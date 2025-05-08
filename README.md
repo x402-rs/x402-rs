@@ -1,5 +1,8 @@
 # x402-rs
 
+[![Crates.io](https://img.shields.io/crates/v/x402-rs.svg)](https://crates.io/crates/x402-rs)
+[![Docs.rs](https://docs.rs/x402-rs/badge.svg)](https://docs.rs/x402-rs)
+
 > Rust-based implementation of the x402 protocol facilitator.
 
 [x402 Protocol](https://docs.cdp.coinbase.com/x402/docs/overview) defines a standard for making blockchain payments directly through HTTP 402 flows.
