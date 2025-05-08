@@ -1,0 +1,25 @@
+[package]
+name = "x402-rs"
+version = "0.1.0"
+authors = ["Sergey Ukustov <sergey@ukstv.me>"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/ukstv/x402-rs"
+description = "Rust SDK for the x402 payment protocol (machine-native payments)"
+
+[dependencies]
+axum = { version = "0.8.4" }
+tokio = { version = "1.45.0", features = ["full"] }
+dotenvy = { version = "0.15.7" }
+tracing = { version = "0.1.41" }
+tracing-subscriber = { version = "0.3.19" }
+serde_json = { version = "1.0.140" }
+tower-http = { version = "0.6.3", features = ["trace"] }
+serde = { version = "1.0.219", features = ["derive"] }
+once_cell = { version = "1.21.3" }
+regex = { version = "1.11.1" }
+url = { version = "2.5.4", features = ["serde"] }
+alloy = { version = "0.15.10" }
+thiserror = { version = "2.0.12" }
+uuid = { version = "1.16.0", features = ["v7"]}
+tower = "0.5.2"
