@@ -1,10 +1,12 @@
 use crate::provider_cache::ProviderCache;
+use axum::http::Method;
 use axum::routing::post;
 use axum::{routing::get, Extension, Router};
 use dotenvy::dotenv;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tower_http::cors;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -71,6 +73,13 @@ async fn main() {
                         );
                     },
                 ),
+        )
+        .layer(
+            cors::CorsLayer::new()
+                .allow_origin(cors::Any)
+                .allow_methods([Method::GET, Method::POST])
+                .allow_credentials(true)
+                .allow_headers(cors::Any),
         )
         .layer(TraceIdLayer);
 

@@ -19,7 +19,7 @@ dotenvy = { version = "0.15.7" }
 tracing = { version = "0.1.41" }
 tracing-subscriber = { version = "0.3.19" }
 serde_json = { version = "1.0.140" }
-tower-http = { version = "0.6.3", features = ["trace"] }
+tower-http = { version = "0.6.3", features = ["trace", "cors"] }
 serde = { version = "1.0.219", features = ["derive"] }
 once_cell = { version = "1.21.3" }
 regex = { version = "1.11.1" }
