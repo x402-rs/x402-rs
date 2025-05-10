@@ -13,8 +13,8 @@ jobs:
   metadata:
     runs-on: ubuntu-latest
     outputs:
-      tags: ${{ steps.meta.outputs.tags }}
-      labels: ${{ steps.meta.outputs.labels }}
+      tags: ${{ steps.meta_main.outputs.tags || steps.meta_tag.outputs.tags }}
+      labels: ${{ steps.meta_main.outputs.labels || steps.meta_tag.outputs.labels }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
