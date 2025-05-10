@@ -149,7 +149,7 @@ jobs:
             echo "Merging manifest for: $tag"
             docker buildx imagetools create \
               --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag \
-              --annotation "org.opencontainers.image.description=${{ fromJson(needs.metadata.outputs.annotations).org.opencontainers.image.description }}" \
+              --annotation "org.opencontainers.image.description=${{ needs.metadata.outputs.annotations.org.opencontainers.image.description }}" \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-amd64 \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-arm64
 
