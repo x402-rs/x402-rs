@@ -62,6 +62,7 @@ jobs:
         with:
           context: .
           push: true
+          provenance: mode=max
           platforms: linux/amd64
           tags: ${{ needs.metadata.outputs.tags }}-amd64
           labels: ${{ needs.metadata.outputs.labels }}
@@ -92,6 +93,7 @@ jobs:
         with:
           context: .
           push: true
+          provenance: mode=max
           platforms: linux/arm64
           tags: ${{ needs.metadata.outputs.tags }}-arm64
           labels: ${{ needs.metadata.outputs.labels }}
