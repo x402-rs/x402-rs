@@ -107,16 +107,18 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Merge all tags from metadata into multi-arch images
+      - name: Merge all tags into multi-arch manifest
         run: |
           echo "Merging tags: ${{ needs.metadata.outputs.tags }}"
-          IFS=',' read -ra TAGS <<< "${{ needs.metadata.outputs.tags }}"
-          for tag in "${TAGS[@]}"; do
-            echo "🔗 Merging manifest for: ${tag}"
+          IFS=',' read -ra FULL_TAGS <<< "${{ needs.metadata.outputs.tags }}"
+          for full in "${FULL_TAGS[@]}"; do
+            # Extract just the tag part from full ref (e.g., latest from ghcr.io/...:latest)
+            tag="${full##*:}"
+            echo "🔗 Merging manifest for: $tag"
             docker buildx imagetools create \
-              --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag} \
-              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}-amd64 \
-              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}-arm64
+              --tag ghcr.io/ukstv/x402-facilitator:$tag \
+              ghcr.io/ukstv/x402-facilitator:$tag-amd64 \
+              ghcr.io/ukstv/x402-facilitator:$tag-arm64
           done
 
 #  build-and-push-image:
