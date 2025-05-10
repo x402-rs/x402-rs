@@ -1,2 +1,5 @@
 target/
-.github/
+.git/
+*.rs.bk
+*.log
+.env
