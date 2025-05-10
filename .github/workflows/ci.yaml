@@ -137,7 +137,8 @@ jobs:
         run: |
           echo "Merging tags: ${{ needs.metadata.outputs.tags }}"
           IFS=',' read -ra FULL_TAGS <<< "${{ needs.metadata.outputs.tags }}"
-          digests_json="{"
+          digests_array="["
+
           for full in "${FULL_TAGS[@]}"; do
             tag="${full##*:}"
             echo "Merging manifest for: $tag"
@@ -145,25 +146,29 @@ jobs:
               --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-amd64 \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-arm64
-          
+
             digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag | jq -r '.digest')
-            echo "Digest for $tag: $digest"
-            digests_json+="\"$tag\":\"$digest\","
+            digests_array+="{\"tag\":\"$tag\",\"digest\":\"$digest\"},"
           done
-          digests_json="${digests_json%,}}"
-          echo "digests=$digests_json" >> "$GITHUB_OUTPUT"
-      - name: Parse and attest digests
-        run: |
-          echo "Parsing digests and creating attestations..."
-          digests='${{ steps.merge-manifest.outputs.digests }}'
-          echo "Digests JSON: $digests"
-          
-          echo "$digests" | jq -r 'to_entries[] | "\(.key) \(.value)"' | while read -r tag digest; do
-            echo "🔐 Attesting $tag with digest $digest"
-          
-            gh run --repo "${{ github.repository }}" \
-              actions/attest-build-provenance@v2 \
-              --field subject-name="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" \
-              --field subject-digest="$digest" \
-              --field push-to-registry=true
-          done
+
+          digests_array="${digests_array%,}]"
+          echo "digests_matrix=$digests_array" >> $GITHUB_OUTPUT
+  attest-digests:
+    name: Attest merged manifests
+    needs: merge-manifest
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        digest_entry: ${{ fromJson(needs.merge-manifest.outputs.digests_matrix) }}
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Attest ${{ matrix.digest_entry.tag }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ matrix.digest_entry.digest }}
+          push-to-registry: true
