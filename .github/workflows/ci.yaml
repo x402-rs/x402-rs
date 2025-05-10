@@ -72,6 +72,7 @@ jobs:
           platforms: linux/amd64
           tags: ${{ needs.metadata.outputs.tags }}-amd64
           labels: ${{ needs.metadata.outputs.labels }}
+          annotations: ${{ needs.metadata.outputs.annotations }}
           cache-from: type=gha,scope=amd64
           cache-to: type=gha,mode=max,scope=amd64
       - name: Generate image attestation
@@ -110,6 +111,7 @@ jobs:
           platforms: linux/arm64
           tags: ${{ needs.metadata.outputs.tags }}-arm64
           labels: ${{ needs.metadata.outputs.labels }}
+          annotations: ${{ needs.metadata.outputs.annotations }}
           cache-from: type=gha,scope=arm64
           cache-to: type=gha,mode=max,scope=arm64
       - name: Generate image attestation
@@ -154,7 +156,6 @@ jobs:
             echo "Merging manifest for: $tag"
             docker buildx imagetools create \
               --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag \
-              --annotation "org.opencontainers.image.description=$DESCRIPTION" \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-amd64 \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-arm64
 
