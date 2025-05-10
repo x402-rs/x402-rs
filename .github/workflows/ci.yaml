@@ -86,7 +86,7 @@ jobs:
         with:
           context: .
           push: true
-          platforms: linux/amd64
+          platforms: linux/arm64
           tags: ${{ needs.metadata.outputs.tags }}-arm64
           labels: ${{ needs.metadata.outputs.labels }}
   merge-manifest:
