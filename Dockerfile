@@ -1,4 +1,4 @@
-FROM rust:bullseye AS builder
+FROM --platform=$BUILDPLATFORM rust:bullseye AS builder
 
 ENV PORT=8080
 
@@ -18,7 +18,7 @@ COPY abi ./abi
 RUN cargo build --release
 
 # --- Stage 2 ---
-FROM debian:bullseye-slim
+FROM --platform=$BUILDPLATFORM debian:bullseye-slim
 
 ENV PORT=8080
 
