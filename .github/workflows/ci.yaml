@@ -18,6 +18,7 @@ jobs:
       tags: ${{ steps.meta_main.outputs.tags || steps.meta_tag.outputs.tags }}
       labels: ${{ steps.meta_main.outputs.labels || steps.meta_tag.outputs.labels }}
       annotations: ${{ steps.meta_main.outputs.annotations || steps.meta_tag.outputs.annotations }}
+      json: ${{ steps.meta_main.outputs.json || steps.meta_tag.outputs.json }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,7 +73,7 @@ jobs:
           provenance: mode=max
           platforms: linux/amd64
           tags: |
-            ${{ join(needs.metadata.outputs.tags, '-amd64\n') }}-amd64
+            ${{ join(fromJSON(steps.meta.outputs.json).tags, '-amd64\n') }}-amd64
           labels: ${{ needs.metadata.outputs.labels }}
           annotations: ${{ needs.metadata.outputs.annotations }}
           cache-from: type=gha,scope=amd64
