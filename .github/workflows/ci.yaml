@@ -4,7 +4,7 @@ on:
     branches: ['main']
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: x402-facilitator
+  IMAGE_NAME: ukstv/x402-facilitator
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
