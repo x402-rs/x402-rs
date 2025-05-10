@@ -78,7 +78,6 @@ async fn main() {
             cors::CorsLayer::new()
                 .allow_origin(cors::Any)
                 .allow_methods([Method::GET, Method::POST])
-                .allow_credentials(true)
                 .allow_headers(cors::Any),
         )
         .layer(TraceIdLayer);
