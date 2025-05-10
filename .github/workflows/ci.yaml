@@ -140,7 +140,7 @@ jobs:
           digests_json="{"
           for full in "${FULL_TAGS[@]}"; do
             tag="${full##*:}"
-            echo "🔗 Merging manifest for: $tag"
+            echo "Merging manifest for: $tag"
             docker buildx imagetools create \
               --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-amd64 \
