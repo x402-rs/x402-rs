@@ -152,3 +152,18 @@ jobs:
           done
           digests_json="${digests_json%,}}"
           echo "digests=$digests_json" >> "$GITHUB_OUTPUT"
+      - name: Parse and attest digests
+        run: |
+          echo "Parsing digests and creating attestations..."
+          digests='${{ needs.merge-manifest.outputs.digests }}'
+          echo "Digests JSON: $digests"
+          
+          echo "$digests" | jq -r 'to_entries[] | "\(.key) \(.value)"' | while read -r tag digest; do
+            echo "🔐 Attesting $tag with digest $digest"
+          
+            gh run --repo "${{ github.repository }}" \
+              actions/attest-build-provenance@v2 \
+              --field subject-name="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" \
+              --field subject-digest="$digest" \
+              --field push-to-registry=true
+          done
