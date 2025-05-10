@@ -117,10 +117,7 @@ jobs:
   merge-manifest:
     name: Merge amd64 and arm64 Docker manifests
     runs-on: ubuntu-latest
-    needs:
-      - build-amd64
-      - build-arm64
-      - metadata
+    needs: [build-amd64, build-arm64, metadata]
     permissions:
       contents: read
       packages: write
@@ -135,29 +132,23 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Merge all tags into multi-arch manifest
+      - name: Merge all tags and capture digests
+        id: capture
         run: |
           echo "Merging tags: ${{ needs.metadata.outputs.tags }}"
           IFS=',' read -ra FULL_TAGS <<< "${{ needs.metadata.outputs.tags }}"
+          digests_json="{"
           for full in "${FULL_TAGS[@]}"; do
             tag="${full##*:}"
-            echo "Merging manifest for: $tag"
+            echo "🔗 Merging manifest for: $tag"
             docker buildx imagetools create \
-              --tag ghcr.io/ukstv/x402-facilitator:$tag \
-              ghcr.io/ukstv/x402-facilitator:$tag-amd64 \
-              ghcr.io/ukstv/x402-facilitator:$tag-arm64
+              --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag \
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-amd64 \
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-arm64
+          
+            digest=$(docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag --format '{{ .Digest }}')
+            echo "Digest for $tag: $digest"
+            digests_json+="\"$tag\":\"$digest\","
           done
-      - name: Create provenance attestations
-        run: |
-          IFS=',' read -ra FULL_TAGS <<< "${{ needs.metadata.outputs.tags }}"
-          for full in "${FULL_TAGS[@]}"; do
-            tag="${full##*:}"
-            echo "Inspecting digest for: $tag"
-            digest=$(docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag" | grep Digest | head -n1 | awk '{print $2}')
-            echo "Creating attestation for $tag ($digest)"
-            gh run --repo "${{ github.repository }}" \
-              actions/attest-build-provenance@v2 \
-              --field subject-name="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" \
-              --field subject-digest="$digest" \
-              --field push-to-registry=true
-          done
+          digests_json="${digests_json%,}}"
+          echo "digests=$digests_json" >> "$GITHUB_OUTPUT"
