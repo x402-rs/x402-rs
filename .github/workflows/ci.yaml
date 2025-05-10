@@ -72,7 +72,7 @@ jobs:
           provenance: mode=max
           platforms: linux/amd64
           tags: |
-            ${{ join(needs.metadata.outputs.tags, '-arm64,') }}-amd64
+            ${{ join(needs.metadata.outputs.tags, '-arm64\n') }}-amd64
           labels: ${{ needs.metadata.outputs.labels }}
           annotations: ${{ needs.metadata.outputs.annotations }}
           cache-from: type=gha,scope=amd64
