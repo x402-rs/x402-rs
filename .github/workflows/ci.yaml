@@ -133,7 +133,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Merge all tags and capture digests
-        id: capture
+        id: merge-manifest
         run: |
           echo "Merging tags: ${{ needs.metadata.outputs.tags }}"
           IFS=',' read -ra FULL_TAGS <<< "${{ needs.metadata.outputs.tags }}"
