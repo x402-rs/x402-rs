@@ -9,13 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
  && rm -rf /var/lib/apt/lists/*
 
-COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo fetch
-
-COPY src ./src
-COPY abi ./abi
-RUN cargo build --release
+COPY . ./
+RUN cargo build --release --locked
 
 # --- Stage 2 ---
 FROM --platform=$BUILDPLATFORM debian:bullseye-slim
