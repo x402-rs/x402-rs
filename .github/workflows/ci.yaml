@@ -72,8 +72,7 @@ jobs:
           push: true
           provenance: mode=max
           platforms: linux/amd64
-          tags: |
-            ${{ join(fromJSON(needs.meta.outputs.json).tags, '-amd64\n') }}-amd64
+          tags: ${{ fromJSON(needs.meta.outputs.json).tags }}-amd64
           labels: ${{ needs.metadata.outputs.labels }}
           annotations: ${{ needs.metadata.outputs.annotations }}
           cache-from: type=gha,scope=amd64
