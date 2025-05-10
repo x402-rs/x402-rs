@@ -146,7 +146,7 @@ jobs:
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-amd64 \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-arm64
           
-            digest=$(docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag --format '{{ .Digest }}')
+            digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag | jq -r '.digest')
             echo "Digest for $tag: $digest"
             digests_json+="\"$tag\":\"$digest\","
           done
