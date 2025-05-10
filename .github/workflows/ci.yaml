@@ -168,6 +168,12 @@ jobs:
       attestations: write
       id-token: write
     steps:
+      - name: Docker login
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Attest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.digest_entry.tag }}
         uses: actions/attest-build-provenance@v2
         with:
