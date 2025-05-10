@@ -58,6 +58,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push AMD64 image
+        id: build-and-push
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -68,6 +69,12 @@ jobs:
           labels: ${{ needs.metadata.outputs.labels }}
           cache-from: type=gha,scope=amd64
           cache-to: type=gha,mode=max,scope=amd64
+      - name: Generate image attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build-and-push.outputs.digest }}
+          push-to-registry: true
   build-arm64:
     name: "Build (arm64)"
     runs-on: ubuntu-24.04-arm
