@@ -57,7 +57,7 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push AMD64 image
+      - name: Build and push amd64 image
         id: build-and-push
         uses: docker/build-push-action@v5
         with:
@@ -97,7 +97,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push arm64 image
         uses: docker/build-push-action@v5
-        id: build
+        id: build-and-push
         with:
           context: .
           push: true
@@ -108,12 +108,12 @@ jobs:
           cache-from: type=gha,scope=arm64
           cache-to: type=gha,mode=max,scope=arm64
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},dest=/tmp/digest-arm64.txt
-#      - name: Generate artifact attestation
-#        uses: actions/attest-build-provenance@v2
-#        with:
-#          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-#          subject-digest: ${{ steps.build.outputs.digest }}
-#          push-to-registry: true
+      - name: Generate image attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build-and-push.outputs.digest }}
+          push-to-registry: true
 #  merge-manifest:
 #    name: Merge amd64 and arm64 Docker manifests
 #    runs-on: ubuntu-latest
