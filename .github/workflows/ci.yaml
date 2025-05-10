@@ -72,8 +72,7 @@ jobs:
           push: true
           provenance: mode=max
           platforms: linux/amd64
-          tags: |
-            ${{ join(fromJSON(needs.metadata.outputs.json).tags, '-amd64,') }}-amd64
+          tags: ${{ join(fromJSON(needs.metadata.outputs.json).tags, '-amd64,') }}-amd64
           labels: ${{ needs.metadata.outputs.labels }}
           annotations: ${{ needs.metadata.outputs.annotations }}
           cache-from: type=gha,scope=amd64
@@ -112,8 +111,7 @@ jobs:
           push: true
           provenance: mode=max
           platforms: linux/arm64
-          tags: |
-            ${{ join(needs.metadata.outputs.tags, '-arm64\n') }}-arm64
+          tags: ${{ join(fromJSON(needs.metadata.outputs.json).tags, '-arm64,') }}-arm64
           labels: ${{ needs.metadata.outputs.labels }}
           annotations: ${{ needs.metadata.outputs.annotations }}
           cache-from: type=gha,scope=arm64
