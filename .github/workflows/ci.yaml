@@ -139,7 +139,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Export description
-        run: echo "DESCRIPTION=${{ fromJson(needs.metadata.outputs.annotations).org.opencontainers.image.description }}" >> "$GITHUB_ENV"
+        run: |
+          export DESCRIPTION=$(echo '${{ needs.metadata.outputs.annotations }}' | jq -r '.["org.opencontainers.image.description"]')
+          echo "DESCRIPTION=$DESCRIPTION" >> "$GITHUB_ENV"
       - name: Merge all tags and capture digests
         id: merge-manifest
         run: |
