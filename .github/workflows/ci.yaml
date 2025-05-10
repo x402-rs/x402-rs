@@ -155,7 +155,7 @@ jobs:
       - name: Parse and attest digests
         run: |
           echo "Parsing digests and creating attestations..."
-          digests='${{ needs.merge-manifest.outputs.digests }}'
+          digests='${{ steps.merge-manifest.outputs.digests }}'
           echo "Digests JSON: $digests"
           
           echo "$digests" | jq -r 'to_entries[] | "\(.key) \(.value)"' | while read -r tag digest; do
