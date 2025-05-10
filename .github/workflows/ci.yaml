@@ -157,7 +157,7 @@ jobs:
         id: merge-manifest
         run: |
           echo "Merging tags: ${{ needs.metadata.outputs.tags }}"
-          IFS=',' read -ra FULL_TAGS <<< "${{ needs.metadata.outputs.tags }}"
+          readarray -t FULL_TAGS <<< "${{ needs.metadata.outputs.tags }}"
           digests_matrix="["
           for full in "${FULL_TAGS[@]}"; do
             tag="${full##*:}"
