@@ -153,7 +153,7 @@ jobs:
           for full in "${FULL_TAGS[@]}"; do
             tag="${full##*:}"
             echo "Inspecting digest for: $tag"
-            digest=$(docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag --format '{{ .Digest }}')
+            digest=$(docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag" | grep Digest | head -n1 | awk '{print $2}')
             echo "Creating attestation for $tag ($digest)"
             gh run --repo "${{ github.repository }}" \
               actions/attest-build-provenance@v2 \
