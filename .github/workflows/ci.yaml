@@ -105,12 +105,19 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Merge amd64 and arm64 manifests
-        uses: Noelware/docker-manifest-action@v1
-        with:
-          inputs: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          push: true
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Merge all tags from metadata into multi-arch images
+        run: |
+          echo "Merging tags: ${{ needs.metadata.outputs.tags }}"
+          IFS=',' read -ra TAGS <<< "${{ needs.metadata.outputs.tags }}"
+          for tag in "${TAGS[@]}"; do
+            echo "🔗 Merging manifest for: ${tag}"
+            docker buildx imagetools create \
+              --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag} \
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}-amd64 \
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}-arm64
+          done
 
 #  build-and-push-image:
 #    runs-on: ubuntu-latest
