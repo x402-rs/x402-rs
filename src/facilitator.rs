@@ -210,14 +210,7 @@ async fn assert_domain<P: Provider<Ethereum>>(
         .as_ref()
         .and_then(|extra| extra.get("name"))
         .and_then(|name| name.as_str().map(|s| s.to_string()));
-    let name = if let Some(name) = name {
-        if name != usdc.name {
-            return Err(PaymentError::UnsupportedNetwork(payload.network));
-        }
-        name
-    } else {
-        usdc.name
-    };
+    let name = name.unwrap_or(usdc.name);
     let chain_id = payload.network.chain_id();
     let version = requirements
         .extra
