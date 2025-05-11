@@ -37,6 +37,7 @@ impl Network {
 }
 
 pub struct USDCDeployment {
+    #[allow(dead_code)]
     pub address: alloy::primitives::Address,
     pub name: String,
 }

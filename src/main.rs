@@ -1,22 +1,23 @@
-use crate::provider_cache::ProviderCache;
 use axum::http::Method;
 use axum::routing::post;
 use axum::{routing::get, Extension, Router};
 use dotenvy::dotenv;
+use opentelemetry::trace::Status;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::cors;
 use tower_http::trace::TraceLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-use crate::trace_id::{TraceId, TraceIdLayer};
+use crate::provider_cache::ProviderCache;
+use crate::telemetry::Telemetry;
 
 mod facilitator;
 mod handlers;
 mod network;
 mod provider_cache;
-mod trace_id;
+mod telemetry;
 mod types;
 
 #[tokio::main]
@@ -24,9 +25,7 @@ async fn main() {
     // Load .env variables
     dotenv().ok();
 
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    let _telemetry = Telemetry::new();
 
     let provider_cache = ProviderCache::from_env().await;
     if let Err(e) = provider_cache {
@@ -46,18 +45,13 @@ async fn main() {
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|request: &axum::http::Request<_>| {
-                    let trace_id = request
-                        .extensions()
-                        .get::<TraceId>()
-                        .map(|id| id.0.to_string())
-                        .unwrap_or_else(|| "unknown".to_string());
-
                     tracing::info_span!(
                         "http_request",
+                        otel.kind = "server",
+                        otel.name = %format!("{} {}", request.method(), request.uri()),
                         method = %request.method(),
                         uri = %request.uri(),
                         version = ?request.version(),
-                        trace_id = %trace_id,
                     )
                 })
                 .on_response(
@@ -66,6 +60,24 @@ async fn main() {
                      span: &tracing::Span| {
                         span.record("status", tracing::field::display(response.status()));
                         span.record("latency", tracing::field::display(latency.as_millis()));
+                        span.record(
+                            "http.status_code",
+                            tracing::field::display(response.status().as_u16()),
+                        );
+
+                        // OpenTelemetry span status
+                        if response.status().is_success() {
+                            span.set_status(Status::Ok);
+                        } else {
+                            span.set_status(Status::error(
+                                response
+                                    .status()
+                                    .canonical_reason()
+                                    .unwrap_or("unknown")
+                                    .to_string(),
+                            ));
+                        }
+
                         tracing::info!(
                             "status={} elapsed={}ms",
                             response.status().as_u16(),
@@ -79,8 +91,7 @@ async fn main() {
                 .allow_origin(cors::Any)
                 .allow_methods([Method::GET, Method::POST])
                 .allow_headers(cors::Any),
-        )
-        .layer(TraceIdLayer);
+        );
 
     let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let port = env::var("PORT")

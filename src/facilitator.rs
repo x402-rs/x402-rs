@@ -1,11 +1,3 @@
-use alloy::network::Ethereum;
-use alloy::primitives::{AddressError, Bytes, FixedBytes, Signature, U256};
-use alloy::providers::Provider;
-use alloy::sol;
-use alloy::sol_types::{eip712_domain, Eip712Domain, SolStruct};
-use std::sync::Arc;
-use std::time::SystemTime;
-
 use crate::facilitator::USDC::USDCInstance;
 use crate::network::{Network, USDCDeployment};
 use crate::provider_cache::{EthereumProvider, ProviderCache};
@@ -14,6 +6,16 @@ use crate::types::{
     PaymentPayload, PaymentRequirements, Scheme, SettleResponse, TransactionHash,
     TransferWithAuthorization, VerifyResponse,
 };
+use alloy::network::Ethereum;
+use alloy::primitives::{AddressError, Bytes, FixedBytes, Signature, U256};
+use alloy::providers::Provider;
+use alloy::sol;
+use alloy::sol_types::{eip712_domain, Eip712Domain, SolStruct};
+use std::future::IntoFuture;
+use std::sync::Arc;
+use std::time::SystemTime;
+use tracing::{instrument, Instrument};
+use tracing_core::Level;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PaymentError {
@@ -58,6 +60,7 @@ sol!(
     "abi/USDC.json"
 );
 
+#[instrument(skip_all, err, fields(chain_id = %payload.network.chain_id()))]
 pub async fn verify(
     provider_cache: Arc<ProviderCache>,
     payload: &PaymentPayload,
@@ -71,6 +74,7 @@ pub async fn verify(
     })
 }
 
+#[instrument(skip_all, err)]
 async fn assert_valid_payment<'a>(
     provider_cache: &'a Arc<ProviderCache>,
     payload: &PaymentPayload,
@@ -122,6 +126,7 @@ struct ValidPaymentResult<'a> {
     contract: USDCInstance<&'a Arc<EthereumProvider>>,
 }
 
+#[instrument(skip_all, err, fields(chain_id = %payload.network.chain_id()))]
 pub async fn settle(
     provider_cache: Arc<ProviderCache>,
     payload: &PaymentPayload,
@@ -139,16 +144,46 @@ pub async fn settle(
     let nonce = FixedBytes(payload.payload.authorization.nonce.0);
     let signature = Bytes::from(payload.payload.signature.0);
     let tx = contract
-        .transferWithAuthorization_0(from, to, value, valid_after, valid_before, nonce, signature)
+        .transferWithAuthorization_0(
+            from,
+            to,
+            value,
+            valid_after,
+            valid_before,
+            nonce,
+            signature.clone(),
+        )
         .send()
+        .instrument(tracing::info_span!("transferWithAuthorization_0",
+                from = %from,
+                to = %to,
+                value = %value,
+                valid_after = %valid_after,
+                valid_before = %valid_before,
+                nonce = %nonce,
+                signature = %signature,
+                token_contract = %contract.address(),
+                otel.kind = "client",
+        ))
         .await
         .map_err(PaymentError::InvalidContractCall)?;
+    let tx_hash = *tx.tx_hash();
     let receipt = tx
         .get_receipt()
+        .into_future()
+        .instrument(tracing::info_span!("get_receipt",
+                transaction = %tx_hash,
+                otel.kind = "client"
+        ))
         .await
         .map_err(|e| PaymentError::InvalidContractCall(e.into()))?;
     let success = receipt.status();
     if success {
+        tracing::event!(Level::INFO,
+            status = "ok",
+            tx = %receipt.transaction_hash,
+            "transferWithAuthorization_0 succeeded"
+        );
         Ok(SettleResponse {
             success: true,
             error_reason: None,
@@ -157,6 +192,12 @@ pub async fn settle(
             network: payload.network,
         })
     } else {
+        tracing::event!(
+            Level::WARN,
+            status = "failed",
+            tx = %receipt.transaction_hash,
+            "transferWithAuthorization_0 failed"
+        );
         Ok(SettleResponse {
             success: false,
             error_reason: Some(ErrorReason::InvalidScheme),
@@ -167,6 +208,7 @@ pub async fn settle(
     }
 }
 
+#[instrument(skip_all, err)]
 fn assert_requirements(
     payload: &PaymentPayload,
     requirements: &PaymentRequirements,
@@ -195,22 +237,24 @@ fn assert_requirements(
     Ok(())
 }
 
+#[instrument(skip_all, err, fields(
+    network = %payload.network,
+    asset = %asset_address,
+    chain_id = %payload.network.chain_id()
+))]
 async fn assert_domain<P: Provider<Ethereum>>(
-    usdc_contract: &USDCInstance<P>,
+    token_contract: &USDCInstance<P>,
     payload: &PaymentPayload,
     asset_address: &alloy::primitives::Address,
     requirements: &PaymentRequirements,
 ) -> Result<Eip712Domain, PaymentError> {
     let usdc = USDCDeployment::by_network(&payload.network);
-    if !usdc.address.eq(asset_address) {
-        return Err(PaymentError::UnsupportedNetwork(payload.network));
-    }
     let name = requirements
         .extra
         .as_ref()
         .and_then(|extra| extra.get("name"))
-        .and_then(|name| name.as_str().map(|s| s.to_string()));
-    let name = name.unwrap_or(usdc.name);
+        .and_then(|name| name.as_str().map(|s| s.to_string()))
+        .unwrap_or(usdc.name);
     let chain_id = payload.network.chain_id();
     let version = requirements
         .extra
@@ -220,9 +264,14 @@ async fn assert_domain<P: Provider<Ethereum>>(
     let version = if let Some(extra_version) = version {
         extra_version
     } else {
-        usdc_contract
+        token_contract
             .version()
             .call()
+            .into_future()
+            .instrument(tracing::info_span!(
+                "fetch_eip712_version",
+                otel.kind = "client",
+            ))
             .await
             .map_err(PaymentError::InvalidContractCall)?
     };
@@ -235,6 +284,7 @@ async fn assert_domain<P: Provider<Ethereum>>(
     Ok(domain)
 }
 
+#[instrument(skip_all, err)]
 fn assert_signature(payload: &ExactEvmPayload, domain: &Eip712Domain) -> Result<(), PaymentError> {
     // Verify the signature
     let signature = Signature::from_raw_array(&payload.signature.0)
@@ -263,6 +313,7 @@ fn assert_signature(payload: &ExactEvmPayload, domain: &Eip712Domain) -> Result<
     }
 }
 
+#[instrument(skip_all, err)]
 fn assert_time(authorization: &ExactEvmPayloadAuthorization) -> Result<(), PaymentError> {
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -286,6 +337,11 @@ fn assert_time(authorization: &ExactEvmPayloadAuthorization) -> Result<(), Payme
     Ok(())
 }
 
+#[instrument(skip_all, err, fields(
+    sender = %sender,
+    max_required = %max_amount_required,
+    token_contract = %usdc_contract.address()
+))]
 async fn assert_enough_balance<P: Provider<Ethereum>>(
     usdc_contract: &USDCInstance<P>,
     sender: &EvmAddress,
@@ -294,8 +350,16 @@ async fn assert_enough_balance<P: Provider<Ethereum>>(
     let balance = usdc_contract
         .balanceOf(sender.0)
         .call()
+        .into_future()
+        .instrument(tracing::info_span!(
+            "fetch_token_balance",
+            token_contract = %usdc_contract.address(),
+            sender = %sender,
+            otel.kind = "client"
+        ))
         .await
         .map_err(PaymentError::InvalidContractCall)?;
+
     if balance < max_amount_required {
         Err(PaymentError::InsufficientFunds)
     } else {
@@ -303,6 +367,10 @@ async fn assert_enough_balance<P: Provider<Ethereum>>(
     }
 }
 
+#[instrument(skip_all, err, fields(
+    sent = %sent,
+    max_amount_required = %max_amount_required
+))]
 fn assert_enough_value(sent: &U256, max_amount_required: &U256) -> Result<(), PaymentError> {
     if sent < max_amount_required {
         Err(PaymentError::InsufficientValue)

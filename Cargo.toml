@@ -16,8 +16,6 @@ categories = ["cryptography", "finance", "network-programming", "web-programming
 axum = { version = "0.8.4" }
 tokio = { version = "1.45.0", features = ["full"] }
 dotenvy = { version = "0.15.7" }
-tracing = { version = "0.1.41" }
-tracing-subscriber = { version = "0.3.19" }
 serde_json = { version = "1.0.140" }
 tower-http = { version = "0.6.3", features = ["trace", "cors"] }
 serde = { version = "1.0.219", features = ["derive"] }
@@ -26,5 +24,14 @@ regex = { version = "1.11.1" }
 url = { version = "2.5.4", features = ["serde"] }
 alloy = { version = "0.15.10" }
 thiserror = { version = "2.0.12" }
-uuid = { version = "1.16.0", features = ["v7"]}
-tower = { version = "0.5.2" }
+
+# Tracing and OpenTelemetry
+tracing = { version = "0.1.41" }
+tracing-subscriber = { version = "0.3.19" }
+opentelemetry = { version = "0.29.1" }
+opentelemetry_sdk = { version = "0.29.0" }
+opentelemetry-semantic-conventions = { version = "0.29.0", features = ["semconv_experimental"] }
+tracing-core = { version = "0.1.33" }
+tracing-opentelemetry = { version = "0.30.0" }
+opentelemetry-otlp = { version = "0.29.0", features = ["metrics", "grpc-tonic"] }
+opentelemetry-stdout = { version = "0.29.0", features = ["trace", "metrics"] }

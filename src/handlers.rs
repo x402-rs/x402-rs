@@ -2,6 +2,7 @@ use axum::http::StatusCode;
 use axum::{response::IntoResponse, Extension, Json};
 use serde_json::json;
 use std::sync::Arc;
+use tracing::instrument;
 
 use crate::facilitator::{settle, verify, PaymentError};
 use crate::provider_cache::ProviderCache;
@@ -9,6 +10,7 @@ use crate::types::{
     ErrorReason, ErrorResponse, SettleRequest, SettleResponse, VerifyRequest, VerifyResponse,
 };
 
+#[instrument(skip_all)]
 pub async fn get_verify_info() -> impl IntoResponse {
     Json(json!({
         "endpoint": "/verify",
@@ -20,6 +22,7 @@ pub async fn get_verify_info() -> impl IntoResponse {
     }))
 }
 
+#[instrument(skip_all)]
 pub async fn get_settle_info() -> impl IntoResponse {
     Json(json!({
         "endpoint": "/settle",
@@ -31,6 +34,7 @@ pub async fn get_settle_info() -> impl IntoResponse {
     }))
 }
 
+#[instrument(skip_all)]
 pub async fn get_supported() -> impl IntoResponse {
     Json(json!({
         "kinds": [
@@ -43,6 +47,7 @@ pub async fn get_supported() -> impl IntoResponse {
     }))
 }
 
+#[instrument(skip_all)]
 pub async fn post_verify(
     Extension(provider_cache): Extension<Arc<ProviderCache>>,
     Json(body): Json<VerifyRequest>,
@@ -102,6 +107,7 @@ pub async fn post_verify(
     }
 }
 
+#[instrument(skip_all)]
 pub async fn post_settle(
     Extension(provider_cache): Extension<Arc<ProviderCache>>,
     Json(body): Json<SettleRequest>,
