@@ -2,6 +2,8 @@
 
 [![Crates.io](https://img.shields.io/crates/v/x402-rs.svg)](https://crates.io/crates/x402-rs)
 [![Docs.rs](https://docs.rs/x402-rs/badge.svg)](https://docs.rs/x402-rs)
+[![Docker Pulls](https://img.shields.io/docker/pulls/ukstv/x402-facilitator.svg)](https://hub.docker.com/r/ukstv/x402-facilitator)
+[![GHCR](https://img.shields.io/badge/ghcr.io-x402--facilitator-blue)](https://github.com/orgs/x402-rs/packages)
 
 > Rust-based implementation of the x402 protocol facilitator.
 
@@ -75,14 +77,23 @@ The supported networks are determined by which RPC URLs you provide:
 
 ### 2. Build and Run with Docker
 
-Build the Docker image:
+Prebuilt Docker images are available at:
+- [GitHub Container Registry](https://ghcr.io/x402-rs/x402-facilitator): `ghcr.io/x402-rs/x402-facilitator`
+- [Docker Hub](https://hub.docker.com/r/ukstv/x402-facilitator): `ukstv/x402-facilitator`
 
+Run the container from Docker Hub:
 ```commandline
-docker build -t x402-rs .
+docker run --env-file .env -p 8080:8080 ukstv/x402-facilitator
 ```
 
-Run the container:
+To run using GitHub Container Registry:
 ```commandline
+docker run --env-file .env -p 8080:8080 ghcr.io/x402-rs/x402-facilitator
+```
+
+Or build a Docker image locally:
+```commandline
+docker build -t x402-rs .
 docker run --env-file .env -p 8080:8080 x402-rs
 ```
 
@@ -141,7 +152,7 @@ The service reads configuration via `.env` file or directly through environment 
 Available variables:
 
 * `SIGNER_TYPE` (required): Type of signer to use. Only `private-key` is supported now.
-* `PRIVATE_KEY` (required): Private key in hex, like `0xdeadbeaf...`.
+* `PRIVATE_KEY` (required): Private key in hex, like `0xdeadbeef...`.
 * `HOST`: HTTP host to bind to (default `0.0.0.0`)
 * `PORT`: HTTP server port (default `8080`)
 * `RUST_LOG`: Logging level (e.g., `info`, `debug`, `trace`)
