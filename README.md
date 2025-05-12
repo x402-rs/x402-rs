@@ -27,6 +27,7 @@ This repository currently implements a _Facilitator_ role according to the x402 
 - _Verify Payments:_ Confirm that submitted payment payloads are valid.
 - _Settle Payments:_ Submit validated payments on-chain.
 - _Return Results:_ Provide clear verification and settlement responses to the resource server.
+- _Emit Traces:_ Emit OpenTelemetry-compatible traces and metrics.
 
 The Facilitator **does not hold funds**. It acts purely as an execution and verification layer based on signed payloads.
 
@@ -36,15 +37,15 @@ For a detailed overview of the x402 payment flow and Facilitator role, see the [
 
 This project provides a Rust-based implementation of the x402 payment protocol, focused on reliability, ease of integration, and support for machine-native payment flows.
 
-| Milestone                           | Description                                                                                              | Status     |
-|:------------------------------------|:---------------------------------------------------------------------------------------------------------|:-----------|
+| Milestone                           | Description                                                                                              |   Status   |
+|:------------------------------------|:---------------------------------------------------------------------------------------------------------|:----------:|
 | Facilitator for Base USDC           | Payment verification and settlement service, enabling real-time pay-per-use transactions for Base chain. | ✅ Complete |
-| Metrics and Tracing                 | Expose Prometheus metrics and structured tracing for observability, monitoring, and debugging            | 🔜 Planned |
+| Metrics and Tracing                 | Expose OpenTelemetry metrics and structured tracing for observability, monitoring, and debugging         | ✅ Complete |
+| Server Middleware                   | Provide ready-to-use integration for Rust web frameworks such as axum and tower.                         | 🔜 Planned |
+| Client Library                      | Provide a lightweight Rust library for initiating and managing x402 payment flows from Rust clients.     | 🔜 Planned |
 | Multiple chains and multiple tokens | Support various tokens and EVM compatible chains.                                                        | 🔜 Planned |
 | Payments Storage                    | Persist verified and settled payments for analytics, access control, and auditability.                   | 🔜 Planned |
 | Micropayments                       | Enable fine-grained offchain usage-based payments, including streaming and per-request billing.          | 🔜 Planned |
-| Server Middleware                   | Provide ready-to-use integration for Rust web frameworks such as axum and tower.                         | 🔜 Planned |
-| Client Library                      | Provide a lightweight Rust library for initiating and managing x402 payment flows from Rust clients.     | 🔜 Planned |
 
 ---
 
@@ -133,19 +134,40 @@ serve({
 
 > ℹ️ **Tip:** For production deployments, ensure your Facilitator is reachable via HTTPS and protect it against public abuse.
 
-## Environment Variables
+## Configuration
 
 The service reads configuration via `.env` file or directly through environment variables.
 
-Important variables:
+Available variables:
 
+* `SIGNER_TYPE` (required): Type of signer to use. Only `private-key` is supported now.
+* `PRIVATE_KEY` (required): Private key in hex, like `0xdeadbeaf...`.
 * `HOST`: HTTP host to bind to (default `0.0.0.0`)
 * `PORT`: HTTP server port (default `8080`)
 * `RUST_LOG`: Logging level (e.g., `info`, `debug`, `trace`)
 * `RPC_URL_BASE_SEPOLIA`: Ethereum RPC endpoint for Base Sepolia testnet
 * `RPC_URL_BASE`: Ethereum RPC endpoint for Base mainnet
-* `SIGNER_TYPE`: Type of signer to use. Only `private-key` is supported now.
-* `PRIVATE_KEY`: Private key in hex, like `0xdeadbeaf...`.
+
+### Observability
+
+The facilitator emits [OpenTelemetry](https://opentelemetry.io)-compatible traces and metrics to standard endpoints,
+making it easy to integrate with tools like Honeycomb, Prometheus, Grafana, and others.
+Spans are tagged with request method, status code, URI, and latency.
+Metrics include basic process and request-level metrics
+
+To enable tracing and metrics export, set the appropriate `OTEL_` environment variables:
+
+```dotenv
+# For Honeycomb, for example:
+# Endpoint URL for sending OpenTelemetry traces and metrics
+OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io:443
+# Comma-separated list of key=value pairs to add as headers
+OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=your_api_key,x-honeycomb-dataset=x402-rs
+# Export protocol to use for telemetry. Supported values: `http/protobuf` (default), `grpc`
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+```
+
+The service automatically detects and initializes exporters if `OTEL_EXPORTER_OTLP_*` variables are provided.
 
 ### Supported Networks
 
