@@ -1,3 +1,12 @@
+//! Type definitions for the x402 protocol as used by this facilitator.
+//!
+//! This mirrors the structures and validation logic from official x402 SDKs (TypeScript/Go).
+//! The key objects are `PaymentPayload`, `PaymentRequirements`, `VerifyResponse`, and `SettleResponse`,
+//! which encode payment intent, authorization, and the result of verification/settlement.
+//!
+//! This module supports ERC-3009 style authorization for tokens (EIP-712 typed signatures),
+//! and provides serialization logic compatible with external clients.
+
 use alloy::hex::FromHex;
 use alloy::primitives::{AddressError, U256};
 use alloy::{hex, sol};
@@ -13,6 +22,7 @@ use crate::network::Network;
 
 pub const EVM_MAX_ATOMIC_UNITS: usize = 18;
 
+/// Represents the protocol version. Currently only version 1 is supported.
 #[derive(Debug, Copy, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum X402Version {
@@ -52,6 +62,8 @@ impl<'de> serde::Deserialize<'de> for X402Version {
     }
 }
 
+/// Enumerates payment schemes. Only "exact" is supported in this implementation,
+/// meaning the amount to be transferred must match exactly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Scheme {
@@ -67,6 +79,9 @@ impl Display for Scheme {
     }
 }
 
+/// Represents a 65-byte ECDSA signature used in EIP-712 typed data.
+/// Serialized as 0x-prefixed hex string with 130 characters.
+/// Used to authorize an ERC-3009 transferWithAuthorization.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct EvmSignature(pub [u8; 65]);
 
@@ -108,6 +123,8 @@ impl Serialize for EvmSignature {
     }
 }
 
+/// Wrapper around `alloy::primitives::Address`, providing display/serialization support.
+/// Used throughout the protocol for typed Ethereum address handling.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvmAddress(pub alloy::primitives::Address);
 
@@ -129,6 +146,8 @@ impl From<EvmAddress> for MixedAddress {
     }
 }
 
+/// Represents a 32-byte random nonce, hex-encoded with 0x prefix.
+/// Must be exactly 64 hex characters long.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct HexEncodedNonce(pub [u8; 32]);
 
@@ -219,6 +238,8 @@ impl From<UnixTimestamp> for U256 {
     }
 }
 
+/// EIP-712 structured data for ERC-3009-based authorization.
+/// Defines who can transfer how much USDC and when.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExactEvmPayloadAuthorization {
@@ -230,6 +251,8 @@ pub struct ExactEvmPayloadAuthorization {
     pub nonce: HexEncodedNonce,
 }
 
+/// Full payload required to authorize an ERC-3009 transfer:
+/// includes the signature and the EIP-712 struct.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExactEvmPayload {
@@ -237,6 +260,8 @@ pub struct ExactEvmPayload {
     pub authorization: ExactEvmPayloadAuthorization,
 }
 
+/// Describes a signed request to transfer a specific amount of funds on-chain.
+/// Includes the scheme, network, and signed payload contents.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentPayload {
@@ -247,6 +272,8 @@ pub struct PaymentPayload {
     pub payload: ExactEvmPayload,
 }
 
+/// The maximum token amount a user is required to pay, expressed as a `u64`.
+/// Parsed from string to prevent accidental loss of precision in JSON serialization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct MaxAmountRequired(pub u64);
 
@@ -258,6 +285,8 @@ impl<'de> Deserialize<'de> for MaxAmountRequired {
     }
 }
 
+/// Represents either an EVM address (0x...) or an off-chain address.
+/// Format is validated by regex and used for routing settlement.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MixedAddress(pub String);
 
@@ -303,6 +332,7 @@ impl<'de> Deserialize<'de> for MixedAddress {
     }
 }
 
+/// A 32-byte EVM transaction hash, encoded as 0x-prefixed hex string.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransactionHash(pub [u8; 32]);
 
@@ -341,6 +371,8 @@ impl Display for TransactionHash {
     }
 }
 
+/// Requirements set by the verifier for an acceptable payment.
+/// This includes min/max amounts, recipient, asset, network, and metadata.
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentRequirements {
@@ -357,6 +389,8 @@ pub struct PaymentRequirements {
     pub extra: Option<serde_json::Value>,
 }
 
+/// Wrapper for a payment payload and requirements sent by the client
+/// to be verified.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifyRequest {
@@ -374,6 +408,8 @@ impl std::fmt::Display for VerifyRequest {
     }
 }
 
+/// Wrapper for a payment payload and requirements sent by the client
+/// to be used for settlement.
 pub type SettleRequest = VerifyRequest;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -387,6 +423,8 @@ pub enum ErrorReason {
     InvalidNetwork,
 }
 
+/// Returned after attempting to settle a payment on-chain.
+/// Indicates success/failure, transaction hash, and payer identity.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettleResponse {
@@ -399,6 +437,8 @@ pub struct SettleResponse {
     pub network: Network,
 }
 
+/// Returned after verifying a `PaymentPayload` against `PaymentRequirements`.
+/// Includes a boolean flag and an optional error reason.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifyResponse {
@@ -408,6 +448,8 @@ pub struct VerifyResponse {
     pub payer: EvmAddress,
 }
 
+/// A simple error structure returned on unexpected or fatal server errors.
+/// Used when no structured protocol-level response is appropriate.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorResponse {
@@ -415,6 +457,15 @@ pub struct ErrorResponse {
 }
 
 sol!(
+    /// Solidity-compatible struct definition for ERC-3009 `transferWithAuthorization`.
+    ///
+    /// This matches the EIP-3009 format used in EIP-712 typed data:
+    /// it defines the authorization to transfer tokens from `from` to `to`
+    /// for a specific `value`, valid only between `validAfter` and `validBefore`
+    /// and identified by a unique `nonce`.
+    ///
+    /// This struct is primarily used to reconstruct the typed data domain/message
+    /// when verifying a client's signature.
     #[derive(Serialize, Deserialize)]
     struct TransferWithAuthorization {
         address from;
