@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ukstv/x402-facilitator
+  IMAGE_NAME: x402-rs/x402-facilitator
   IMAGE_NAME_DH: ukstv/x402-facilitator
 
 jobs:
