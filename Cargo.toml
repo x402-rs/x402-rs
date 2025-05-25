@@ -2,7 +2,7 @@
 name = "x402-rs"
 version = "0.3.1"
 authors = ["Sergey Ukustov <sergey@ukstv.me>"]
-edition = "2021"
+edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/x402-rs/x402-rs"
 description = "x402 payments in Rust: verify, settle, and monitor payments over HTTP 402 flows"
@@ -22,8 +22,10 @@ serde = { version = "1.0.219", features = ["derive"] }
 once_cell = { version = "1.21.3" }
 regex = { version = "1.11.1" }
 url = { version = "2.5.4", features = ["serde"] }
-alloy = { version = "0.15.10" }
+alloy = { version = "1.0.7" }
 thiserror = { version = "2.0.12" }
+base64 = { version = "0.22.1" }
+rust_decimal = { version = "1.37.1" }
 
 # Tracing and OpenTelemetry
 tracing = { version = "0.1.41" }
@@ -35,3 +37,13 @@ tracing-core = { version = "0.1.33" }
 tracing-opentelemetry = { version = "0.30.0" }
 opentelemetry-otlp = { version = "0.29.0", features = ["metrics", "grpc-tonic"] }
 opentelemetry-stdout = { version = "0.29.0", features = ["trace", "metrics"] }
+
+[features]
+telemetry = []
+
+[workspace]
+members = [
+  "crates/x402-axum",
+  "examples/x402-axum-example",
+  "."
+]

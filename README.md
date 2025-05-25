@@ -5,57 +5,86 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/ukstv/x402-facilitator.svg)](https://hub.docker.com/r/ukstv/x402-facilitator)
 [![GHCR](https://img.shields.io/badge/ghcr.io-x402--facilitator-blue)](https://github.com/orgs/x402-rs/packages)
 
-> Rust-based implementation of the x402 protocol facilitator.
+> A Rust-based implementation of the x402 protocol.
 
-[x402 Protocol](https://docs.cdp.coinbase.com/x402/docs/overview) defines a standard for making blockchain payments directly through HTTP 402 flows.
+This repository provides:
 
-The _Facilitator_ simplifies adoption of x402 by handling:
+- `x402-rs` (current crate):
+  - Core protocol types, facilitator traits, and logic for on-chain payment verification and settlement
+  - Facilitator binary - production-grade HTTP server to verify and settle x402 payments
+- [`x402-axum`](./crates/x402-axum) - Axum middleware for accepting x402 payments,
+- [`x402-axum-example`](./examples/x402-axum-example) - an example of `x402-axum` usage.
 
-* **Payment verification**: Confirming that client-submitted payment payloads match the declared requirements.
-* **Payment settlement**: Submitting validated payments to the blockchain and monitoring their confirmation.
+## About x402
 
-By using a Facilitator, servers (sellers) do not need to:
+The [x402 protocol](https://docs.cdp.coinbase.com/x402/docs/overview) is a proposed standard for making blockchain payments directly through HTTP using native `402 Payment Required` status code.
 
-* Connect directly to a blockchain.
-* Implement complex cryptographic or blockchain-specific payment logic.
+Servers declare payment requirements for specific routes. Clients send cryptographically signed payment payloads. Facilitators verify and settle payments on-chain.
 
-Instead, they can rely on the Facilitator to perform verification and settlement, reducing operational overhead and accelerating x402 adoption.
+## Getting Started
 
-## Current Features
+### Run facilitator
 
-This repository currently implements a _Facilitator_ role according to the x402 specification.
+```shell
+docker run --env-file .env -p 8080:8080 ukstv/x402-facilitator
+```
 
-**Responsibilities:**
-- _Verify Payments:_ Confirm that submitted payment payloads are valid.
-- _Settle Payments:_ Submit validated payments on-chain.
-- _Return Results:_ Provide clear verification and settlement responses to the resource server.
-- _Emit Traces:_ Emit OpenTelemetry-compatible traces and metrics.
+Or build locally:
+```shell
+docker build -t x402-rs .
+docker run --env-file .env -p 8080:8080 x402-rs
+```
 
-The Facilitator **does not hold funds**. It acts purely as an execution and verification layer based on signed payloads.
+See the [Facilitator](#facilitator) section below for full usage details
 
-For a detailed overview of the x402 payment flow and Facilitator role, see the [x402 protocol documentation](https://docs.cdp.coinbase.com/x402/docs/overview).
+### Protect Axum Routes
+
+Use `x402-axum` to gate your routes behind on-chain payments:
+
+```rust
+let x402 = X402Middleware::try_from("https://x402.org/facilitator/").unwrap();
+let usdc = USDCDeployment::by_network(Network::BaseSepolia);
+
+let app = Router::new().route("/paid-content", get(handler).layer( 
+        x402.with_price_tag(usdc.amount("0.025").pay_to("0xYourAddress").unwrap())
+    ),
+);
+```
+
+See [`x402-axum` crate docs](./crates/x402-axum/README.md).
 
 ## Roadmap
-
-This project provides a Rust-based implementation of the x402 payment protocol, focused on reliability, ease of integration, and support for machine-native payment flows.
 
 | Milestone                           | Description                                                                                              |   Status   |
 |:------------------------------------|:---------------------------------------------------------------------------------------------------------|:----------:|
 | Facilitator for Base USDC           | Payment verification and settlement service, enabling real-time pay-per-use transactions for Base chain. | ✅ Complete |
 | Metrics and Tracing                 | Expose OpenTelemetry metrics and structured tracing for observability, monitoring, and debugging         | ✅ Complete |
-| Server Middleware                   | Provide ready-to-use integration for Rust web frameworks such as axum and tower.                         | 🔜 Planned |
-| Client Library                      | Provide a lightweight Rust library for initiating and managing x402 payment flows from Rust clients.     | 🔜 Planned |
+| Server Middleware                   | Provide ready-to-use integration for Rust web frameworks such as axum and tower.                         | ✅ Complete |
+| Client Library                      | Provide a lightweight Rust library for initiating and managing x402 payment flows from Rust clients.     | ⏳ Planned  |
 | Multiple chains and multiple tokens | Support various tokens and EVM compatible chains.                                                        | 🔜 Planned |
-| Payments Storage                    | Persist verified and settled payments for analytics, access control, and auditability.                   | 🔜 Planned |
-| Micropayments                       | Enable fine-grained offchain usage-based payments, including streaming and per-request billing.          | 🔜 Planned |
-
----
+| Payment Storage                     | Persist verified and settled payments for analytics, access control, and auditability.                   | 🔜 Planned |
+| Micropayment Support                | Enable fine-grained offchain usage-based payments, including streaming and per-request billing.          | 🔜 Planned |
 
 The initial focus is on establishing a stable, production-quality Rust SDK and middleware ecosystem for x402 integration.
 
-## Usage
+## Facilitator
 
-### 1. Provide environment variables
+The `x402-rs` crate (this repo) provides a runnable x402 facilitator binary. The _Facilitator_ role simplifies adoption of x402 by handling:
+- **Payment verification**: Confirming that client-submitted payment payloads match the declared requirements.
+- **Payment settlement**: Submitting validated payments to the blockchain and monitoring their confirmation.
+
+By using a Facilitator, servers (sellers) do not need to:
+- Connect directly to a blockchain.
+- Implement complex cryptographic or blockchain-specific payment logic.
+
+Instead, they can rely on the Facilitator to perform verification and settlement, reducing operational overhead and accelerating x402 adoption.
+The Facilitator **never holds user funds**. It acts solely as a stateless verification and execution layer for signed payment payloads.
+
+For a detailed overview of the x402 payment flow and Facilitator role, see the [x402 protocol documentation](https://docs.cdp.coinbase.com/x402/docs/overview).
+
+### Usage
+
+#### 1. Provide environment variables
 
 Create a `.env` file or set environment variables directly. Example `.env`:
 
@@ -75,24 +104,24 @@ The supported networks are determined by which RPC URLs you provide:
 - If you set both `RPC_URL_BASE_SEPOLIA` and `RPC_URL_BASE`, then both Base Sepolia and Base Mainnet are supported.
 - If an RPC URL for a network is missing, that network will not be available for settlement or verification.
 
-### 2. Build and Run with Docker
+#### 2. Build and Run with Docker
 
 Prebuilt Docker images are available at:
 - [GitHub Container Registry](https://ghcr.io/x402-rs/x402-facilitator): `ghcr.io/x402-rs/x402-facilitator`
 - [Docker Hub](https://hub.docker.com/r/ukstv/x402-facilitator): `ukstv/x402-facilitator`
 
 Run the container from Docker Hub:
-```commandline
+```shell
 docker run --env-file .env -p 8080:8080 ukstv/x402-facilitator
 ```
 
 To run using GitHub Container Registry:
-```commandline
+```shell
 docker run --env-file .env -p 8080:8080 ghcr.io/x402-rs/x402-facilitator
 ```
 
 Or build a Docker image locally:
-```commandline
+```shell
 docker build -t x402-rs .
 docker run --env-file .env -p 8080:8080 x402-rs
 ```
@@ -102,11 +131,15 @@ The container:
 * Starts on http://localhost:8080 by default.
 * Requires minimal runtime dependencies (based on `debian:bullseye-slim`).
 
-### 3. Point your application to your Facilitator
+#### 3. Point your application to your Facilitator
 
 If you are building an x402-powered application, update the Facilitator URL to point to your self-hosted instance.
 
-Example using Hono and x402-hono (from [x402.org Quickstart for Sellers](https://x402.gitbook.io/x402/getting-started/quickstart-for-sellers)):
+> ℹ️ **Tip:** For production deployments, ensure your Facilitator is reachable via HTTPS and protect it against public abuse.
+
+<details>
+<summary>If you use Hono and x402-hono</summary>
+From [x402.org Quickstart for Sellers](https://x402.gitbook.io/x402/getting-started/quickstart-for-sellers):
 
 ```typescript
 import { Hono } from "hono";
@@ -128,7 +161,7 @@ app.use(paymentMiddleware(
     }
   },
   {
-    url: "http://localhost:8080", // 👈 Your self-hosted Facilitator
+    url: "http://your-validator.url/", // 👈 Your self-hosted Facilitator
   }
 ));
 
@@ -143,28 +176,42 @@ serve({
 });
 ```
 
-> ℹ️ **Tip:** For production deployments, ensure your Facilitator is reachable via HTTPS and protect it against public abuse.
+</details>
 
-## Configuration
+<details>
+<summary>If you use `x402-axum`</summary>
+
+```rust
+let x402 = X402Middleware::try_from("http://your-validator.url/").unwrap();  // 👈 Your self-hosted Facilitator
+let usdc = USDCDeployment::by_network(Network::BaseSepolia);
+
+let app = Router::new().route("/paid-content", get(handler).layer( 
+        x402.with_price_tag(usdc.amount("0.025").pay_to("0xYourAddress").unwrap())
+    ),
+);
+```
+
+</details>
+
+### Configuration
 
 The service reads configuration via `.env` file or directly through environment variables.
 
 Available variables:
 
-* `SIGNER_TYPE` (required): Type of signer to use. Only `private-key` is supported now.
-* `PRIVATE_KEY` (required): Private key in hex, like `0xdeadbeef...`.
-* `HOST`: HTTP host to bind to (default `0.0.0.0`)
-* `PORT`: HTTP server port (default `8080`)
-* `RUST_LOG`: Logging level (e.g., `info`, `debug`, `trace`)
-* `RPC_URL_BASE_SEPOLIA`: Ethereum RPC endpoint for Base Sepolia testnet
-* `RPC_URL_BASE`: Ethereum RPC endpoint for Base mainnet
+* `RUST_LOG`: Logging level (e.g., `info`, `debug`, `trace`),
+* `HOST`: HTTP host to bind to (default: `0.0.0.0`),
+* `PORT`: HTTP server port (default: `8080`),
+* `SIGNER_TYPE` (required): Type of signer to use. Only `private-key` is supported now,
+* `PRIVATE_KEY` (required): Private key in hex, like `0xdeadbeef...`,
+* `RPC_URL_BASE_SEPOLIA`: Ethereum RPC endpoint for Base Sepolia testnet,
+* `RPC_URL_BASE`: Ethereum RPC endpoint for Base mainnet.
 
 ### Observability
 
 The facilitator emits [OpenTelemetry](https://opentelemetry.io)-compatible traces and metrics to standard endpoints,
 making it easy to integrate with tools like Honeycomb, Prometheus, Grafana, and others.
-Spans are tagged with request method, status code, URI, and latency.
-Metrics include basic process and request-level metrics
+Tracing spans are annotated with HTTP method, status code, URI, latency, other request and process metadata.
 
 To enable tracing and metrics export, set the appropriate `OTEL_` environment variables:
 
@@ -194,18 +241,18 @@ The Facilitator supports different networks based on the environment variables y
 
 > ℹ️ **Tip:** For initial development and testing, you can start with Base Sepolia only.
 
-## Development
+### Development
 
 Prerequisites:
 - Rust 1.80+
 - `cargo` and a working toolchain
 
 Build locally:
-```bash
+```shell
 cargo build
 ```
 Run:
-```bash
+```shell
 cargo run
 ```
 

@@ -1,17 +1,23 @@
-//! x402 Facilitator core modules.
+//! Rust implementation of the x402 protocol.
 //!
-//! This crate implements the server-side logic for an x402 facilitator,
-//! including Ethereum network integration, caching of providers,
-//! OpenTelemetry instrumentation, and type-safe handling of payment
-//! payloads and responses.
+//! This crate provides the core data structures and logic for working with the x402 protocol,
+//! including a reference facilitator implementation for on-chain verification and settlement.
 //!
-//! - `facilitator`: core logic for handling payment verification and settlement
-//! - `network`: definitions of supported networks and chain metadata
-//! - `provider_cache`: shared cache of Ethereum providers per network
-//! - `telemetry`: OpenTelemetry setup and subscriber initialization
-//! - `types`: all x402 protocol structures, payload formats, and verification types
+//! It is designed for reuse across all x402 roles:
+//! - _Facilitator_: a server that verifies and settles x402 payments (see [`facilitator`] and [`facilitator_local`])
+//! - _Seller_: a payment-gated service that consumes shared types from [`types`]
+//! - _Buyer_: a client that constructs and submits x402-compliant payments
+//!
+//! Modules:
+//! - [`facilitator`] — defines the [`facilitator::Facilitator`] trait used to validate and settle x402 payments.
+//! - [`facilitator_local`] — a concrete implementation of [`facilitator::Facilitator`].
+//! - [`network`] — enumerates supported Ethereum-compatible networks and known token deployments.
+//! - [`provider_cache`] — dynamic initialization and caching of Ethereum JSON-RPC providers.
+//! - [`telemetry`] — OpenTelemetry instrumentation setup for tracing and observability.
+//! - [`types`] — all shared x402 protocol structures and payload formats.
 
 pub mod facilitator;
+pub mod facilitator_local;
 pub mod network;
 pub mod provider_cache;
 pub mod telemetry;

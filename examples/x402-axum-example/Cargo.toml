@@ -1,0 +1,21 @@
+[package]
+name = "x402-axum-example"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+x402-rs = { version = "0.3.1" }
+x402-axum = { version = "0.1.0", features = ["telemetry"] }
+
+axum = { version = "0.8.4" }
+serde_json = { version = "1.0.140" }
+tokio = { version = "1.45.0" }
+dotenvy = { version = "0.15.7" }
+
+# Tracing and OpenTelemetry
+tracing = { version = "0.1.41" }
+opentelemetry = { version = "0.29.1" }
+tower-http = "0.6.4"
+tracing-opentelemetry = "0.30.0"
+url = "2.5.4"

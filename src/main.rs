@@ -22,48 +22,61 @@
 
 use axum::http::Method;
 use axum::routing::post;
-use axum::{routing::get, Extension, Router};
+use axum::{Extension, Router, routing::get};
 use dotenvy::dotenv;
 use opentelemetry::trace::Status;
 use std::env;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use tower_http::cors;
 use tower_http::trace::TraceLayer;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
+use crate::facilitator_local::FacilitatorLocal;
 use crate::provider_cache::ProviderCache;
 use crate::telemetry::Telemetry;
 
 mod facilitator;
+mod facilitator_local;
 mod handlers;
 mod network;
 mod provider_cache;
 mod telemetry;
 mod types;
 
+/// Initializes the x402 facilitator server.
+///
+/// - Loads `.env` variables.
+/// - Initializes OpenTelemetry tracing.
+/// - Connects to Ethereum providers for supported networks.
+/// - Starts an Axum HTTP server with the x402 protocol handlers.
+///
+/// Binds to the address specified by the `HOST` and `PORT` env vars.
 #[tokio::main]
 async fn main() {
     // Load .env variables
     dotenv().ok();
 
-    let _telemetry = Telemetry::new();
+    let _telemetry = Telemetry::new()
+        .with_name(env!("CARGO_PKG_NAME"))
+        .with_version(env!("CARGO_PKG_VERSION"))
+        .register();
 
     let provider_cache = ProviderCache::from_env().await;
+    // Abort if we can't initialize Ethereum providers early
     if let Err(e) = provider_cache {
         tracing::error!("Failed to create Ethereum providers: {}", e);
         std::process::exit(1);
     }
-    let provider_cache = Arc::new(provider_cache.unwrap());
+    let facilitator = FacilitatorLocal::new(provider_cache.unwrap());
 
     let app = Router::new()
-        .route("/", get(|| async { "Hello, World!" }))
+        .route("/", get(|| async { "Hello, World!" })) // Liveness or sanity check route
         .route("/verify", get(handlers::get_verify_info))
         .route("/verify", post(handlers::post_verify))
         .route("/settle", get(handlers::get_settle_info))
         .route("/settle", post(handlers::post_settle))
         .route("/supported", get(handlers::get_supported))
-        .layer(Extension(provider_cache))
+        .layer(Extension(facilitator))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|request: &axum::http::Request<_>| {
