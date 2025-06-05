@@ -4538,7 +4538,7 @@ dependencies = [
 
 [[package]]
 name = "x402-axum"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "axum-core",
@@ -4573,7 +4573,7 @@ dependencies = [
 
 [[package]]
 name = "x402-rs"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "alloy",
  "axum",
