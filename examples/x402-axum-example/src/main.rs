@@ -21,7 +21,7 @@ async fn main() {
         .with_version(env!("CARGO_PKG_VERSION"))
         .register();
 
-    let x402 = X402Middleware::try_from("https://x402.org/facilitator")
+    let x402 = X402Middleware::try_from("https://facilitator.x402.rs")
         .unwrap()
         .with_base_url(url::Url::parse("https://localhost:3000/").unwrap());
     let usdc = USDCDeployment::by_network(Network::BaseSepolia)
