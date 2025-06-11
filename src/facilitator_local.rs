@@ -9,14 +9,6 @@
 //! - Contract interaction using Alloy
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
-use crate::facilitator::Facilitator;
-use crate::network::{Network, USDCDeployment};
-use crate::provider_cache::ProviderCache;
-use crate::types::{
-    EvmAddress, ExactEvmPayload, ExactEvmPayloadAuthorization, FacilitatorErrorReason,
-    MixedAddress, MixedAddressError, PaymentPayload, PaymentRequirements, Scheme, SettleRequest,
-    SettleResponse, TransactionHash, TransferWithAuthorization, VerifyRequest, VerifyResponse,
-};
 use alloy::network::Ethereum;
 use alloy::primitives::{Bytes, FixedBytes, Signature, U256};
 use alloy::providers::Provider;
@@ -28,7 +20,15 @@ use std::time::SystemTime;
 use tracing::{Instrument, instrument};
 use tracing_core::Level;
 
+use crate::facilitator::Facilitator;
+use crate::network::{Network, USDCDeployment};
+use crate::provider_cache::ProviderCache;
 use crate::provider_cache::ProviderMap;
+use crate::types::{
+    EvmAddress, ExactEvmPayload, ExactEvmPayloadAuthorization, FacilitatorErrorReason,
+    MixedAddress, MixedAddressError, PaymentPayload, PaymentRequirements, Scheme, SettleRequest,
+    SettleResponse, TransactionHash, TransferWithAuthorization, VerifyRequest, VerifyResponse,
+};
 
 /// Represents all possible errors that may occur during verification or settlement of x402 payments.
 #[derive(thiserror::Error, Debug)]
@@ -151,8 +151,13 @@ where
         .await?;
         let value: U256 = payload.payload.authorization.value.into();
         assert_enough_value(&value, &amount_required)?;
+        let eip1559 = self.provider_cache.eip1559(payload.network);
 
-        Ok(ValidPaymentResult { contract })
+        Ok(ValidPaymentResult {
+            contract,
+            provider,
+            eip1559,
+        })
     }
 }
 
@@ -201,10 +206,13 @@ where
     async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
         let payload = &request.payment_payload;
         let payment_requirements = &request.payment_requirements;
-        let contract = self
+        let valid_payment = self
             .assert_valid_payment(payload, payment_requirements)
-            .await?
-            .contract;
+            .await?;
+        let contract = valid_payment.contract;
+        let provider = valid_payment.provider;
+        let eip1559 = valid_payment.eip1559;
+
         let from: alloy::primitives::Address = payload.payload.authorization.from.into();
         let to: alloy::primitives::Address = payload.payload.authorization.to.into();
         let value: U256 = payload.payload.authorization.value.into();
@@ -212,16 +220,28 @@ where
         let valid_before: U256 = payload.payload.authorization.valid_before.into();
         let nonce = FixedBytes(payload.payload.authorization.nonce.0);
         let signature = Bytes::from(payload.payload.signature.0);
-        let tx = contract
-            .transferWithAuthorization_0(
-                from,
-                to,
-                value,
-                valid_after,
-                valid_before,
-                nonce,
-                signature.clone(),
-            )
+
+        let tx = contract.transferWithAuthorization_0(
+            from,
+            to,
+            value,
+            valid_after,
+            valid_before,
+            nonce,
+            signature.clone(),
+        );
+
+        let tx = if eip1559 {
+            tx
+        } else {
+            let gas = provider
+                .get_gas_price()
+                .await
+                .map_err(|e| PaymentError::InvalidContractCall(e.into()))?;
+            tx.gas_price(gas)
+        };
+
+        let tx = tx
             .send()
             .instrument(tracing::info_span!("transferWithAuthorization_0",
                     from = %from,
@@ -278,10 +298,32 @@ where
     }
 }
 
+/// Result of a successful x402 payment validation.
+///
+/// This struct packages all the verified components needed for settlement, including:
+/// - an instance of the token contract (`USDCInstance`) ready to execute transfers,
+/// - the Ethereum provider used for interacting with the blockchain,
+/// - a boolean flag indicating whether the target network supports EIP-1559.
+///
+/// Used internally to pass validated context from [`FacilitatorLocal::assert_valid_payment`] into [`FacilitatorLocal::settle`].
 struct ValidPaymentResult<P> {
+    /// An instance of the verified token contract, ready to perform `transferWithAuthorization`.
     contract: USDC::USDCInstance<P>,
+    /// The Ethereum provider configured for the target network.
+    provider: P,
+    /// Whether the network uses EIP-1559-style fee parameters (used to decide gas pricing mode).
+    eip1559: bool,
 }
 
+/// Checks whether the basic payment requirements are compatible with the payload.
+///
+/// Verifies the following:
+/// - The scheme (e.g. "exact") in the payload matches the required one.
+/// - The network (e.g. Base) matches.
+/// - The recipient address matches.
+///
+/// # Errors
+/// Returns a [`PaymentError`] if any of these checks fail.
 #[instrument(skip_all, err)]
 fn assert_requirements(
     payload: &PaymentPayload,
@@ -314,6 +356,14 @@ fn assert_requirements(
     Ok(())
 }
 
+/// Constructs the correct EIP-712 domain for signature verification.
+///
+/// Resolves the `name` and `version` based on:
+/// - Static metadata from [`USDCDeployment`] (if available),
+/// - Or by calling `version()` on the token contract if not matched statically.
+///
+/// # Errors
+/// Returns a [`PaymentError::InvalidContractCall`] if the contract call fails.
 #[instrument(skip_all, err, fields(
     network = %payload.network,
     asset = %asset_address,
@@ -362,6 +412,12 @@ async fn assert_domain<P: Provider<Ethereum>>(
     Ok(domain)
 }
 
+/// Verifies the EIP-712 signature in the payment payload.
+///
+/// Recovers the signing address and checks it matches the expected `from` address in the payload.
+///
+/// # Errors
+/// Returns a [`PaymentError::InvalidSignature`] if the signature is malformed or does not match.
 #[instrument(skip_all, err)]
 fn assert_signature(payload: &ExactEvmPayload, domain: &Eip712Domain) -> Result<(), PaymentError> {
     // Verify the signature
@@ -391,6 +447,13 @@ fn assert_signature(payload: &ExactEvmPayload, domain: &Eip712Domain) -> Result<
     }
 }
 
+/// Validates that the current time is within the `validAfter` and `validBefore` bounds.
+///
+/// Adds a 6-second grace buffer when checking expiration to account for latency.
+///
+/// # Errors
+/// Returns [`PaymentError::InvalidTiming`] if the authorization is not yet active or already expired.
+/// Returns [`PaymentError::ClockError`] if the system clock cannot be read.
 #[instrument(skip_all, err)]
 fn assert_time(authorization: &ExactEvmPayloadAuthorization) -> Result<(), PaymentError> {
     let now = SystemTime::now()
@@ -415,6 +478,13 @@ fn assert_time(authorization: &ExactEvmPayloadAuthorization) -> Result<(), Payme
     Ok(())
 }
 
+/// Checks if the payer has enough on-chain token balance to meet the `maxAmountRequired`.
+///
+/// Performs an `ERC20.balanceOf()` call using the USDC contract instance.
+///
+/// # Errors
+/// Returns [`PaymentError::InsufficientFunds`] if the balance is too low.
+/// Returns [`PaymentError::InvalidContractCall`] if the balance query fails.
 #[instrument(skip_all, err, fields(
     sender = %sender,
     max_required = %max_amount_required,
@@ -445,6 +515,12 @@ async fn assert_enough_balance<P: Provider<Ethereum>>(
     }
 }
 
+/// Verifies that the declared `value` in the payload is sufficient for the required amount.
+///
+/// This is a static check (not on-chain) that compares two numbers.
+///
+/// # Errors
+/// Returns [`PaymentError::InsufficientValue`] if the payload's value is less than required.
 #[instrument(skip_all, err, fields(
     sent = %sent,
     max_amount_required = %max_amount_required

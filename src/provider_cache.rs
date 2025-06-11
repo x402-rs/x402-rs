@@ -11,6 +11,12 @@
 //! - `SIGNER_TYPE` — currently only `"private-key"` is supported,
 //! - `PRIVATE_KEY` — the private key used to sign transactions as `"0x..."` string,
 //! - `RPC_URL_BASE`, `RPC_URL_BASE_SEPOLIA` — RPC endpoints per network
+//!
+//! Example usage:
+//! ```rust
+//! let provider_cache = ProviderCache::from_env().await?;
+//! let provider = provider_cache.by_network(Network::Base)?;
+//! ```
 
 use alloy::network::EthereumWallet;
 use alloy::providers::fillers::{
@@ -25,7 +31,7 @@ use std::env;
 
 use crate::network::Network;
 
-/// The full Ethereum provider type used in this project.
+/// The fully composed Ethereum provider type used in this project.
 ///
 /// Combines multiple filler layers for gas, nonce, chain ID, blob gas, and wallet signing,
 /// and wraps a [`RootProvider`] for actual JSON-RPC communication.
@@ -44,6 +50,7 @@ const ENV_SIGNER_TYPE: &str = "SIGNER_TYPE";
 const ENV_PRIVATE_KEY: &str = "PRIVATE_KEY";
 const ENV_RPC_BASE: &str = "RPC_URL_BASE";
 const ENV_RPC_BASE_SEPOLIA: &str = "RPC_URL_BASE_SEPOLIA";
+const ENV_RPC_XDC: &str = "RPC_URL_XDC";
 
 /// A cache of pre-initialized [`EthereumProvider`] instances keyed by network.
 ///
@@ -54,14 +61,21 @@ const ENV_RPC_BASE_SEPOLIA: &str = "RPC_URL_BASE_SEPOLIA";
 #[derive(Clone, Debug)]
 pub struct ProviderCache {
     providers: HashMap<Network, EthereumProvider>,
+    eip1559: HashMap<Network, bool>,
 }
 
 /// A generic cache of pre-initialized Ethereum provider instances [`ProviderMap::Value`] keyed by network.
+///
+/// This allows querying configured providers by network, and checking whether the network
+/// supports EIP-1559 fee mechanics.
 pub trait ProviderMap {
     type Value;
 
     /// Returns the Ethereum provider for the specified network, if configured.
     fn by_network<N: Borrow<Network>>(&self, network: N) -> Option<&Self::Value>;
+
+    /// Returns `true` if the specified network supports EIP-1559-style transactions.
+    fn eip1559<N: Borrow<Network>>(&self, network: N) -> bool;
 }
 
 impl ProviderCache {
@@ -75,6 +89,7 @@ impl ProviderCache {
     /// Fails if required env vars are missing or if the provider cannot connect.
     pub async fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
         let mut providers = HashMap::new();
+        let mut eip1559 = HashMap::new();
         let wallet = SignerType::from_env()?.make_wallet()?;
         tracing::info!("Using address: {}", wallet.default_signer().address());
 
@@ -82,7 +97,14 @@ impl ProviderCache {
             let env_var = match network {
                 Network::BaseSepolia => ENV_RPC_BASE_SEPOLIA,
                 Network::Base => ENV_RPC_BASE,
+                Network::XdcMainnet => ENV_RPC_XDC,
             };
+            let is_eip1559 = match network {
+                Network::BaseSepolia => true,
+                Network::Base => true,
+                Network::XdcMainnet => false,
+            };
+            eip1559.insert(*network, is_eip1559);
 
             let rpc_url = env::var(env_var);
             if let Ok(rpc_url) = rpc_url {
@@ -98,7 +120,7 @@ impl ProviderCache {
             }
         }
 
-        Ok(Self { providers })
+        Ok(Self { providers, eip1559 })
     }
 }
 
@@ -106,6 +128,10 @@ impl ProviderMap for ProviderCache {
     type Value = EthereumProvider;
     fn by_network<N: Borrow<Network>>(&self, network: N) -> Option<&EthereumProvider> {
         self.providers.get(network.borrow())
+    }
+
+    fn eip1559<N: Borrow<Network>>(&self, network: N) -> bool {
+        self.eip1559.get(network.borrow()).cloned().unwrap_or(true)
     }
 }
 
