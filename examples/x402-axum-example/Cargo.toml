@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 x402-rs = { version = "0.5.0" }
-x402-axum = { version = "0.1.0", features = ["telemetry"] }
+x402-axum = { version = "0.1.2", features = ["telemetry"] }
 
 axum = { version = "0.8.4" }
 serde_json = { version = "1.0.140" }
