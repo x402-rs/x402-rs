@@ -4573,7 +4573,7 @@ dependencies = [
 
 [[package]]
 name = "x402-rs"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "alloy",
  "axum",
