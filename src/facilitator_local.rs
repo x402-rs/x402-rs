@@ -16,7 +16,7 @@ use alloy::sol;
 use alloy::sol_types::{Eip712Domain, SolStruct, eip712_domain};
 use std::fmt::Debug;
 use std::future::IntoFuture;
-use std::time::SystemTime;
+use std::time::{SystemTime, SystemTimeError};
 use tracing::{Instrument, instrument};
 use tracing_core::Level;
 
@@ -74,7 +74,7 @@ pub enum PaymentError {
     InsufficientValue,
     /// Failed to read system clock to check timing.
     #[error("Can not get system clock")]
-    ClockError,
+    ClockError(#[source] SystemTimeError),
 }
 
 sol!(
@@ -389,7 +389,7 @@ async fn assert_domain<P: Provider<Ethereum>>(
         .and_then(|version| version.as_str().map(|s| s.to_string()));
     let version = if let Some(extra_version) = version {
         extra_version
-    } else if usdc.address == *asset_address {
+    } else if usdc.address() == *asset_address {
         usdc.eip712.version.clone()
     } else {
         token_contract
@@ -458,7 +458,7 @@ fn assert_signature(payload: &ExactEvmPayload, domain: &Eip712Domain) -> Result<
 fn assert_time(authorization: &ExactEvmPayloadAuthorization) -> Result<(), PaymentError> {
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(|_| PaymentError::ClockError)?
+        .map_err(PaymentError::ClockError)?
         .as_secs();
     let valid_before = authorization.valid_before.0;
     if valid_before < now + 6 {

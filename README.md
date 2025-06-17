@@ -13,6 +13,7 @@ This repository provides:
   - Core protocol types, facilitator traits, and logic for on-chain payment verification and settlement
   - Facilitator binary - production-grade HTTP server to verify and settle x402 payments
 - [`x402-axum`](./crates/x402-axum) - Axum middleware for accepting x402 payments,
+- [`x402-reqwest`](./crates/x402-reqwest) - Wrapper for reqwest for transparent x402 payments,
 - [`x402-axum-example`](./examples/x402-axum-example) - an example of `x402-axum` usage.
 
 ## About x402
@@ -53,6 +54,27 @@ let app = Router::new().route("/paid-content", get(handler).layer(
 
 See [`x402-axum` crate docs](./crates/x402-axum/README.md).
 
+### Send x402 payments
+
+Use `x402-reqwest` to send payments:
+
+```rust
+let signer: PrivateKeySigner = "0x...".parse()?; // never hardcode real keys!
+
+let client = reqwest::Client::new()
+    .with_payments(signer)
+    .prefer(USDCDeployment::by_network(Network::Base))
+    .max(USDCDeployment::by_network(Network::Base).amount("1.00")?)
+    .build();
+
+let res = client
+    .get("https://example.com/protected")
+    .send()
+    .await?;
+```
+
+See [`x402-reqwest` crate docs](./crates/x402-reqwest/README.md).
+
 ## Roadmap
 
 | Milestone                           | Description                                                                                              |   Status   |
@@ -60,8 +82,8 @@ See [`x402-axum` crate docs](./crates/x402-axum/README.md).
 | Facilitator for Base USDC           | Payment verification and settlement service, enabling real-time pay-per-use transactions for Base chain. | ✅ Complete |
 | Metrics and Tracing                 | Expose OpenTelemetry metrics and structured tracing for observability, monitoring, and debugging         | ✅ Complete |
 | Server Middleware                   | Provide ready-to-use integration for Rust web frameworks such as axum and tower.                         | ✅ Complete |
-| Client Library                      | Provide a lightweight Rust library for initiating and managing x402 payment flows from Rust clients.     | ⏳ Planned  |
-| Multiple chains and multiple tokens | Support various tokens and EVM compatible chains.                                                        | 🔜 Planned |
+| Client Library                      | Provide a lightweight Rust library for initiating and managing x402 payment flows from Rust clients.     | ✅ Complete |
+| Multiple chains and multiple tokens | Support various tokens and EVM compatible chains.                                                        | ⏳ Planned  |
 | Payment Storage                     | Persist verified and settled payments for analytics, access control, and auditability.                   | 🔜 Planned |
 | Micropayment Support                | Enable fine-grained offchain usage-based payments, including streaming and per-request billing.          | 🔜 Planned |
 

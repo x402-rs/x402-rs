@@ -10,7 +10,7 @@ use std::borrow::Borrow;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 
-use crate::types::{TokenAsset, TokenAssetEip712};
+use crate::types::{TokenAsset, TokenDeployment, TokenDeploymentEip712};
 
 /// Supported Ethereum-compatible networks.
 ///
@@ -56,11 +56,13 @@ impl Network {
 
 /// Lazily initialized known USDC deployment on Base Sepolia as [`USDCDeployment`].
 static USDC_BASE_SEPOLIA: Lazy<USDCDeployment> = Lazy::new(|| {
-    USDCDeployment(TokenAsset {
-        address: address!("0x036CbD53842c5426634e7929541eC2318f3dCF7e").into(),
-        network: Network::BaseSepolia,
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0x036CbD53842c5426634e7929541eC2318f3dCF7e").into(),
+            network: Network::BaseSepolia,
+        },
         decimals: 6,
-        eip712: TokenAssetEip712 {
+        eip712: TokenDeploymentEip712 {
             name: "USDC".into(),
             version: "2".into(),
         },
@@ -69,11 +71,13 @@ static USDC_BASE_SEPOLIA: Lazy<USDCDeployment> = Lazy::new(|| {
 
 /// Lazily initialized known USDC deployment on Base mainnet as [`USDCDeployment`].
 static USDC_BASE: Lazy<USDCDeployment> = Lazy::new(|| {
-    USDCDeployment(TokenAsset {
-        address: address!("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913").into(),
-        network: Network::Base,
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913").into(),
+            network: Network::Base,
+        },
         decimals: 6,
-        eip712: TokenAssetEip712 {
+        eip712: TokenDeploymentEip712 {
             name: "USDC".into(),
             version: "2".into(),
         },
@@ -82,32 +86,46 @@ static USDC_BASE: Lazy<USDCDeployment> = Lazy::new(|| {
 
 /// Lazily initialized known USDC deployment on XDC mainnet as [`USDCDeployment`].
 static USDC_XDC: Lazy<USDCDeployment> = Lazy::new(|| {
-    USDCDeployment(TokenAsset {
-        address: address!("0x2A8E898b6242355c290E1f4Fc966b8788729A4D4").into(),
-        network: Network::XdcMainnet,
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0x2A8E898b6242355c290E1f4Fc966b8788729A4D4").into(),
+            network: Network::XdcMainnet,
+        },
         decimals: 6,
-        eip712: TokenAssetEip712 {
+        eip712: TokenDeploymentEip712 {
             name: "Bridged USDC(XDC)".into(),
             version: "2".into(),
         },
     })
 });
 
-/// A known USDC deployment as a wrapper around [`TokenAsset`].
+/// A known USDC deployment as a wrapper around [`TokenDeployment`].
 #[derive(Clone, Debug)]
-pub struct USDCDeployment(pub TokenAsset);
+pub struct USDCDeployment(pub TokenDeployment);
 
 impl Deref for USDCDeployment {
-    type Target = TokenAsset;
+    type Target = TokenDeployment;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl From<&USDCDeployment> for TokenAsset {
+impl From<&USDCDeployment> for TokenDeployment {
     fn from(deployment: &USDCDeployment) -> Self {
         deployment.0.clone()
+    }
+}
+
+impl From<USDCDeployment> for Vec<TokenAsset> {
+    fn from(deployment: USDCDeployment) -> Self {
+        vec![deployment.asset.clone()]
+    }
+}
+
+impl From<&USDCDeployment> for Vec<TokenAsset> {
+    fn from(deployment: &USDCDeployment) -> Self {
+        vec![deployment.asset.clone()]
     }
 }
 

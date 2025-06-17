@@ -24,12 +24,12 @@ If no valid payment is provided, a `402 Payment Required` response is returned w
 Add to your `Cargo.toml`:
 
 ```toml
-x402-axum = "0.1"
+x402-axum = "0.2"
 ```
 
 If you want to enable tracing and OpenTelemetry support, use the telemetry feature (make sure to register a tracing subscriber in your application):
 ```toml
-x402-axum = { version = "0.1", features = ["telemetry"] }
+x402-axum = { version = "0.2", features = ["telemetry"] }
 ```
 
 ## Specifying Prices
@@ -46,15 +46,17 @@ You can construct `PriceTag`s directly or use fluent builder helpers that simpli
 
 **Bring Your Own Token**
 
-If you're integrating a custom token, define it using `TokenAsset`. This includes token address, decimals, the network it lives on, and EIP-712 metadata (name/version):
+If you're integrating a custom token, define it using `TokenDeployment`. This includes token address, decimals, the network it lives on, and EIP-712 metadata (name/version):
 
 ```rust
-use x402_rs::types::{TokenAsset, EvmAddress, TokenAssetEip712};
+use x402_rs::types::{TokenAsset, TokenDeployment, EvmAddress, TokenAssetEip712};
 use x402_rs::network::Network;
 
-let asset = TokenAsset {
-    address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e".parse().unwrap(),
-    network: Network::BaseSepolia,
+let asset = TokenDeployment {
+    asset: TokenAsset {
+        address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e".parse().unwrap(),
+        network: Network::BaseSepolia,
+    },
     decimals: 6,
     eip712: TokenAssetEip712 {
         name: "MyToken".into(),
@@ -202,7 +204,7 @@ To enable:
 
 ```toml
 [dependencies]
-x402-axum = { version = "0.1", features = ["telemetry"] }
+x402-axum = { version = "0.2", features = ["telemetry"] }
 ```
 
 ## Related Crates	

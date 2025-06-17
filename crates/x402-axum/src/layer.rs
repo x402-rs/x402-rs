@@ -224,17 +224,17 @@ where
                 .iter()
                 .map(|price_tag| PaymentRequirements {
                     scheme: Scheme::Exact,
-                    network: price_tag.asset.network,
+                    network: price_tag.token.network(),
                     max_amount_required: price_tag.amount,
                     resource: resource.clone(),
                     description: description.clone(),
                     mime_type: mime_type.clone(),
                     pay_to: price_tag.pay_to.into(),
                     max_timeout_seconds,
-                    asset: price_tag.asset.address.into(),
+                    asset: price_tag.token.address().into(),
                     extra: Some(json!({
-                        "name": price_tag.asset.eip712.name,
-                        "version": price_tag.asset.eip712.version
+                        "name": price_tag.token.eip712.name,
+                        "version": price_tag.token.eip712.version
                     })),
                     output_schema: None,
                 })
@@ -246,16 +246,16 @@ where
                 .iter()
                 .map(|price_tag| PaymentRequirementsNoResource {
                     scheme: Scheme::Exact,
-                    network: price_tag.asset.network,
+                    network: price_tag.token.network(),
                     max_amount_required: price_tag.amount,
                     description: description.clone(),
                     mime_type: mime_type.clone(),
                     pay_to: price_tag.pay_to.into(),
                     max_timeout_seconds,
-                    asset: price_tag.asset.address.into(),
+                    asset: price_tag.token.address().into(),
                     extra: Some(json!({
-                        "name": price_tag.asset.eip712.name,
-                        "version": price_tag.asset.eip712.version
+                        "name": price_tag.token.eip712.name,
+                        "version": price_tag.token.eip712.version
                     })),
                     output_schema: None,
                 })

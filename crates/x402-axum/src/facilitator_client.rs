@@ -7,7 +7,7 @@
 //! ## Example
 //!
 //! ```rust
-//! use x402_middleware::facilitator_client::FacilitatorClient;
+//! use x402_axum::facilitator_client::FacilitatorClient;
 //!
 //! let facilitator = FacilitatorClient::try_from("https://facilitator.ukstv.me/").unwrap();
 //! ```

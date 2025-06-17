@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use x402_rs::network::USDCDeployment;
-use x402_rs::types::EvmAddress;
-use x402_rs::types::{MoneyAmount, TokenAmount, TokenAsset};
+use x402_rs::types::{EvmAddress, TokenDeployment};
+use x402_rs::types::{MoneyAmount, TokenAmount};
 
 /// A complete x402-compatible price tag, describing a required payment.
 ///
@@ -12,20 +12,20 @@ use x402_rs::types::{MoneyAmount, TokenAmount, TokenAsset};
 pub struct PriceTag {
     pub pay_to: EvmAddress,
     pub amount: TokenAmount,
-    pub asset: TokenAsset,
+    pub token: TokenDeployment,
 }
 
 impl PriceTag {
     /// Constructs a new `PriceTag` from raw inputs.
-    pub fn new<P: Into<EvmAddress>, T: Into<TokenAmount>, A: Into<TokenAsset>>(
+    pub fn new<P: Into<EvmAddress>, T: Into<TokenAmount>, A: Into<TokenDeployment>>(
         pay_to: P,
         amount: T,
-        asset: A,
+        token: A,
     ) -> Self {
         Self {
             pay_to: pay_to.into(),
             amount: amount.into(),
-            asset: asset.into(),
+            token: token.into(),
         }
     }
 }
@@ -42,7 +42,7 @@ impl From<PriceTag> for Vec<PriceTag> {
 /// (e.g., `"1.5"` USDC). Generic over the amount and payee representations.
 #[derive(Clone, Debug)]
 pub struct PriceTagBuilder<A, P> {
-    asset: TokenAsset,
+    token: TokenDeployment,
     amount: Option<A>,
     pay_to: Option<P>,
 }
@@ -89,7 +89,7 @@ where
 /// All methods clone the asset, so the trait is intended for ergonomic one-liners like:
 ///
 /// ```rust
-/// use x402_middleware::price::IntoPriceTag;
+/// use x402_axum::price::IntoPriceTag;
 /// use x402_rs::network::{Network, USDCDeployment};
 ///
 /// let price_tag = USDCDeployment::by_network(Network::Base)
@@ -133,7 +133,7 @@ where
     /// Returns an error if the amount or payee are missing or invalid.
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn build(self) -> Result<PriceTag, PriceTagBuilderError> {
-        let asset = self.asset;
+        let token = self.token;
         let amount = self.amount.ok_or(PriceTagBuilderError::NoAmount)?;
         let amount = amount
             .try_into()
@@ -145,7 +145,7 @@ where
             .ok()
             .ok_or(PriceTagBuilderError::InvalidPayTo)?;
         let price_tag = PriceTag {
-            asset,
+            token,
             amount,
             pay_to,
         };
@@ -168,14 +168,14 @@ where
     ///
     /// Converts the money amount to a [`TokenAmount`] using the asset's decimal precision.
     pub fn build(self) -> Result<PriceTag, PriceTagBuilderError> {
-        let asset = self.asset;
+        let token = self.token;
         let amount = self.amount.ok_or(PriceTagBuilderError::NoAmount)?;
         let money_amount: MoneyAmount = amount
             .try_into()
             .ok()
             .ok_or(PriceTagBuilderError::InvalidAmount)?;
         let amount = money_amount
-            .as_token_amount(asset.decimals as u32)
+            .as_token_amount(token.decimals as u32)
             .ok()
             .ok_or(PriceTagBuilderError::InvalidAmount)?;
         let pay_to = self.pay_to.ok_or(PriceTagBuilderError::NoPayTo)?;
@@ -184,7 +184,7 @@ where
             .ok()
             .ok_or(PriceTagBuilderError::InvalidPayTo)?;
         let price_tag = PriceTag {
-            asset,
+            token,
             amount,
             pay_to,
         };
@@ -205,7 +205,7 @@ where
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn pay_to<P1: TryInto<EvmAddress>>(&self, address: P1) -> PriceTagBuilder<A, P1> {
         PriceTagBuilder {
-            asset: self.asset.clone(),
+            token: self.token.clone(),
             amount: self.amount.clone(),
             pay_to: Some(address),
         }
@@ -222,7 +222,7 @@ where
         amount: A1,
     ) -> PriceTagBuilder<PriceTagMoneyAmount<A1>, P> {
         PriceTagBuilder {
-            asset: self.asset.clone(),
+            token: self.token.clone(),
             amount: Some(PriceTagMoneyAmount(amount)),
             pay_to: self.pay_to.clone(),
         }
@@ -235,21 +235,21 @@ where
         token_amount: A1,
     ) -> PriceTagBuilder<PriceTagTokenAmount<A1>, P> {
         PriceTagBuilder {
-            asset: self.asset.clone(),
+            token: self.token.clone(),
             amount: Some(PriceTagTokenAmount(token_amount)),
             pay_to: self.pay_to.clone(),
         }
     }
 }
 
-impl IntoPriceTag for TokenAsset {
+impl IntoPriceTag for TokenDeployment {
     fn token_amount<A: TryInto<TokenAmount>>(
         &self,
         token_amount: A,
     ) -> PriceTagBuilder<PriceTagTokenAmount<A>, ()> {
-        let asset = self.clone();
+        let token = self.clone();
         PriceTagBuilder {
-            asset,
+            token,
             amount: Some(PriceTagTokenAmount(token_amount)),
             pay_to: None,
         }
@@ -259,18 +259,18 @@ impl IntoPriceTag for TokenAsset {
         &self,
         amount: A,
     ) -> PriceTagBuilder<PriceTagMoneyAmount<A>, ()> {
-        let asset = self.clone();
+        let token = self.clone();
         PriceTagBuilder {
-            asset,
+            token,
             amount: Some(PriceTagMoneyAmount(amount)),
             pay_to: None,
         }
     }
 
     fn pay_to<P: TryInto<EvmAddress>>(&self, address: P) -> PriceTagBuilder<(), P> {
-        let asset = self.clone();
+        let token = self.clone();
         PriceTagBuilder {
-            asset,
+            token,
             amount: None,
             pay_to: Some(address),
         }

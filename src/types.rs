@@ -14,13 +14,13 @@ use base64::engine::general_purpose::STANDARD as b64;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use rust_decimal::Decimal;
-use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::prelude::{FromPrimitive, Zero};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
 use std::fmt;
-use std::fmt::{Debug, Display};
-use std::ops::Mul;
+use std::fmt::{Debug, Display, Formatter};
+use std::ops::{Add, Mul};
 use std::str::FromStr;
 use url::Url;
 
@@ -103,6 +103,12 @@ impl Display for Scheme {
 /// Used to authorize an ERC-3009 transferWithAuthorization.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct EvmSignature(pub [u8; 65]);
+
+impl From<[u8; 65]> for EvmSignature {
+    fn from(bytes: [u8; 65]) -> Self {
+        EvmSignature(bytes)
+    }
+}
 
 impl Debug for EvmSignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -247,44 +253,6 @@ impl Serialize for HexEncodedNonce {
     }
 }
 
-/// A wrapper around a raw `U256` token value used in [`Scheme::Exact`] payments.
-///
-/// This value represents the exact number of base units (e.g., wei or USDC's 6-decimal units)
-/// to be transferred using ERC-3009 `transferWithAuthorization`.
-///
-/// Serialized as a string to ensure lossless transmission over JSON.
-///
-/// # Example
-///
-/// A transfer of 1.23 USDC (with 6 decimals) would be encoded as `"1230000"`,
-/// which translates to `ExactEvmPayloadValue(U256::from(1230000))`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ExactEvmPayloadValue(pub U256);
-
-impl Serialize for ExactEvmPayloadValue {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for ExactEvmPayloadValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let parsed = U256::from_str(&s)
-            .map_err(|_| serde::de::Error::custom("Invalid U256 value string"))?;
-        Ok(ExactEvmPayloadValue(parsed))
-    }
-}
-
-impl From<ExactEvmPayloadValue> for U256 {
-    fn from(value: ExactEvmPayloadValue) -> Self {
-        U256::from(value.0)
-    }
-}
-
 /// A Unix timestamp represented as a `u64`, used in payment authorization windows.
 ///
 /// This type encodes the number of seconds since the Unix epoch (1970-01-01T00:00:00Z).
@@ -328,7 +296,7 @@ impl From<UnixTimestamp> for U256 {
 pub struct ExactEvmPayloadAuthorization {
     pub from: EvmAddress,
     pub to: EvmAddress,
-    pub value: ExactEvmPayloadValue,
+    pub value: TokenAmount,
     pub valid_after: UnixTimestamp,
     pub valid_before: UnixTimestamp,
     pub nonce: HexEncodedNonce,
@@ -384,8 +352,32 @@ impl TryFrom<Base64Bytes<'_>> for PaymentPayload {
 
 /// A precise on-chain token amount in base units (e.g., USDC with 6 decimals).
 /// Represented as a stringified `U256` in JSON to prevent precision loss.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Ord, PartialOrd, Eq, Hash)]
 pub struct TokenAmount(pub U256);
+
+impl From<TokenAmount> for U256 {
+    fn from(value: TokenAmount) -> Self {
+        value.0
+    }
+}
+
+impl Add<Self> for TokenAmount {
+    type Output = TokenAmount;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl Zero for TokenAmount {
+    fn zero() -> Self {
+        TokenAmount(U256::from(0))
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0.is_zero()
+    }
+}
 
 impl<'de> Deserialize<'de> for TokenAmount {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
@@ -398,6 +390,12 @@ impl<'de> Deserialize<'de> for TokenAmount {
 impl Serialize for TokenAmount {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+impl Display for TokenAmount {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -561,6 +559,33 @@ pub struct PaymentRequirements {
     pub max_timeout_seconds: u64,
     pub asset: MixedAddress,
     pub extra: Option<serde_json::Value>,
+}
+
+impl PaymentRequirements {
+    /// Returns the [`TokenAsset`] that identifies the token required for payment.
+    ///
+    /// This includes the ERC-20 contract address and the associated network.
+    /// It can be used for comparisons, lookups, or matching against maximum allowed token amounts.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal `asset` field cannot be converted into an [`EvmAddress`].
+    /// This should not occur if `asset` was originally derived from a valid address.
+    ///
+    /// # Example
+    /// ```
+    /// use x402_rs::types::{PaymentRequirements, TokenAsset};
+    ///
+    /// let reqs: PaymentRequirements = /* from parsed response or constructed */;
+    /// let token: TokenAsset = reqs.token_asset();
+    /// ```
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn token_asset(&self) -> TokenAsset {
+        TokenAsset {
+            address: self.asset.clone().try_into().unwrap(),
+            network: self.network,
+        }
+    }
 }
 
 /// Wrapper for a payment payload and requirements sent by the client to a facilitator
@@ -926,42 +951,113 @@ impl Display for MoneyAmount {
 /// These values must match exactly what the token contract returns from `name()` and `version()`
 /// and are critical for ensuring signature validity and replay protection across different token versions.
 ///
-/// Used in conjunction with [`TokenAsset`] to define a token asset for payment authorization.
+/// Used in conjunction with [`TokenDeployment`] to define a token asset for payment authorization.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct TokenAssetEip712 {
+pub struct TokenDeploymentEip712 {
     pub name: String,
     pub version: String,
 }
 
-/// A token asset type used in EIP-712 signing across networks.
+/// Represents a fungible token identified by its address and network,
+/// used for selecting or matching assets across chains (e.g., USDC on Base).
+///
+/// This struct does not include metadata like `decimals` or EIP-712 signing info.
 ///
 /// # Example
 ///
 /// ```
-/// use x402_rs::types::{TokenAsset, EvmAddress, TokenAssetEip712};
+/// use x402_rs::types::{TokenAsset, EvmAddress};
 /// use x402_rs::network::Network;
 ///
 /// let asset = TokenAsset {
 ///     address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e".parse().unwrap(),
 ///     network: Network::BaseSepolia,
-///     decimals: 6,
-///     eip712: TokenAssetEip712 {
-///         name: "MyToken".into(),
-///         version: "1".into(),
-///     },
 /// };
 ///
 /// assert_eq!(asset.address.to_string(), "0x036CbD53842c5426634e7929541eC2318f3dCF7e");
-/// assert_eq!(asset.decimals, 6);
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct TokenAsset {
     pub address: EvmAddress,
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub network: Network,
+}
+
+impl From<TokenAsset> for Vec<TokenAsset> {
+    fn from(asset: TokenAsset) -> Vec<TokenAsset> {
+        vec![asset]
+    }
+}
+
+impl Display for TokenAsset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Use CAIP-19 https://chainagnostic.org/CAIPs/caip-19
+        write!(
+            f,
+            "eip155:{}/erc20:{}",
+            self.network.chain_id(),
+            self.address
+        )
+    }
+}
+
+/// Describes a specific deployed ERC-20 token instance, including metadata
+/// required for value formatting and EIP-712 signing.
+///
+/// This is the canonical representation used when signing `TransferWithAuthorization`.
+///
+/// # Example
+///
+/// ```
+/// use x402_rs::types::{TokenAsset, TokenDeployment, TokenDeploymentEip712};
+/// use x402_rs::network::Network;
+///
+/// let asset = TokenAsset {
+///     address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e".parse().unwrap(),
+///     network: Network::BaseSepolia,
+/// };
+///
+/// let deployment = TokenDeployment {
+///     asset,
+///     decimals: 6,
+///     eip712: TokenDeploymentEip712 {
+///         name: "MyToken".into(),
+///         version: "1".into(),
+///     },
+/// };
+///
+/// assert_eq!(deployment.asset.address.to_string(), "0x036CbD53842c5426634e7929541eC2318f3dCF7e");
+/// assert_eq!(deployment.decimals, 6);
+/// ```
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct TokenDeployment {
+    pub asset: TokenAsset,
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub decimals: u8,
-    pub eip712: TokenAssetEip712,
+    pub eip712: TokenDeploymentEip712,
+}
+
+impl TokenDeployment {
+    pub fn address(&self) -> EvmAddress {
+        self.asset.address
+    }
+
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn network(&self) -> Network {
+        self.asset.network
+    }
+}
+
+impl From<TokenDeployment> for Vec<TokenAsset> {
+    fn from(value: TokenDeployment) -> Self {
+        vec![value.asset]
+    }
+}
+
+impl From<TokenDeployment> for TokenAsset {
+    fn from(value: TokenDeployment) -> Self {
+        value.asset
+    }
 }
 
 /// Response returned from an x402 payment-gated endpoint when no valid payment was provided or accepted.

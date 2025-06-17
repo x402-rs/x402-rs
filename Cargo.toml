@@ -1,6 +1,6 @@
 [package]
 name = "x402-rs"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Sergey Ukustov <sergey@ukstv.me>"]
 edition = "2024"
 license = "Apache-2.0"
@@ -46,4 +46,4 @@ members = [
   "crates/x402-axum",
   "examples/x402-axum-example",
   "."
-]
+, "crates/x402-reqwest"]

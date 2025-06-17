@@ -129,7 +129,7 @@ pub async fn post_verify(
                     .into_response(),
                 PaymentError::InvalidContractCall(_)
                 | PaymentError::InvalidAddress(_)
-                | PaymentError::ClockError => bad_request,
+                | PaymentError::ClockError(_) => bad_request,
                 PaymentError::InsufficientFunds => (
                     StatusCode::OK,
                     Json(VerifyResponse::invalid(
@@ -194,7 +194,7 @@ pub async fn post_settle(
                 PaymentError::InvalidContractCall(_)
                 | PaymentError::InvalidAddress(_)
                 | PaymentError::UnsupportedNetwork(_)
-                | PaymentError::ClockError => bad_request,
+                | PaymentError::ClockError(_) => bad_request,
                 PaymentError::InsufficientFunds => (
                     StatusCode::BAD_REQUEST,
                     Json(SettleResponse {
