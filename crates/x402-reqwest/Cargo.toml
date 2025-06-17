@@ -1,5 +1,5 @@
 [package]
-name = "x402-request"
+name = "x402-reqwest"
 version = "0.1.0"
 edition = "2024"
 description = "Wrapper for reqwest for transparent x402 payments"
@@ -7,7 +7,7 @@ license = "Apache-2.0"
 authors = ["Sergey Ukustov <sergey@ukstv.me>"]
 repository = "https://github.com/x402-rs/x402-rs"
 homepage = "https://x402.rs"
-documentation = "https://docs.rs/x402-request"
+documentation = "https://docs.rs/x402-reqwest"
 keywords = ["axum", "middleware", "x402", "payments", "stablecoin"]
 categories = ["web-programming::http-client", "authentication", "cryptography", "finance", "network-programming"]
 readme = "README.md"

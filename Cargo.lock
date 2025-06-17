@@ -4613,7 +4613,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "x402-request"
+name = "x402-reqwest"
 version = "0.1.0"
 dependencies = [
  "alloy",
