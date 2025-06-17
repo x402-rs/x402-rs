@@ -4579,7 +4579,7 @@ dependencies = [
 
 [[package]]
 name = "x402-axum"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "axum",
  "axum-core",
@@ -4592,7 +4592,7 @@ dependencies = [
  "tower 0.5.2",
  "tracing",
  "url",
- "x402-rs 0.5.0",
+ "x402-rs",
 ]
 
 [[package]]
@@ -4609,7 +4609,7 @@ dependencies = [
  "tracing-opentelemetry",
  "url",
  "x402-axum",
- "x402-rs 0.6.0",
+ "x402-rs",
 ]
 
 [[package]]
@@ -4626,37 +4626,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tracing",
- "x402-rs 0.5.0",
-]
-
-[[package]]
-name = "x402-rs"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdae1669dc2c1dde088dcaea7f1c7e05ef56bc4ec9e2b92881088166b13207b4"
-dependencies = [
- "alloy",
- "axum",
- "base64",
- "dotenvy",
- "once_cell",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry-semantic-conventions",
- "opentelemetry-stdout",
- "opentelemetry_sdk",
- "regex",
- "rust_decimal",
- "serde",
- "serde_json",
- "thiserror 2.0.12",
- "tokio",
- "tower-http",
- "tracing",
- "tracing-core",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "url",
+ "x402-rs",
 ]
 
 [[package]]
