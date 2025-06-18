@@ -5,7 +5,7 @@
 //!
 //! ```rust,no_run
 //! use reqwest::Client;
-//! use x402_request::{ReqwestWithPayments, ReqwestWithPaymentsBuild};
+//! use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild};
 //! use alloy::signers::local::PrivateKeySigner;
 //!
 //! let signer: PrivateKeySigner = "...".parse().unwrap();
@@ -58,25 +58,41 @@ impl<A> ReqwestWithPaymentsBuilder<A> {
 
 /// A trait implemented for both builder variants to finalize the HTTP client.
 pub trait ReqwestWithPaymentsBuild {
-    type Output;
+    type BuildResult;
+    type BuilderResult;
 
     /// Finalize the middleware-enhanced client, producing a [`ClientWithMiddleware`].
-    fn build(self) -> Self::Output;
+    fn build(self) -> Self::BuildResult;
+
+    /// Produce a [`Self::BuildResult`] to further customize the reqwest http client.
+    fn builder(self) -> Self::BuilderResult;
 }
 
 impl ReqwestWithPaymentsBuild for ReqwestWithPaymentsBuilder<Client> {
-    type Output = ClientWithMiddleware;
+    type BuildResult = ClientWithMiddleware;
+    type BuilderResult = rqm::ClientBuilder;
 
-    fn build(self) -> Self::Output {
-        rqm::ClientBuilder::new(self.inner).with(self.x402).build()
+    fn build(self) -> Self::BuildResult {
+        self.builder().build()
+    }
+
+    fn builder(self) -> Self::BuilderResult {
+        rqm::ClientBuilder::new(self.inner).with(self.x402)
     }
 }
 
 impl ReqwestWithPaymentsBuild for ReqwestWithPaymentsBuilder<ClientBuilder> {
-    type Output = Result<ClientWithMiddleware, reqwest::Error>;
-    fn build(self) -> Self::Output {
+    type BuildResult = Result<ClientWithMiddleware, reqwest::Error>;
+    type BuilderResult = Result<rqm::ClientBuilder, reqwest::Error>;
+    
+    fn build(self) -> Self::BuildResult {
+        let builder = self.builder()?;
+        Ok(builder.build())
+    }
+
+    fn builder(self) -> Self::BuilderResult {
         let client = self.inner.build()?;
-        Ok(rqm::ClientBuilder::new(client).with(self.x402).build())
+        Ok(rqm::ClientBuilder::new(client).with(self.x402))
     }
 }
 

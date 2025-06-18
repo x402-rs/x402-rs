@@ -15,7 +15,7 @@ dotenvy = { version = "0.15.7" }
 
 # Tracing and OpenTelemetry
 tracing = { version = "0.1.41" }
-opentelemetry = { version = "0.29.1" }
-tower-http = "0.6.4"
-tracing-opentelemetry = "0.30.0"
-url = "2.5.4"
+opentelemetry = { version = "0.30.0" }
+tower-http = { version = "0.6.4" }
+tracing-opentelemetry = { version = "0.31.0" }
+url = { version = "2.5.4" }

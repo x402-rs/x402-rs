@@ -1,10 +1,9 @@
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
-use axum::{Json, Router};
+use axum::Router;
 use dotenvy::dotenv;
 use opentelemetry::trace::Status;
-use serde_json::json;
 use tower_http::trace::TraceLayer;
 use tracing::instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -61,7 +60,7 @@ async fn main() {
                         );
 
                         // OpenTelemetry span status
-                        if response.status().is_success() {
+                        if response.status().is_success() || response.status() == StatusCode::PAYMENT_REQUIRED {
                             span.set_status(Status::Ok);
                         } else {
                             span.set_status(Status::error(
@@ -91,5 +90,5 @@ async fn main() {
 
 #[instrument(skip_all)]
 async fn my_handler() -> impl IntoResponse {
-    (StatusCode::OK, Json(json!({ "hello": "paid-content" })))
+    (StatusCode::OK, "This is a VIP content!")
 }

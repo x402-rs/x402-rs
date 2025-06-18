@@ -22,7 +22,7 @@
 //!
 //! ```rust,no_run
 //! use alloy::signers::local::PrivateKeySigner;
-//! use x402_request::{MaxTokenAmountFromAmount, X402Payments};
+//! use x402_reqwest::{MaxTokenAmountFromAmount, X402Payments};
 //! use x402_rs::network::{Network, USDCDeployment};
 //!
 //! let signer: PrivateKeySigner = "0x...".parse()?;
@@ -37,7 +37,7 @@
 //! ### Using [`reqwest::ClientBuilder`]
 //! ```rust,no_run
 //! use reqwest::ClientBuilder;
-//! use x402_request::{ReqwestWithPayments, ReqwestWithPaymentsBuild, MaxTokenAmountFromAmount};
+//! use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, MaxTokenAmountFromAmount};
 //! use alloy::signers::local::PrivateKeySigner;
 //! use x402_rs::network::{Network, USDCDeployment};
 //!
@@ -62,7 +62,7 @@
 //! ### Using [`reqwest::Client`]
 //! ```rust,no_run
 //! use reqwest::Client;
-//! use x402_request::{ReqwestWithPayments, ReqwestWithPaymentsBuild, MaxTokenAmountFromAmount};
+//! use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, MaxTokenAmountFromAmount};
 //! use alloy::signers::local::PrivateKeySigner;
 //! use x402_rs::network::{Network, USDCDeployment};
 //!
@@ -89,7 +89,7 @@
 //! use alloy::signers::local::PrivateKeySigner;
 //! use reqwest::Client;
 //! use reqwest_middleware as rqm;
-//! use x402_request::{MaxTokenAmountFromAmount, X402Payments};
+//! use x402_reqwest::{MaxTokenAmountFromAmount, X402Payments};
 //! use x402_rs::network::{Network, USDCDeployment};
 //!
 //! #[tokio::main]

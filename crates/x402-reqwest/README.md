@@ -42,7 +42,7 @@ x402-reqwest = { version = "0.1", features = ["telemetry"] }
 
 ```rust
 use reqwest::Client;
-use x402_request::{ReqwestWithPayments, ReqwestWithPaymentsBuild, MaxTokenAmountFromAmount};
+use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, MaxTokenAmountFromAmount};
 use alloy::signers::local::PrivateKeySigner;
 use x402_rs::network::{Network, USDCDeployment};
 
