@@ -15,6 +15,7 @@ This repository provides:
 - [`x402-axum`](./crates/x402-axum) - Axum middleware for accepting x402 payments,
 - [`x402-reqwest`](./crates/x402-reqwest) - Wrapper for reqwest for transparent x402 payments,
 - [`x402-axum-example`](./examples/x402-axum-example) - an example of `x402-axum` usage.
+- [`x402-reqwest-example`](./examples/x402-reqwest-example) - an example of `x402-reqwest` usage.
 
 ## About x402
 
