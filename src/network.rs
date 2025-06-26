@@ -78,7 +78,7 @@ static USDC_BASE: Lazy<USDCDeployment> = Lazy::new(|| {
         },
         decimals: 6,
         eip712: TokenDeploymentEip712 {
-            name: "USDC".into(),
+            name: "USD Coin".into(),
             version: "2".into(),
         },
     })
