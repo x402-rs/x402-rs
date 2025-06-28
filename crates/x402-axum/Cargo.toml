@@ -1,6 +1,6 @@
 [package]
 name = "x402-axum"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 description = "Axum middleware for enforcing x402 protocol payments on protected routes"
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ categories = ["web-programming::http-server", "authentication", "cryptography", 
 readme = "README.md"
 
 [dependencies]
-x402-rs = { version = "0.6.2", default-features = false }
+x402-rs = { version = "0.6.3", default-features = false }
 url = { version = "2.5.4", features = ["serde"] }
 serde_json = { version = "1.0.140" }
 reqwest = { version = "0.12.15" }

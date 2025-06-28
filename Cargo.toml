@@ -1,6 +1,6 @@
 [package]
 name = "x402-rs"
-version = "0.6.2"
+version = "0.6.3"
 authors = ["Sergey Ukustov <sergey@ukstv.me>"]
 edition = "2024"
 license = "Apache-2.0"
