@@ -84,7 +84,7 @@ impl ReqwestWithPaymentsBuild for ReqwestWithPaymentsBuilder<Client> {
 impl ReqwestWithPaymentsBuild for ReqwestWithPaymentsBuilder<ClientBuilder> {
     type BuildResult = Result<ClientWithMiddleware, reqwest::Error>;
     type BuilderResult = Result<rqm::ClientBuilder, reqwest::Error>;
-    
+
     fn build(self) -> Self::BuildResult {
         let builder = self.builder()?;
         Ok(builder.build())

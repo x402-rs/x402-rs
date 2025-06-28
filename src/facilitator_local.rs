@@ -9,6 +9,7 @@
 //! - Contract interaction using Alloy
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
+use alloy::contract::SolCallBuilder;
 use alloy::network::Ethereum;
 use alloy::primitives::{Bytes, FixedBytes, Signature, U256};
 use alloy::providers::Provider;
@@ -85,15 +86,50 @@ sol!(
     "abi/USDC.json"
 );
 
+/// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
+/// using a network-aware provider cache.
+///
+/// This type is generic over the [`ProviderMap`] implementation used to access EVM providers,
+/// which enables testing or customization beyond the default [`ProviderCache`].
 #[derive(Clone, Debug)]
 pub struct FacilitatorLocal<P = ProviderCache> {
     pub provider_cache: P,
+}
+
+/// A prepared call to `transferWithAuthorization` (ERC-3009) including all derived fields.
+///
+/// This struct wraps the assembled call builder, making it reusable across verification
+/// (`.call()`) and settlement (`.send()`) flows, along with context useful for tracing/logging.
+///
+/// This is created by [`FacilitatorLocal::transferWithAuthorization_0`].
+pub struct TransferWithAuthorization0Call<P> {
+    /// The prepared call builder that can be `.call()`ed or `.send()`ed.
+    pub tx: SolCallBuilder<P, USDC::transferWithAuthorization_0Call>,
+    /// The sender (`from`) address for the authorization.
+    pub from: alloy::primitives::Address,
+    /// The recipient (`to`) address for the authorization.
+    pub to: alloy::primitives::Address,
+    /// The amount to transfer (value).
+    pub value: U256,
+    /// Start of the validity window (inclusive).
+    pub valid_after: U256,
+    /// End of the validity window (exclusive).
+    pub valid_before: U256,
+    /// 32-byte authorization nonce (prevents replay).
+    pub nonce: FixedBytes<32>,
+    /// EIP-712 signature for the transfer authorization.
+    pub signature: Bytes,
+    /// Address of the token contract used for this transfer.
+    pub contract_address: alloy::primitives::Address,
 }
 
 impl<P> FacilitatorLocal<P>
 where
     P: ProviderMap<Value: Provider<Ethereum>>,
 {
+    /// Creates a new [`FacilitatorLocal`] with the given provider cache.
+    ///
+    /// The provider cache is used to resolve the appropriate EVM provider for each payment's target network.
     pub fn new(provider_cache: P) -> Self {
         FacilitatorLocal { provider_cache }
     }
@@ -110,7 +146,7 @@ where
         &self,
         payload: &PaymentPayload,
         payment_requirements: &PaymentRequirements,
-    ) -> Result<ValidPaymentResult<&P::Value>, PaymentError> {
+    ) -> Result<USDC::USDCInstance<&P::Value>, PaymentError> {
         /*
         verification steps:
           - ✅ verify payload version
@@ -151,12 +187,60 @@ where
         .await?;
         let value: U256 = payload.payload.authorization.value.into();
         assert_enough_value(&value, &amount_required)?;
-        let eip1559 = self.provider_cache.eip1559(payload.network);
+        Ok(contract)
+    }
 
-        Ok(ValidPaymentResult {
-            contract,
-            provider,
-            eip1559,
+    /// Constructs a full `transferWithAuthorization` call for a verified payment payload.
+    ///
+    /// This function prepares the transaction builder with gas pricing adapted to the network's
+    /// capabilities (EIP-1559 or legacy), and packages it together with signature metadata
+    /// into a [`TransferWithAuthorization0Call`] structure.
+    ///
+    /// This function does not perform any validation — it assumes inputs are already checked.
+    #[allow(non_snake_case)]
+    async fn transferWithAuthorization_0<'a>(
+        &self,
+        contract: &'a USDC::USDCInstance<&'a P::Value>,
+        payload: &PaymentPayload,
+    ) -> Result<TransferWithAuthorization0Call<&'a &'a P::Value>, PaymentError> {
+        let from: alloy::primitives::Address = payload.payload.authorization.from.into();
+        let to: alloy::primitives::Address = payload.payload.authorization.to.into();
+        let value: U256 = payload.payload.authorization.value.into();
+        let valid_after: U256 = payload.payload.authorization.valid_after.into();
+        let valid_before: U256 = payload.payload.authorization.valid_before.into();
+        let nonce = FixedBytes(payload.payload.authorization.nonce.0);
+        let signature = Bytes::from(payload.payload.signature.0);
+        let tx = contract.transferWithAuthorization_0(
+            from,
+            to,
+            value,
+            valid_after,
+            valid_before,
+            nonce,
+            signature.clone(),
+        );
+        let eip1559 = self.provider_cache.eip1559(payload.network);
+        let tx = if eip1559 {
+            tx
+        } else {
+            let provider = contract.provider();
+            let gas: u128 = provider
+                .get_gas_price()
+                .instrument(tracing::info_span!("get_gas_price"))
+                .await
+                .map_err(|e| PaymentError::InvalidContractCall(e.into()))?;
+            tx.gas_price(gas)
+        };
+        Ok(TransferWithAuthorization0Call {
+            tx,
+            from,
+            to,
+            value,
+            valid_after,
+            valid_before,
+            nonce,
+            signature,
+            contract_address: *contract.address(),
         })
     }
 }
@@ -186,8 +270,27 @@ where
     #[instrument(skip_all, err, fields(chain_id = %request.payment_payload.network.chain_id()))]
     async fn verify(&self, request: &VerifyRequest) -> Result<VerifyResponse, Self::Error> {
         let payload = &request.payment_payload;
-        self.assert_valid_payment(payload, &request.payment_requirements)
+        let contract = self
+            .assert_valid_payment(payload, &request.payment_requirements)
             .await?;
+        let transfer_call = self.transferWithAuthorization_0(&contract, payload).await?;
+        transfer_call
+            .tx
+            .call()
+            .into_future()
+            .instrument(tracing::info_span!("call_transferWithAuthorization_0",
+                    from = %transfer_call.from,
+                    to = %transfer_call.to,
+                    value = %transfer_call.value,
+                    valid_after = %transfer_call.valid_after,
+                    valid_before = %transfer_call.valid_before,
+                    nonce = %transfer_call.nonce,
+                    signature = %transfer_call.signature,
+                    token_contract = %transfer_call.contract_address,
+                    otel.kind = "client",
+            ))
+            .await
+            .map_err(PaymentError::InvalidContractCall)?;
         Ok(VerifyResponse::valid(payload.payload.authorization.from))
     }
 
@@ -206,51 +309,22 @@ where
     async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
         let payload = &request.payment_payload;
         let payment_requirements = &request.payment_requirements;
-        let valid_payment = self
+        let contract = self
             .assert_valid_payment(payload, payment_requirements)
             .await?;
-        let contract = valid_payment.contract;
-        let provider = valid_payment.provider;
-        let eip1559 = valid_payment.eip1559;
 
-        let from: alloy::primitives::Address = payload.payload.authorization.from.into();
-        let to: alloy::primitives::Address = payload.payload.authorization.to.into();
-        let value: U256 = payload.payload.authorization.value.into();
-        let valid_after: U256 = payload.payload.authorization.valid_after.into();
-        let valid_before: U256 = payload.payload.authorization.valid_before.into();
-        let nonce = FixedBytes(payload.payload.authorization.nonce.0);
-        let signature = Bytes::from(payload.payload.signature.0);
-
-        let tx = contract.transferWithAuthorization_0(
-            from,
-            to,
-            value,
-            valid_after,
-            valid_before,
-            nonce,
-            signature.clone(),
-        );
-
-        let tx = if eip1559 {
-            tx
-        } else {
-            let gas = provider
-                .get_gas_price()
-                .await
-                .map_err(|e| PaymentError::InvalidContractCall(e.into()))?;
-            tx.gas_price(gas)
-        };
-
-        let tx = tx
+        let transfer_call = self.transferWithAuthorization_0(&contract, payload).await?;
+        let tx = transfer_call
+            .tx
             .send()
             .instrument(tracing::info_span!("transferWithAuthorization_0",
-                    from = %from,
-                    to = %to,
-                    value = %value,
-                    valid_after = %valid_after,
-                    valid_before = %valid_before,
-                    nonce = %nonce,
-                    signature = %signature,
+                    from = %transfer_call.from,
+                    to = %transfer_call.to,
+                    value = %transfer_call.value,
+                    valid_after = %transfer_call.valid_after,
+                    valid_before = %transfer_call.valid_before,
+                    nonce = %transfer_call.nonce,
+                    signature = %transfer_call.signature,
                     token_contract = %contract.address(),
                     otel.kind = "client",
             ))
@@ -296,23 +370,6 @@ where
             })
         }
     }
-}
-
-/// Result of a successful x402 payment validation.
-///
-/// This struct packages all the verified components needed for settlement, including:
-/// - an instance of the token contract (`USDCInstance`) ready to execute transfers,
-/// - the Ethereum provider used for interacting with the blockchain,
-/// - a boolean flag indicating whether the target network supports EIP-1559.
-///
-/// Used internally to pass validated context from [`FacilitatorLocal::assert_valid_payment`] into [`FacilitatorLocal::settle`].
-struct ValidPaymentResult<P> {
-    /// An instance of the verified token contract, ready to perform `transferWithAuthorization`.
-    contract: USDC::USDCInstance<P>,
-    /// The Ethereum provider configured for the target network.
-    provider: P,
-    /// Whether the network uses EIP-1559-style fee parameters (used to decide gas pricing mode).
-    eip1559: bool,
 }
 
 /// Checks whether the basic payment requirements are compatible with the payload.

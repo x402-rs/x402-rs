@@ -1,7 +1,7 @@
+use axum::Router;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
-use axum::Router;
 use dotenvy::dotenv;
 use opentelemetry::trace::Status;
 use tower_http::trace::TraceLayer;
@@ -60,7 +60,9 @@ async fn main() {
                         );
 
                         // OpenTelemetry span status
-                        if response.status().is_success() || response.status() == StatusCode::PAYMENT_REQUIRED {
+                        if response.status().is_success()
+                            || response.status() == StatusCode::PAYMENT_REQUIRED
+                        {
                             span.set_status(Status::Ok);
                         } else {
                             span.set_status(Status::error(

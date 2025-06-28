@@ -27,7 +27,7 @@
 //!
 //! let signer: PrivateKeySigner = "0x...".parse()?;
 //! X402Payments::with_signer(signer)
-//!     // Example: prefer USDC on Base, and limit payments to 1.00 USDC 
+//!     // Example: prefer USDC on Base, and limit payments to 1.00 USDC
 //!     .prefer(USDCDeployment::by_network(Network::Base))
 //!     .max(USDCDeployment::by_network(Network::Base).amount("1.00")?)
 //! ```
