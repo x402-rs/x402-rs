@@ -178,7 +178,7 @@ where
             assert_domain(&contract, payload, &asset_address, payment_requirements).await?;
         assert_signature(&payload.payload, &domain)?;
 
-        let amount_required = payment_requirements.max_amount_required.0;
+        let amount_required = payment_requirements.max_amount_required;
         assert_enough_balance(
             &contract,
             &payload.payload.authorization.from,

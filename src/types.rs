@@ -14,13 +14,13 @@ use base64::engine::general_purpose::STANDARD as b64;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use rust_decimal::Decimal;
-use rust_decimal::prelude::{FromPrimitive, Zero};
+use rust_decimal::prelude::FromPrimitive;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
 use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
-use std::ops::{Add, Mul};
+use std::fmt::{Debug, Display};
+use std::ops::Mul;
 use std::str::FromStr;
 use url::Url;
 
@@ -352,58 +352,7 @@ impl TryFrom<Base64Bytes<'_>> for PaymentPayload {
 
 /// A precise on-chain token amount in base units (e.g., USDC with 6 decimals).
 /// Represented as a stringified `U256` in JSON to prevent precision loss.
-#[derive(Debug, Copy, Clone, PartialEq, Ord, PartialOrd, Eq, Hash)]
-pub struct TokenAmount(pub U256);
-
-impl From<TokenAmount> for U256 {
-    fn from(value: TokenAmount) -> Self {
-        value.0
-    }
-}
-
-impl Add<Self> for TokenAmount {
-    type Output = TokenAmount;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Self(self.0 + rhs.0)
-    }
-}
-
-impl Zero for TokenAmount {
-    fn zero() -> Self {
-        TokenAmount(U256::from(0))
-    }
-
-    fn is_zero(&self) -> bool {
-        self.0.is_zero()
-    }
-}
-
-impl<'de> Deserialize<'de> for TokenAmount {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let string = String::deserialize(deserializer)?;
-        let value = U256::from_str(&string).map_err(serde::de::Error::custom)?;
-        Ok(TokenAmount(value))
-    }
-}
-
-impl Serialize for TokenAmount {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0.to_string())
-    }
-}
-
-impl Display for TokenAmount {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<u128> for TokenAmount {
-    fn from(value: u128) -> Self {
-        TokenAmount(U256::from(value))
-    }
-}
+pub type TokenAmount = U256;
 
 /// Represents either an EVM address (0x...) or an off-chain address.
 /// The format is validated by regex and used for routing settlement.
@@ -845,7 +794,7 @@ impl MoneyAmount {
         let multiplier = U256::from(10).pow(U256::from(scale_diff));
         let digits = money_amount.mantissa();
         let value = U256::from(digits).mul(multiplier);
-        Ok(TokenAmount(value))
+        Ok(value)
     }
 }
 
