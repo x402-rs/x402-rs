@@ -479,7 +479,7 @@ async fn assert_domain<P: Provider<Ethereum>>(
 fn assert_signature(payload: &ExactEvmPayload, domain: &Eip712Domain) -> Result<(), PaymentError> {
     // Verify the signature
     let signature = Signature::from_raw_array(&payload.signature.0)
-        .map_err(|e| PaymentError::InvalidSignature(format!("{}", e)))?;
+        .map_err(|e| PaymentError::InvalidSignature(format!("{e}")))?;
     let authorization = &payload.authorization;
     let transfer_with_authorization = TransferWithAuthorization {
         from: authorization.from.0,
@@ -492,12 +492,11 @@ fn assert_signature(payload: &ExactEvmPayload, domain: &Eip712Domain) -> Result<
     let eip712_hash = transfer_with_authorization.eip712_signing_hash(domain);
     let recovered_address = signature
         .recover_address_from_prehash(&eip712_hash)
-        .map_err(|e| PaymentError::InvalidSignature(format!("{}", e)))?;
+        .map_err(|e| PaymentError::InvalidSignature(format!("{e}")))?;
     let expected_address = authorization.from.0;
     if recovered_address != expected_address {
         Err(PaymentError::InvalidSignature(format!(
-            "Address mismatch: recovered: {} expected: {}",
-            recovered_address, expected_address
+            "Address mismatch: recovered: {recovered_address} expected: {expected_address}",
         )))
     } else {
         Ok(())
@@ -528,8 +527,7 @@ fn assert_time(authorization: &ExactEvmPayloadAuthorization) -> Result<(), Payme
     let valid_after = authorization.valid_after.0;
     if valid_after > now {
         return Err(PaymentError::InvalidTiming(format!(
-            "Not active yet: valid_after {} > now {}",
-            valid_after, now
+            "Not active yet: valid_after {valid_after} > now {now}",
         )));
     }
     Ok(())

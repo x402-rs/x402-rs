@@ -112,7 +112,7 @@ impl ProviderCache {
                     .wallet(wallet.clone())
                     .connect(&rpc_url)
                     .await
-                    .map_err(|e| format!("Failed to connect to {}: {}", network, e))?;
+                    .map_err(|e| format!("Failed to connect to {network}: {e}"))?;
                 providers.insert(*network, provider);
                 tracing::info!("Initialized provider for {} at {}", network, rpc_url);
             } else {
@@ -147,10 +147,10 @@ impl SignerType {
     /// Parse the signer type from the `SIGNER_TYPE` environment variable.
     fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
         let signer_type_string =
-            env::var(ENV_SIGNER_TYPE).map_err(|_| format!("env {} not set", ENV_SIGNER_TYPE))?;
+            env::var(ENV_SIGNER_TYPE).map_err(|_| format!("env {ENV_SIGNER_TYPE} not set"))?;
         match signer_type_string.as_str() {
             "private-key" => Ok(SignerType::PrivateKey),
-            _ => Err(format!("Unknown signer type {}", signer_type_string).into()),
+            _ => Err(format!("Unknown signer type {signer_type_string}").into()),
         }
     }
 
@@ -163,7 +163,7 @@ impl SignerType {
         match self {
             SignerType::PrivateKey => {
                 let private_key = env::var(ENV_PRIVATE_KEY)
-                    .map_err(|_| format!("env {} not set", ENV_PRIVATE_KEY))?;
+                    .map_err(|_| format!("env {ENV_PRIVATE_KEY} not set"))?;
                 let pk_signer: PrivateKeySigner = private_key.parse()?;
                 Ok(EthereumWallet::new(pk_signer))
             }

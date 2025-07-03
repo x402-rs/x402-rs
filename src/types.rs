@@ -94,7 +94,7 @@ impl Display for Scheme {
         let s = match self {
             Scheme::Exact => "exact",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -355,6 +355,109 @@ impl TryFrom<Base64Bytes<'_>> for PaymentPayload {
 #[derive(Debug, Copy, Clone, PartialEq, Ord, PartialOrd, Eq, Hash)]
 pub struct TokenAmount(pub U256);
 
+impl TokenAmount {
+    /// Computes the absolute difference between `self` and `other`.
+    ///
+    /// Returns $\left\vert \mathtt{self} - \mathtt{other} \right\vert$.
+    #[must_use]
+    pub fn abs_diff(self, other: Self) -> Self {
+        Self(self.0.abs_diff(other.0))
+    }
+
+    /// Computes `self + rhs`, returning [`None`] if overflow occurred.
+    #[must_use]
+    pub const fn checked_add(self, rhs: Self) -> Option<Self> {
+        match self.0.checked_add(rhs.0) {
+            Some(value) => Some(Self(value)),
+            None => None,
+        }
+    }
+
+    /// Computes `-self`, returning [`None`] unless `self == 0`.
+    #[must_use]
+    pub const fn checked_neg(self) -> Option<Self> {
+        match self.0.checked_neg() {
+            Some(value) => Some(Self(value)),
+            None => None,
+        }
+    }
+
+    /// Computes `self - rhs`, returning [`None`] if overflow occurred.
+    #[must_use]
+    pub const fn checked_sub(self, rhs: Self) -> Option<Self> {
+        match self.0.checked_sub(rhs.0) {
+            Some(value) => Some(Self(value)),
+            None => None,
+        }
+    }
+
+    /// Calculates $\mod{\mathtt{self} + \mathtt{rhs}}_{2^{BITS}}$.
+    ///
+    /// Returns a tuple of the addition along with a boolean indicating whether
+    /// an arithmetic overflow would occur. If an overflow would have occurred
+    /// then the wrapped value is returned.
+    #[must_use]
+    pub const fn overflowing_add(self, rhs: Self) -> (Self, bool) {
+        let add = self.0.overflowing_add(rhs.0);
+        (Self(add.0), add.1)
+    }
+
+    /// Calculates $\mod{-\mathtt{self}}_{2^{BITS}}$.
+    ///
+    /// Returns `!self + 1` using wrapping operations to return the value that
+    /// represents the negation of this unsigned value. Note that for positive
+    /// unsigned values overflow always occurs, but negating 0 does not
+    /// overflow.
+    #[must_use]
+    pub const fn overflowing_neg(self) -> (Self, bool) {
+        let neg = self.0.overflowing_neg();
+        (Self(neg.0), neg.1)
+    }
+
+    /// Calculates $\mod{\mathtt{self} - \mathtt{rhs}}_{2^{BITS}}$.
+    ///
+    /// Returns a tuple of the subtraction along with a boolean indicating
+    /// whether an arithmetic overflow would occur. If an overflow would have
+    /// occurred then the wrapped value is returned.
+    #[must_use]
+    pub const fn overflowing_sub(self, rhs: Self) -> (Self, bool) {
+        let sub = self.0.overflowing_sub(rhs.0);
+        (Self(sub.0), sub.1)
+    }
+
+    /// Computes `self + rhs`, saturating at the numeric bounds instead of
+    /// overflowing.
+    #[must_use]
+    pub const fn saturating_add(self, rhs: Self) -> Self {
+        Self(self.0.saturating_add(rhs.0))
+    }
+
+    /// Computes `self - rhs`, saturating at the numeric bounds instead of
+    /// overflowing
+    #[must_use]
+    pub const fn saturating_sub(self, rhs: Self) -> Self {
+        Self(self.0.saturating_sub(rhs.0))
+    }
+
+    /// Computes `self + rhs`, wrapping around at the boundary of the type.
+    #[must_use]
+    pub const fn wrapping_add(self, rhs: Self) -> Self {
+        Self(self.0.wrapping_add(rhs.0))
+    }
+
+    /// Computes `-self`, wrapping around at the boundary of the type.
+    #[must_use]
+    pub const fn wrapping_neg(self) -> Self {
+        self.overflowing_neg().0
+    }
+
+    /// Computes `self - rhs`, wrapping around at the boundary of the type.
+    #[must_use]
+    pub const fn wrapping_sub(self, rhs: Self) -> Self {
+        self.overflowing_sub(rhs).0
+    }
+}
+
 impl From<TokenAmount> for U256 {
     fn from(value: TokenAmount) -> Self {
         value.0
@@ -460,8 +563,8 @@ impl TryInto<EvmAddress> for MixedAddress {
 impl Display for MixedAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MixedAddress::Evm(address) => write!(f, "{}", address),
-            MixedAddress::Offchain(address) => write!(f, "{}", address),
+            MixedAddress::Evm(address) => write!(f, "{address}"),
+            MixedAddress::Offchain(address) => write!(f, "{address}"),
         }
     }
 }
