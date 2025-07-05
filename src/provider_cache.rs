@@ -51,6 +51,8 @@ const ENV_PRIVATE_KEY: &str = "PRIVATE_KEY";
 const ENV_RPC_BASE: &str = "RPC_URL_BASE";
 const ENV_RPC_BASE_SEPOLIA: &str = "RPC_URL_BASE_SEPOLIA";
 const ENV_RPC_XDC: &str = "RPC_URL_XDC";
+const ENV_RPC_AVALANCHE_FUJI: &str = "RPC_URL_AVALANCHE_FUJI";
+const ENV_RPC_AVALANCHE: &str = "RPC_URL_AVALANCHE";
 
 /// A cache of pre-initialized [`EthereumProvider`] instances keyed by network.
 ///
@@ -98,11 +100,15 @@ impl ProviderCache {
                 Network::BaseSepolia => ENV_RPC_BASE_SEPOLIA,
                 Network::Base => ENV_RPC_BASE,
                 Network::XdcMainnet => ENV_RPC_XDC,
+                Network::AvalancheFuji => ENV_RPC_AVALANCHE_FUJI,
+                Network::Avalanche => ENV_RPC_AVALANCHE,
             };
             let is_eip1559 = match network {
                 Network::BaseSepolia => true,
                 Network::Base => true,
                 Network::XdcMainnet => false,
+                Network::AvalancheFuji => true,
+                Network::Avalanche => true,
             };
             eip1559.insert(*network, is_eip1559);
 

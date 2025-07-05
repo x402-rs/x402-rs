@@ -26,6 +26,12 @@ pub enum Network {
     /// XDC mainnet (chain ID 50).
     #[serde(rename = "xdc")]
     XdcMainnet,
+    /// Avalanche Fuji testnet (chain ID 43113)
+    #[serde(rename = "avalanche-fuji")]
+    AvalancheFuji,
+    /// Avalanche Mainnet (chain ID 43114)
+    #[serde(rename = "avalanche")]
+    Avalanche,
 }
 
 impl Display for Network {
@@ -34,6 +40,8 @@ impl Display for Network {
             Network::BaseSepolia => write!(f, "base-sepolia"),
             Network::Base => write!(f, "base"),
             Network::XdcMainnet => write!(f, "xdc"),
+            Network::AvalancheFuji => write!(f, "avalanche-fuji"),
+            Network::Avalanche => write!(f, "avalanche"),
         }
     }
 }
@@ -45,12 +53,14 @@ impl Network {
             Network::BaseSepolia => 84532,
             Network::Base => 8453,
             Network::XdcMainnet => 50,
+            Network::AvalancheFuji => 43113,
+            Network::Avalanche => 43114,
         }
     }
 
     /// Return all known [`Network`] variants.
     pub fn variants() -> &'static [Network] {
-        &[Network::BaseSepolia, Network::Base, Network::XdcMainnet]
+        &[Network::BaseSepolia, Network::Base, Network::XdcMainnet, Network::AvalancheFuji, Network::Avalanche]
     }
 }
 
@@ -99,6 +109,36 @@ static USDC_XDC: Lazy<USDCDeployment> = Lazy::new(|| {
     })
 });
 
+/// Lazily initialized known USDC deployment on Avalanche Fuji testnet as [`USDCDeployment`].
+static USDC_AVALANCHE_FUJI: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0x5425890298aed601595a70AB815c96711a31Bc65").into(),
+            network: Network::AvalancheFuji,
+        },
+        decimals: 6,
+        eip712: TokenDeploymentEip712 {
+            name: "USD Coin".into(),
+            version: "2".into(),
+        },
+    })
+});
+
+/// Lazily initialized known USDC deployment on Avalanche Fuji testnet as [`USDCDeployment`].
+static USDC_AVALANCHE: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E").into(),
+            network: Network::AvalancheFuji,
+        },
+        decimals: 6,
+        eip712: TokenDeploymentEip712 {
+            name: "USD Coin".into(),
+            version: "2".into(),
+        },
+    })
+});
+
 /// A known USDC deployment as a wrapper around [`TokenDeployment`].
 #[derive(Clone, Debug)]
 pub struct USDCDeployment(pub TokenDeployment);
@@ -138,6 +178,8 @@ impl USDCDeployment {
             Network::BaseSepolia => &USDC_BASE_SEPOLIA,
             Network::Base => &USDC_BASE,
             Network::XdcMainnet => &USDC_XDC,
+            Network::AvalancheFuji => &USDC_AVALANCHE_FUJI,
+            Network::Avalanche => &USDC_AVALANCHE,
         }
     }
 }
