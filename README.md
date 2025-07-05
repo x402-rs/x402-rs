@@ -228,7 +228,9 @@ Available variables:
 * `SIGNER_TYPE` (required): Type of signer to use. Only `private-key` is supported now,
 * `PRIVATE_KEY` (required): Private key in hex, like `0xdeadbeef...`,
 * `RPC_URL_BASE_SEPOLIA`: Ethereum RPC endpoint for Base Sepolia testnet,
-* `RPC_URL_BASE`: Ethereum RPC endpoint for Base mainnet.
+* `RPC_URL_BASE`: Ethereum RPC endpoint for Base mainnet,
+* `RPC_URL_AVALANCHE_FUJI`: Ethereum RPC endpoint for Avalanche Fuji testnet,
+* `RPC_URL_AVALANCHE`: Ethereum RPC endpoint for Avalanche C-Chain mainnet.
 
 ### Observability
 
@@ -254,13 +256,16 @@ The service automatically detects and initializes exporters if `OTEL_EXPORTER_OT
 
 The Facilitator supports different networks based on the environment variables you configure:
 
-| Network      | Environment Variable   | Supported if Set | Notes                   |
-|:-------------|:-----------------------|:-----------------|:------------------------|
-| Base Sepolia | `RPC_URL_BASE_SEPOLIA` | ✅                | Recommended for testing |
-| Base Mainnet | `RPC_URL_BASE`         | ✅                | Mainnet deployment      |
+| Network                   | Environment Variable     | Supported if Set | Notes                            |
+|:--------------------------|:-------------------------|:-----------------|:---------------------------------|
+| Base Sepolia Testnet      | `RPC_URL_BASE_SEPOLIA`   | ✅                | Testnet, Recommended for testing |
+| Base Mainnet              | `RPC_URL_BASE`           | ✅                | Mainnet                          |
+| XDC Mainnet               | `RPC_URL_XDC`            | ✅                | Mainnet                          |
+| Avalanche Fuji Testnet    | `RPC_URL_AVALANCHE_FUJI` | ✅                | Testnet                          |
+| Avalanche C-Chain Mainnet | `RPC_URL_AVALANCHE`      | ✅                | Mainnet                          |
 
-- If you provide only `RPC_URL_BASE_SEPOLIA`, only **Base Sepolia** will be available.
-- If you provide both `RPC_URL_BASE_SEPOLIA` and `RPC_URL_BASE`, then both networks will be supported.
+- If you provide say only `RPC_URL_BASE_SEPOLIA`, only **Base Sepolia** will be available.
+- If you provide `RPC_URL_BASE_SEPOLIA`, `RPC_URL_BASE`, and other env variables on the list, then all the specified networks will be supported.
 
 > ℹ️ **Tip:** For initial development and testing, you can start with Base Sepolia only.
 

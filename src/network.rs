@@ -60,7 +60,13 @@ impl Network {
 
     /// Return all known [`Network`] variants.
     pub fn variants() -> &'static [Network] {
-        &[Network::BaseSepolia, Network::Base, Network::XdcMainnet, Network::AvalancheFuji, Network::Avalanche]
+        &[
+            Network::BaseSepolia,
+            Network::Base,
+            Network::XdcMainnet,
+            Network::AvalancheFuji,
+            Network::Avalanche,
+        ]
     }
 }
 
