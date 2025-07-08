@@ -13,8 +13,8 @@
 //! use http::StatusCode;
 //! use serde_json::json;
 //! use x402_rs::network::{Network, USDCDeployment};
-//! use x402_middleware::layer::X402Middleware;
-//! use x402_middleware::price::IntoPriceTag;
+//! use x402_axum::layer::X402Middleware;
+//! use x402_axum::price::IntoPriceTag;
 //!
 //! let x402 = X402Middleware::try_from("https://facilitator.ukstv.me/").unwrap();
 //! let usdc = USDCDeployment::by_network(Network::BaseSepolia)
@@ -463,11 +463,13 @@ where
         &self,
         payment_payload: &PaymentPayload,
     ) -> Option<PaymentRequirements> {
+        let destination: MixedAddress = payment_payload.payload.authorization.to.into();
         self.payment_requirements
             .iter()
             .find(|requirement| {
                 requirement.scheme == payment_payload.scheme
                     && requirement.network == payment_payload.network
+                    && requirement.pay_to == destination
             })
             .cloned()
     }

@@ -10,7 +10,7 @@
 //! use axum::response::IntoResponse;
 //! use http::StatusCode;
 //! use serde_json::json;
-//! use x402_middleware::{X402Middleware, IntoPriceTag};
+//! use x402_axum::{X402Middleware, IntoPriceTag};
 //! use x402_rs::network::{Network, USDCDeployment};
 //!
 //! let x402 = X402Middleware::try_from("https://facilitator.example.com/").unwrap();
