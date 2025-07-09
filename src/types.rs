@@ -20,7 +20,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::{Add, Mul};
+use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
 use url::Url;
 
@@ -456,6 +456,116 @@ impl TokenAmount {
     pub const fn wrapping_sub(self, rhs: Self) -> Self {
         self.overflowing_sub(rhs).0
     }
+
+    /// Computes `self * rhs`, returning [`None`] if overflow occurred.
+    #[inline(always)]
+    #[must_use]
+    pub fn checked_mul(self, rhs: Self) -> Option<Self> {
+        match self.overflowing_mul(rhs) {
+            (value, false) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// Calculates the multiplication of self and rhs.
+    ///
+    /// Returns a tuple of the multiplication along with a boolean indicating
+    /// whether an arithmetic overflow would occur. If an overflow would have
+    /// occurred then the wrapped value is returned.
+    #[inline]
+    #[must_use]
+    pub fn overflowing_mul(self, rhs: Self) -> (Self, bool) {
+        let (mul, overflow) = self.0.overflowing_mul(rhs.0);
+        (Self(mul), overflow)
+    }
+
+    /// Computes `self * rhs`, saturating at the numeric bounds instead of
+    /// overflowing.
+    #[inline(always)]
+    #[must_use]
+    pub fn saturating_mul(self, rhs: Self) -> Self {
+        Self(self.0.saturating_mul(rhs.0))
+    }
+
+    /// Computes `self * rhs`, wrapping around at the boundary of the type.
+    #[inline(always)]
+    #[must_use]
+    pub fn wrapping_mul(self, rhs: Self) -> Self {
+        Self(self.0.wrapping_mul(rhs.0))
+    }
+
+    /// Computes the inverse modulo $2^{\mathtt{BITS}}$ of `self`, returning
+    /// [`None`] if the inverse does not exist.
+    #[inline]
+    #[must_use]
+    pub fn inv_ring(self) -> Option<Self> {
+        self.0.inv_ring().map(Self)
+    }
+
+    /// Computes `self / rhs`, returning [`None`] if `rhs == 0`.
+    #[inline]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // False positive
+    pub fn checked_div(self, rhs: Self) -> Option<Self> {
+        self.0.checked_div(rhs.0).map(Self)
+    }
+
+    /// Computes `self % rhs`, returning [`None`] if `rhs == 0`.
+    #[inline]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // False positive
+    pub fn checked_rem(self, rhs: Self) -> Option<Self> {
+        self.0.checked_rem(rhs.0).map(Self)
+    }
+
+    /// Computes `self / rhs` rounding up.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `rhs == 0`.
+    #[inline]
+    #[must_use]
+    #[track_caller]
+    pub fn div_ceil(self, rhs: Self) -> Self {
+        Self(self.0.div_ceil(rhs.0))
+    }
+
+    /// Computes `self / rhs` and `self % rhs`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `rhs == 0`.
+    #[inline]
+    #[must_use]
+    #[track_caller]
+    pub fn div_rem(self, rhs: Self) -> (Self, Self) {
+        let (d, m) = self.0.div_rem(rhs.0);
+        (Self(d), Self(m))
+    }
+
+    /// Computes `self / rhs` rounding down.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `rhs == 0`.
+    #[inline]
+    #[must_use]
+    #[track_caller]
+    pub fn wrapping_div(self, rhs: Self) -> Self {
+        self.div_rem(rhs).0
+    }
+
+    /// Computes `self % rhs`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `rhs == 0`.
+    #[inline]
+    #[must_use]
+    #[track_caller]
+    pub fn wrapping_rem(self, rhs: Self) -> Self {
+        self.div_rem(rhs).1
+    }
 }
 
 impl From<TokenAmount> for U256 {
@@ -464,11 +574,31 @@ impl From<TokenAmount> for U256 {
     }
 }
 
+impl From<U256> for TokenAmount {
+    fn from(value: U256) -> Self {
+        TokenAmount(value)
+    }
+}
+
 impl Add<Self> for TokenAmount {
     type Output = TokenAmount;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Self(self.0 + rhs.0)
+        self.wrapping_add(rhs)
+    }
+}
+
+impl Sub<Self> for TokenAmount {
+    type Output = TokenAmount;
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.wrapping_sub(rhs)
+    }
+}
+
+impl Mul<Self> for TokenAmount {
+    type Output = TokenAmount;
+    fn mul(self, rhs: Self) -> Self::Output {
+        self.wrapping_mul(rhs)
     }
 }
 
