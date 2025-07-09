@@ -20,7 +20,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::{Add, Mul, Sub};
+use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::str::FromStr;
 use url::Url;
 
@@ -580,25 +580,39 @@ impl From<U256> for TokenAmount {
     }
 }
 
-impl Add<Self> for TokenAmount {
+impl<T: Into<TokenAmount>> Add<T> for TokenAmount {
     type Output = TokenAmount;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        self.wrapping_add(rhs)
+    fn add(self, rhs: T) -> Self::Output {
+        self.wrapping_add(rhs.into())
     }
 }
 
-impl Sub<Self> for TokenAmount {
+impl<T: Into<TokenAmount>> Sub<T> for TokenAmount {
     type Output = TokenAmount;
-    fn sub(self, rhs: Self) -> Self::Output {
-        self.wrapping_sub(rhs)
+    fn sub(self, rhs: T) -> Self::Output {
+        self.wrapping_sub(rhs.into())
     }
 }
 
-impl Mul<Self> for TokenAmount {
+impl<T: Into<TokenAmount>> Mul<T> for TokenAmount {
     type Output = TokenAmount;
-    fn mul(self, rhs: Self) -> Self::Output {
-        self.wrapping_mul(rhs)
+    fn mul(self, rhs: T) -> Self::Output {
+        self.wrapping_mul(rhs.into())
+    }
+}
+
+impl<T: Into<TokenAmount>> Div<T> for TokenAmount {
+    type Output = TokenAmount;
+    fn div(self, rhs: T) -> Self::Output {
+        self.wrapping_div(rhs.into())
+    }
+}
+
+impl<T: Into<TokenAmount>> Rem<T> for TokenAmount {
+    type Output = TokenAmount;
+    fn rem(self, rhs: T) -> Self::Output {
+        self.wrapping_rem(rhs.into())
     }
 }
 

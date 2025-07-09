@@ -4620,7 +4620,7 @@ dependencies = [
 
 [[package]]
 name = "x402-rs"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "alloy",
  "axum",
