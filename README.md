@@ -84,6 +84,7 @@ See [`x402-reqwest` crate docs](./crates/x402-reqwest/README.md).
 | Metrics and Tracing                 | Expose OpenTelemetry metrics and structured tracing for observability, monitoring, and debugging         | ✅ Complete |
 | Server Middleware                   | Provide ready-to-use integration for Rust web frameworks such as axum and tower.                         | ✅ Complete |
 | Client Library                      | Provide a lightweight Rust library for initiating and managing x402 payment flows from Rust clients.     | ✅ Complete |
+| Solana Support                      | Support Solana chain.                                                                                    | ✅ Complete |
 | Multiple chains and multiple tokens | Support various tokens and EVM compatible chains.                                                        | ⏳ Planned  |
 | Payment Storage                     | Persist verified and settled payments for analytics, access control, and auditability.                   | 🔜 Planned |
 | Micropayment Support                | Enable fine-grained offchain usage-based payments, including streaming and per-request billing.          | 🔜 Planned |
@@ -117,7 +118,8 @@ PORT=8080
 RPC_URL_BASE_SEPOLIA=https://sepolia.base.org
 RPC_URL_BASE=https://mainnet.base.org
 SIGNER_TYPE=private-key
-PRIVATE_KEY=0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+EVM_PRIVATE_KEY=0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+SOLANA_PRIVATE_KEY=6ASf5EcmmEHTgDJ4X4ZT5vT6iHVJBXPg5AN5YoTCpGWt
 RUST_LOG=info
 ```
 
@@ -231,6 +233,8 @@ Available variables:
 * `RPC_URL_BASE`: Ethereum RPC endpoint for Base mainnet,
 * `RPC_URL_AVALANCHE_FUJI`: Ethereum RPC endpoint for Avalanche Fuji testnet,
 * `RPC_URL_AVALANCHE`: Ethereum RPC endpoint for Avalanche C-Chain mainnet.
+* `RPC_URL_SOLANA`: RPC endpoint for Solana mainnet.
+* `RPC_URL_SOLANA_DEVNET`: RPC endpoint for Solana devnet.
 
 ### Observability
 
@@ -263,6 +267,8 @@ The Facilitator supports different networks based on the environment variables y
 | XDC Mainnet               | `RPC_URL_XDC`            | ✅                | Mainnet                          |
 | Avalanche Fuji Testnet    | `RPC_URL_AVALANCHE_FUJI` | ✅                | Testnet                          |
 | Avalanche C-Chain Mainnet | `RPC_URL_AVALANCHE`      | ✅                | Mainnet                          |
+| Solana Mainnet            | `RPC_URL_SOLANA`         | ✅                | Mainnet                          |
+| Solana Devnet             | `RPC_URL_SOLANA_DEVNET`  | ✅                | Testnet, Recommended for testing |
 
 - If you provide say only `RPC_URL_BASE_SEPOLIA`, only **Base Sepolia** will be available.
 - If you provide `RPC_URL_BASE_SEPOLIA`, `RPC_URL_BASE`, and other env variables on the list, then all the specified networks will be supported.
