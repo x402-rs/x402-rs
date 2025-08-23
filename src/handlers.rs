@@ -10,16 +10,17 @@
 //! and is compatible with official x402 client SDKs.
 
 use axum::http::StatusCode;
+use axum::response::Response;
 use axum::{Extension, Json, response::IntoResponse};
 use serde_json::json;
 use tracing::instrument;
 
+use crate::chain::FacilitatorLocalError;
 use crate::facilitator::Facilitator;
-use crate::facilitator_local::{FacilitatorLocal, PaymentError};
-use crate::network::Network;
+use crate::facilitator_local::FacilitatorLocal;
 use crate::types::{
-    ErrorResponse, FacilitatorErrorReason, Scheme, SettleRequest, SettleResponse,
-    SupportedPaymentKind, VerifyRequest, VerifyResponse, X402Version,
+    ErrorResponse, FacilitatorErrorReason, MixedAddress, SettleRequest, VerifyRequest,
+    VerifyResponse,
 };
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.
@@ -61,16 +62,16 @@ pub async fn get_settle_info() -> impl IntoResponse {
 /// Facilitators may expose this to help clients dynamically configure their payment requests
 /// based on available network and scheme support.
 #[instrument(skip_all)]
-pub async fn get_supported() -> impl IntoResponse {
-    let mut kinds = Vec::with_capacity(Network::variants().len());
-    for network in Network::variants() {
-        kinds.push(SupportedPaymentKind {
-            x402_version: X402Version::V1,
-            scheme: Scheme::Exact,
-            network: *network,
-        })
-    }
-    (StatusCode::OK, Json(kinds))
+pub async fn get_supported(
+    Extension(facilitator): Extension<FacilitatorLocal>,
+) -> impl IntoResponse {
+    let kinds = facilitator.kinds();
+    (
+        StatusCode::OK,
+        Json(json!({
+            "kinds": kinds,
+        })),
+    )
 }
 
 /// `POST /verify`: Facilitator-side verification of a proposed x402 payment.
@@ -84,9 +85,6 @@ pub async fn post_verify(
     Extension(facilitator): Extension<FacilitatorLocal>,
     Json(body): Json<VerifyRequest>,
 ) -> impl IntoResponse {
-    let payload = &body.payment_payload;
-    let payer = &payload.payload.authorization.from;
-
     match facilitator.verify(&body).await {
         Ok(valid_response) => (StatusCode::OK, Json(valid_response)).into_response(),
         Err(error) => {
@@ -95,50 +93,7 @@ pub async fn post_verify(
                 body = %serde_json::to_string(&body).unwrap_or_else(|_| "<can-not-serialize>".to_string()),
                 "Verification failed"
             );
-            let bad_request = (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "Invalid request".to_string(),
-                }),
-            )
-                .into_response();
-
-            let invalid_schema = (
-                StatusCode::OK,
-                Json(VerifyResponse::invalid(
-                    *payer,
-                    FacilitatorErrorReason::InvalidScheme,
-                )),
-            )
-                .into_response();
-
-            match error {
-                PaymentError::IncompatibleScheme { .. }
-                | PaymentError::IncompatibleNetwork { .. }
-                | PaymentError::IncompatibleReceivers { .. }
-                | PaymentError::InvalidSignature(_)
-                | PaymentError::InvalidTiming(_)
-                | PaymentError::InsufficientValue => invalid_schema,
-                PaymentError::UnsupportedNetwork(_) => (
-                    StatusCode::OK,
-                    Json(VerifyResponse::invalid(
-                        *payer,
-                        FacilitatorErrorReason::InvalidNetwork,
-                    )),
-                )
-                    .into_response(),
-                PaymentError::InvalidContractCall(_)
-                | PaymentError::InvalidAddress(_)
-                | PaymentError::ClockError(_) => bad_request,
-                PaymentError::InsufficientFunds => (
-                    StatusCode::OK,
-                    Json(VerifyResponse::invalid(
-                        *payer,
-                        FacilitatorErrorReason::InsufficientFunds,
-                    )),
-                )
-                    .into_response(),
-            }
+            error.into_response()
         }
     }
 }
@@ -154,8 +109,6 @@ pub async fn post_settle(
     Extension(facilitator): Extension<FacilitatorLocal>,
     Json(body): Json<SettleRequest>,
 ) -> impl IntoResponse {
-    let payer = &body.payment_payload.payload.authorization.from;
-    let network = &body.payment_payload.network;
     match facilitator.settle(&body).await {
         Ok(valid_response) => (StatusCode::OK, Json(valid_response)).into_response(),
         Err(error) => {
@@ -164,49 +117,58 @@ pub async fn post_settle(
                 body = %serde_json::to_string(&body).unwrap_or_else(|_| "<can-not-serialize>".to_string()),
                 "Settlement failed"
             );
-            let bad_request = (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "Invalid request".to_string(),
-                }),
-            )
-                .into_response();
+            error.into_response()
+        }
+    }
+}
 
-            let invalid_schema = (
-                StatusCode::OK,
-                Json(SettleResponse {
-                    success: false,
-                    error_reason: Some(FacilitatorErrorReason::InvalidScheme),
-                    payer: (*payer).into(),
-                    transaction: None,
-                    network: *network,
-                }),
-            )
-                .into_response();
+fn invalid_schema(payer: Option<MixedAddress>) -> VerifyResponse {
+    VerifyResponse::invalid(payer, FacilitatorErrorReason::InvalidScheme)
+}
 
-            match error {
-                PaymentError::IncompatibleScheme { .. }
-                | PaymentError::IncompatibleNetwork { .. }
-                | PaymentError::IncompatibleReceivers { .. }
-                | PaymentError::InvalidSignature(_)
-                | PaymentError::InvalidTiming(_)
-                | PaymentError::InsufficientValue => invalid_schema,
-                PaymentError::InvalidContractCall(_)
-                | PaymentError::InvalidAddress(_)
-                | PaymentError::UnsupportedNetwork(_)
-                | PaymentError::ClockError(_) => bad_request,
-                PaymentError::InsufficientFunds => (
-                    StatusCode::BAD_REQUEST,
-                    Json(SettleResponse {
-                        success: false,
-                        error_reason: Some(FacilitatorErrorReason::InsufficientFunds),
-                        payer: (*payer).into(),
-                        transaction: None,
-                        network: *network,
-                    }),
-                )
-                    .into_response(),
+impl IntoResponse for FacilitatorLocalError {
+    fn into_response(self) -> Response {
+        let error = self;
+
+        let bad_request = (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Invalid request".to_string(),
+            }),
+        )
+            .into_response();
+
+        match error {
+            FacilitatorLocalError::SchemeMismatch(payer, ..) => {
+                (StatusCode::OK, Json(invalid_schema(payer))).into_response()
             }
+            FacilitatorLocalError::ReceiverMismatch(payer, ..)
+            | FacilitatorLocalError::InvalidSignature(payer, ..)
+            | FacilitatorLocalError::InvalidTiming(payer, ..)
+            | FacilitatorLocalError::InsufficientValue(payer) => {
+                (StatusCode::OK, Json(invalid_schema(Some(payer)))).into_response()
+            }
+            FacilitatorLocalError::NetworkMismatch(payer, ..)
+            | FacilitatorLocalError::UnsupportedNetwork(payer) => (
+                StatusCode::OK,
+                Json(VerifyResponse::invalid(
+                    payer,
+                    FacilitatorErrorReason::InvalidNetwork,
+                )),
+            )
+                .into_response(),
+            FacilitatorLocalError::ContractCall(..)
+            | FacilitatorLocalError::InvalidAddress(..)
+            | FacilitatorLocalError::DecodingError(..)
+            | FacilitatorLocalError::ClockError(_) => bad_request,
+            FacilitatorLocalError::InsufficientFunds(payer) => (
+                StatusCode::OK,
+                Json(VerifyResponse::invalid(
+                    Some(payer),
+                    FacilitatorErrorReason::InsufficientFunds,
+                )),
+            )
+                .into_response(),
         }
     }
 }

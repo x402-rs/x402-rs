@@ -34,7 +34,9 @@ use std::fmt::Display;
 use std::time::Duration;
 use url::Url;
 use x402_rs::facilitator::Facilitator;
-use x402_rs::types::{SettleRequest, SettleResponse, VerifyRequest, VerifyResponse};
+use x402_rs::types::{
+    SettleRequest, SettleResponse, SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
+};
 
 #[cfg(feature = "telemetry")]
 use tracing::{Instrument, Span};
@@ -51,6 +53,8 @@ pub struct FacilitatorClient {
     verify_url: Url,
     /// Full URL to `POST /settle` requests
     settle_url: Url,
+    /// Full URL to `GET /supported` requests
+    supported_url: Url,
     /// Shared Reqwest HTTP client
     client: Client,
     /// Optional custom headers sent with each request
@@ -98,6 +102,10 @@ impl Facilitator for FacilitatorClient {
             tracing::info_span!("x402.facilitator_client.settle", timeout = ?self.timeout),
         )
         .await
+    }
+
+    async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
+        FacilitatorClient::supported(self).await
     }
 
     /// Attempts to settle a verified payment with the facilitator.
@@ -196,11 +204,19 @@ impl FacilitatorClient {
                     context: "Failed to construct ./settle URL",
                     source: e,
                 })?;
+        let supported_url =
+            base_url
+                .join("./supported")
+                .map_err(|e| FacilitatorClientError::UrlParse {
+                    context: "Failed to construct ./supported URL",
+                    source: e,
+                })?;
         Ok(Self {
             client,
             base_url,
             verify_url,
             settle_url,
+            supported_url,
             headers: HeaderMap::new(),
             timeout: None,
         })
@@ -240,6 +256,10 @@ impl FacilitatorClient {
             .await
     }
 
+    pub async fn supported(&self) -> Result<SupportedPaymentKindsResponse, FacilitatorClientError> {
+        self.get_json(&self.supported_url, "GET /supported").await
+    }
+
     /// Generic POST helper that handles JSON serialization, error mapping,
     /// timeout application, and telemetry integration.
     ///
@@ -255,6 +275,53 @@ impl FacilitatorClient {
         R: serde::de::DeserializeOwned,
     {
         let mut req = self.client.post(url.clone()).json(payload);
+        for (key, value) in self.headers.iter() {
+            req = req.header(key, value);
+        }
+        if let Some(timeout) = self.timeout {
+            req = req.timeout(timeout);
+        }
+        let http_response = req
+            .send()
+            .await
+            .map_err(|e| FacilitatorClientError::Http { context, source: e })?;
+
+        let result = if http_response.status() == StatusCode::OK {
+            http_response
+                .json::<R>()
+                .await
+                .map_err(|e| FacilitatorClientError::JsonDeserialization { context, source: e })
+        } else {
+            let status = http_response.status();
+            let body = http_response
+                .text()
+                .await
+                .map_err(|e| FacilitatorClientError::ResponseBodyRead { context, source: e })?;
+            Err(FacilitatorClientError::HttpStatus {
+                context,
+                status,
+                body,
+            })
+        };
+
+        record_result_on_span(&result);
+
+        result
+    }
+
+    /// Generic GET helper that handles JSON serialization, error mapping,
+    /// timeout application, and telemetry integration.
+    ///
+    /// `context` is a human-readable identifier used in tracing and error messages (e.g. `"POST /verify"`).
+    async fn get_json<R>(
+        &self,
+        url: &Url,
+        context: &'static str,
+    ) -> Result<R, FacilitatorClientError>
+    where
+        R: serde::de::DeserializeOwned,
+    {
+        let mut req = self.client.get(url.clone());
         for (key, value) in self.headers.iter() {
             req = req.header(key, value);
         }

@@ -3,14 +3,15 @@
 //! This module defines supported networks and their chain IDs,
 //! and provides statically known USDC deployments per network.
 
+use crate::types::{MixedAddress, TokenAsset, TokenDeployment, TokenDeploymentEip712};
 use alloy::primitives::address;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
 use std::borrow::Borrow;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
-
-use crate::types::{TokenAsset, TokenDeployment, TokenDeploymentEip712};
+use std::str::FromStr;
 
 /// Supported Ethereum-compatible networks.
 ///
@@ -32,6 +33,12 @@ pub enum Network {
     /// Avalanche Mainnet (chain ID 43114)
     #[serde(rename = "avalanche")]
     Avalanche,
+    /// Solana Mainnet - Live production environment for deployed applications
+    #[serde(rename = "solana")]
+    Solana,
+    /// Solana Devnet - Testing with public accessibility for developers experimenting with their applications
+    #[serde(rename = "solana-devnet")]
+    SolanaDevnet,
 }
 
 impl Display for Network {
@@ -42,22 +49,33 @@ impl Display for Network {
             Network::XdcMainnet => write!(f, "xdc"),
             Network::AvalancheFuji => write!(f, "avalanche-fuji"),
             Network::Avalanche => write!(f, "avalanche"),
+            Network::Solana => write!(f, "solana"),
+            Network::SolanaDevnet => write!(f, "solana-devnet"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum NetworkFamily {
+    Evm,
+    Solana,
+}
+
+impl From<Network> for NetworkFamily {
+    fn from(value: Network) -> Self {
+        match value {
+            Network::BaseSepolia => NetworkFamily::Evm,
+            Network::Base => NetworkFamily::Evm,
+            Network::XdcMainnet => NetworkFamily::Evm,
+            Network::AvalancheFuji => NetworkFamily::Evm,
+            Network::Avalanche => NetworkFamily::Evm,
+            Network::Solana => NetworkFamily::Solana,
+            Network::SolanaDevnet => NetworkFamily::Solana,
         }
     }
 }
 
 impl Network {
-    /// Return the numeric chain ID associated with the network.
-    pub fn chain_id(&self) -> u64 {
-        match self {
-            Network::BaseSepolia => 84532,
-            Network::Base => 8453,
-            Network::XdcMainnet => 50,
-            Network::AvalancheFuji => 43113,
-            Network::Avalanche => 43114,
-        }
-    }
-
     /// Return all known [`Network`] variants.
     pub fn variants() -> &'static [Network] {
         &[
@@ -66,6 +84,8 @@ impl Network {
             Network::XdcMainnet,
             Network::AvalancheFuji,
             Network::Avalanche,
+            Network::Solana,
+            Network::SolanaDevnet,
         ]
     }
 }
@@ -78,10 +98,10 @@ static USDC_BASE_SEPOLIA: Lazy<USDCDeployment> = Lazy::new(|| {
             network: Network::BaseSepolia,
         },
         decimals: 6,
-        eip712: TokenDeploymentEip712 {
+        eip712: Some(TokenDeploymentEip712 {
             name: "USDC".into(),
             version: "2".into(),
-        },
+        }),
     })
 });
 
@@ -93,10 +113,10 @@ static USDC_BASE: Lazy<USDCDeployment> = Lazy::new(|| {
             network: Network::Base,
         },
         decimals: 6,
-        eip712: TokenDeploymentEip712 {
+        eip712: Some(TokenDeploymentEip712 {
             name: "USD Coin".into(),
             version: "2".into(),
-        },
+        }),
     })
 });
 
@@ -108,10 +128,10 @@ static USDC_XDC: Lazy<USDCDeployment> = Lazy::new(|| {
             network: Network::XdcMainnet,
         },
         decimals: 6,
-        eip712: TokenDeploymentEip712 {
+        eip712: Some(TokenDeploymentEip712 {
             name: "Bridged USDC(XDC)".into(),
             version: "2".into(),
-        },
+        }),
     })
 });
 
@@ -123,10 +143,10 @@ static USDC_AVALANCHE_FUJI: Lazy<USDCDeployment> = Lazy::new(|| {
             network: Network::AvalancheFuji,
         },
         decimals: 6,
-        eip712: TokenDeploymentEip712 {
+        eip712: Some(TokenDeploymentEip712 {
             name: "USD Coin".into(),
             version: "2".into(),
-        },
+        }),
     })
 });
 
@@ -135,13 +155,41 @@ static USDC_AVALANCHE: Lazy<USDCDeployment> = Lazy::new(|| {
     USDCDeployment(TokenDeployment {
         asset: TokenAsset {
             address: address!("0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E").into(),
-            network: Network::AvalancheFuji,
+            network: Network::Avalanche,
         },
         decimals: 6,
-        eip712: TokenDeploymentEip712 {
+        eip712: Some(TokenDeploymentEip712 {
             name: "USD Coin".into(),
             version: "2".into(),
+        }),
+    })
+});
+
+/// Lazily initialized known USDC deployment on Solana mainnet as [`USDCDeployment`].
+static USDC_SOLANA: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: MixedAddress::Solana(
+                Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+            ),
+            network: Network::Solana,
         },
+        decimals: 6,
+        eip712: None,
+    })
+});
+
+/// Lazily initialized known USDC deployment on Solana mainnet as [`USDCDeployment`].
+static USDC_SOLANA_DEVNET: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: MixedAddress::Solana(
+                Pubkey::from_str("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU").unwrap(),
+            ),
+            network: Network::SolanaDevnet,
+        },
+        decimals: 6,
+        eip712: None,
     })
 });
 
@@ -186,6 +234,8 @@ impl USDCDeployment {
             Network::XdcMainnet => &USDC_XDC,
             Network::AvalancheFuji => &USDC_AVALANCHE_FUJI,
             Network::Avalanche => &USDC_AVALANCHE,
+            Network::Solana => &USDC_SOLANA,
+            Network::SolanaDevnet => &USDC_SOLANA_DEVNET,
         }
     }
 }

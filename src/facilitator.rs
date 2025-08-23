@@ -5,7 +5,9 @@
 
 use std::fmt::{Debug, Display};
 
-use crate::types::{SettleRequest, SettleResponse, VerifyRequest, VerifyResponse};
+use crate::types::{
+    SettleRequest, SettleResponse, SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
+};
 
 /// Trait defining the asynchronous interface for x402 payment facilitators.
 ///
@@ -49,4 +51,8 @@ pub trait Facilitator {
         &self,
         request: &SettleRequest,
     ) -> impl Future<Output = Result<SettleResponse, Self::Error>> + Send;
+
+    fn supported(
+        &self,
+    ) -> impl Future<Output = Result<SupportedPaymentKindsResponse, Self::Error>> + Send;
 }

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 use x402_rs::network::USDCDeployment;
-use x402_rs::types::{EvmAddress, TokenDeployment};
+use x402_rs::types::{EvmAddress, MixedAddress, TokenDeployment};
 use x402_rs::types::{MoneyAmount, TokenAmount};
 
 /// A complete x402-compatible price tag, describing a required payment.
@@ -10,14 +10,14 @@ use x402_rs::types::{MoneyAmount, TokenAmount};
 /// or by facilitators to verify compliance.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct PriceTag {
-    pub pay_to: EvmAddress,
+    pub pay_to: MixedAddress,
     pub amount: TokenAmount,
     pub token: TokenDeployment,
 }
 
 impl PriceTag {
     /// Constructs a new `PriceTag` from raw inputs.
-    pub fn new<P: Into<EvmAddress>, T: Into<TokenAmount>, A: Into<TokenDeployment>>(
+    pub fn new<P: Into<MixedAddress>, T: Into<TokenAmount>, A: Into<TokenDeployment>>(
         pay_to: P,
         amount: T,
         token: A,
@@ -107,7 +107,7 @@ pub trait IntoPriceTag {
         &self,
         amount: A,
     ) -> PriceTagBuilder<PriceTagMoneyAmount<A>, ()>;
-    fn pay_to<P: TryInto<EvmAddress>>(&self, address: P) -> PriceTagBuilder<(), P>;
+    fn pay_to<P: Into<MixedAddress>>(&self, address: P) -> PriceTagBuilder<(), P>;
 }
 
 /// Errors that may occur when building a [`PriceTag`] using a [`PriceTagBuilder`].
@@ -126,7 +126,7 @@ pub enum PriceTagBuilderError {
 impl<A, P> PriceTagBuilder<PriceTagTokenAmount<A>, P>
 where
     A: TryInto<TokenAmount>,
-    P: TryInto<EvmAddress>,
+    P: Into<MixedAddress>,
 {
     /// Builds a [`PriceTag`] using a token-denominated amount.
     ///
@@ -140,10 +140,7 @@ where
             .ok()
             .ok_or(PriceTagBuilderError::InvalidAmount)?;
         let pay_to = self.pay_to.ok_or(PriceTagBuilderError::NoPayTo)?;
-        let pay_to = pay_to
-            .try_into()
-            .ok()
-            .ok_or(PriceTagBuilderError::InvalidPayTo)?;
+        let pay_to = pay_to.into();
         let price_tag = PriceTag {
             token,
             amount,
@@ -162,7 +159,7 @@ where
 impl<A, P> PriceTagBuilder<PriceTagMoneyAmount<A>, P>
 where
     A: TryInto<MoneyAmount>,
-    P: TryInto<EvmAddress>,
+    P: Into<MixedAddress>,
 {
     /// Builds a [`PriceTag`] from a human-readable money amount (e.g., `"1.50"`).
     ///
@@ -179,10 +176,7 @@ where
             .ok()
             .ok_or(PriceTagBuilderError::InvalidAmount)?;
         let pay_to = self.pay_to.ok_or(PriceTagBuilderError::NoPayTo)?;
-        let pay_to = pay_to
-            .try_into()
-            .ok()
-            .ok_or(PriceTagBuilderError::InvalidPayTo)?;
+        let pay_to = pay_to.into();
         let price_tag = PriceTag {
             token,
             amount,
@@ -267,7 +261,7 @@ impl IntoPriceTag for TokenDeployment {
         }
     }
 
-    fn pay_to<P: TryInto<EvmAddress>>(&self, address: P) -> PriceTagBuilder<(), P> {
+    fn pay_to<P: Into<MixedAddress>>(&self, address: P) -> PriceTagBuilder<(), P> {
         let token = self.clone();
         PriceTagBuilder {
             token,
@@ -295,7 +289,7 @@ impl IntoPriceTag for USDCDeployment {
     }
 
     /// Adds or replaces the `pay_to` address in the builder.
-    fn pay_to<P: TryInto<EvmAddress>>(&self, address: P) -> PriceTagBuilder<(), P> {
+    fn pay_to<P: Into<MixedAddress>>(&self, address: P) -> PriceTagBuilder<(), P> {
         self.0.pay_to(address)
     }
 }

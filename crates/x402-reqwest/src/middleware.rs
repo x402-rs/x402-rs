@@ -9,24 +9,20 @@
 //! - EIP-712-based payload construction and signing
 //! - Base64 encoding into a payment header
 
-use alloy::primitives::FixedBytes;
-use alloy::signers::Signer;
-use alloy::sol_types::{SolStruct, eip712_domain};
 use http::{Extensions, HeaderValue, StatusCode};
-use rand::{Rng, rng};
 use reqwest::{Request, Response};
 use reqwest_middleware as rqm;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{SystemTime, SystemTimeError};
+use std::time::SystemTimeError;
 use tracing::instrument;
 use x402_rs::network::{Network, USDCDeployment};
 use x402_rs::types::{
-    Base64Bytes, EvmSignature, ExactEvmPayload, ExactEvmPayloadAuthorization, HexEncodedNonce,
-    MixedAddressError, MoneyAmount, MoneyAmountParseError, PaymentPayload, PaymentRequiredResponse,
-    PaymentRequirements, Scheme, TokenAmount, TokenAsset, TokenDeployment,
-    TransferWithAuthorization, UnixTimestamp, X402Version,
+    Base64Bytes, MixedAddressError, MoneyAmount, MoneyAmountParseError, PaymentPayload,
+    PaymentRequiredResponse, PaymentRequirements, TokenAmount, TokenAsset, TokenDeployment,
 };
+
+use crate::chains::{IntoSenderWallet, SenderWallet};
 
 /// Represents the maximum allowed amount for a specific token asset.
 pub struct MaxTokenAmount {
@@ -103,8 +99,8 @@ pub enum X402PaymentsError {
     #[error("Failed to get system clock")]
     ClockError(#[source] SystemTimeError),
     /// Indicates that signing the EIP-712 payment payload failed using the provided signer.
-    #[error("Failed to sign payment payload")]
-    SigningError(#[source] alloy::signers::Error),
+    #[error("Failed to sign payment payload: {0}")]
+    SigningError(String),
     /// Occurs if the constructed payment payload cannot be serialized to JSON.
     /// This should be an extremely rare occurrence.
     #[error("Failed to encode payment payload to json")]
@@ -142,19 +138,27 @@ impl MaxTokenAmountFromAmount for TokenDeployment {
 /// by attaching a valid x402 payment header.
 #[derive(Clone)]
 pub struct X402Payments {
-    signer: Arc<dyn Signer + Send + Sync>,
+    wallets: Vec<Arc<dyn SenderWallet>>,
     max_token_amount: HashMap<TokenAsset, TokenAmount>,
     prefer: Vec<TokenAsset>,
 }
 
 impl X402Payments {
-    /// Create a new middleware instance with the given EIP-712-compatible signer.
-    /// By default, USDC on Base is preferred.
-    pub fn with_signer<S: Signer + Send + Sync + 'static>(signer: S) -> Self {
+    pub fn with_wallet<S: IntoSenderWallet>(wallet: S) -> Self {
         Self {
-            signer: Arc::new(signer),
+            wallets: vec![wallet.into_sender_wallet()],
             max_token_amount: HashMap::new(),
-            prefer: vec![USDCDeployment::by_network(Network::Base).asset.clone()],
+            prefer: vec![],
+        }
+    }
+
+    pub fn and_with_wallet<S: IntoSenderWallet>(self, wallet: S) -> Self {
+        let mut wallets = self.wallets;
+        wallets.push(wallet.into_sender_wallet());
+        Self {
+            wallets,
+            max_token_amount: self.max_token_amount,
+            prefer: self.prefer,
         }
     }
 
@@ -201,7 +205,7 @@ impl X402Payments {
         // Try to find a USDC requirement
         let usdc_requirement = sorted.iter().find(|req| {
             let usdc = USDCDeployment::by_network(req.network);
-            req.asset == usdc.address().into()
+            req.asset == usdc.address()
         });
 
         let selected = usdc_requirement
@@ -243,74 +247,13 @@ impl X402Payments {
         &self,
         selected: PaymentRequirements,
     ) -> Result<PaymentPayload, X402PaymentsError> {
-        let (name, version) = match selected.extra {
-            None => (None, None),
-            Some(extra) => {
-                let name = extra
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .map(ToOwned::to_owned);
-                let version = extra
-                    .get("version")
-                    .and_then(|v| v.as_str())
-                    .map(ToOwned::to_owned);
-                (name, version)
-            }
-        };
-        let network = selected.network;
-        let chain_id = network.chain_id();
-        let domain = eip712_domain! {
-            name: name.unwrap_or("".to_string()),
-            version: version.unwrap_or("".to_string()),
-            chain_id: chain_id,
-            verifying_contract: selected.asset.try_into().map_err(X402PaymentsError::InvalidEVMAddress)?,
-        };
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(X402PaymentsError::ClockError)?
-            .as_secs();
-        let valid_after = now - 10 * 60; // 10 mins before
-        let valid_before = now + selected.max_timeout_seconds;
-        let nonce: [u8; 32] = rng().random();
-        let authorization = ExactEvmPayloadAuthorization {
-            from: self.signer.address().into(),
-            to: selected
-                .pay_to
-                .try_into()
-                .map_err(X402PaymentsError::InvalidEVMAddress)?,
-            value: selected.max_amount_required,
-            valid_after: UnixTimestamp(valid_after),
-            valid_before: UnixTimestamp(valid_before),
-            nonce: HexEncodedNonce(nonce),
-        };
-        #[cfg(feature = "telemetry")]
-        tracing::debug!(?authorization, "Constructed authorization payload");
-        let transfer_with_authorization = TransferWithAuthorization {
-            from: authorization.from.into(),
-            to: authorization.to.into(),
-            value: authorization.value.into(),
-            validAfter: authorization.valid_after.into(),
-            validBefore: authorization.valid_before.into(),
-            nonce: FixedBytes(nonce),
-        };
-        let eip712_hash = transfer_with_authorization.eip712_signing_hash(&domain);
-        let signature = self
-            .signer
-            .sign_hash(&eip712_hash)
-            .await
-            .map_err(X402PaymentsError::SigningError)?;
-        #[cfg(feature = "telemetry")]
-        tracing::debug!(?signature, "Signature obtained");
-        let payment_payload = PaymentPayload {
-            x402_version: X402Version::V1,
-            scheme: Scheme::Exact,
-            network,
-            payload: ExactEvmPayload {
-                signature: EvmSignature::from(signature.as_bytes()),
-                authorization,
-            },
-        };
-        Ok(payment_payload)
+        let wallet = self.wallets.iter().find(|w| w.can_handle(&selected));
+        match wallet {
+            None => Err(X402PaymentsError::SigningError(
+                "No suitable wallet found".to_string(),
+            )),
+            Some(wallet) => wallet.payment_payload(selected).await,
+        }
     }
 
     /// Encodes the `PaymentPayload` into a base64 string suitable for an `X-Payment` header.

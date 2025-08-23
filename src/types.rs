@@ -17,6 +17,8 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, Zero};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use solana_sdk::bs58;
+use solana_sdk::pubkey::Pubkey;
 use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -25,6 +27,7 @@ use std::str::FromStr;
 use url::Url;
 
 use crate::network::Network;
+use crate::timestamp::UnixTimestamp;
 
 /// Represents the protocol version. Currently only version 1 is supported.
 #[derive(Debug, Copy, Clone)]
@@ -253,42 +256,6 @@ impl Serialize for HexEncodedNonce {
     }
 }
 
-/// A Unix timestamp represented as a `u64`, used in payment authorization windows.
-///
-/// This type encodes the number of seconds since the Unix epoch (1970-01-01T00:00:00Z).
-/// It is used in time-bounded ERC-3009 `transferWithAuthorization` messages to specify
-/// the validity window (`validAfter` and `validBefore`) of a payment authorization.
-///
-/// Serialized as a stringified integer to avoid loss of precision in JSON.
-/// For example, `1699999999` becomes `"1699999999"` in the wire format.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct UnixTimestamp(pub u64);
-
-impl Serialize for UnixTimestamp {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for UnixTimestamp {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let ts = s
-            .parse::<u64>()
-            .map_err(|_| serde::de::Error::custom("timestamp must be a non-negative integer"))?;
-        Ok(UnixTimestamp(ts))
-    }
-}
-
-impl From<UnixTimestamp> for U256 {
-    fn from(value: UnixTimestamp) -> Self {
-        U256::from(value.0)
-    }
-}
-
 /// EIP-712 structured data for ERC-3009-based authorization.
 /// Defines who can transfer how much USDC and when.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
@@ -311,15 +278,28 @@ pub struct ExactEvmPayload {
     pub authorization: ExactEvmPayloadAuthorization,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExactSolanaPayload {
+    pub transaction: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ExactPaymentPayload {
+    Evm(ExactEvmPayload),
+    Solana(ExactSolanaPayload),
+}
+
 /// Describes a signed request to transfer a specific amount of funds on-chain.
 /// Includes the scheme, network, and signed payload contents.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentPayload {
     pub x402_version: X402Version,
     pub scheme: Scheme,
     pub network: Network,
-    pub payload: ExactEvmPayload,
+    pub payload: ExactPaymentPayload,
 }
 
 /// Error returned when decoding a base64-encoded [`PaymentPayload`] fails.
@@ -652,14 +632,43 @@ impl From<u128> for TokenAmount {
     }
 }
 
-/// Represents either an EVM address (0x...) or an off-chain address.
-/// The format is validated by regex and used for routing settlement.
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl From<u64> for TokenAmount {
+    fn from(value: u64) -> Self {
+        TokenAmount(U256::from(value))
+    }
+}
+
+/// Represents either an EVM address (0x...), or an off-chain address, or Solana address.
+/// The format is used for routing settlement.
+#[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub enum MixedAddress {
     /// EVM address
     Evm(EvmAddress),
     /// Off-chain address in `^[A-Za-z0-9][A-Za-z0-9-]{0,34}[A-Za-z0-9]$` format.
     Offchain(String),
+    Solana(Pubkey),
+}
+
+#[macro_export]
+macro_rules! address_evm {
+    ($s:literal) => {
+        $crate::types::MixedAddress::Evm(
+            $crate::__reexports::alloy::primitives::address!($s).into(),
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! address_sol {
+    ($s:literal) => {
+        $crate::types::MixedAddress::Solana($crate::__reexports::solana_sdk::pubkey!($s))
+    };
+}
+
+impl From<Pubkey> for MixedAddress {
+    fn from(value: Pubkey) -> Self {
+        MixedAddress::Solana(value)
+    }
 }
 
 impl From<alloy::primitives::Address> for MixedAddress {
@@ -675,6 +684,7 @@ impl TryFrom<MixedAddress> for alloy::primitives::Address {
         match value {
             MixedAddress::Evm(address) => Ok(address.into()),
             MixedAddress::Offchain(_) => Err(MixedAddressError::NotEvmAddress),
+            MixedAddress::Solana(_) => Err(MixedAddressError::NotEvmAddress),
         }
     }
 }
@@ -700,6 +710,7 @@ impl TryInto<EvmAddress> for MixedAddress {
         match self {
             MixedAddress::Evm(address) => Ok(address),
             MixedAddress::Offchain(_) => Err(MixedAddressError::NotEvmAddress),
+            MixedAddress::Solana(_) => Err(MixedAddressError::NotEvmAddress),
         }
     }
 }
@@ -709,6 +720,7 @@ impl Display for MixedAddress {
         match self {
             MixedAddress::Evm(address) => write!(f, "{address}"),
             MixedAddress::Offchain(address) => write!(f, "{address}"),
+            MixedAddress::Solana(pubkey) => write!(f, "{pubkey}"),
         }
     }
 }
@@ -724,17 +736,19 @@ impl<'de> Deserialize<'de> for MixedAddress {
         });
 
         let s = String::deserialize(deserializer)?;
-        let evm_address = EvmAddress::from_str(&s);
-        match evm_address {
-            Ok(address) => Ok(MixedAddress::Evm(address)),
-            Err(_) => {
-                if OFFCHAIN_ADDRESS_REGEX.is_match(&s) {
-                    Ok(MixedAddress::Offchain(s))
-                } else {
-                    Err(serde::de::Error::custom("Invalid address format"))
-                }
-            }
+        // 1) EVM address (e.g., 0x... 20 bytes, hex)
+        if let Ok(addr) = EvmAddress::from_str(&s) {
+            return Ok(MixedAddress::Evm(addr));
         }
+        // 2) Solana Pubkey (base58, 32 bytes)
+        if let Ok(pk) = Pubkey::from_str(&s) {
+            return Ok(MixedAddress::Solana(pk));
+        }
+        // 3) Off-chain address by regex
+        if OFFCHAIN_ADDRESS_REGEX.is_match(&s) {
+            return Ok(MixedAddress::Offchain(s));
+        }
+        Err(serde::de::Error::custom("Invalid address format"))
     }
 }
 
@@ -746,46 +760,72 @@ impl Serialize for MixedAddress {
         match self {
             MixedAddress::Evm(addr) => serializer.serialize_str(&addr.to_string()),
             MixedAddress::Offchain(s) => serializer.serialize_str(s),
+            MixedAddress::Solana(pubkey) => serializer.serialize_str(pubkey.to_string().as_str()),
         }
     }
 }
 
-/// A 32-byte EVM transaction hash, encoded as 0x-prefixed hex string.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TransactionHash(pub [u8; 32]);
+pub enum TransactionHash {
+    /// A 32-byte EVM transaction hash, encoded as 0x-prefixed hex string.
+    Evm([u8; 32]),
+    Solana([u8; 64]),
+}
 
 impl<'de> Deserialize<'de> for TransactionHash {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
 
-        static TX_HASH_REGEX: Lazy<Regex> =
+        static EVM_TX_HASH_REGEX: Lazy<Regex> =
             Lazy::new(|| Regex::new(r"^0x[0-9a-fA-F]{64}$").expect("invalid regex"));
 
-        if !TX_HASH_REGEX.is_match(&s) {
-            return Err(serde::de::Error::custom("Invalid transaction hash format"));
+        // EVM: 0x-prefixed, 32 bytes hex
+        if EVM_TX_HASH_REGEX.is_match(&s) {
+            let bytes = hex::decode(s.trim_start_matches("0x"))
+                .map_err(|_| serde::de::Error::custom("Invalid hex in transaction hash"))?;
+            let array: [u8; 32] = bytes.try_into().map_err(|_| {
+                serde::de::Error::custom("Transaction hash must be exactly 32 bytes")
+            })?;
+            return Ok(TransactionHash::Evm(array));
         }
 
-        let bytes = hex::decode(s.trim_start_matches("0x"))
-            .map_err(|_| serde::de::Error::custom("Invalid hex in transaction hash"))?;
+        // Solana: base58 string, decodes to exactly 64 bytes
+        if let Ok(bytes) = bs58::decode(&s).into_vec() {
+            if bytes.len() == 64 {
+                let array: [u8; 64] = bytes.try_into().unwrap(); // safe after length check
+                return Ok(TransactionHash::Solana(array));
+            }
+        }
 
-        let array: [u8; 32] = bytes
-            .try_into()
-            .map_err(|_| serde::de::Error::custom("Transaction hash must be exactly 32 bytes"))?;
-
-        Ok(TransactionHash(array))
+        Err(serde::de::Error::custom("Invalid transaction hash format"))
     }
 }
 
 impl Serialize for TransactionHash {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let hex_string = format!("0x{}", hex::encode(self.0));
-        serializer.serialize_str(&hex_string)
+        match self {
+            TransactionHash::Evm(bytes) => {
+                let hex_string = format!("0x{}", hex::encode(bytes));
+                serializer.serialize_str(&hex_string)
+            }
+            TransactionHash::Solana(bytes) => {
+                let b58_string = bs58::encode(bytes).into_string();
+                serializer.serialize_str(&b58_string)
+            }
+        }
     }
 }
 
 impl Display for TransactionHash {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "0x{}", hex::encode(self.0))
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            TransactionHash::Evm(bytes) => {
+                write!(f, "0x{}", hex::encode(bytes))
+            }
+            TransactionHash::Solana(bytes) => {
+                write!(f, "{}", bs58::encode(bytes).into_string())
+            }
+        }
     }
 }
 
@@ -829,7 +869,7 @@ impl PaymentRequirements {
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn token_asset(&self) -> TokenAsset {
         TokenAsset {
-            address: self.asset.clone().try_into().unwrap(),
+            address: self.asset.clone(),
             network: self.network,
         }
     }
@@ -855,6 +895,12 @@ impl Display for VerifyRequest {
     }
 }
 
+impl VerifyRequest {
+    pub fn network(&self) -> Network {
+        self.payment_payload.network
+    }
+}
+
 /// Wrapper for a payment payload and requirements sent by the client
 /// to be used for settlement.
 pub type SettleRequest = VerifyRequest;
@@ -874,6 +920,10 @@ pub enum FacilitatorErrorReason {
     #[error("invalid_network")]
     #[serde(rename = "invalid_network")]
     InvalidNetwork,
+    /// Unexpected settle error
+    #[error("unexpected_settle_error")]
+    #[serde(rename = "unexpected_settle_error")]
+    UnexpectedSettleError,
 }
 
 /// Returned from a facilitator after attempting to settle a payment on-chain.
@@ -923,11 +973,11 @@ impl TryInto<Base64Bytes<'static>> for SettleResponse {
 #[derive(Debug, Clone)]
 pub enum VerifyResponse {
     /// The payload matches the requirements and passes all checks.
-    Valid { payer: EvmAddress },
+    Valid { payer: MixedAddress },
     /// The payload was well-formed but failed verification due to the specified [`FacilitatorErrorReason`]
     Invalid {
         reason: FacilitatorErrorReason,
-        payer: EvmAddress,
+        payer: Option<MixedAddress>,
     },
 }
 
@@ -935,7 +985,7 @@ impl VerifyResponse {
     /// Constructs a successful verification response with the given `payer` address.
     ///
     /// Indicates that the provided payment payload has been validated against the payment requirements.
-    pub fn valid(payer: EvmAddress) -> Self {
+    pub fn valid(payer: MixedAddress) -> Self {
         VerifyResponse::Valid { payer }
     }
 
@@ -943,7 +993,7 @@ impl VerifyResponse {
     ///
     /// Indicates that the payment was recognized but rejected due to reasons such as
     /// insufficient funds, invalid network, or scheme mismatch.
-    pub fn invalid(payer: EvmAddress, reason: FacilitatorErrorReason) -> Self {
+    pub fn invalid(payer: Option<MixedAddress>, reason: FacilitatorErrorReason) -> Self {
         VerifyResponse::Invalid { reason, payer }
     }
 }
@@ -966,7 +1016,9 @@ impl Serialize for VerifyResponse {
             VerifyResponse::Invalid { reason, payer } => {
                 s.serialize_field("isValid", &false)?;
                 s.serialize_field("invalidReason", reason)?;
-                s.serialize_field("payer", payer)?;
+                if let Some(payer) = payer {
+                    s.serialize_field("payer", payer)?
+                }
             }
         }
 
@@ -983,7 +1035,8 @@ impl<'de> Deserialize<'de> for VerifyResponse {
         #[serde(rename_all = "camelCase")]
         struct Raw {
             is_valid: bool,
-            payer: EvmAddress,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            payer: Option<MixedAddress>,
             #[serde(default)]
             invalid_reason: Option<FacilitatorErrorReason>,
         }
@@ -991,7 +1044,12 @@ impl<'de> Deserialize<'de> for VerifyResponse {
         let raw = Raw::deserialize(deserializer)?;
 
         match (raw.is_valid, raw.invalid_reason) {
-            (true, None) => Ok(VerifyResponse::Valid { payer: raw.payer }),
+            (true, None) => match raw.payer {
+                None => Err(serde::de::Error::custom(
+                    "`payer` must be present when `isValid` is true",
+                )),
+                Some(payer) => Ok(VerifyResponse::Valid { payer }),
+            },
             (false, Some(reason)) => Ok(VerifyResponse::Invalid {
                 payer: raw.payer,
                 reason,
@@ -1225,7 +1283,7 @@ pub struct TokenDeploymentEip712 {
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct TokenAsset {
-    pub address: EvmAddress,
+    pub address: MixedAddress,
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub network: Network,
 }
@@ -1238,13 +1296,7 @@ impl From<TokenAsset> for Vec<TokenAsset> {
 
 impl Display for TokenAsset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Use CAIP-19 https://chainagnostic.org/CAIPs/caip-19
-        write!(
-            f,
-            "eip155:{}/erc20:{}",
-            self.network.chain_id(),
-            self.address
-        )
+        write!(f, "{}", self.address)
     }
 }
 
@@ -1281,12 +1333,12 @@ pub struct TokenDeployment {
     pub asset: TokenAsset,
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub decimals: u8,
-    pub eip712: TokenDeploymentEip712,
+    pub eip712: Option<TokenDeploymentEip712>,
 }
 
 impl TokenDeployment {
-    pub fn address(&self) -> EvmAddress {
-        self.asset.address
+    pub fn address(&self) -> MixedAddress {
+        self.asset.address.clone()
     }
 
     #[allow(dead_code)] // Public for consumption by downstream crates.
@@ -1327,8 +1379,6 @@ impl From<TokenDeployment> for TokenAsset {
 pub struct PaymentRequiredResponse {
     pub error: String,
     pub accepts: Vec<PaymentRequirements>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub payer: Option<EvmAddress>,
     pub x402_version: X402Version,
 }
 
@@ -1336,13 +1386,9 @@ impl Display for PaymentRequiredResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "PaymentRequiredResponse: error='{}', accepts={} requirement(s), payer={}, version={}",
+            "PaymentRequiredResponse: error='{}', accepts={} requirement(s), version={}",
             self.error,
             self.accepts.len(),
-            self.payer
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_else(|| "unknown".to_string()),
             self.x402_version
         )
     }
@@ -1354,6 +1400,14 @@ pub struct SupportedPaymentKind {
     pub x402_version: X402Version,
     pub scheme: Scheme,
     pub network: Network,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra: Option<SupportedPaymentKindExtra>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportedPaymentKindExtra {
+    pub fee_payer: MixedAddress,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

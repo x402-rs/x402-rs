@@ -16,9 +16,18 @@
 //! - [`telemetry`] — OpenTelemetry instrumentation setup for tracing and observability.
 //! - [`types`] — all shared x402 protocol structures and payload formats.
 
+pub mod chain;
 pub mod facilitator;
 pub mod facilitator_local;
 pub mod network;
 pub mod provider_cache;
 pub mod telemetry;
+pub mod timestamp;
 pub mod types;
+
+// Hidden re-exports just for macro expansion.
+#[doc(hidden)]
+pub mod __reexports {
+    pub use alloy;
+    pub use solana_sdk;
+}

@@ -35,12 +35,14 @@ use crate::facilitator_local::FacilitatorLocal;
 use crate::provider_cache::ProviderCache;
 use crate::telemetry::Telemetry;
 
+mod chain;
 mod facilitator;
 mod facilitator_local;
 mod handlers;
 mod network;
 mod provider_cache;
 mod telemetry;
+mod timestamp;
 mod types;
 
 /// Initializes the x402 facilitator server.

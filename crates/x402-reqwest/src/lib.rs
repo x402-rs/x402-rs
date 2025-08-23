@@ -138,5 +138,7 @@
 mod builder;
 mod middleware;
 
+pub mod chains;
+
 pub use builder::*;
 pub use middleware::*;

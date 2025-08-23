@@ -72,9 +72,9 @@ use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::network::Network;
 use x402_rs::types::{
-    Base64Bytes, EvmAddress, FacilitatorErrorReason, MixedAddress, PaymentPayload,
-    PaymentRequiredResponse, PaymentRequirements, Scheme, SettleRequest, SettleResponse,
-    TokenAmount, VerifyRequest, VerifyResponse, X402Version,
+    Base64Bytes, FacilitatorErrorReason, MixedAddress, PaymentPayload, PaymentRequiredResponse,
+    PaymentRequirements, Scheme, SettleRequest, SettleResponse, TokenAmount, VerifyRequest,
+    VerifyResponse, X402Version,
 };
 
 #[cfg(feature = "telemetry")]
@@ -122,6 +122,14 @@ impl TryFrom<&str> for X402Middleware<FacilitatorClient> {
     }
 }
 
+impl TryFrom<String> for X402Middleware<FacilitatorClient> {
+    type Error = FacilitatorClientError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        X402Middleware::try_from(value.as_str())
+    }
+}
+
 impl<F> X402Middleware<F>
 where
     F: Clone,
@@ -137,6 +145,10 @@ where
             price_tag: Vec::new(),
             payment_offers: Arc::new(PaymentOffers::Ready(Arc::new(Vec::new()))),
         }
+    }
+
+    pub fn facilitator_url(&self) -> Url {
+        self.base_url()
     }
 
     pub fn base_url(&self) -> Url {
@@ -222,21 +234,28 @@ where
             let payment_requirements = self
                 .price_tag
                 .iter()
-                .map(|price_tag| PaymentRequirements {
-                    scheme: Scheme::Exact,
-                    network: price_tag.token.network(),
-                    max_amount_required: price_tag.amount,
-                    resource: resource.clone(),
-                    description: description.clone(),
-                    mime_type: mime_type.clone(),
-                    pay_to: price_tag.pay_to.into(),
-                    max_timeout_seconds,
-                    asset: price_tag.token.address().into(),
-                    extra: Some(json!({
-                        "name": price_tag.token.eip712.name,
-                        "version": price_tag.token.eip712.version
-                    })),
-                    output_schema: None,
+                .map(|price_tag| {
+                    let extra = if let Some(eip712) = price_tag.token.eip712.clone() {
+                        Some(json!({
+                            "name": eip712.name,
+                            "version": eip712.version
+                        }))
+                    } else {
+                        None
+                    };
+                    PaymentRequirements {
+                        scheme: Scheme::Exact,
+                        network: price_tag.token.network(),
+                        max_amount_required: price_tag.amount,
+                        resource: resource.clone(),
+                        description: description.clone(),
+                        mime_type: mime_type.clone(),
+                        pay_to: price_tag.pay_to.clone(),
+                        max_timeout_seconds,
+                        asset: price_tag.token.address(),
+                        extra,
+                        output_schema: None,
+                    }
                 })
                 .collect::<Vec<_>>();
             PaymentOffers::Ready(Arc::new(payment_requirements))
@@ -244,20 +263,27 @@ where
             let no_resource = self
                 .price_tag
                 .iter()
-                .map(|price_tag| PaymentRequirementsNoResource {
-                    scheme: Scheme::Exact,
-                    network: price_tag.token.network(),
-                    max_amount_required: price_tag.amount,
-                    description: description.clone(),
-                    mime_type: mime_type.clone(),
-                    pay_to: price_tag.pay_to.into(),
-                    max_timeout_seconds,
-                    asset: price_tag.token.address().into(),
-                    extra: Some(json!({
-                        "name": price_tag.token.eip712.name,
-                        "version": price_tag.token.eip712.version
-                    })),
-                    output_schema: None,
+                .map(|price_tag| {
+                    let extra = if let Some(eip712) = price_tag.token.eip712.clone() {
+                        Some(json!({
+                            "name": eip712.name,
+                            "version": eip712.version
+                        }))
+                    } else {
+                        None
+                    };
+                    PaymentRequirementsNoResource {
+                        scheme: Scheme::Exact,
+                        network: price_tag.token.network(),
+                        max_amount_required: price_tag.amount,
+                        description: description.clone(),
+                        mime_type: mime_type.clone(),
+                        pay_to: price_tag.pay_to.clone(),
+                        max_timeout_seconds,
+                        asset: price_tag.token.address(),
+                        extra,
+                        output_schema: None,
+                    }
                 })
                 .collect::<Vec<_>>();
             PaymentOffers::NoResource {
@@ -356,7 +382,6 @@ impl X402Error {
         let payment_required_response = PaymentRequiredResponse {
             error: ERR_PAYMENT_HEADER_REQUIRED.clone(),
             accepts: payment_requirements,
-            payer: None,
             x402_version: X402Version::V1,
         };
         Self(payment_required_response)
@@ -366,7 +391,6 @@ impl X402Error {
         let payment_required_response = PaymentRequiredResponse {
             error: ERR_INVALID_PAYMENT_HEADER.clone(),
             accepts: payment_requirements,
-            payer: None,
             x402_version: X402Version::V1,
         };
         Self(payment_required_response)
@@ -376,7 +400,6 @@ impl X402Error {
         let payment_required_response = PaymentRequiredResponse {
             error: ERR_NO_PAYMENT_MATCHING.clone(),
             accepts: payment_requirements,
-            payer: None,
             x402_version: X402Version::V1,
         };
         Self(payment_required_response)
@@ -385,12 +408,10 @@ impl X402Error {
     pub fn verification_failed<E2: Display>(
         error: E2,
         payment_requirements: Vec<PaymentRequirements>,
-        payer: EvmAddress,
     ) -> Self {
         let payment_required_response = PaymentRequiredResponse {
-            error: format!("Verification Failed: {}", error),
+            error: format!("Verification Failed: {error}"),
             accepts: payment_requirements,
-            payer: Some(payer),
             x402_version: X402Version::V1,
         };
         Self(payment_required_response)
@@ -399,12 +420,10 @@ impl X402Error {
     pub fn settlement_failed<E2: Display>(
         error: E2,
         payment_requirements: Vec<PaymentRequirements>,
-        payer: EvmAddress,
     ) -> Self {
         let payment_required_response = PaymentRequiredResponse {
-            error: format!("Settlement Failed: {}", error),
+            error: format!("Settlement Failed: {error}"),
             accepts: payment_requirements,
-            payer: Some(payer),
             x402_version: X402Version::V1,
         };
         Self(payment_required_response)
@@ -436,15 +455,45 @@ where
     F: Facilitator + Clone + Send + Sync,
 {
     /// Parses the `X-Payment` header and returns a decoded [`PaymentPayload`], or constructs a 402 error if missing or malformed as [`X402Error`].
-    pub fn extract_payment_payload(
+    pub async fn extract_payment_payload(
         &self,
         headers: &HeaderMap,
     ) -> Result<PaymentPayload, X402Error> {
         let payment_header = headers.get("X-Payment");
+        let supported = self.facilitator.supported().await.map_err(|e| {
+            X402Error(PaymentRequiredResponse {
+                x402_version: X402Version::V1,
+                error: format!("Unable to retrieve supported payment schemes: {e}"),
+                accepts: vec![],
+            })
+        })?;
         match payment_header {
-            None => Err(X402Error::payment_header_required(
-                self.payment_requirements.as_ref().clone(),
-            )),
+            None => {
+                let requirements = self
+                    .payment_requirements
+                    .as_ref()
+                    .iter()
+                    .map(|r| {
+                        let mut r = r.clone();
+                        let network = r.network;
+                        let extra = supported
+                            .kinds
+                            .iter()
+                            .find(|s| s.network == network)
+                            .cloned()
+                            .and_then(|s| s.extra);
+                        if let Some(extra) = extra {
+                            r.extra = Some(json!({
+                                "feePayer": extra.fee_payer
+                            }));
+                            r
+                        } else {
+                            r
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                Err(X402Error::payment_header_required(requirements))
+            }
             Some(payment_header) => {
                 let base64 = Base64Bytes::from(payment_header.as_bytes());
                 let payment_payload = PaymentPayload::try_from(base64);
@@ -463,13 +512,11 @@ where
         &self,
         payment_payload: &PaymentPayload,
     ) -> Option<PaymentRequirements> {
-        let destination: MixedAddress = payment_payload.payload.authorization.to.into();
         self.payment_requirements
             .iter()
             .find(|requirement| {
                 requirement.scheme == payment_payload.scheme
                     && requirement.network == payment_payload.network
-                    && requirement.pay_to == destination
             })
             .cloned()
     }
@@ -498,18 +545,13 @@ where
             .verify(&verify_request)
             .await
             .map_err(|e| {
-                X402Error::verification_failed(
-                    e,
-                    self.payment_requirements.as_ref().clone(),
-                    payment_payload.payload.authorization.from,
-                )
+                X402Error::verification_failed(e, self.payment_requirements.as_ref().clone())
             })?;
         match verify_response {
             VerifyResponse::Valid { .. } => Ok(verify_request),
-            VerifyResponse::Invalid { reason, payer } => Err(X402Error::verification_failed(
+            VerifyResponse::Invalid { reason, .. } => Err(X402Error::verification_failed(
                 reason,
                 self.payment_requirements.as_ref().clone(),
-                payer,
             )),
         }
     }
@@ -524,11 +566,7 @@ where
         settle_request: &SettleRequest,
     ) -> Result<SettleResponse, X402Error> {
         let settlement = self.facilitator.settle(settle_request).await.map_err(|e| {
-            X402Error::settlement_failed(
-                e,
-                self.payment_requirements.as_ref().clone(),
-                settle_request.payment_payload.payload.authorization.from,
-            )
+            X402Error::settlement_failed(e, self.payment_requirements.as_ref().clone())
         })?;
         if settlement.success {
             Ok(settlement)
@@ -539,7 +577,6 @@ where
             Err(X402Error::settlement_failed(
                 error_reason,
                 self.payment_requirements.as_ref().clone(),
-                settle_request.payment_payload.payload.authorization.from,
             ))
         }
     }
@@ -582,7 +619,7 @@ where
         S::Response: IntoResponse,
         S::Error: IntoResponse,
     {
-        let payment_payload = match self.extract_payment_payload(req.headers()) {
+        let payment_payload = match self.extract_payment_payload(req.headers()).await {
             Ok(payment_payload) => payment_payload,
             Err(err) => {
                 #[cfg(feature = "telemetry")]
@@ -618,7 +655,6 @@ where
                 return X402Error::settlement_failed(
                     err,
                     self.payment_requirements.as_ref().clone(),
-                    verify_request.payment_payload.payload.authorization.from,
                 )
                 .into_response();
             }
@@ -629,7 +665,6 @@ where
                 return X402Error::settlement_failed(
                     err,
                     self.payment_requirements.as_ref().clone(),
-                    verify_request.payment_payload.payload.authorization.from,
                 )
                 .into_response();
             }

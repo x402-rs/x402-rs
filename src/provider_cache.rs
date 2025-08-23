@@ -19,40 +19,29 @@
 //! ```
 
 use alloy::network::EthereumWallet;
-use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
-};
-use alloy::providers::{Identity, ProviderBuilder, RootProvider};
+use alloy::providers::ProviderBuilder;
 use alloy::signers::local::PrivateKeySigner;
 use serde::{Deserialize, Serialize};
+use solana_sdk::signature::Keypair;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::env;
 
-use crate::network::Network;
-
-/// The fully composed Ethereum provider type used in this project.
-///
-/// Combines multiple filler layers for gas, nonce, chain ID, blob gas, and wallet signing,
-/// and wraps a [`RootProvider`] for actual JSON-RPC communication.
-pub type EthereumProvider = FillProvider<
-    JoinFill<
-        JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        WalletFiller<EthereumWallet>,
-    >,
-    RootProvider,
->;
+use crate::chain::evm::EvmProvider;
+use crate::chain::solana::SolanaProvider;
+use crate::chain::{NetworkProvider, NetworkProviderOps};
+use crate::network::{Network, NetworkFamily};
 
 const ENV_SIGNER_TYPE: &str = "SIGNER_TYPE";
-const ENV_PRIVATE_KEY: &str = "PRIVATE_KEY";
+const ENV_EVM_PRIVATE_KEY: &str = "EVM_PRIVATE_KEY";
+const ENV_SOLANA_PRIVATE_KEY: &str = "SOLANA_PRIVATE_KEY";
 const ENV_RPC_BASE: &str = "RPC_URL_BASE";
 const ENV_RPC_BASE_SEPOLIA: &str = "RPC_URL_BASE_SEPOLIA";
 const ENV_RPC_XDC: &str = "RPC_URL_XDC";
 const ENV_RPC_AVALANCHE_FUJI: &str = "RPC_URL_AVALANCHE_FUJI";
 const ENV_RPC_AVALANCHE: &str = "RPC_URL_AVALANCHE";
+const ENV_RPC_SOLANA: &str = "RPC_URL_SOLANA";
+const ENV_RPC_SOLANA_DEVNET: &str = "RPC_URL_SOLANA_DEVNET";
 
 /// A cache of pre-initialized [`EthereumProvider`] instances keyed by network.
 ///
@@ -60,10 +49,9 @@ const ENV_RPC_AVALANCHE: &str = "RPC_URL_AVALANCHE";
 /// and wrapping them with appropriate signing and filler middleware.
 ///
 /// Use [`ProviderCache::from_env`] to load credentials and connect using environment variables.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ProviderCache {
-    providers: HashMap<Network, EthereumProvider>,
-    eip1559: HashMap<Network, bool>,
+    providers: HashMap<Network, NetworkProvider>,
 }
 
 /// A generic cache of pre-initialized Ethereum provider instances [`ProviderMap::Value`] keyed by network.
@@ -75,9 +63,15 @@ pub trait ProviderMap {
 
     /// Returns the Ethereum provider for the specified network, if configured.
     fn by_network<N: Borrow<Network>>(&self, network: N) -> Option<&Self::Value>;
+}
 
-    /// Returns `true` if the specified network supports EIP-1559-style transactions.
-    fn eip1559<N: Borrow<Network>>(&self, network: N) -> bool;
+impl<'a> IntoIterator for &'a ProviderCache {
+    type Item = (&'a Network, &'a NetworkProvider);
+    type IntoIter = std::collections::hash_map::Iter<'a, Network, NetworkProvider>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.providers.iter()
+    }
 }
 
 impl ProviderCache {
@@ -91,10 +85,6 @@ impl ProviderCache {
     /// Fails if required env vars are missing or if the provider cannot connect.
     pub async fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
         let mut providers = HashMap::new();
-        let mut eip1559 = HashMap::new();
-        let wallet = SignerType::from_env()?.make_wallet()?;
-        tracing::info!("Using address: {}", wallet.default_signer().address());
-
         for network in Network::variants() {
             let env_var = match network {
                 Network::BaseSepolia => ENV_RPC_BASE_SEPOLIA,
@@ -102,6 +92,8 @@ impl ProviderCache {
                 Network::XdcMainnet => ENV_RPC_XDC,
                 Network::AvalancheFuji => ENV_RPC_AVALANCHE_FUJI,
                 Network::Avalanche => ENV_RPC_AVALANCHE,
+                Network::Solana => ENV_RPC_SOLANA,
+                Network::SolanaDevnet => ENV_RPC_SOLANA_DEVNET,
             };
             let is_eip1559 = match network {
                 Network::BaseSepolia => true,
@@ -109,35 +101,59 @@ impl ProviderCache {
                 Network::XdcMainnet => false,
                 Network::AvalancheFuji => true,
                 Network::Avalanche => true,
+                Network::Solana => false,
+                Network::SolanaDevnet => false,
             };
-            eip1559.insert(*network, is_eip1559);
 
             let rpc_url = env::var(env_var);
             if let Ok(rpc_url) = rpc_url {
-                let provider = ProviderBuilder::new()
-                    .wallet(wallet.clone())
-                    .connect(&rpc_url)
-                    .await
-                    .map_err(|e| format!("Failed to connect to {network}: {e}"))?;
-                providers.insert(*network, provider);
-                tracing::info!("Initialized provider for {} at {}", network, rpc_url);
+                let family: NetworkFamily = (*network).into();
+                match family {
+                    NetworkFamily::Evm => {
+                        let wallet = SignerType::from_env()?.make_evm_wallet()?;
+                        let provider = ProviderBuilder::new()
+                            .wallet(wallet)
+                            .connect(&rpc_url)
+                            .await
+                            .map_err(|e| format!("Failed to connect to {network}: {e}"))?;
+                        let provider = EvmProvider::try_new(provider, is_eip1559, *network)?;
+                        let provider = NetworkProvider::Evm(provider);
+                        let signer_address = provider.signer_address();
+                        providers.insert(*network, provider);
+                        tracing::info!(
+                            "Initialized provider for {} at {} using {}",
+                            network,
+                            rpc_url,
+                            signer_address
+                        );
+                    }
+                    NetworkFamily::Solana => {
+                        let keypair = SignerType::from_env()?.make_solana_wallet()?;
+                        let provider = SolanaProvider::try_new(keypair, rpc_url.clone(), *network)?;
+                        let provider = NetworkProvider::Solana(provider);
+                        let signer_address = provider.signer_address();
+                        providers.insert(*network, provider);
+                        tracing::info!(
+                            "Initialized provider for {} at {} using {}",
+                            network,
+                            rpc_url,
+                            signer_address
+                        );
+                    }
+                }
             } else {
                 tracing::warn!("No RPC URL configured for {} (skipped)", network);
             }
         }
 
-        Ok(Self { providers, eip1559 })
+        Ok(Self { providers })
     }
 }
 
 impl ProviderMap for ProviderCache {
-    type Value = EthereumProvider;
-    fn by_network<N: Borrow<Network>>(&self, network: N) -> Option<&EthereumProvider> {
+    type Value = NetworkProvider;
+    fn by_network<N: Borrow<Network>>(&self, network: N) -> Option<&NetworkProvider> {
         self.providers.get(network.borrow())
-    }
-
-    fn eip1559<N: Borrow<Network>>(&self, network: N) -> bool {
-        self.eip1559.get(network.borrow()).cloned().unwrap_or(true)
     }
 }
 
@@ -165,13 +181,24 @@ impl SignerType {
     /// Currently only supports [`SignerType::PrivateKey`] variant, based on the following environment variables:
     /// - `SIGNER_TYPE` — currently only `"private-key"` is supported
     /// - `PRIVATE_KEY` — the private key used to sign transactions
-    pub fn make_wallet(&self) -> Result<EthereumWallet, Box<dyn std::error::Error>> {
+    pub fn make_evm_wallet(&self) -> Result<EthereumWallet, Box<dyn std::error::Error>> {
         match self {
             SignerType::PrivateKey => {
-                let private_key = env::var(ENV_PRIVATE_KEY)
-                    .map_err(|_| format!("env {ENV_PRIVATE_KEY} not set"))?;
+                let private_key = env::var(ENV_EVM_PRIVATE_KEY)
+                    .map_err(|_| format!("env {ENV_EVM_PRIVATE_KEY} not set"))?;
                 let pk_signer: PrivateKeySigner = private_key.parse()?;
                 Ok(EthereumWallet::new(pk_signer))
+            }
+        }
+    }
+
+    pub fn make_solana_wallet(&self) -> Result<Keypair, Box<dyn std::error::Error>> {
+        match self {
+            SignerType::PrivateKey => {
+                let private_key = env::var(ENV_SOLANA_PRIVATE_KEY)
+                    .map_err(|_| format!("env {ENV_EVM_PRIVATE_KEY} not set"))?;
+                let keypair = Keypair::from_base58_string(private_key.as_str());
+                Ok(keypair)
             }
         }
     }

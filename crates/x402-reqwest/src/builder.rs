@@ -17,12 +17,12 @@
 //!     .build();
 //! ```
 
-use alloy::signers::Signer;
 use reqwest::{Client, ClientBuilder};
 use reqwest_middleware as rqm;
 use reqwest_middleware::ClientWithMiddleware;
 use x402_rs::types::TokenAsset;
 
+use crate::chains::IntoSenderWallet;
 use crate::{MaxTokenAmount, X402Payments};
 
 /// Builder for attaching `X402Payments` middleware to a `reqwest` client or builder.
@@ -35,6 +35,13 @@ pub struct ReqwestWithPaymentsBuilder<A> {
 }
 
 impl<A> ReqwestWithPaymentsBuilder<A> {
+    pub fn and_with_wallet<S: IntoSenderWallet>(self, wallet: S) -> Self {
+        Self {
+            inner: self.inner,
+            x402: self.x402.and_with_wallet(wallet),
+        }
+    }
+
     /// Set the maximum amount allowed to be paid for a given token.
     /// This is enforced before any request is retried with a payment header.
     /// Mimics [`X402Payments::max`].
@@ -102,22 +109,22 @@ pub trait ReqwestWithPayments {
     type Inner;
 
     /// Wraps the base client with an [`X402Payments`] middleware using the given signer.
-    fn with_payments<S: Signer + Send + Sync + 'static>(
+    fn with_payments<S: IntoSenderWallet>(
         self,
-        signer: S,
+        wallet: S,
     ) -> ReqwestWithPaymentsBuilder<Self::Inner>;
 }
 
 impl ReqwestWithPayments for Client {
     type Inner = Client;
 
-    fn with_payments<S: Signer + Send + Sync + 'static>(
+    fn with_payments<S: IntoSenderWallet>(
         self,
-        signer: S,
+        wallet: S,
     ) -> ReqwestWithPaymentsBuilder<Self::Inner> {
         ReqwestWithPaymentsBuilder {
             inner: self,
-            x402: X402Payments::with_signer(signer),
+            x402: X402Payments::with_wallet(wallet),
         }
     }
 }
@@ -125,13 +132,13 @@ impl ReqwestWithPayments for Client {
 impl ReqwestWithPayments for ClientBuilder {
     type Inner = ClientBuilder;
 
-    fn with_payments<S: Signer + Send + Sync + 'static>(
+    fn with_payments<S: IntoSenderWallet>(
         self,
-        signer: S,
+        wallet: S,
     ) -> ReqwestWithPaymentsBuilder<Self::Inner> {
         ReqwestWithPaymentsBuilder {
             inner: self,
-            x402: X402Payments::with_signer(signer),
+            x402: X402Payments::with_wallet(wallet),
         }
     }
 }
