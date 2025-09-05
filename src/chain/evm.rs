@@ -1,12 +1,33 @@
+//! x402 EVM flow: verification (off-chain) and settlement (on-chain).
+//!
+//! - **Verify**: simulate signature validity and transfer atomically in a single `eth_call`.
+//!   For 6492 signatures, we call the universal validator which may *prepare* (deploy) the
+//!   counterfactual wallet inside the same simulation.
+//! - **Settle**: if the signer wallet is not yet deployed, we deploy it (via the 6492
+//!   factory+calldata) and then call ERC-3009 `transferWithAuthorization` in a real tx.
+//!
+//! Assumptions:
+//! - Target tokens implement ERC-3009 and support ERC-1271 for contract signers.
+//! - The validator contract exists at [`VALIDATOR_ADDRESS`] on supported chains.
+//!
+//! Invariants:
+//! - Settlement is atomic: deploy (if needed) + transfer happen in a single user flow.
+//! - Verification does not persist state.
+
 use alloy::contract::SolCallBuilder;
-use alloy::network::EthereumWallet;
-use alloy::primitives::{Bytes, FixedBytes, Signature, U256};
+use alloy::dyn_abi::SolType;
+use alloy::network::{EthereumWallet, TransactionBuilder};
+use alloy::primitives::{Bytes, FixedBytes, U256, address};
+use alloy::providers::bindings::IMulticall3;
 use alloy::providers::fillers::{
     BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
 };
-use alloy::providers::{Identity, Provider, RootProvider, WalletProvider};
-use alloy::sol;
-use alloy::sol_types::{Eip712Domain, SolStruct, eip712_domain};
+use alloy::providers::{
+    Identity, MULTICALL3_ADDRESS, MulticallItem, Provider, RootProvider, WalletProvider,
+};
+use alloy::rpc::types::{TransactionReceipt, TransactionRequest};
+use alloy::sol_types::{Eip712Domain, SolCall, SolStruct, eip712_domain};
+use alloy::{hex, sol};
 use tracing::{Instrument, instrument};
 use tracing_core::Level;
 
@@ -15,19 +36,34 @@ use crate::facilitator::Facilitator;
 use crate::network::{Network, USDCDeployment};
 use crate::timestamp::UnixTimestamp;
 use crate::types::{
-    EvmAddress, EvmSignature, ExactEvmPayload, ExactPaymentPayload, FacilitatorErrorReason,
-    HexEncodedNonce, MixedAddress, PaymentPayload, PaymentRequirements, Scheme, SettleRequest,
-    SettleResponse, SupportedPaymentKind, SupportedPaymentKindsResponse, TokenAmount,
-    TransactionHash, TransferWithAuthorization, VerifyRequest, VerifyResponse, X402Version,
+    EvmAddress, EvmSignature, ExactPaymentPayload, FacilitatorErrorReason, HexEncodedNonce,
+    MixedAddress, PaymentPayload, PaymentRequirements, Scheme, SettleRequest, SettleResponse,
+    SupportedPaymentKind, SupportedPaymentKindsResponse, TokenAmount, TransactionHash,
+    TransferWithAuthorization, VerifyRequest, VerifyResponse, X402Version,
 };
 
 sol!(
     #[allow(missing_docs)]
     #[allow(clippy::too_many_arguments)]
+    #[derive(Debug)]
     #[sol(rpc)]
     USDC,
     "abi/USDC.json"
 );
+
+sol! {
+    #[allow(missing_docs)]
+    #[allow(clippy::too_many_arguments)]
+    #[derive(Debug)]
+    #[sol(rpc)]
+    Validator6492,
+    "abi/Validator6492.json"
+}
+
+/// Signature verifier for EIP-6492, EIP-1271, EOA, universally deployed on the supported EVM chains
+/// If absent on a target chain, verification will fail; you should deploy the validator there.
+const VALIDATOR_ADDRESS: alloy::primitives::Address =
+    address!("0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B");
 
 /// The fully composed Ethereum provider type used in this project.
 ///
@@ -44,13 +80,19 @@ pub type InnerProvider = FillProvider<
     RootProvider,
 >;
 
+/// Chain descriptor used by the EVM provider.
+///
+/// Wraps a `Network` enum and the concrete `chain_id` used for EIP-155 and EIP-712.
 #[derive(Clone, Debug)]
 pub struct EvmChain {
+    /// x402 network name (Base, Avalanche, etc.).
     pub network: Network,
+    /// Numeric chain id used in transactions and EIP-712 domains.
     pub chain_id: u64,
 }
 
 impl EvmChain {
+    /// Construct a chain descriptor from a network and chain id.
     pub fn new(network: Network, chain_id: u64) -> Self {
         Self { network, chain_id }
     }
@@ -59,6 +101,10 @@ impl EvmChain {
 impl TryFrom<Network> for EvmChain {
     type Error = FacilitatorLocalError;
 
+    /// Map a `Network` to its canonical `chain_id`.
+    ///
+    /// # Errors
+    /// Returns [`FacilitatorLocalError::UnsupportedNetwork`] for non-EVM networks (e.g. Solana).
     fn try_from(value: Network) -> Result<Self, Self::Error> {
         match value {
             Network::BaseSepolia => Ok(EvmChain::new(value, 84532)),
@@ -72,18 +118,31 @@ impl TryFrom<Network> for EvmChain {
     }
 }
 
+/// A fully specified ERC-3009 authorization payload for EVM settlement.
 pub struct ExactEvmPayment {
+    /// Target chain for settlement.
     #[allow(dead_code)] // Just in case.
     pub chain: EvmChain,
+    /// Authorized sender (`from`) — EOA or smart wallet.
     pub from: EvmAddress,
+    /// Authorized recipient (`to`).
     pub to: EvmAddress,
+    /// Transfer amount (token units).
     pub value: TokenAmount,
+    /// Not valid before this timestamp (inclusive).
     pub valid_after: UnixTimestamp,
+    /// Not valid at/after this timestamp (exclusive).
     pub valid_before: UnixTimestamp,
+    /// Unique 32-byte nonce (prevents replay).
     pub nonce: HexEncodedNonce,
+    /// Raw signature bytes (EIP-1271 or EIP-6492-wrapped).
     pub signature: EvmSignature,
 }
 
+/// EVM implementation of the x402 facilitator.
+///
+/// Holds a composed Alloy ethereum provider [`InnerProvider`],
+/// an `eip1559` toggle for gas pricing strategy, and the `EvmChain` context.
 #[derive(Clone, Debug)]
 pub struct EvmProvider {
     inner: InnerProvider,
@@ -92,6 +151,10 @@ pub struct EvmProvider {
 }
 
 impl EvmProvider {
+    /// Build an [`EvmProvider`] from a pre-composed Alloy ethereum provider [`InnerProvider`].
+    ///
+    /// # Errors
+    /// Return [`FacilitatorLocalError::UnsupportedNetwork`] if `network` is not EVM.
     pub fn try_new(
         inner: InnerProvider,
         eip1559: bool,
@@ -109,7 +172,6 @@ impl EvmProvider {
     /// - Valid scheme, network, and receiver.
     /// - Valid time window (validAfter/validBefore).
     /// - Correct EIP-712 domain construction.
-    /// - Valid EIP-712 signature.
     /// - Sufficient on-chain balance.
     /// - Sufficient value in payload.
     #[instrument(skip_all, err)]
@@ -117,8 +179,15 @@ impl EvmProvider {
         &self,
         payload: &PaymentPayload,
         requirements: &PaymentRequirements,
-    ) -> Result<(USDC::USDCInstance<&InnerProvider>, ExactEvmPayment), FacilitatorLocalError> {
-        let payment_payload = match payload.payload {
+    ) -> Result<
+        (
+            USDC::USDCInstance<&InnerProvider>,
+            ExactEvmPayment,
+            Eip712Domain,
+        ),
+        FacilitatorLocalError,
+    > {
+        let payment_payload = match &payload.payload {
             ExactPaymentPayload::Evm(payload) => payload,
             ExactPaymentPayload::Solana(_) => {
                 return Err(FacilitatorLocalError::UnsupportedNetwork(None));
@@ -172,7 +241,6 @@ impl EvmProvider {
         let domain = self
             .assert_domain(&contract, payload, &asset_address, requirements)
             .await?;
-        assert_signature(payer.into(), &payment_payload, &domain)?;
 
         let amount_required = requirements.max_amount_required.0;
         assert_enough_balance(
@@ -192,16 +260,16 @@ impl EvmProvider {
             valid_after: payment_payload.authorization.valid_after,
             valid_before: payment_payload.authorization.valid_before,
             nonce: payment_payload.authorization.nonce,
-            signature: payment_payload.signature,
+            signature: payment_payload.signature.clone(),
         };
 
-        Ok((contract, payment))
+        Ok((contract, payment, domain))
     }
 
     /// Constructs a full `transferWithAuthorization` call for a verified payment payload.
     ///
     /// This function prepares the transaction builder with gas pricing adapted to the network's
-    /// capabilities (EIP-1559 or legacy), and packages it together with signature metadata
+    /// capabilities (EIP-1559 or legacy) and packages it together with signature metadata
     /// into a [`TransferWithAuthorization0Call`] structure.
     ///
     /// This function does not perform any validation — it assumes inputs are already checked.
@@ -210,6 +278,7 @@ impl EvmProvider {
         &self,
         contract: &'a USDC::USDCInstance<&'a InnerProvider>,
         payment: &ExactEvmPayment,
+        signature: Bytes,
     ) -> Result<TransferWithAuthorization0Call<&'a &'a InnerProvider>, FacilitatorLocalError> {
         let from: alloy::primitives::Address = payment.from.into();
         let to: alloy::primitives::Address = payment.to.into();
@@ -217,7 +286,6 @@ impl EvmProvider {
         let valid_after: U256 = payment.valid_after.into();
         let valid_before: U256 = payment.valid_before.into();
         let nonce = FixedBytes(payment.nonce.0);
-        let signature = Bytes::from(payment.signature.0);
         let tx = contract.transferWithAuthorization_0(
             from,
             to,
@@ -256,9 +324,6 @@ impl EvmProvider {
     /// Resolves the `name` and `version` based on:
     /// - Static metadata from [`USDCDeployment`] (if available),
     /// - Or by calling `version()` on the token contract if not matched statically.
-    ///
-    /// # Errors
-    /// Returns a [`PaymentError::InvalidContractCall`] if the contract call fails.
     #[instrument(skip_all, err, fields(
         network = %payload.network,
         asset = %asset_address
@@ -312,13 +377,62 @@ impl EvmProvider {
         };
         Ok(domain)
     }
+
+    /// Check whether contract code is present at `address`.
+    ///
+    /// Uses `eth_getCode` against this provider. This is useful after a counterfactual
+    /// deployment to confirm visibility on the sending RPC before submitting a
+    /// follow-up transaction.
+    ///
+    /// # Errors
+    /// Return [`FacilitatorLocalError::ContractCall`] if the RPC call fails.
+    async fn is_contract_deployed(
+        &self,
+        address: &alloy::primitives::Address,
+    ) -> Result<bool, FacilitatorLocalError> {
+        let bytes = self
+            .inner
+            .get_code_at(*address)
+            .into_future()
+            .instrument(tracing::info_span!("get_code_at",
+                address = %address,
+                otel.kind = "client",
+            ))
+            .await
+            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+        Ok(!bytes.is_empty())
+    }
+
+    /// Send a prepared transaction and wait for its receipt.
+    ///
+    /// Convenience wrapper that:
+    /// 1) calls `send_transaction` on the inner provider, and
+    /// 2) awaits the receipt.
+    ///
+    /// # Errors
+    /// Return [`FacilitatorLocalError::ContractCall`] if tx sending or receipt retrieval fails.
+    async fn send_transaction(
+        &self,
+        tx: TransactionRequest,
+    ) -> Result<TransactionReceipt, FacilitatorLocalError> {
+        let tx = self
+            .inner
+            .send_transaction(tx)
+            .await
+            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+        tx.get_receipt()
+            .await
+            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))
+    }
 }
 
 impl NetworkProviderOps for EvmProvider {
+    /// Address of the default signer used by this provider (for tx sending).
     fn signer_address(&self) -> MixedAddress {
         self.inner.default_signer_address().into()
     }
 
+    /// x402 network handled by this provider.
     fn network(&self) -> Network {
         self.chain.network
     }
@@ -327,67 +441,172 @@ impl NetworkProviderOps for EvmProvider {
 impl Facilitator for EvmProvider {
     type Error = FacilitatorLocalError;
 
+    /// Verify x402 payment intent by simulating signature validity and ERC-3009 transfer.
+    ///
+    /// For EIP-6492 signatures, perform a multicall: first the validator’s
+    /// `isValidSigWithSideEffects` (which *may* deploy the counterfactual wallet in sim),
+    /// then the token’s `transferWithAuthorization`. Both run within a single `eth_call`
+    /// so the state is shared during simulation.
+    ///
+    /// # Errors
+    /// - [`FacilitatorLocalError::NetworkMismatch`], [`FacilitatorLocalError::SchemeMismatch`], [`FacilitatorLocalError::ReceiverMismatch`] if inputs are inconsistent.
+    /// - [`FacilitatorLocalError::InvalidTiming`] if outside `validAfter/validBefore`.
+    /// - [`FacilitatorLocalError::InsufficientFunds`] / `FacilitatorLocalError::InsufficientValue` on balance/value checks.
+    /// - [`FacilitatorLocalError::ContractCall`] if on-chain calls revert.
     async fn verify(&self, request: &VerifyRequest) -> Result<VerifyResponse, Self::Error> {
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
-        let (contract, payment) = self.assert_valid_payment(payload, requirements).await?;
+        let (contract, payment, eip712_domain) =
+            self.assert_valid_payment(payload, requirements).await?;
 
-        let transfer_call = self
-            .transferWithAuthorization_0(&contract, &payment)
-            .await?;
-        transfer_call
-            .tx
-            .call()
-            .into_future()
-            .instrument(tracing::info_span!("call_transferWithAuthorization_0",
-                    from = %transfer_call.from,
-                    to = %transfer_call.to,
-                    value = %transfer_call.value,
-                    valid_after = %transfer_call.valid_after,
-                    valid_before = %transfer_call.valid_before,
-                    nonce = %transfer_call.nonce,
-                    signature = %transfer_call.signature,
-                    token_contract = %transfer_call.contract_address,
-                    otel.kind = "client",
-            ))
-            .await
-            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
-        Ok(VerifyResponse::valid(payment.from.into()))
+        let signed_message = SignedMessage::extract(&payment, &eip712_domain)?;
+        let payer = signed_message.address;
+        let hash = signed_message.hash;
+        match signed_message.signature {
+            StructuredSignature::EIP6492 {
+                factory: _,
+                factory_calldata: _,
+                inner,
+                original,
+            } => {
+                // Prepare the call to validate EIP-6492 signature
+                let validator6492 = Validator6492::new(VALIDATOR_ADDRESS, &self.inner);
+                let is_valid_signature_call =
+                    validator6492.isValidSigWithSideEffects(payer, hash, original);
+                // Prepare the call to simulate transfer the funds
+                let transfer_call = self
+                    .transferWithAuthorization_0(&contract, &payment, inner)
+                    .await?;
+                // Execute both calls in a single transaction simulation to accommodate for possible smart wallet creation
+                let (is_valid_signature_result, transfer_result) = self
+                    .inner
+                    .multicall()
+                    .add(is_valid_signature_call)
+                    .add(transfer_call.tx)
+                    .aggregate3()
+                    .instrument(tracing::info_span!("call_transferWithAuthorization_0",
+                            from = %transfer_call.from,
+                            to = %transfer_call.to,
+                            value = %transfer_call.value,
+                            valid_after = %transfer_call.valid_after,
+                            valid_before = %transfer_call.valid_before,
+                            nonce = %transfer_call.nonce,
+                            signature = %transfer_call.signature,
+                            token_contract = %transfer_call.contract_address,
+                            otel.kind = "client",
+                    ))
+                    .await
+                    .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+                let is_valid_signature_result = is_valid_signature_result
+                    .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+                if !is_valid_signature_result {
+                    return Err(FacilitatorLocalError::InvalidSignature(
+                        payer.into(),
+                        "Incorrect signature".to_string(),
+                    ));
+                }
+                transfer_result.map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
+            }
+            StructuredSignature::EIP1271(signature) => {
+                // It is EOA or EIP-1271 signature, which we can pass to the transfer simulation
+                let transfer_call = self
+                    .transferWithAuthorization_0(&contract, &payment, signature)
+                    .await?;
+                transfer_call
+                    .tx
+                    .call()
+                    .into_future()
+                    .instrument(tracing::info_span!("call_transferWithAuthorization_0",
+                            from = %transfer_call.from,
+                            to = %transfer_call.to,
+                            value = %transfer_call.value,
+                            valid_after = %transfer_call.valid_after,
+                            valid_before = %transfer_call.valid_before,
+                            nonce = %transfer_call.nonce,
+                            signature = %transfer_call.signature,
+                            token_contract = %transfer_call.contract_address,
+                            otel.kind = "client",
+                    ))
+                    .await
+                    .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+            }
+        }
+
+        Ok(VerifyResponse::valid(payer.into()))
     }
 
+    /// Settle a verified payment on-chain.
+    ///
+    /// If the signer is counterfactual (EIP-6492) and the wallet is not yet deployed,
+    /// this submits **one** transaction to Multicall3 (`aggregate3`) that:
+    /// 1) calls the 6492 factory with the provided calldata (best-effort prepare),
+    /// 2) calls `transferWithAuthorization` with the **inner** signature.
+    ///
+    /// This makes deploy + transfer atomic and avoids read-your-write issues.
+    ///
+    /// If the wallet is already deployed (or the signature is plain EIP-1271/EOA),
+    /// we submit a single `transferWithAuthorization` transaction.
+    ///
+    /// # Returns
+    /// A [`SettleResponse`] containing success flag and transaction hash.
+    ///
+    /// # Errors
+    /// Propagates [`FacilitatorLocalError::ContractCall`] on deployment or transfer failures
+    /// and all prior validation errors.
     async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
-        let (contract, payment) = self.assert_valid_payment(payload, requirements).await?;
-        let transfer_call = self
-            .transferWithAuthorization_0(&contract, &payment)
-            .await?;
-        let tx = transfer_call
-            .tx
-            .send()
-            .instrument(tracing::info_span!("transferWithAuthorization_0",
-                    from = %transfer_call.from,
-                    to = %transfer_call.to,
-                    value = %transfer_call.value,
-                    valid_after = %transfer_call.valid_after,
-                    valid_before = %transfer_call.valid_before,
-                    nonce = %transfer_call.nonce,
-                    signature = %transfer_call.signature,
-                    token_contract = %transfer_call.contract_address,
-                    otel.kind = "client",
-            ))
-            .await
-            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
-        let tx_hash = *tx.tx_hash();
-        let receipt = tx
-            .get_receipt()
-            .into_future()
-            .instrument(tracing::info_span!("get_receipt",
-                    transaction = %tx_hash,
-                    otel.kind = "client"
-            ))
-            .await
-            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+        let (contract, payment, eip712_domain) =
+            self.assert_valid_payment(payload, requirements).await?;
+
+        let signed_message = SignedMessage::extract(&payment, &eip712_domain)?;
+        let payer = signed_message.address;
+        let transaction_receipt_fut = match signed_message.signature {
+            StructuredSignature::EIP6492 {
+                factory,
+                factory_calldata,
+                inner,
+                original: _,
+            } => {
+                let is_contract_deployed = self.is_contract_deployed(&payer).await?;
+                let transfer_call = self
+                    .transferWithAuthorization_0(&contract, &payment, inner)
+                    .await?;
+                if is_contract_deployed {
+                    // transferWithAuthorization with inner signature
+                    let transaction_request = transfer_call.tx.into_transaction_request();
+                    self.send_transaction(transaction_request)
+                } else {
+                    // deploy the smart wallet, and transferWithAuthorization with inner signature
+                    let deployment_call = IMulticall3::Call3 {
+                        allowFailure: true,
+                        target: factory,
+                        callData: factory_calldata,
+                    };
+                    let transfer_with_authorization_call = IMulticall3::Call3 {
+                        allowFailure: false,
+                        target: transfer_call.tx.target(),
+                        callData: transfer_call.tx.calldata().clone(),
+                    };
+                    let aggregate_call = IMulticall3::aggregate3Call {
+                        calls: vec![deployment_call, transfer_with_authorization_call],
+                    };
+                    let aggregate_tx = TransactionRequest::default()
+                        .with_to(MULTICALL3_ADDRESS)
+                        .with_input(aggregate_call.abi_encode());
+                    self.send_transaction(aggregate_tx)
+                }
+            }
+            StructuredSignature::EIP1271(eip1271_signature) => {
+                let transfer_call = self
+                    .transferWithAuthorization_0(&contract, &payment, eip1271_signature)
+                    .await?;
+                // transferWithAuthorization with eip1271 signature
+                let transaction_request = transfer_call.tx.into_transaction_request();
+                self.send_transaction(transaction_request)
+            }
+        };
+        let receipt = transaction_receipt_fut.await?;
         let success = receipt.status();
         if success {
             tracing::event!(Level::INFO,
@@ -419,6 +638,7 @@ impl Facilitator for EvmProvider {
         }
     }
 
+    /// Report payment kinds supported by this provider on its current network.
     async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
         let kinds = vec![SupportedPaymentKind {
             network: self.network(),
@@ -435,7 +655,7 @@ impl Facilitator for EvmProvider {
 /// This struct wraps the assembled call builder, making it reusable across verification
 /// (`.call()`) and settlement (`.send()`) flows, along with context useful for tracing/logging.
 ///
-/// This is created by [`FacilitatorLocal::transferWithAuthorization_0`].
+/// This is created by [`EvmProvider::transferWithAuthorization_0`].
 pub struct TransferWithAuthorization0Call<P> {
     /// The prepared call builder that can be `.call()`ed or `.send()`ed.
     pub tx: SolCallBuilder<P, USDC::transferWithAuthorization_0Call>,
@@ -486,54 +706,13 @@ fn assert_time(
     Ok(())
 }
 
-/// Verifies the EIP-712 signature in the payment payload.
-///
-/// Recovers the signing address and checks it matches the expected `from` address in the payload.
-///
-/// # Errors
-/// Returns a [`PaymentError::InvalidSignature`] if the signature is malformed or does not match.
-#[instrument(skip_all, err)]
-fn assert_signature(
-    payer: MixedAddress,
-    payload: &ExactEvmPayload,
-    domain: &Eip712Domain,
-) -> Result<(), FacilitatorLocalError> {
-    // Verify the signature
-    let signature = Signature::from_raw_array(&payload.signature.0)
-        .map_err(|e| FacilitatorLocalError::InvalidSignature(payer.clone(), format!("{e}")))?;
-    let authorization = &payload.authorization;
-    let transfer_with_authorization = TransferWithAuthorization {
-        from: authorization.from.0,
-        to: authorization.to.0,
-        value: authorization.value.into(),
-        validAfter: authorization.valid_after.into(),
-        validBefore: authorization.valid_before.into(),
-        nonce: FixedBytes(authorization.nonce.0),
-    };
-    let eip712_hash = transfer_with_authorization.eip712_signing_hash(domain);
-    let recovered_address = signature
-        .recover_address_from_prehash(&eip712_hash)
-        .map_err(|e| FacilitatorLocalError::InvalidSignature(payer.clone(), format!("{e}")))?;
-    let expected_address = authorization.from.0;
-    if recovered_address != expected_address {
-        Err(FacilitatorLocalError::InvalidSignature(
-            payer.clone(),
-            format!(
-                "Address mismatch: recovered: {recovered_address} expected: {expected_address}",
-            ),
-        ))
-    } else {
-        Ok(())
-    }
-}
-
 /// Checks if the payer has enough on-chain token balance to meet the `maxAmountRequired`.
 ///
 /// Performs an `ERC20.balanceOf()` call using the USDC contract instance.
 ///
 /// # Errors
-/// Returns [`PaymentError::InsufficientFunds`] if the balance is too low.
-/// Returns [`PaymentError::InvalidContractCall`] if the balance query fails.
+/// Returns [`FacilitatorLocalError::InsufficientFunds`] if the balance is too low.
+/// Returns [`FacilitatorLocalError::ContractCall`] if the balance query fails.
 #[instrument(skip_all, err, fields(
     sender = %sender,
     max_required = %max_amount_required,
@@ -569,7 +748,7 @@ async fn assert_enough_balance(
 /// This is a static check (not on-chain) that compares two numbers.
 ///
 /// # Errors
-/// Returns [`FacilitatorLocalError::InsufficientValue`] if the payload's value is less than required.
+/// Return [`FacilitatorLocalError::InsufficientValue`] if the payload's value is less than required.
 #[instrument(skip_all, err, fields(
     sent = %sent,
     max_amount_required = %max_amount_required
@@ -583,5 +762,150 @@ fn assert_enough_value(
         Err(FacilitatorLocalError::InsufficientValue((*payer).into()))
     } else {
         Ok(())
+    }
+}
+
+/// A structured representation of an Ethereum signature.
+///
+/// This enum normalizes two supported cases:
+///
+/// - **EIP-6492 wrapped signatures**: used for counterfactual contract wallets.
+///   They include deployment metadata (factory + calldata) plus the inner
+///   signature that the wallet contract will validate after deployment.
+/// - **EIP-1271 signatures**: plain contract (or EOA-style) signatures.
+#[derive(Debug, Clone)]
+enum StructuredSignature {
+    /// An EIP-6492 wrapped signature.
+    EIP6492 {
+        /// Factory contract that can deploy the wallet deterministically
+        factory: alloy::primitives::Address,
+        /// Calldata to invoke on the factory (often a CREATE2 deployment).
+        factory_calldata: Bytes,
+        /// Inner signature for the wallet itself, probably EIP-1271.
+        inner: Bytes,
+        /// Full original bytes including the 6492 wrapper and magic bytes suffix.
+        original: Bytes,
+    },
+    /// A plain EIP-1271 or EOA signature (no 6492 wrappers).
+    EIP1271(Bytes),
+}
+
+/// Canonical data required to verify a signature.
+#[derive(Debug, Clone)]
+struct SignedMessage {
+    /// Expected signer (an EOA or contract wallet).
+    address: alloy::primitives::Address,
+    /// 32-byte digest that was signed (typically an EIP-712 hash).
+    hash: FixedBytes<32>,
+    /// Structured signature, either EIP-6492 or EIP-1271.
+    signature: StructuredSignature,
+}
+
+impl SignedMessage {
+    /// Construct a [`SignedMessage`] from an [`ExactEvmPayment`] and its
+    /// corresponding [`Eip712Domain`].
+    ///
+    /// This helper ties together:
+    /// - The **payment intent** (an ERC-3009 `TransferWithAuthorization` struct),
+    /// - The **EIP-712 domain** used for signing,
+    /// - And the raw signature bytes attached to the payment.
+    ///
+    /// Steps performed:
+    /// 1. Build an in-memory [`TransferWithAuthorization`] struct from the
+    ///    `ExactEvmPayment` fields (`from`, `to`, `value`, validity window, `nonce`).
+    /// 2. Compute the **EIP-712 struct hash** for that transfer under the given
+    ///    `domain`. This becomes the `hash` field of the signed message.
+    /// 3. Parse the raw signature bytes into a [`StructuredSignature`], which
+    ///    distinguishes between:
+    ///    - EIP-1271 (plain signature), and
+    ///    - EIP-6492 (counterfactual signature wrapper).
+    /// 4. Assemble all parts into a [`SignedMessage`] and return it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FacilitatorLocalError`] if:
+    /// - The raw signature cannot be decoded as either EIP-1271 or EIP-6492.
+    pub fn extract(
+        payment: &ExactEvmPayment,
+        domain: &Eip712Domain,
+    ) -> Result<Self, FacilitatorLocalError> {
+        let transfer_with_authorization = TransferWithAuthorization {
+            from: payment.from.0,
+            to: payment.to.0,
+            value: payment.value.into(),
+            validAfter: payment.valid_after.into(),
+            validBefore: payment.valid_before.into(),
+            nonce: FixedBytes(payment.nonce.0),
+        };
+        let eip712_hash = transfer_with_authorization.eip712_signing_hash(domain);
+        let expected_address = payment.from;
+        let structured_signature: StructuredSignature = payment.signature.clone().try_into()?;
+        let signed_message = Self {
+            address: expected_address.into(),
+            hash: eip712_hash,
+            signature: structured_signature,
+        };
+        Ok(signed_message)
+    }
+}
+
+/// The fixed 32-byte magic suffix defined by [EIP-6492](https://eips.ethereum.org/EIPS/eip-6492).
+///
+/// Any signature ending with this constant is treated as a 6492-wrapped
+/// signature; the preceding bytes are ABI-decoded as `(address factory, bytes factoryCalldata, bytes innerSig)`.
+const EIP6492_MAGIC_SUFFIX: [u8; 32] =
+    hex!("6492649264926492649264926492649264926492649264926492649264926492");
+
+sol! {
+    /// Solidity-compatible struct for decoding the prefix of an EIP-6492 signature.
+    ///
+    /// Matches the tuple `(address factory, bytes factoryCalldata, bytes innerSig)`.
+    #[derive(Debug)]
+    struct Sig6492 {
+        address factory;
+        bytes   factoryCalldata;
+        bytes   innerSig;
+    }
+}
+
+impl TryFrom<EvmSignature> for StructuredSignature {
+    type Error = FacilitatorLocalError;
+    /// Convert from an `EvmSignature` wrapper to a structured signature.
+    ///
+    /// This delegates to the `TryFrom<Vec<u8>>` implementation.
+    fn try_from(signature: EvmSignature) -> Result<Self, Self::Error> {
+        signature.0.try_into()
+    }
+}
+
+impl TryFrom<Vec<u8>> for StructuredSignature {
+    type Error = FacilitatorLocalError;
+
+    /// Parse raw signature bytes into a `StructuredSignature`.
+    ///
+    /// Rules:
+    /// - If the last 32 bytes equal [`EIP6492_MAGIC_SUFFIX`], the prefix is
+    ///   decoded as a [`Sig6492`] struct and returned as
+    ///   [`StructuredSignature::EIP6492`].
+    /// - Otherwise, the bytes are returned as [`StructuredSignature::EIP1271`].
+    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+        let is_eip6492 = bytes.len() >= 32 && bytes[bytes.len() - 32..] == EIP6492_MAGIC_SUFFIX;
+        let signature = if is_eip6492 {
+            let body = &bytes[..bytes.len() - 32];
+            let sig6492 = Sig6492::abi_decode_params(body).map_err(|e| {
+                FacilitatorLocalError::ContractCall(format!(
+                    "Failed to decode EIP6492 signature: {e}"
+                ))
+            })?;
+            StructuredSignature::EIP6492 {
+                factory: sig6492.factory,
+                factory_calldata: sig6492.factoryCalldata,
+                inner: sig6492.innerSig,
+                original: bytes.into(),
+            }
+        } else {
+            StructuredSignature::EIP1271(bytes.into())
+        };
+        Ok(signature)
     }
 }

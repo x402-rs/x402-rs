@@ -7,7 +7,7 @@
 //! This module supports ERC-3009 style authorization for tokens (EIP-712 typed signatures),
 //! and provides serialization logic compatible with external clients.
 
-use alloy::primitives::U256;
+use alloy::primitives::{Bytes, U256};
 use alloy::{hex, sol};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as b64;
@@ -101,21 +101,34 @@ impl Display for Scheme {
     }
 }
 
-/// Represents a 65-byte EVM signature used in EIP-712 typed data.
-/// Serialized as 0x-prefixed hex string with 130 characters.
+/// Represents an EVM signature used in EIP-712 typed data.
+/// Serialized as 0x-prefixed hex string.
 /// Used to authorize an ERC-3009 transferWithAuthorization.
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct EvmSignature(pub [u8; 65]);
+/// Can contain EOA, EIP-1271, and EIP-6492 signatures.
+#[derive(Clone, PartialEq, Eq)]
+pub struct EvmSignature(pub Vec<u8>);
 
 impl From<[u8; 65]> for EvmSignature {
     fn from(bytes: [u8; 65]) -> Self {
-        EvmSignature(bytes)
+        EvmSignature(bytes.to_vec())
+    }
+}
+
+impl From<Bytes> for EvmSignature {
+    fn from(bytes: Bytes) -> Self {
+        EvmSignature(bytes.to_vec())
+    }
+}
+
+impl From<EvmSignature> for Bytes {
+    fn from(value: EvmSignature) -> Self {
+        Bytes::from(value.0)
     }
 }
 
 impl Debug for EvmSignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EvmSignature(0x{})", hex::encode(self.0))
+        write!(f, "EvmSignature(0x{})", hex::encode(self.0.clone()))
     }
 }
 
@@ -125,26 +138,10 @@ impl<'de> Deserialize<'de> for EvmSignature {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
+        let bytes = hex::decode(s.trim_start_matches("0x"))
+            .map_err(|_| serde::de::Error::custom("Failed to decode EVM signature hex string"))?;
 
-        static SIG_REGEX: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"^0x[0-9a-fA-F]{130}$").expect("Invalid regex for EVM signature")
-        });
-
-        if SIG_REGEX.is_match(&s) {
-            let bytes = hex::decode(s.trim_start_matches("0x")).map_err(|_| {
-                serde::de::Error::custom("Failed to decode EVM signature hex string")
-            })?;
-
-            let array: [u8; 65] = bytes
-                .try_into()
-                .map_err(|_| serde::de::Error::custom("Signature must be exactly 65 bytes"))?;
-
-            Ok(EvmSignature(array))
-        } else {
-            Err(serde::de::Error::custom(
-                "Invalid EVM signature format: must be 0x-prefixed and 130 hex chars",
-            ))
-        }
+        Ok(EvmSignature(bytes))
     }
 }
 
@@ -153,7 +150,7 @@ impl Serialize for EvmSignature {
     where
         S: Serializer,
     {
-        let hex_string = format!("0x{}", hex::encode(self.0));
+        let hex_string = format!("0x{}", hex::encode(self.0.clone()));
         serializer.serialize_str(&hex_string)
     }
 }
@@ -271,7 +268,7 @@ pub struct ExactEvmPayloadAuthorization {
 
 /// Full payload required to authorize an ERC-3009 transfer:
 /// includes the signature and the EIP-712 struct.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExactEvmPayload {
     pub signature: EvmSignature,
