@@ -38,6 +38,8 @@ impl TryFrom<Network> for SolanaChain {
             Network::Avalanche => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::Solana => Ok(Self { network: value }),
             Network::SolanaDevnet => Ok(Self { network: value }),
+            Network::PolygonAmoy => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::Polygon => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
         }
     }
 }

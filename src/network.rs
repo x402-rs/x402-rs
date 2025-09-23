@@ -39,6 +39,12 @@ pub enum Network {
     /// Solana Devnet - Testing with public accessibility for developers experimenting with their applications
     #[serde(rename = "solana-devnet")]
     SolanaDevnet,
+    /// Polygon Amoy testnet (chain ID 80002).
+    #[serde(rename = "polygon-amoy")]
+    PolygonAmoy,
+    /// Polygon mainnet (chain ID 137).
+    #[serde(rename = "polygon")]
+    Polygon,
 }
 
 impl Display for Network {
@@ -51,6 +57,8 @@ impl Display for Network {
             Network::Avalanche => write!(f, "avalanche"),
             Network::Solana => write!(f, "solana"),
             Network::SolanaDevnet => write!(f, "solana-devnet"),
+            Network::PolygonAmoy => write!(f, "polygon-amoy"),
+            Network::Polygon => write!(f, "polygon"),
         }
     }
 }
@@ -71,6 +79,8 @@ impl From<Network> for NetworkFamily {
             Network::Avalanche => NetworkFamily::Evm,
             Network::Solana => NetworkFamily::Solana,
             Network::SolanaDevnet => NetworkFamily::Solana,
+            Network::PolygonAmoy => NetworkFamily::Evm,
+            Network::Polygon => NetworkFamily::Evm,
         }
     }
 }
@@ -86,6 +96,8 @@ impl Network {
             Network::Avalanche,
             Network::Solana,
             Network::SolanaDevnet,
+            Network::PolygonAmoy,
+            Network::Polygon,
         ]
     }
 }
@@ -193,6 +205,36 @@ static USDC_SOLANA_DEVNET: Lazy<USDCDeployment> = Lazy::new(|| {
     })
 });
 
+/// Lazily initialized known USDC deployment on Polygon Amoy testnet as [`USDCDeployment`].
+static USDC_POLYGON_AMOY: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582").into(),
+            network: Network::PolygonAmoy,
+        },
+        decimals: 6,
+        eip712: Some(TokenDeploymentEip712 {
+            name: "USDC".into(),
+            version: "2".into(),
+        }),
+    })
+});
+
+/// Lazily initialized known USDC deployment on Polygon mainnet as [`USDCDeployment`].
+static USDC_POLYGON: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359").into(),
+            network: Network::Polygon,
+        },
+        decimals: 6,
+        eip712: Some(TokenDeploymentEip712 {
+            name: "USDC".into(),
+            version: "1".into(),
+        }),
+    })
+});
+
 /// A known USDC deployment as a wrapper around [`TokenDeployment`].
 #[derive(Clone, Debug)]
 pub struct USDCDeployment(pub TokenDeployment);
@@ -236,6 +278,8 @@ impl USDCDeployment {
             Network::Avalanche => &USDC_AVALANCHE,
             Network::Solana => &USDC_SOLANA,
             Network::SolanaDevnet => &USDC_SOLANA_DEVNET,
+            Network::PolygonAmoy => &USDC_POLYGON_AMOY,
+            Network::Polygon => &USDC_POLYGON,
         }
     }
 }
