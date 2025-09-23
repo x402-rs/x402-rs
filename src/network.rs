@@ -224,7 +224,7 @@ static USDC_POLYGON_AMOY: Lazy<USDCDeployment> = Lazy::new(|| {
 static USDC_POLYGON: Lazy<USDCDeployment> = Lazy::new(|| {
     USDCDeployment(TokenDeployment {
         asset: TokenAsset {
-            address: address!("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174").into(),
+            address: address!("0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359").into(),
             network: Network::Polygon,
         },
         decimals: 6,
