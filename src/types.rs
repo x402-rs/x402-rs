@@ -1061,6 +1061,26 @@ impl<'de> Deserialize<'de> for VerifyResponse {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefundRequest {
+    pub x402_version: X402Version,
+    pub network: Network,
+    pub asset: MixedAddress,
+    pub to: MixedAddress,
+    pub amount: TokenAmount,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefundResponse {
+    pub success: bool,
+    pub error_reason: Option<FacilitatorErrorReason>,
+    pub to: MixedAddress,
+    pub transaction: Option<TransactionHash>,
+    pub network: Network,
+}
+
 /// A simple error structure returned on unexpected or fatal server errors.
 /// Used when no structured protocol-level response is appropriate.
 #[derive(Debug, Serialize, Deserialize)]
