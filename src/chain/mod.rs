@@ -5,8 +5,8 @@ use crate::chain::solana::SolanaProvider;
 use crate::facilitator::Facilitator;
 use crate::network::Network;
 use crate::types::{
-    MixedAddress, Scheme, SettleRequest, SettleResponse, SupportedPaymentKindsResponse,
-    VerifyRequest, VerifyResponse,
+    MixedAddress, RefundRequest, RefundResponse, Scheme, SettleRequest, SettleResponse,
+    SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
 };
 
 pub mod evm;
@@ -53,6 +53,13 @@ impl Facilitator for NetworkProvider {
         match self {
             NetworkProvider::Evm(provider) => provider.settle(request).await,
             NetworkProvider::Solana(provider) => provider.settle(request).await,
+        }
+    }
+
+    async fn refund(&self, request: &RefundRequest) -> Result<RefundResponse, Self::Error> {
+        match self {
+            NetworkProvider::Evm(provider) => provider.refund(request).await,
+            NetworkProvider::Solana(provider) => provider.refund(request).await,
         }
     }
 
