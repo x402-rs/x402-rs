@@ -921,6 +921,10 @@ pub enum FacilitatorErrorReason {
     #[error("unexpected_settle_error")]
     #[serde(rename = "unexpected_settle_error")]
     UnexpectedSettleError,
+    /// Unexpected refund error
+    #[error("unexpected_refund_error")]
+    #[serde(rename = "unexpected_refund_error")]
+    UnexpectedRefundError,
 }
 
 /// Returned from a facilitator after attempting to settle a payment on-chain.

@@ -663,7 +663,7 @@ impl Facilitator for EvmProvider {
         let amount: U256 = request.amount.into();
 
         let contract = USDC::new(token_address, &self.inner);
-        let mut call = contract.transfer(to.into, amount);
+        let mut call = contract.transfer(to.into(), amount);
         if !self.eip1559 {
             let gas: u128 = self
                 .inner

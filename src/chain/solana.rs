@@ -3,8 +3,9 @@ use crate::facilitator::Facilitator;
 use crate::network::Network;
 use crate::types::{
     Base64Bytes, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, PaymentRequirements,
-    SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
-    SupportedPaymentKindsResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse,
+    RefundRequest, RefundResponse, SettleRequest, SettleResponse, SupportedPaymentKind,
+    SupportedPaymentKindExtra, SupportedPaymentKindsResponse, TokenAmount, TransactionHash,
+    VerifyRequest, VerifyResponse,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
@@ -505,6 +506,10 @@ impl Facilitator for SolanaProvider {
             network: self.network(),
         };
         Ok(settle_response)
+    }
+
+    async fn refund(&self, _request: &RefundRequest) -> Result<RefundResponse, Self::Error> {
+        Err(FacilitatorLocalError::UnsupportedNetwork(None))
     }
 
     async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
