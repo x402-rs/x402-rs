@@ -19,8 +19,8 @@ use crate::chain::FacilitatorLocalError;
 use crate::facilitator::Facilitator;
 use crate::facilitator_local::FacilitatorLocal;
 use crate::types::{
-    ErrorResponse, FacilitatorErrorReason, MixedAddress, RefundRequest, RefundResponse,
-    SettleRequest, VerifyRequest, VerifyResponse,
+    ErrorResponse, FacilitatorErrorReason, MixedAddress, RefundRequest, SettleRequest,
+    VerifyRequest, VerifyResponse,
 };
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.

@@ -134,6 +134,16 @@ impl Facilitator for FacilitatorClient {
         )
         .await
     }
+
+    /// Attempts to refund a verified payment with the facilitator.
+    /// Instruments a tracing span (only when telemetry feature is enabled).
+    #[cfg(not(feature = "telemetry"))]
+    async fn refund(
+        &self,
+        request: &RefundRequest,
+    ) -> Result<RefundResponse, FacilitatorClientError> {
+        FacilitatorClient::refund(self, request).await
+    }
 }
 
 /// Errors that can occur while interacting with a remote facilitator.
@@ -204,7 +214,7 @@ impl FacilitatorClient {
 
     /// Constructs a new [`FacilitatorClient`] from a base URL.
     ///
-    /// This sets up `./verify` and `./settle` endpoint URLs relative to the base.
+    /// This sets up `./verify`, `./settle` and `./refund` endpoint URLs relative to the base.
     pub fn try_new(base_url: Url) -> Result<Self, FacilitatorClientError> {
         let client = Client::new();
         let verify_url =
