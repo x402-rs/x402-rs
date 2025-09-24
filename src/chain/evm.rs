@@ -17,7 +17,7 @@
 use alloy::contract::SolCallBuilder;
 use alloy::dyn_abi::SolType;
 use alloy::network::{EthereumWallet, TransactionBuilder};
-use alloy::primitives::{Bytes, FixedBytes, U256, address};
+use alloy::primitives::{Address, Bytes, FixedBytes, U256, address};
 use alloy::providers::bindings::IMulticall3;
 use alloy::providers::fillers::{
     BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
@@ -37,9 +37,10 @@ use crate::network::{Network, USDCDeployment};
 use crate::timestamp::UnixTimestamp;
 use crate::types::{
     EvmAddress, EvmSignature, ExactPaymentPayload, FacilitatorErrorReason, HexEncodedNonce,
-    MixedAddress, PaymentPayload, PaymentRequirements, Scheme, SettleRequest, SettleResponse,
-    SupportedPaymentKind, SupportedPaymentKindsResponse, TokenAmount, TransactionHash,
-    TransferWithAuthorization, VerifyRequest, VerifyResponse, X402Version,
+    MixedAddress, PaymentPayload, PaymentRequirements, RefundRequest, RefundResponse, Scheme,
+    SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindsResponse,
+    TokenAmount, TransactionHash, TransferWithAuthorization, VerifyRequest, VerifyResponse,
+    X402Version,
 };
 
 sol!(
@@ -636,6 +637,62 @@ impl Facilitator for EvmProvider {
                 payer: payment.from.into(),
                 transaction: Some(TransactionHash::Evm(receipt.transaction_hash.0)),
                 network: payload.network,
+            })
+        }
+    }
+
+    async fn refund(&self, request: &RefundRequest) -> Result<RefundResponse, Self::Error> {
+        if request.network != self.network() {
+            return Err(FacilitatorLocalError::NetworkMismatch(
+                None,
+                self.network(),
+                request.network,
+            ));
+        }
+
+        let to: EvmAddress = request
+            .to
+            .clone()
+            .try_into()
+            .map_err(|e| FacilitatorLocalError::InvalidAddress(format!("{e:?}")))?;
+        let token_address: Address = request
+            .asset
+            .clone()
+            .try_into()
+            .map_err(|e| FacilitatorLocalError::InvalidAddress(format!("{e:?}")))?;
+        let amount: U256 = request.amount.into();
+
+        let contract = USDC::new(token_address, &self.inner);
+        let mut call = contract.transfer(to.into(), amount);
+        if !self.eip1559 {
+            let gas: u128 = self
+                .inner
+                .get_gas_price()
+                .instrument(tracing::info_span!("get_gas_price"))
+                .await
+                .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+            call = call.gas_price(gas)
+        }
+
+        let tx = call.into_transaction_request();
+        let receipt = self.send_transaction(tx).await?;
+        let success = receipt.status();
+
+        if success {
+            Ok(RefundResponse {
+                success: true,
+                error_reason: None,
+                to: request.to.clone(),
+                transaction: Some(TransactionHash::Evm(receipt.transaction_hash.0)),
+                network: request.network,
+            })
+        } else {
+            Ok(RefundResponse {
+                success: false,
+                error_reason: Some(FacilitatorErrorReason::UnexpectedRefundError),
+                to: request.to.clone(),
+                transaction: Some(TransactionHash::Evm(receipt.transaction_hash.0)),
+                network: request.network,
             })
         }
     }

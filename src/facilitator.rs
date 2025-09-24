@@ -6,7 +6,8 @@
 use std::fmt::{Debug, Display};
 
 use crate::types::{
-    SettleRequest, SettleResponse, SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
+    RefundRequest, RefundResponse, SettleRequest, SettleResponse, SupportedPaymentKindsResponse,
+    VerifyRequest, VerifyResponse,
 };
 
 /// Trait defining the asynchronous interface for x402 payment facilitators.
@@ -51,6 +52,24 @@ pub trait Facilitator {
         &self,
         request: &SettleRequest,
     ) -> impl Future<Output = Result<SettleResponse, Self::Error>> + Send;
+
+    /// Executes an on-chain x402 refund for a valid [`RefundRequest`].
+    ///
+    /// This method should validate the payment and, if valid, perform
+    /// an onchain call to refund the payment to the given address.
+    ///
+    /// # Returns
+    ///
+    /// A [`RefundResponse`] indicating whether the refund was successful, and
+    /// containing any on-chain transaction metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Self::Error`] if verification or refund fails.
+    fn refund(
+        &self,
+        request: &RefundRequest,
+    ) -> impl Future<Output = Result<RefundResponse, Self::Error>> + Send;
 
     fn supported(
         &self,

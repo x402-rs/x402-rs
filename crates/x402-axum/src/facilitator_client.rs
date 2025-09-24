@@ -35,7 +35,8 @@ use std::time::Duration;
 use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::types::{
-    SettleRequest, SettleResponse, SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
+    RefundRequest, RefundResponse, SettleRequest, SettleResponse, SupportedPaymentKindsResponse,
+    VerifyRequest, VerifyResponse,
 };
 
 #[cfg(feature = "telemetry")]
@@ -53,6 +54,8 @@ pub struct FacilitatorClient {
     verify_url: Url,
     /// Full URL to `POST /settle` requests
     settle_url: Url,
+    /// Full URL to `POST /refund` requests
+    refund_url: Url,
     /// Full URL to `GET /supported` requests
     supported_url: Url,
     /// Shared Reqwest HTTP client
@@ -116,6 +119,30 @@ impl Facilitator for FacilitatorClient {
         request: &SettleRequest,
     ) -> Result<SettleResponse, FacilitatorClientError> {
         FacilitatorClient::settle(self, request).await
+    }
+
+    /// Attempts to refund a verified payment with the facilitator.
+    /// Instruments a tracing span (only when telemetry feature is enabled).
+    #[cfg(feature = "telemetry")]
+    async fn refund(
+        &self,
+        request: &RefundRequest,
+    ) -> Result<RefundResponse, FacilitatorClientError> {
+        with_span(
+            FacilitatorClient::refund(self, request),
+            tracing::info_span!("x402.facilitator_client.refund", timeout = ?self.timeout),
+        )
+        .await
+    }
+
+    /// Attempts to refund a verified payment with the facilitator.
+    /// Instruments a tracing span (only when telemetry feature is enabled).
+    #[cfg(not(feature = "telemetry"))]
+    async fn refund(
+        &self,
+        request: &RefundRequest,
+    ) -> Result<RefundResponse, FacilitatorClientError> {
+        FacilitatorClient::refund(self, request).await
     }
 }
 
@@ -187,7 +214,7 @@ impl FacilitatorClient {
 
     /// Constructs a new [`FacilitatorClient`] from a base URL.
     ///
-    /// This sets up `./verify` and `./settle` endpoint URLs relative to the base.
+    /// This sets up `./verify`, `./settle` and `./refund` endpoint URLs relative to the base.
     pub fn try_new(base_url: Url) -> Result<Self, FacilitatorClientError> {
         let client = Client::new();
         let verify_url =
@@ -204,6 +231,13 @@ impl FacilitatorClient {
                     context: "Failed to construct ./settle URL",
                     source: e,
                 })?;
+        let refund_url =
+            base_url
+                .join("./refund")
+                .map_err(|e| FacilitatorClientError::UrlParse {
+                    context: "Failed to construct ./refund URL",
+                    source: e,
+                })?;
         let supported_url =
             base_url
                 .join("./supported")
@@ -216,6 +250,7 @@ impl FacilitatorClient {
             base_url,
             verify_url,
             settle_url,
+            refund_url,
             supported_url,
             headers: HeaderMap::new(),
             timeout: None,
@@ -253,6 +288,15 @@ impl FacilitatorClient {
         request: &SettleRequest,
     ) -> Result<SettleResponse, FacilitatorClientError> {
         self.post_json(&self.settle_url, "POST /settle", request)
+            .await
+    }
+
+    /// Sends a `POST /refund` request to the facilitator.
+    pub async fn refund(
+        &self,
+        request: &RefundRequest,
+    ) -> Result<RefundResponse, FacilitatorClientError> {
+        self.post_json(&self.refund_url, "POST /refund", request)
             .await
     }
 
