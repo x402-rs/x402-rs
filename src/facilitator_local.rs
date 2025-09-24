@@ -16,8 +16,9 @@ use crate::facilitator::Facilitator;
 use crate::provider_cache::ProviderCache;
 use crate::provider_cache::ProviderMap;
 use crate::types::{
-    Scheme, SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
-    SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse, X402Version,
+    RefundRequest, RefundResponse, Scheme, SettleRequest, SettleResponse, SupportedPaymentKind,
+    SupportedPaymentKindExtra, SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
+    X402Version,
 };
 
 /// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
@@ -109,6 +110,15 @@ impl Facilitator for FacilitatorLocal {
             .by_network(network)
             .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
         provider.settle(request).await
+    }
+
+    async fn refund(&self, request: &RefundRequest) -> Result<RefundResponse, Self::Error> {
+        let network = request.network;
+        let provider = self
+            .provider_cache
+            .by_network(network)
+            .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+        provider.refund(request).await
     }
 
     async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {

@@ -77,6 +77,8 @@ async fn main() {
         .route("/verify", post(handlers::post_verify))
         .route("/settle", get(handlers::get_settle_info))
         .route("/settle", post(handlers::post_settle))
+        .route("/refund", get(handlers::get_refund_info))
+        .route("/refund", post(handlers::post_refund))
         .route("/supported", get(handlers::get_supported))
         .layer(Extension(facilitator))
         .layer(

@@ -19,8 +19,8 @@ use crate::chain::FacilitatorLocalError;
 use crate::facilitator::Facilitator;
 use crate::facilitator_local::FacilitatorLocal;
 use crate::types::{
-    ErrorResponse, FacilitatorErrorReason, MixedAddress, SettleRequest, VerifyRequest,
-    VerifyResponse,
+    ErrorResponse, FacilitatorErrorReason, MixedAddress, RefundRequest, RefundResponse,
+    SettleRequest, VerifyRequest, VerifyResponse,
 };
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.
@@ -55,6 +55,22 @@ pub async fn get_settle_info() -> impl IntoResponse {
             "paymentRequirements": "PaymentRequirements",
         }
     }))
+}
+
+pub async fn get_refund_info() -> impl IntoResponse {
+    Json(json!(
+        {
+            "endpoint": "/refund",
+            "description": "POST to refund funds to the client",
+            "body": {
+                "x402_version": "X402Version",
+                "network": "Network",
+                "asset": "MixedAddress",
+                "to": "MixedAddress",
+                "amount": "TokenAmount",
+            }
+        }
+    ))
 }
 
 /// `GET /supported`: Lists the x402 payment schemes and networks supported by this facilitator.
@@ -119,6 +135,22 @@ pub async fn post_settle(
             );
             error.into_response()
         }
+    }
+}
+
+pub async fn post_refund(
+    Extension(facilitator): Extension<FacilitatorLocal>,
+    Json(body): Json<RefundRequest>,
+) -> impl IntoResponse {
+    match facilitator.refund(&body).await {
+        Ok(response) => (StatusCode::OK, Json(response)).into_response(),
+        Err(_error) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Refund failed".to_string(),
+            }),
+        )
+            .into_response(),
     }
 }
 
