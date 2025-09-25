@@ -238,6 +238,8 @@ Available variables:
 * `RPC_URL_SOLANA_DEVNET`: RPC endpoint for Solana devnet.
 * `RPC_URL_POLYGON`: RPC endpoint for Polygon mainnet.
 * `RPC_URL_POLYGON_AMOY`: RPC endpoint for Polygon Amoy testnet.
+* `RPC_URL_SEI`: RPC endpoint for Sei mainnet.
+* `RPC_URL_SEI_TESTNET`: RPC endpoint for Sei testnet.
 
 
 ### Observability
@@ -264,8 +266,8 @@ The service automatically detects and initializes exporters if `OTEL_EXPORTER_OT
 
 The Facilitator supports different networks based on the environment variables you configure:
 
-| Network                   | Environment Variable     | Supported if Set  | Notes                            |
-|:--------------------------|:-------------------------|:------------------|:---------------------------------|
+| Network                   | Environment Variable     | Supported if Set | Notes                            |
+|:--------------------------|:-------------------------|:-----------------|:---------------------------------|
 | Base Sepolia Testnet      | `RPC_URL_BASE_SEPOLIA`   | ✅                | Testnet, Recommended for testing |
 | Base Mainnet              | `RPC_URL_BASE`           | ✅                | Mainnet                          |
 | XDC Mainnet               | `RPC_URL_XDC`            | ✅                | Mainnet                          |
@@ -273,6 +275,8 @@ The Facilitator supports different networks based on the environment variables y
 | Avalanche C-Chain Mainnet | `RPC_URL_AVALANCHE`      | ✅                | Mainnet                          |
 | Polygon Amoy Testnet      | `RPC_URL_POLYGON_AMOY`   | ✅                | Testnet                          |
 | Polygon Mainnet           | `RPC_URL_POLYGON`        | ✅                | Mainnet                          |
+| Sei Testnet               | `RPC_URL_SEI_TESTNET`    | ✅                | Testnet                          |
+| Sei Mainnet               | `RPC_URL_SEI`            | ✅                | Mainnet                          |
 | Solana Mainnet            | `RPC_URL_SOLANA`         | ✅                | Mainnet                          |
 | Solana Devnet             | `RPC_URL_SOLANA_DEVNET`  | ✅                | Testnet, Recommended for testing |
 

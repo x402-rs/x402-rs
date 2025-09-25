@@ -44,6 +44,8 @@ const ENV_RPC_SOLANA: &str = "RPC_URL_SOLANA";
 const ENV_RPC_SOLANA_DEVNET: &str = "RPC_URL_SOLANA_DEVNET";
 const ENV_RPC_POLYGON_AMOY: &str = "RPC_URL_POLYGON_AMOY";
 const ENV_RPC_POLYGON: &str = "RPC_URL_POLYGON";
+const ENV_RPC_SEI: &str = "RPC_URL_SEI";
+const ENV_RPC_SEI_TESTNET: &str = "RPC_URL_SEI_TESTNET";
 
 /// A cache of pre-initialized [`EthereumProvider`] instances keyed by network.
 ///
@@ -98,6 +100,8 @@ impl ProviderCache {
                 Network::SolanaDevnet => ENV_RPC_SOLANA_DEVNET,
                 Network::PolygonAmoy => ENV_RPC_POLYGON_AMOY,
                 Network::Polygon => ENV_RPC_POLYGON,
+                Network::Sei => ENV_RPC_SEI,
+                Network::SeiTestnet => ENV_RPC_SEI_TESTNET,
             };
             let is_eip1559 = match network {
                 Network::BaseSepolia => true,
@@ -109,6 +113,8 @@ impl ProviderCache {
                 Network::SolanaDevnet => false,
                 Network::PolygonAmoy => true,
                 Network::Polygon => true,
+                Network::Sei => true,
+                Network::SeiTestnet => true,
             };
 
             let rpc_url = env::var(env_var);

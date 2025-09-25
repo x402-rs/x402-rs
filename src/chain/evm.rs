@@ -116,6 +116,8 @@ impl TryFrom<Network> for EvmChain {
             Network::SolanaDevnet => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::PolygonAmoy => Ok(EvmChain::new(value, 80002)),
             Network::Polygon => Ok(EvmChain::new(value, 137)),
+            Network::Sei => Ok(EvmChain::new(value, 1329)),
+            Network::SeiTestnet => Ok(EvmChain::new(value, 1328)),
         }
     }
 }

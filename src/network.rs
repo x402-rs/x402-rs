@@ -45,6 +45,12 @@ pub enum Network {
     /// Polygon mainnet (chain ID 137).
     #[serde(rename = "polygon")]
     Polygon,
+    /// Sei mainnet (chain ID 1329).
+    #[serde(rename = "sei")]
+    Sei,
+    /// Sei testnet (chain ID 1328).
+    #[serde(rename = "sei-testnet")]
+    SeiTestnet,
 }
 
 impl Display for Network {
@@ -59,6 +65,8 @@ impl Display for Network {
             Network::SolanaDevnet => write!(f, "solana-devnet"),
             Network::PolygonAmoy => write!(f, "polygon-amoy"),
             Network::Polygon => write!(f, "polygon"),
+            Network::Sei => write!(f, "sei"),
+            Network::SeiTestnet => write!(f, "sei-testnet"),
         }
     }
 }
@@ -81,6 +89,8 @@ impl From<Network> for NetworkFamily {
             Network::SolanaDevnet => NetworkFamily::Solana,
             Network::PolygonAmoy => NetworkFamily::Evm,
             Network::Polygon => NetworkFamily::Evm,
+            Network::Sei => NetworkFamily::Evm,
+            Network::SeiTestnet => NetworkFamily::Evm,
         }
     }
 }
@@ -98,6 +108,8 @@ impl Network {
             Network::SolanaDevnet,
             Network::PolygonAmoy,
             Network::Polygon,
+            Network::Sei,
+            Network::SeiTestnet,
         ]
     }
 }
@@ -230,7 +242,35 @@ static USDC_POLYGON: Lazy<USDCDeployment> = Lazy::new(|| {
         decimals: 6,
         eip712: Some(TokenDeploymentEip712 {
             name: "USDC".into(),
-            version: "1".into(),
+            version: "2".into(),
+        }),
+    })
+});
+
+static USDC_SEI: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392").into(),
+            network: Network::Sei,
+        },
+        decimals: 6,
+        eip712: Some(TokenDeploymentEip712 {
+            name: "USDC".into(),
+            version: "2".into(),
+        }),
+    })
+});
+
+static USDC_SEI_TESTNET: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0x4fCF1784B31630811181f670Aea7A7bEF803eaED").into(),
+            network: Network::Sei,
+        },
+        decimals: 6,
+        eip712: Some(TokenDeploymentEip712 {
+            name: "USDC".into(),
+            version: "2".into(),
         }),
     })
 });
@@ -280,6 +320,8 @@ impl USDCDeployment {
             Network::SolanaDevnet => &USDC_SOLANA_DEVNET,
             Network::PolygonAmoy => &USDC_POLYGON_AMOY,
             Network::Polygon => &USDC_POLYGON,
+            Network::Sei => &USDC_SEI,
+            Network::SeiTestnet => &USDC_SEI_TESTNET,
         }
     }
 }
