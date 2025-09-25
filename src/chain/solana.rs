@@ -6,7 +6,7 @@ use crate::types::{
     SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
     SupportedPaymentKindsResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse,
 };
-use solana_client::rpc_client::RpcClient;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
 use solana_commitment_config::CommitmentConfig;
 use solana_sdk::instruction::CompiledInstruction;
@@ -205,7 +205,7 @@ impl SolanaProvider {
     }
 
     // this expects the destination ATA to already exist
-    pub fn verify_transfer_instruction(
+    pub async fn verify_transfer_instruction(
         &self,
         transaction: &VersionedTransaction,
         instruction_index: usize,
@@ -316,6 +316,7 @@ impl SolanaProvider {
         let accounts = self
             .rpc_client
             .get_multiple_accounts(&[transfer_checked_instruction.source, ata])
+            .await
             .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
         let is_sender_missing = accounts.first().cloned().is_none_or(|a| a.is_none());
         if is_sender_missing {
@@ -339,7 +340,7 @@ impl SolanaProvider {
         Ok(transfer_checked_instruction)
     }
 
-    fn verify_transfer(
+    async fn verify_transfer(
         &self,
         request: &VerifyRequest,
     ) -> Result<VerifyTransferResult, FacilitatorLocalError> {
@@ -388,12 +389,12 @@ impl SolanaProvider {
         let transfer_instruction = if instructions.len() == 3 {
             // verify that the transfer instruction is valid
             // this expects the destination ATA to already exist
-            self.verify_transfer_instruction(&transaction, 2, requirements, false)?
+            self.verify_transfer_instruction(&transaction, 2, requirements, false).await?
         } else {
             // verify that the transfer instruction is valid
             // this expects the destination ATA to be created in the same transaction
             self.verify_create_ata_instruction(&transaction, 2, requirements)?;
-            self.verify_transfer_instruction(&transaction, 3, requirements, true)?
+            self.verify_transfer_instruction(&transaction, 3, requirements, true).await?
         };
 
         // simulate the transaction to ensure it will execute successfully
@@ -433,6 +434,7 @@ impl SolanaProvider {
         let sim = self
             .rpc_client
             .simulate_transaction_with_config(&tx.inner, cfg)
+            .await
             .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
         if sim.value.err.is_some() {
             return Err(FacilitatorLocalError::DecodingError(
@@ -476,12 +478,12 @@ impl Facilitator for SolanaProvider {
     type Error = FacilitatorLocalError;
 
     async fn verify(&self, request: &VerifyRequest) -> Result<VerifyResponse, Self::Error> {
-        let verification = self.verify_transfer(request)?;
+        let verification = self.verify_transfer(request).await?;
         Ok(VerifyResponse::valid(verification.payer.into()))
     }
 
     async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
-        let verification = self.verify_transfer(request)?;
+        let verification = self.verify_transfer(request).await?;
         let tx = TransactionInt::new(verification.transaction).sign(&self.keypair)?;
         // Verify if fully signed
         if !tx.is_fully_signed() {
@@ -637,7 +639,7 @@ impl TransactionInt {
         Ok(Self { inner: tx })
     }
 
-    pub fn send(&self, rpc_client: &RpcClient) -> Result<Signature, FacilitatorLocalError> {
+    pub async fn send(&self, rpc_client: &RpcClient) -> Result<Signature, FacilitatorLocalError> {
         rpc_client
             .send_transaction_with_config(
                 &self.inner,
@@ -646,6 +648,7 @@ impl TransactionInt {
                     ..RpcSendTransactionConfig::default()
                 },
             )
+            .await
             .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))
     }
 
@@ -654,10 +657,11 @@ impl TransactionInt {
         rpc_client: &RpcClient,
         commitment_config: CommitmentConfig,
     ) -> Result<Signature, FacilitatorLocalError> {
-        let tx_sig = self.send(rpc_client)?;
+        let tx_sig = self.send(rpc_client).await?;
         loop {
             let confirmed = rpc_client
                 .confirm_transaction_with_commitment(&tx_sig, commitment_config)
+                .await
                 .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
             if confirmed.value {
                 return Ok(tx_sig);
