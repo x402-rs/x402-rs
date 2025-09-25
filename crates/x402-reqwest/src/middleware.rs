@@ -224,14 +224,14 @@ impl X402Payments {
         selected: &PaymentRequirements,
     ) -> Result<(), X402PaymentsError> {
         let token_asset = selected.token_asset();
-        if let Some(max) = self.max_token_amount.get(&token_asset) {
-            if &selected.max_amount_required > max {
-                return Err(X402PaymentsError::PaymentAmountTooLarge {
-                    requested: selected.max_amount_required,
-                    allowed: *max,
-                    asset: token_asset,
-                });
-            }
+        if let Some(max) = self.max_token_amount.get(&token_asset)
+            && &selected.max_amount_required > max
+        {
+            return Err(X402PaymentsError::PaymentAmountTooLarge {
+                requested: selected.max_amount_required,
+                allowed: *max,
+                asset: token_asset,
+            });
         }
         Ok(())
     }

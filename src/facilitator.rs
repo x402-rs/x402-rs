@@ -52,6 +52,7 @@ pub trait Facilitator {
         request: &SettleRequest,
     ) -> impl Future<Output = Result<SettleResponse, Self::Error>> + Send;
 
+    #[allow(dead_code)] // For some reason clippy believes it is not used.
     fn supported(
         &self,
     ) -> impl Future<Output = Result<SupportedPaymentKindsResponse, Self::Error>> + Send;

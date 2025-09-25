@@ -29,6 +29,7 @@ async fn buy_evm() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[allow(dead_code)] // It is an example!
 async fn buy_solana() -> Result<(), Box<dyn std::error::Error>> {
     let solana_private_key = env::var("SOLANA_PRIVATE_KEY")?;
     let keypair = Keypair::from_base58_string(solana_private_key.as_str());

@@ -389,12 +389,14 @@ impl SolanaProvider {
         let transfer_instruction = if instructions.len() == 3 {
             // verify that the transfer instruction is valid
             // this expects the destination ATA to already exist
-            self.verify_transfer_instruction(&transaction, 2, requirements, false).await?
+            self.verify_transfer_instruction(&transaction, 2, requirements, false)
+                .await?
         } else {
             // verify that the transfer instruction is valid
             // this expects the destination ATA to be created in the same transaction
             self.verify_create_ata_instruction(&transaction, 2, requirements)?;
-            self.verify_transfer_instruction(&transaction, 3, requirements, true).await?
+            self.verify_transfer_instruction(&transaction, 3, requirements, true)
+                .await?
         };
 
         // simulate the transaction to ensure it will execute successfully

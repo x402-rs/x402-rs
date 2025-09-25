@@ -313,15 +313,15 @@ pub struct TelemetryProviders {
 /// Any shutdown errors are printed to stderr.
 impl Drop for TelemetryProviders {
     fn drop(&mut self) {
-        if let Some(tracer_provider) = self.tracer_provider.as_ref() {
-            if let Err(err) = tracer_provider.shutdown() {
-                eprintln!("{err:?}");
-            }
+        if let Some(tracer_provider) = self.tracer_provider.as_ref()
+            && let Err(err) = tracer_provider.shutdown()
+        {
+            eprintln!("{err:?}");
         }
-        if let Some(meter_provider) = self.meter_provider.as_ref() {
-            if let Err(err) = meter_provider.shutdown() {
-                eprintln!("{err:?}");
-            }
+        if let Some(meter_provider) = self.meter_provider.as_ref()
+            && let Err(err) = meter_provider.shutdown()
+        {
+            eprintln!("{err:?}");
         }
     }
 }
