@@ -8949,10 +8949,9 @@ dependencies = [
 
 [[package]]
 name = "x402-rs"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "alloy",
- "anyhow",
  "axum",
  "base64 0.22.1",
  "bincode",

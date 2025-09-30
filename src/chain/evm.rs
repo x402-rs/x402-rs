@@ -20,7 +20,8 @@ use alloy::network::{EthereumWallet, TransactionBuilder};
 use alloy::primitives::{Bytes, FixedBytes, U256, address};
 use alloy::providers::bindings::IMulticall3;
 use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
+    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+    SimpleNonceManager, WalletFiller,
 };
 use alloy::providers::{
     Identity, MULTICALL3_ADDRESS, MulticallItem, Provider, RootProvider, WalletProvider,
@@ -72,8 +73,11 @@ const VALIDATOR_ADDRESS: alloy::primitives::Address =
 pub type InnerProvider = FillProvider<
     JoinFill<
         JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+            JoinFill<
+                Identity,
+                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+            >,
+            NonceFiller<SimpleNonceManager>,
         >,
         WalletFiller<EthereumWallet>,
     >,

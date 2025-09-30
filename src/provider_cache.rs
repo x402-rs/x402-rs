@@ -124,6 +124,7 @@ impl ProviderCache {
                     NetworkFamily::Evm => {
                         let wallet = SignerType::from_env()?.make_evm_wallet()?;
                         let provider = ProviderBuilder::new()
+                            .with_simple_nonce_management() // Fetches nonce on every transaction. Better working now. Improve later TODO.
                             .wallet(wallet)
                             .connect(&rpc_url)
                             .await
