@@ -301,7 +301,7 @@ impl SolanaProvider {
         let token_program = transfer_checked_instruction.token_program;
         // findAssociatedTokenPda
         let program_id = Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
-            .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
+            .map_err(|e| FacilitatorLocalError::InvalidAddress(format!("{e}")))?;
         let (ata, _) = Pubkey::find_program_address(
             &[
                 pay_to_address.pubkey.as_ref(),
@@ -319,7 +319,7 @@ impl SolanaProvider {
             .rpc_client
             .get_multiple_accounts(&[transfer_checked_instruction.source, ata])
             .await
-            .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
+            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
         let is_sender_missing = accounts.first().cloned().is_none_or(|a| a.is_none());
         if is_sender_missing {
             return Err(FacilitatorLocalError::DecodingError(
@@ -401,31 +401,7 @@ impl SolanaProvider {
                 .await?
         };
 
-        // simulate the transaction to ensure it will execute successfully
-        // JS: signAndSimulateTransaction
         let tx = TransactionInt::new(transaction.clone()).sign(&self.keypair)?;
-        // let mut tx = transaction.clone();
-        // let message_bytes = tx.message.serialize();
-        // let sig = self
-        //     .keypair
-        //     .try_sign_message(message_bytes.as_slice())
-        //     .map_err(|e| FacilitatorLocalError::DecodingError(format!("{}", e)))?;
-        // // Required signatures are the first N account keys
-        // let num_required = tx.message.header().num_required_signatures as usize;
-        // let static_keys = tx.message.static_account_keys();
-        // // Find signer’s position
-        // let pos = static_keys[..num_required]
-        //     .iter()
-        //     .position(|k| *k == self.keypair.pubkey())
-        //     .ok_or(FacilitatorLocalError::DecodingError(
-        //         "invalid_exact_svm_payload_transaction_simulation_failed".to_string(),
-        //     ))?;
-        // // Ensure signature vector is large enough, then place the signature
-        // if tx.signatures.len() < num_required {
-        //     tx.signatures.resize(num_required, Signature::default());
-        // }
-        // tx.signatures[pos] = sig;
-
         let cfg = RpcSimulateTransactionConfig {
             sig_verify: false,
             replace_recent_blockhash: false,
@@ -439,7 +415,7 @@ impl SolanaProvider {
             .rpc_client
             .simulate_transaction_with_config(&tx.inner, cfg)
             .await
-            .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
+            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
         if sim.value.err.is_some() {
             return Err(FacilitatorLocalError::DecodingError(
                 "invalid_exact_svm_payload_transaction_simulation_failed".to_string(),
@@ -623,7 +599,7 @@ impl TransactionInt {
         let msg_bytes = tx.message.serialize();
         let signature = keypair
             .try_sign_message(msg_bytes.as_slice())
-            .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
+            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
         // Required signatures are the first N account keys
         let num_required = tx.message.header().num_required_signatures as usize;
         let static_keys = tx.message.static_account_keys();

@@ -169,8 +169,15 @@ impl IntoResponse for FacilitatorLocalError {
                 .into_response(),
             FacilitatorLocalError::ContractCall(..)
             | FacilitatorLocalError::InvalidAddress(..)
-            | FacilitatorLocalError::DecodingError(..)
             | FacilitatorLocalError::ClockError(_) => bad_request,
+            FacilitatorLocalError::DecodingError(reason) => (
+                StatusCode::OK,
+                Json(VerifyResponse::invalid(
+                    None,
+                    FacilitatorErrorReason::FreeForm(reason),
+                )),
+            )
+                .into_response(),
             FacilitatorLocalError::InsufficientFunds(payer) => (
                 StatusCode::OK,
                 Json(VerifyResponse::invalid(

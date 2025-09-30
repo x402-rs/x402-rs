@@ -902,8 +902,8 @@ impl VerifyRequest {
 /// to be used for settlement.
 pub type SettleRequest = VerifyRequest;
 
-#[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Serialize, Deserialize, thiserror::Error)]
+#[serde(untagged, rename_all = "camelCase")]
 pub enum FacilitatorErrorReason {
     /// Payer doesn't have sufficient funds.
     #[error("insufficient_funds")]
@@ -921,6 +921,8 @@ pub enum FacilitatorErrorReason {
     #[error("unexpected_settle_error")]
     #[serde(rename = "unexpected_settle_error")]
     UnexpectedSettleError,
+    #[error("{0}")]
+    FreeForm(String),
 }
 
 /// Returned from a facilitator after attempting to settle a payment on-chain.
@@ -967,7 +969,7 @@ impl TryInto<Base64Bytes<'static>> for SettleResponse {
 ///
 /// This response indicates whether the payment authorization is valid and identifies the payer. If invalid,
 /// it includes a reason describing why verification failed (e.g., wrong network, an invalid scheme, insufficient funds).
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum VerifyResponse {
     /// The payload matches the requirements and passes all checks.
     Valid { payer: MixedAddress },
