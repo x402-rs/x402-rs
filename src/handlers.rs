@@ -74,6 +74,16 @@ pub async fn get_supported(
     )
 }
 
+pub async fn get_health(Extension(facilitator): Extension<FacilitatorLocal>) -> impl IntoResponse {
+    let health = facilitator.health();
+    (
+        StatusCode::OK,
+        Json(json!({
+            "providers": health,
+        })),
+    )
+}
+
 /// `POST /verify`: Facilitator-side verification of a proposed x402 payment.
 ///
 /// This endpoint checks whether a given payment payload satisfies the declared

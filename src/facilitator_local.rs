@@ -9,15 +9,18 @@
 //! - Contract interaction using Alloy
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
+use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
 use crate::chain::{FacilitatorLocalError, NetworkProvider, NetworkProviderOps};
 use crate::facilitator::Facilitator;
+use crate::network::Network;
 use crate::provider_cache::ProviderCache;
 use crate::provider_cache::ProviderMap;
 use crate::types::{
-    Scheme, SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
-    SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse, X402Version,
+    MixedAddress, Scheme, SettleRequest, SettleResponse, SupportedPaymentKind,
+    SupportedPaymentKindExtra, SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
+    X402Version,
 };
 
 /// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
@@ -55,6 +58,22 @@ impl FacilitatorLocal {
                     extra: Some(SupportedPaymentKindExtra {
                         fee_payer: provider.signer_address(),
                     }),
+                },
+            })
+            .collect()
+    }
+
+    pub fn health(&self) -> Vec<HealthStatus> {
+        self.provider_cache
+            .into_iter()
+            .map(|(network, provider)| match provider {
+                NetworkProvider::Evm(_) => HealthStatus {
+                    network: *network,
+                    address: provider.signer_address(),
+                },
+                NetworkProvider::Solana(provider) => HealthStatus {
+                    network: *network,
+                    address: provider.signer_address(),
                 },
             })
             .collect()
@@ -115,4 +134,11 @@ impl Facilitator for FacilitatorLocal {
         let kinds = self.kinds();
         Ok(SupportedPaymentKindsResponse { kinds })
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthStatus {
+    pub network: Network,
+    pub address: MixedAddress,
 }

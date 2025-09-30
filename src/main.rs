@@ -78,6 +78,7 @@ async fn main() {
         .route("/settle", get(handlers::get_settle_info))
         .route("/settle", post(handlers::post_settle))
         .route("/supported", get(handlers::get_supported))
+        .route("/health", get(handlers::get_health))
         .layer(Extension(facilitator))
         .layer(
             TraceLayer::new_for_http()
