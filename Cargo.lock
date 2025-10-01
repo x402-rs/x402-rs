@@ -8952,9 +8952,11 @@ name = "x402-rs"
 version = "0.7.6"
 dependencies = [
  "alloy",
+ "async-trait",
  "axum",
  "base64 0.22.1",
  "bincode",
+ "dashmap 6.1.0",
  "dotenvy",
  "once_cell",
  "opentelemetry",

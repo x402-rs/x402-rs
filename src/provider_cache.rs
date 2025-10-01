@@ -19,7 +19,6 @@
 //! ```
 
 use alloy::network::EthereumWallet;
-use alloy::providers::ProviderBuilder;
 use alloy::signers::local::PrivateKeySigner;
 use serde::{Deserialize, Serialize};
 use solana_sdk::signature::Keypair;
@@ -123,13 +122,8 @@ impl ProviderCache {
                 match family {
                     NetworkFamily::Evm => {
                         let wallet = SignerType::from_env()?.make_evm_wallet()?;
-                        let provider = ProviderBuilder::new()
-                            .with_simple_nonce_management() // Fetches nonce on every transaction. Better working now. Improve later TODO.
-                            .wallet(wallet)
-                            .connect(&rpc_url)
-                            .await
-                            .map_err(|e| format!("Failed to connect to {network}: {e}"))?;
-                        let provider = EvmProvider::try_new(provider, is_eip1559, *network)?;
+                        let provider =
+                            EvmProvider::try_new(wallet, &rpc_url, is_eip1559, *network).await?;
                         let provider = NetworkProvider::Evm(provider);
                         let signer_address = provider.signer_address();
                         providers.insert(*network, provider);

@@ -18,17 +18,23 @@ use alloy::contract::SolCallBuilder;
 use alloy::dyn_abi::SolType;
 use alloy::network::{EthereumWallet, TransactionBuilder};
 use alloy::primitives::{Bytes, FixedBytes, U256, address};
+use alloy::providers::ProviderBuilder;
 use alloy::providers::bindings::IMulticall3;
+use alloy::providers::fillers::NonceManager;
 use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-    SimpleNonceManager, WalletFiller,
+    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
 };
 use alloy::providers::{
     Identity, MULTICALL3_ADDRESS, MulticallItem, Provider, RootProvider, WalletProvider,
 };
+use alloy::rpc::client::RpcClient;
 use alloy::rpc::types::{TransactionReceipt, TransactionRequest};
 use alloy::sol_types::{Eip712Domain, SolCall, SolStruct, eip712_domain};
 use alloy::{hex, sol};
+use async_trait::async_trait;
+use dashmap::DashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tracing::{Instrument, instrument};
 use tracing_core::Level;
 
@@ -66,21 +72,17 @@ sol! {
 const VALIDATOR_ADDRESS: alloy::primitives::Address =
     address!("0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B");
 
+type InnerFiller = JoinFill<
+    GasFiller,
+    JoinFill<BlobGasFiller, JoinFill<NonceFiller<PendingNonceManager>, ChainIdFiller>>,
+>;
+
 /// The fully composed Ethereum provider type used in this project.
 ///
 /// Combines multiple filler layers for gas, nonce, chain ID, blob gas, and wallet signing,
 /// and wraps a [`RootProvider`] for actual JSON-RPC communication.
 pub type InnerProvider = FillProvider<
-    JoinFill<
-        JoinFill<
-            JoinFill<
-                Identity,
-                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-            >,
-            NonceFiller<SimpleNonceManager>,
-        >,
-        WalletFiller<EthereumWallet>,
-    >,
+    JoinFill<JoinFill<Identity, InnerFiller>, WalletFiller<EthereumWallet>>,
     RootProvider,
 >;
 
@@ -160,15 +162,22 @@ pub struct EvmProvider {
 
 impl EvmProvider {
     /// Build an [`EvmProvider`] from a pre-composed Alloy ethereum provider [`InnerProvider`].
-    ///
-    /// # Errors
-    /// Return [`FacilitatorLocalError::UnsupportedNetwork`] if `network` is not EVM.
-    pub fn try_new(
-        inner: InnerProvider,
+    pub async fn try_new(
+        wallet: EthereumWallet,
+        rpc_url: &str,
         eip1559: bool,
         network: Network,
-    ) -> Result<Self, FacilitatorLocalError> {
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let chain = EvmChain::try_from(network)?;
+        let client = RpcClient::builder()
+            .connect(rpc_url)
+            .await
+            .map_err(|e| format!("Failed to connect to {network}: {e}"))?;
+        let filler = InnerFiller::default();
+        let inner = ProviderBuilder::default()
+            .filler(filler)
+            .wallet(wallet)
+            .connect_client(client);
         Ok(Self {
             inner,
             eip1559,
@@ -915,5 +924,69 @@ impl TryFrom<Vec<u8>> for StructuredSignature {
             StructuredSignature::EIP1271(bytes.into())
         };
         Ok(signature)
+    }
+}
+
+/// A nonce manager that caches nonces locally and checks pending transactions on initialization.
+///
+/// This implementation attempts to improve upon Alloy's `CachedNonceManager` by using `.pending()` when
+/// fetching the initial nonce, which includes pending transactions in the mempool. This prevents
+/// "nonce too low" errors when the application restarts while transactions are still pending.
+///
+/// # How it works
+///
+/// - **First call for an address**: Fetches the nonce using `.pending()`, which includes
+///   transactions in the mempool, not just confirmed transactions.
+/// - **Subsequent calls**: Increments the cached nonce locally without querying the RPC.
+/// - **Per-address tracking**: Each address has its own cached nonce, allowing concurrent
+///   transaction submission from multiple addresses.
+///
+/// # Thread Safety
+///
+/// The nonce cache is shared across all clones using `Arc<DashMap>`, ensuring that concurrent
+/// requests see consistent nonce values. Each address's nonce is protected by its own `Mutex`
+/// to prevent race conditions during allocation.
+/// ```
+#[derive(Clone, Debug, Default)]
+pub struct PendingNonceManager {
+    /// Cache of nonces per address. Each address has its own mutex-protected nonce value.
+    nonces: Arc<DashMap<alloy::primitives::Address, Arc<Mutex<u64>>>>,
+}
+
+#[async_trait]
+impl NonceManager for PendingNonceManager {
+    async fn get_next_nonce<P, N>(
+        &self,
+        provider: &P,
+        address: alloy::primitives::Address,
+    ) -> alloy::transports::TransportResult<u64>
+    where
+        P: Provider<N>,
+        N: alloy::network::Network,
+    {
+        // Use `u64::MAX` as a sentinel value to indicate that the nonce has not been fetched yet.
+        const NONE: u64 = u64::MAX;
+
+        // Locks dashmap internally for a short duration to clone the `Arc`.
+        // We also don't want to hold the dashmap lock through the await point below.
+        let nonce = {
+            let rm = self
+                .nonces
+                .entry(address)
+                .or_insert_with(|| Arc::new(Mutex::new(NONE)));
+            Arc::clone(rm.value())
+        };
+
+        let mut nonce = nonce.lock().await;
+        let new_nonce = if *nonce == NONE {
+            // Initialize the nonce if we haven't seen this account before.
+            tracing::trace!(%address, "fetching nonce");
+            provider.get_transaction_count(address).pending().await?
+        } else {
+            tracing::trace!(%address, current_nonce = *nonce, "incrementing nonce");
+            *nonce + 1
+        };
+        *nonce = new_nonce;
+        Ok(new_nonce)
     }
 }
