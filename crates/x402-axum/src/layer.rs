@@ -645,6 +645,9 @@ where
             Ok(response) => response,
             Err(err) => return err.into_response(),
         };
+        if response.status().is_client_error() || response.status().is_server_error() {
+            return response.into_response();
+        }
         let settlement = match self.settle_payment(&verify_request).await {
             Ok(settlement) => settlement,
             Err(err) => return err.into_response(),
