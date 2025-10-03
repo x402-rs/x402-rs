@@ -212,8 +212,9 @@ impl SenderWallet for SolanaSenderWallet {
             .rpc_client
             .get_latest_blockhash()
             .map_err(|e| X402PaymentsError::SigningError(format!("{e:?}")))?;
+        let fee = get_priority_fee_micro_lamports(self.rpc_client.as_ref(), &vec![fee_payer, destination_ata, source_ata])?;
         let (msg_to_sim, instructions) =
-            build_message_to_simulate(fee_payer, &transfer_instructions, 1, recent_blockhash)?;
+            build_message_to_simulate(fee_payer, &transfer_instructions, fee, recent_blockhash)?;
         // 2) Estimate CU via simulation
         let estimated_cu = estimate_compute_units(self.rpc_client.as_ref(), &msg_to_sim)?;
         // prepend the CU limit instruction
@@ -322,6 +323,19 @@ pub fn estimate_compute_units(
             "simulation returned no units_consumed".to_string(),
         ))?;
     Ok(units as u32)
+}
+
+pub fn get_priority_fee_micro_lamports(rpc: &RpcClient, writeable_accounts: &[Pubkey]) -> Result<u64, X402PaymentsError> {    
+    let fee = rpc
+        .get_recent_prioritization_fees(&writeable_accounts)
+        .map_err(|e| X402PaymentsError::SigningError(format!("{e:?}")))?
+        .iter()
+        .filter(|e| e.prioritization_fee > 0)
+        .map(|e| e.prioritization_fee)
+        .min_by(|a, b| a.cmp(b))
+        .unwrap_or(1);
+        
+    Ok(fee)
 }
 
 /// Update the first set_compute_unit_limit ix if it exists, else append a new one.
