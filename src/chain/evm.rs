@@ -16,8 +16,10 @@
 
 use alloy::contract::SolCallBuilder;
 use alloy::dyn_abi::SolType;
-use alloy::network::{EthereumWallet, TransactionBuilder};
-use alloy::primitives::{Bytes, FixedBytes, U256, address};
+use alloy::network::{
+    Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder,
+};
+use alloy::primitives::{Address, Bytes, FixedBytes, U256, address};
 use alloy::providers::ProviderBuilder;
 use alloy::providers::bindings::IMulticall3;
 use alloy::providers::fillers::NonceManager;
@@ -34,6 +36,7 @@ use alloy::{hex, sol};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Mutex;
 use tracing::{Instrument, instrument};
 use tracing_core::Level;
@@ -158,6 +161,8 @@ pub struct EvmProvider {
     inner: InnerProvider,
     eip1559: bool,
     chain: EvmChain,
+    signer_addresses: Arc<Vec<Address>>,
+    signer_cursor: Arc<AtomicUsize>,
 }
 
 impl EvmProvider {
@@ -169,6 +174,13 @@ impl EvmProvider {
         network: Network,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let chain = EvmChain::try_from(network)?;
+        let signer_addresses: Vec<Address> =
+            NetworkWallet::<AlloyEthereum>::signer_addresses(&wallet).collect();
+        if signer_addresses.is_empty() {
+            return Err("wallet must contain at least one signer".into());
+        }
+        let signer_addresses = Arc::new(signer_addresses);
+        let signer_cursor = Arc::new(AtomicUsize::new(0));
         let client = RpcClient::builder()
             .connect(rpc_url)
             .await
@@ -182,7 +194,20 @@ impl EvmProvider {
             inner,
             eip1559,
             chain,
+            signer_addresses,
+            signer_cursor,
         })
+    }
+
+    fn next_signer_address(&self) -> Address {
+        debug_assert!(!self.signer_addresses.is_empty());
+        if self.signer_addresses.len() == 1 {
+            self.signer_addresses[0]
+        } else {
+            let next =
+                self.signer_cursor.fetch_add(1, Ordering::Relaxed) % self.signer_addresses.len();
+            self.signer_addresses[next]
+        }
     }
 
     /// Runs all preconditions needed for a successful payment:
@@ -432,6 +457,10 @@ impl EvmProvider {
         &self,
         tx: TransactionRequest,
     ) -> Result<TransactionReceipt, FacilitatorLocalError> {
+        let mut tx = tx;
+        if tx.from.is_none() {
+            tx.from = Some(self.next_signer_address());
+        }
         let tx = self
             .inner
             .send_transaction(tx)
