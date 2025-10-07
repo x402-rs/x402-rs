@@ -194,27 +194,24 @@ impl SignerType {
             SignerType::PrivateKey => {
                 let raw_keys = env::var(ENV_EVM_PRIVATE_KEY)
                     .map_err(|_| format!("env {ENV_EVM_PRIVATE_KEY} not set"))?;
-                let keys: Vec<_> = raw_keys
+                let signers = raw_keys
                     .split(',')
                     .map(str::trim)
                     .filter(|entry| !entry.is_empty())
-                    .map(str::to_owned)
-                    .collect();
-                if keys.is_empty() {
+                    .map(PrivateKeySigner::from_str)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|err| -> Box<dyn std::error::Error> { Box::new(err) })?;
+                if signers.is_empty() {
                     return Err("env EVM_PRIVATE_KEY did not contain any private keys".into());
                 }
 
-                let mut iter = keys.into_iter();
-                let first_key = iter
+                let mut iter = signers.into_iter();
+                let first_signer = iter
                     .next()
                     .expect("iterator contains at least one element by construction");
-                let first_signer = PrivateKeySigner::from_str(&first_key)
-                    .map_err(|err| -> Box<dyn std::error::Error> { Box::new(err) })?;
                 let mut wallet = EthereumWallet::from(first_signer);
 
-                for key in iter {
-                    let signer = PrivateKeySigner::from_str(&key)
-                        .map_err(|err| -> Box<dyn std::error::Error> { Box::new(err) })?;
+                for signer in iter {
                     wallet.register_signer(signer);
                 }
 
@@ -245,30 +242,44 @@ mod tests {
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
-    fn restore_env(key: &str, original: Option<String>) {
-        if let Some(value) = original {
-            // Safety: guarded by `ENV_LOCK`, so no concurrent environment mutation occurs.
-            unsafe { env::set_var(key, value) };
-        } else {
-            // Safety: guarded by `ENV_LOCK`, so no concurrent environment mutation occurs.
-            unsafe { env::remove_var(key) };
+    struct EnvOverride {
+        key: &'static str,
+        original: Option<String>,
+    }
+
+    impl EnvOverride {
+        fn new(key: &'static str) -> Self {
+            Self {
+                key,
+                original: env::var(key).ok(),
+            }
+        }
+
+        fn set(&self, value: &str) {
+            unsafe { env::set_var(self.key, value) };
+        }
+    }
+
+    impl Drop for EnvOverride {
+        fn drop(&mut self) {
+            match &self.original {
+                Some(value) => unsafe { env::set_var(self.key, value) },
+                None => unsafe { env::remove_var(self.key) },
+            }
         }
     }
 
     #[test]
     fn make_evm_wallet_supports_multiple_private_keys() {
         let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        let original_signer_type = env::var(ENV_SIGNER_TYPE).ok();
-        let original_evm_keys = env::var(ENV_EVM_PRIVATE_KEY).ok();
+        let signer_type_override = EnvOverride::new(ENV_SIGNER_TYPE);
+        let evm_keys_override = EnvOverride::new(ENV_EVM_PRIVATE_KEY);
 
         const KEY_1: &str = "0xcafe000000000000000000000000000000000000000000000000000000000001";
         const KEY_2: &str = "0xcafe000000000000000000000000000000000000000000000000000000000002";
 
-        // Safety: guarded by `ENV_LOCK`, so no concurrent environment mutation occurs.
-        unsafe {
-            env::set_var(ENV_SIGNER_TYPE, "private-key");
-            env::set_var(ENV_EVM_PRIVATE_KEY, format!("{KEY_1},{KEY_2}"));
-        }
+        signer_type_override.set("private-key");
+        evm_keys_override.set(&format!("{KEY_1},{KEY_2}"));
 
         let signer_type = SignerType::from_env().expect("SIGNER_TYPE");
         let wallet = signer_type
@@ -291,8 +302,5 @@ mod tests {
         assert_eq!(signers.len(), 2);
         assert!(signers.contains(&expected_primary));
         assert!(signers.contains(&expected_secondary));
-
-        restore_env(ENV_EVM_PRIVATE_KEY, original_evm_keys);
-        restore_env(ENV_SIGNER_TYPE, original_signer_type);
     }
 }
