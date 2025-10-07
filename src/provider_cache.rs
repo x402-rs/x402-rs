@@ -52,7 +52,6 @@ const ENV_RPC_SEI_TESTNET: &str = "RPC_URL_SEI_TESTNET";
 /// and wrapping them with appropriate signing and filler middleware.
 ///
 /// Use [`ProviderCache::from_env`] to load credentials and connect using environment variables.
-#[derive(Clone)]
 pub struct ProviderCache {
     providers: HashMap<Network, NetworkProvider>,
 }

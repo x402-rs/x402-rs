@@ -22,7 +22,7 @@
 
 use axum::http::Method;
 use axum::routing::post;
-use axum::{Extension, Router, routing::get};
+use axum::{Router, routing::get};
 use dotenvy::dotenv;
 use opentelemetry::trace::Status;
 use std::env;
@@ -79,7 +79,7 @@ async fn main() {
         .route("/settle", post(handlers::post_settle))
         .route("/supported", get(handlers::get_supported))
         .route("/health", get(handlers::get_health))
-        .layer(Extension(facilitator))
+        .with_state(facilitator)
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|request: &axum::http::Request<_>| {

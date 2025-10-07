@@ -10,6 +10,7 @@
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tracing::instrument;
 
 use crate::chain::{FacilitatorLocalError, NetworkProvider, NetworkProviderOps};
@@ -30,7 +31,7 @@ use crate::types::{
 /// which enables testing or customization beyond the default [`ProviderCache`].
 #[derive(Clone)]
 pub struct FacilitatorLocal {
-    pub provider_cache: ProviderCache,
+    pub provider_cache: Arc<ProviderCache>,
 }
 
 impl FacilitatorLocal {
@@ -38,7 +39,9 @@ impl FacilitatorLocal {
     ///
     /// The provider cache is used to resolve the appropriate EVM provider for each payment's target network.
     pub fn new(provider_cache: ProviderCache) -> Self {
-        FacilitatorLocal { provider_cache }
+        FacilitatorLocal {
+            provider_cache: Arc::new(provider_cache),
+        }
     }
 
     pub fn kinds(&self) -> Vec<SupportedPaymentKind> {

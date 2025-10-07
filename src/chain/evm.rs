@@ -153,7 +153,7 @@ pub struct ExactEvmPayment {
 ///
 /// Holds a composed Alloy ethereum provider [`InnerProvider`],
 /// an `eip1559` toggle for gas pricing strategy, and the `EvmChain` context.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct EvmProvider {
     inner: InnerProvider,
     eip1559: bool,

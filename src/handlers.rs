@@ -9,9 +9,10 @@
 //! Each endpoint consumes or produces structured JSON payloads defined in `x402-rs`,
 //! and is compatible with official x402 client SDKs.
 
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
-use axum::{Extension, Json, response::IntoResponse};
+use axum::{Json, response::IntoResponse};
 use serde_json::json;
 use tracing::instrument;
 
@@ -62,9 +63,7 @@ pub async fn get_settle_info() -> impl IntoResponse {
 /// Facilitators may expose this to help clients dynamically configure their payment requests
 /// based on available network and scheme support.
 #[instrument(skip_all)]
-pub async fn get_supported(
-    Extension(facilitator): Extension<FacilitatorLocal>,
-) -> impl IntoResponse {
+pub async fn get_supported(State(facilitator): State<FacilitatorLocal>) -> impl IntoResponse {
     let kinds = facilitator.kinds();
     (
         StatusCode::OK,
@@ -74,7 +73,7 @@ pub async fn get_supported(
     )
 }
 
-pub async fn get_health(Extension(facilitator): Extension<FacilitatorLocal>) -> impl IntoResponse {
+pub async fn get_health(State(facilitator): State<FacilitatorLocal>) -> impl IntoResponse {
     let health = facilitator.health();
     (
         StatusCode::OK,
@@ -92,7 +91,7 @@ pub async fn get_health(Extension(facilitator): Extension<FacilitatorLocal>) -> 
 /// Responds with a [`VerifyResponse`] indicating whether the payment can be accepted.
 #[instrument(skip_all)]
 pub async fn post_verify(
-    Extension(facilitator): Extension<FacilitatorLocal>,
+    State(facilitator): State<FacilitatorLocal>,
     Json(body): Json<VerifyRequest>,
 ) -> impl IntoResponse {
     match facilitator.verify(&body).await {
@@ -116,7 +115,7 @@ pub async fn post_verify(
 /// This endpoint is typically called after a successful `/verify` step.
 #[instrument(skip_all)]
 pub async fn post_settle(
-    Extension(facilitator): Extension<FacilitatorLocal>,
+    State(facilitator): State<FacilitatorLocal>,
     Json(body): Json<SettleRequest>,
 ) -> impl IntoResponse {
     match facilitator.settle(&body).await {
