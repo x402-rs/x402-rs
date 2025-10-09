@@ -857,7 +857,7 @@ impl PaymentRequirements {
     /// This should not occur if `asset` was originally derived from a valid address.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use x402_rs::types::{PaymentRequirements, TokenAsset};
     ///
     /// let reqs: PaymentRequirements = /* from parsed response or constructed */;
@@ -1269,7 +1269,7 @@ pub struct TokenDeploymentEip712 {
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// use x402_rs::types::{TokenAsset, EvmAddress};
 /// use x402_rs::network::Network;
 ///
@@ -1306,7 +1306,7 @@ impl Display for TokenAsset {
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// use x402_rs::types::{TokenAsset, TokenDeployment, TokenDeploymentEip712};
 /// use x402_rs::network::Network;
 ///

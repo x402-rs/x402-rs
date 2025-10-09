@@ -9,11 +9,11 @@
 //!
 //! Environment variables used:
 //! - `SIGNER_TYPE` — currently only `"private-key"` is supported,
-//! - `PRIVATE_KEY` — the private key used to sign transactions as `"0x..."` string,
+//! - `EVM_PRIVATE_KEY` — comma-separated list of private keys used to sign transactions,
 //! - `RPC_URL_BASE`, `RPC_URL_BASE_SEPOLIA` — RPC endpoints per network
 //!
 //! Example usage:
-//! ```rust
+//! ```ignore
 //! let provider_cache = ProviderCache::from_env().await?;
 //! let provider = provider_cache.by_network(Network::Base)?;
 //! ```
@@ -25,6 +25,7 @@ use solana_sdk::signature::Keypair;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::env;
+use std::str::FromStr;
 
 use crate::chain::evm::EvmProvider;
 use crate::chain::solana::SolanaProvider;
@@ -81,7 +82,7 @@ impl ProviderCache {
     ///
     /// Expects the following to be set:
     /// - `SIGNER_TYPE` — currently only `"private-key"` is supported
-    /// - `PRIVATE_KEY` — the private key used to sign transactions
+    /// - `EVM_PRIVATE_KEY` — comma-separated list of private keys used to sign transactions
     /// - `RPC_URL_BASE`, `RPC_URL_BASE_SEPOLIA` — RPC endpoints per network
     ///
     /// Fails if required env vars are missing or if the provider cannot connect.
@@ -166,7 +167,7 @@ impl ProviderMap for ProviderCache {
 /// Supported methods for constructing an Ethereum wallet from environment variables.
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SignerType {
-    /// A local private key stored in the `PRIVATE_KEY` environment variable.
+    /// A local private key stored in the `EVM_PRIVATE_KEY` environment variable.
     #[serde(rename = "private-key")]
     PrivateKey,
 }
@@ -186,14 +187,34 @@ impl SignerType {
     ///
     /// Currently only supports [`SignerType::PrivateKey`] variant, based on the following environment variables:
     /// - `SIGNER_TYPE` — currently only `"private-key"` is supported
-    /// - `PRIVATE_KEY` — the private key used to sign transactions
+    /// - `EVM_PRIVATE_KEY` — comma-separated list of private keys used to sign transactions
     pub fn make_evm_wallet(&self) -> Result<EthereumWallet, Box<dyn std::error::Error>> {
         match self {
             SignerType::PrivateKey => {
-                let private_key = env::var(ENV_EVM_PRIVATE_KEY)
+                let raw_keys = env::var(ENV_EVM_PRIVATE_KEY)
                     .map_err(|_| format!("env {ENV_EVM_PRIVATE_KEY} not set"))?;
-                let pk_signer: PrivateKeySigner = private_key.parse()?;
-                Ok(EthereumWallet::new(pk_signer))
+                let signers = raw_keys
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|entry| !entry.is_empty())
+                    .map(PrivateKeySigner::from_str)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|err| -> Box<dyn std::error::Error> { Box::new(err) })?;
+                if signers.is_empty() {
+                    return Err("env EVM_PRIVATE_KEY did not contain any private keys".into());
+                }
+
+                let mut iter = signers.into_iter();
+                let first_signer = iter
+                    .next()
+                    .expect("iterator contains at least one element by construction");
+                let mut wallet = EthereumWallet::from(first_signer);
+
+                for signer in iter {
+                    wallet.register_signer(signer);
+                }
+
+                Ok(wallet)
             }
         }
     }
@@ -202,10 +223,83 @@ impl SignerType {
         match self {
             SignerType::PrivateKey => {
                 let private_key = env::var(ENV_SOLANA_PRIVATE_KEY)
-                    .map_err(|_| format!("env {ENV_EVM_PRIVATE_KEY} not set"))?;
+                    .map_err(|_| format!("env {ENV_SOLANA_PRIVATE_KEY} not set"))?;
                 let keypair = Keypair::from_base58_string(private_key.as_str());
                 Ok(keypair)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::network::{Ethereum as AlloyEthereum, NetworkWallet};
+    use alloy::signers::local::PrivateKeySigner;
+    use std::str::FromStr;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvOverride {
+        key: &'static str,
+        original: Option<String>,
+    }
+
+    impl EnvOverride {
+        fn new(key: &'static str) -> Self {
+            Self {
+                key,
+                original: env::var(key).ok(),
+            }
+        }
+
+        fn set(&self, value: &str) {
+            unsafe { env::set_var(self.key, value) };
+        }
+    }
+
+    impl Drop for EnvOverride {
+        fn drop(&mut self) {
+            match &self.original {
+                Some(value) => unsafe { env::set_var(self.key, value) },
+                None => unsafe { env::remove_var(self.key) },
+            }
+        }
+    }
+
+    #[test]
+    fn make_evm_wallet_supports_multiple_private_keys() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        let signer_type_override = EnvOverride::new(ENV_SIGNER_TYPE);
+        let evm_keys_override = EnvOverride::new(ENV_EVM_PRIVATE_KEY);
+
+        const KEY_1: &str = "0xcafe000000000000000000000000000000000000000000000000000000000001";
+        const KEY_2: &str = "0xcafe000000000000000000000000000000000000000000000000000000000002";
+
+        signer_type_override.set("private-key");
+        evm_keys_override.set(&format!("{KEY_1},{KEY_2}"));
+
+        let signer_type = SignerType::from_env().expect("SIGNER_TYPE");
+        let wallet = signer_type
+            .make_evm_wallet()
+            .expect("wallet constructed from env");
+
+        let expected_primary = PrivateKeySigner::from_str(KEY_1)
+            .expect("key1 parses")
+            .address();
+        let expected_secondary = PrivateKeySigner::from_str(KEY_2)
+            .expect("key2 parses")
+            .address();
+
+        assert_eq!(
+            NetworkWallet::<AlloyEthereum>::default_signer_address(&wallet),
+            expected_primary
+        );
+
+        let signers: Vec<_> = NetworkWallet::<AlloyEthereum>::signer_addresses(&wallet).collect();
+        assert_eq!(signers.len(), 2);
+        assert!(signers.contains(&expected_primary));
+        assert!(signers.contains(&expected_secondary));
     }
 }
