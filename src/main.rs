@@ -20,27 +20,26 @@
 //! - `HOST`, `PORT` control binding address
 //! - `OTEL_*` variables enable tracing to systems like Honeycomb
 
+use axum::Router;
 use axum::http::Method;
-use axum::routing::post;
-use axum::{Router, routing::get};
 use dotenvy::dotenv;
-use opentelemetry::trace::Status;
-use std::env;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tower_http::cors;
-use tower_http::trace::TraceLayer;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::facilitator_local::FacilitatorLocal;
 use crate::provider_cache::ProviderCache;
+use crate::sig_down::SigDown;
 use crate::telemetry::Telemetry;
 
 mod chain;
 mod facilitator;
 mod facilitator_local;
+mod from_env;
 mod handlers;
 mod network;
 mod provider_cache;
+mod sig_down;
 mod telemetry;
 mod timestamp;
 mod types;
@@ -54,76 +53,30 @@ mod types;
 ///
 /// Binds to the address specified by the `HOST` and `PORT` env vars.
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load .env variables
     dotenv().ok();
 
-    let _telemetry = Telemetry::new()
+    let telemetry = Telemetry::new()
         .with_name(env!("CARGO_PKG_NAME"))
         .with_version(env!("CARGO_PKG_VERSION"))
         .register();
 
     let provider_cache = ProviderCache::from_env().await;
-    // Abort if we can't initialize Ethereum providers early
-    if let Err(e) = provider_cache {
-        tracing::error!("Failed to create Ethereum providers: {}", e);
-        std::process::exit(1);
-    }
-    let facilitator = FacilitatorLocal::new(provider_cache.unwrap());
+    // Abort if we can't initialise Ethereum providers early
+    let provider_cache = match provider_cache {
+        Ok(provider_cache) => provider_cache,
+        Err(e) => {
+            tracing::error!("Failed to create Ethereum providers: {}", e);
+            std::process::exit(1);
+        }
+    };
+    let facilitator = FacilitatorLocal::new(provider_cache);
+    let axum_state = Arc::new(facilitator);
 
-    let app = Router::new()
-        .route("/", get(|| async { "Hello, World!" })) // Liveness or sanity check route
-        .route("/verify", get(handlers::get_verify_info))
-        .route("/verify", post(handlers::post_verify))
-        .route("/settle", get(handlers::get_settle_info))
-        .route("/settle", post(handlers::post_settle))
-        .route("/supported", get(handlers::get_supported))
-        .route("/health", get(handlers::get_health))
-        .with_state(facilitator)
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(|request: &axum::http::Request<_>| {
-                    tracing::info_span!(
-                        "http_request",
-                        otel.kind = "server",
-                        otel.name = %format!("{} {}", request.method(), request.uri()),
-                        method = %request.method(),
-                        uri = %request.uri(),
-                        version = ?request.version(),
-                    )
-                })
-                .on_response(
-                    |response: &axum::http::Response<_>,
-                     latency: std::time::Duration,
-                     span: &tracing::Span| {
-                        span.record("status", tracing::field::display(response.status()));
-                        span.record("latency", tracing::field::display(latency.as_millis()));
-                        span.record(
-                            "http.status_code",
-                            tracing::field::display(response.status().as_u16()),
-                        );
-
-                        // OpenTelemetry span status
-                        if response.status().is_success() {
-                            span.set_status(Status::Ok);
-                        } else {
-                            span.set_status(Status::error(
-                                response
-                                    .status()
-                                    .canonical_reason()
-                                    .unwrap_or("unknown")
-                                    .to_string(),
-                            ));
-                        }
-
-                        tracing::info!(
-                            "status={} elapsed={}ms",
-                            response.status().as_u16(),
-                            latency.as_millis()
-                        );
-                    },
-                ),
-        )
+    let http_endpoints = Router::new()
+        .merge(handlers::routes().with_state(axum_state))
+        .layer(telemetry.http_tracing())
         .layer(
             cors::CorsLayer::new()
                 .allow_origin(cors::Any)
@@ -131,24 +84,28 @@ async fn main() {
                 .allow_headers(cors::Any),
         );
 
-    let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
-    let port = env::var("PORT")
+    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port = std::env::var("PORT")
         .ok()
         .and_then(|s| s.parse::<u16>().ok())
         .unwrap_or(8080);
 
-    let addr = SocketAddr::from((host.parse::<std::net::IpAddr>().unwrap(), port));
+    let addr = SocketAddr::new(host.parse().expect("HOST must be a valid IP address"), port);
     tracing::info!("Starting server at http://{}", addr);
 
-    let listener = match tokio::net::TcpListener::bind(addr).await {
-        Ok(listener) => listener,
-        Err(e) => {
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .unwrap_or_else(|e| {
             tracing::error!("Failed to bind to {}: {}", addr, e);
             std::process::exit(1);
-        }
-    };
+        });
 
-    if let Err(e) = axum::serve(listener, app).await {
-        tracing::error!("Server error: {}", e);
-    }
+    let sig_down = SigDown::try_new()?;
+    let axum_cancellation_token = sig_down.cancellation_token();
+    let axum_graceful_shutdown = async move { axum_cancellation_token.cancelled().await };
+    axum::serve(listener, http_endpoints)
+        .with_graceful_shutdown(axum_graceful_shutdown)
+        .await?;
+
+    Ok(())
 }

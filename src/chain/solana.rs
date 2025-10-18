@@ -1,11 +1,13 @@
-use crate::chain::{FacilitatorLocalError, NetworkProviderOps};
+use crate::chain::{FacilitatorLocalError, FromEnvByNetworkBuild, NetworkProviderOps};
 use crate::facilitator::Facilitator;
+use crate::from_env;
 use crate::network::Network;
 use crate::types::{
     Base64Bytes, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, PaymentRequirements,
     SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
     SupportedPaymentKindsResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse,
 };
+use crate::types::{Scheme, X402Version};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
 use solana_commitment_config::CommitmentConfig;
@@ -14,12 +16,11 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::signer::Signer;
 use solana_sdk::transaction::VersionedTransaction;
+use std::fmt::{Debug, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing_core::Level;
-
-use crate::types::{Scheme, X402Version};
 
 #[derive(Clone, Debug)]
 pub struct SolanaChain {
@@ -92,14 +93,28 @@ pub struct SolanaProvider {
     rpc_client: Arc<RpcClient>,
 }
 
+impl Debug for SolanaProvider {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SolanaProvider")
+            .field("pubkey", &self.keypair.pubkey())
+            .field("chain", &self.chain)
+            .field("rpc_url", &self.rpc_client.url())
+            .finish()
+    }
+}
+
 impl SolanaProvider {
     pub fn try_new(
         keypair: Keypair,
-        url: String,
+        rpc_url: String,
         network: Network,
     ) -> Result<Self, FacilitatorLocalError> {
         let chain = SolanaChain::try_from(network)?;
-        let rpc_client = RpcClient::new(url);
+        {
+            let signer_addresses = vec![keypair.pubkey()];
+            tracing::info!(network=%network, rpc=rpc_url, signers=?signer_addresses, "Initialized provider");
+        }
+        let rpc_client = RpcClient::new(rpc_url);
         Ok(Self {
             keypair: Arc::new(keypair),
             chain,
@@ -424,6 +439,27 @@ impl SolanaProvider {
         let payer: SolanaAddress = transfer_instruction.authority.into();
         Ok(VerifyTransferResult { payer, transaction })
     }
+
+    pub fn fee_payer(&self) -> MixedAddress {
+        let pubkey = self.keypair.pubkey();
+        MixedAddress::Solana(pubkey)
+    }
+}
+
+impl FromEnvByNetworkBuild for SolanaProvider {
+    async fn from_env(network: Network) -> Result<Option<Self>, Box<dyn std::error::Error>> {
+        let env_var = from_env::rpc_env_name_from_network(network);
+        let rpc_url = match std::env::var(env_var).ok() {
+            Some(rpc_url) => rpc_url,
+            None => {
+                tracing::warn!(network=%network, "no RPC URL configured, skipping");
+                return Ok(None);
+            }
+        };
+        let keypair = from_env::SignerType::from_env()?.make_solana_wallet()?;
+        let provider = SolanaProvider::try_new(keypair, rpc_url, network)?;
+        Ok(Some(provider))
+    }
 }
 
 pub struct VerifyTransferResult {
@@ -445,8 +481,7 @@ pub struct TransferCheckedInstruction {
 
 impl NetworkProviderOps for SolanaProvider {
     fn signer_address(&self) -> MixedAddress {
-        let pubkey = self.keypair.pubkey();
-        MixedAddress::Solana(pubkey)
+        self.fee_payer()
     }
 
     fn network(&self) -> Network {

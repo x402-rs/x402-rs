@@ -9,19 +9,13 @@
 //! - Contract interaction using Alloy
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tracing::instrument;
 
-use crate::chain::{FacilitatorLocalError, NetworkProvider, NetworkProviderOps};
+use crate::chain::FacilitatorLocalError;
 use crate::facilitator::Facilitator;
-use crate::network::Network;
-use crate::provider_cache::ProviderCache;
 use crate::provider_cache::ProviderMap;
 use crate::types::{
-    MixedAddress, Scheme, SettleRequest, SettleResponse, SupportedPaymentKind,
-    SupportedPaymentKindExtra, SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
-    X402Version,
+    SettleRequest, SettleResponse, SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
 };
 
 /// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
@@ -29,61 +23,26 @@ use crate::types::{
 ///
 /// This type is generic over the [`ProviderMap`] implementation used to access EVM providers,
 /// which enables testing or customization beyond the default [`ProviderCache`].
-#[derive(Clone)]
-pub struct FacilitatorLocal {
-    pub provider_cache: Arc<ProviderCache>,
+pub struct FacilitatorLocal<A> {
+    provider_map: A,
 }
 
-impl FacilitatorLocal {
+impl<A> FacilitatorLocal<A> {
     /// Creates a new [`FacilitatorLocal`] with the given provider cache.
     ///
     /// The provider cache is used to resolve the appropriate EVM provider for each payment's target network.
-    pub fn new(provider_cache: ProviderCache) -> Self {
-        FacilitatorLocal {
-            provider_cache: Arc::new(provider_cache),
-        }
-    }
-
-    pub fn kinds(&self) -> Vec<SupportedPaymentKind> {
-        self.provider_cache
-            .into_iter()
-            .map(|(network, provider)| match provider {
-                NetworkProvider::Evm(_) => SupportedPaymentKind {
-                    x402_version: X402Version::V1,
-                    scheme: Scheme::Exact,
-                    network: network.to_string(),
-                    extra: None,
-                },
-                NetworkProvider::Solana(provider) => SupportedPaymentKind {
-                    x402_version: X402Version::V1,
-                    scheme: Scheme::Exact,
-                    network: network.to_string(),
-                    extra: Some(SupportedPaymentKindExtra {
-                        fee_payer: provider.signer_address(),
-                    }),
-                },
-            })
-            .collect()
-    }
-
-    pub fn health(&self) -> Vec<HealthStatus> {
-        self.provider_cache
-            .into_iter()
-            .map(|(network, provider)| match provider {
-                NetworkProvider::Evm(_) => HealthStatus {
-                    network: *network,
-                    address: provider.signer_address(),
-                },
-                NetworkProvider::Solana(provider) => HealthStatus {
-                    network: *network,
-                    address: provider.signer_address(),
-                },
-            })
-            .collect()
+    pub fn new(provider_map: A) -> Self {
+        FacilitatorLocal { provider_map }
     }
 }
 
-impl Facilitator for FacilitatorLocal {
+impl<A, E> Facilitator for FacilitatorLocal<A>
+where
+    A: ProviderMap + Sync,
+    A::Value: Facilitator<Error = E>,
+    E: Send,
+    FacilitatorLocalError: From<E>,
+{
     type Error = FacilitatorLocalError;
 
     /// Verifies a proposed x402 payment payload against a passed [`PaymentRequirements`].
@@ -106,10 +65,11 @@ impl Facilitator for FacilitatorLocal {
     async fn verify(&self, request: &VerifyRequest) -> Result<VerifyResponse, Self::Error> {
         let network = request.network();
         let provider = self
-            .provider_cache
+            .provider_map
             .by_network(network)
             .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
-        provider.verify(request).await
+        let verify_response = provider.verify(request).await?;
+        Ok(verify_response)
     }
 
     /// Executes an x402 payment on-chain using ERC-3009 `transferWithAuthorization`.
@@ -127,21 +87,20 @@ impl Facilitator for FacilitatorLocal {
     async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
         let network = request.network();
         let provider = self
-            .provider_cache
+            .provider_map
             .by_network(network)
             .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
-        provider.settle(request).await
+        let settle_response = provider.settle(request).await?;
+        Ok(settle_response)
     }
 
     async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
-        let kinds = self.kinds();
+        let mut kinds = vec![];
+        for provider in self.provider_map.values() {
+            let supported = provider.supported().await.ok();
+            let mut supported_kinds = supported.map(|k| k.kinds).unwrap_or_default();
+            kinds.append(&mut supported_kinds);
+        }
         Ok(SupportedPaymentKindsResponse { kinds })
     }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HealthStatus {
-    pub network: Network,
-    pub address: MixedAddress,
 }

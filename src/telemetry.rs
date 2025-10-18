@@ -1,4 +1,6 @@
-use opentelemetry::{KeyValue, Value, global, trace::TracerProvider as _};
+use axum::http::{Request, Response};
+use opentelemetry::trace::{Status, TracerProvider};
+use opentelemetry::{KeyValue, Value, global};
 use opentelemetry_sdk::{
     Resource,
     metrics::{MeterProviderBuilder, PeriodicReader, SdkMeterProvider},
@@ -10,8 +12,11 @@ use opentelemetry_semantic_conventions::{
 };
 use serde::{Deserialize, Serialize};
 use std::env;
-use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use std::time::Duration;
+use tower_http::trace::{MakeSpan, OnResponse, TraceLayer};
+use tracing::Span;
+use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer, OpenTelemetrySpanExt};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Supported telemetry transport protocols for exporting OTLP data.
 ///
@@ -282,6 +287,7 @@ impl Telemetry {
             None => {
                 // Fallback: just use local logging
                 tracing_subscriber::registry()
+                    .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "trace".into()))
                     .with(tracing_subscriber::fmt::layer())
                     .init();
 
@@ -323,5 +329,69 @@ impl Drop for TelemetryProviders {
         {
             eprintln!("{err:?}");
         }
+    }
+}
+
+impl TelemetryProviders {
+    pub fn http_tracing(
+        &self,
+    ) -> TraceLayer<
+        tower_http::classify::SharedClassifier<tower_http::classify::ServerErrorsAsFailures>,
+        FacilitatorHttpMakeSpan,
+        tower_http::trace::DefaultOnRequest,
+        FacilitatorHttpOnResponse,
+    > {
+        TraceLayer::new_for_http()
+            .make_span_with(FacilitatorHttpMakeSpan)
+            .on_response(FacilitatorHttpOnResponse)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FacilitatorHttpMakeSpan;
+
+impl<A> MakeSpan<A> for FacilitatorHttpMakeSpan {
+    fn make_span(&mut self, request: &Request<A>) -> Span {
+        tracing::info_span!(
+            "http_request",
+            otel.kind = "server",
+            otel.name = %format!("{} {}", request.method(), request.uri()),
+            method = %request.method(),
+            uri = %request.uri(),
+            version = ?request.version(),
+        )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FacilitatorHttpOnResponse;
+
+impl<A> OnResponse<A> for FacilitatorHttpOnResponse {
+    fn on_response(self, response: &Response<A>, latency: Duration, span: &Span) {
+        span.record("status", tracing::field::display(response.status()));
+        span.record("latency", tracing::field::display(latency.as_millis()));
+        span.record(
+            "http.status_code",
+            tracing::field::display(response.status().as_u16()),
+        );
+
+        // OpenTelemetry span status
+        if response.status().is_success() {
+            span.set_status(Status::Ok);
+        } else {
+            span.set_status(Status::error(
+                response
+                    .status()
+                    .canonical_reason()
+                    .unwrap_or("unknown")
+                    .to_string(),
+            ));
+        }
+
+        tracing::info!(
+            "status={} elapsed={}ms",
+            response.status().as_u16(),
+            latency.as_millis()
+        );
     }
 }

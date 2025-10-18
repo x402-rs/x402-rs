@@ -3,11 +3,11 @@
 //! Implementors of this trait are responsible for validating incoming payment payloads
 //! against specified requirements [`Facilitator::verify`] and executing on-chain transfers [`Facilitator::settle`].
 
-use std::fmt::{Debug, Display};
-
 use crate::types::{
     SettleRequest, SettleResponse, SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
 };
+use std::fmt::{Debug, Display};
+use std::sync::Arc;
 
 /// Trait defining the asynchronous interface for x402 payment facilitators.
 ///
@@ -56,4 +56,28 @@ pub trait Facilitator {
     fn supported(
         &self,
     ) -> impl Future<Output = Result<SupportedPaymentKindsResponse, Self::Error>> + Send;
+}
+
+impl<T: Facilitator> Facilitator for Arc<T> {
+    type Error = T::Error;
+
+    fn verify(
+        &self,
+        request: &VerifyRequest,
+    ) -> impl Future<Output = Result<VerifyResponse, Self::Error>> + Send {
+        self.as_ref().verify(request)
+    }
+
+    fn settle(
+        &self,
+        request: &SettleRequest,
+    ) -> impl Future<Output = Result<SettleResponse, Self::Error>> + Send {
+        self.as_ref().settle(request)
+    }
+
+    fn supported(
+        &self,
+    ) -> impl Future<Output = Result<SupportedPaymentKindsResponse, Self::Error>> + Send {
+        self.as_ref().supported()
+    }
 }

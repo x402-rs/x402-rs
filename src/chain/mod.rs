@@ -3,7 +3,7 @@ use std::time::SystemTimeError;
 use crate::chain::evm::EvmProvider;
 use crate::chain::solana::SolanaProvider;
 use crate::facilitator::Facilitator;
-use crate::network::Network;
+use crate::network::{Network, NetworkFamily};
 use crate::types::{
     MixedAddress, Scheme, SettleRequest, SettleResponse, SupportedPaymentKindsResponse,
     VerifyRequest, VerifyResponse,
@@ -15,6 +15,29 @@ pub mod solana;
 pub enum NetworkProvider {
     Evm(EvmProvider),
     Solana(SolanaProvider),
+}
+
+pub trait FromEnvByNetworkBuild: Sized {
+    fn from_env(
+        network: Network,
+    ) -> impl Future<Output = Result<Option<Self>, Box<dyn std::error::Error>>> + Send;
+}
+
+impl FromEnvByNetworkBuild for NetworkProvider {
+    async fn from_env(network: Network) -> Result<Option<Self>, Box<dyn std::error::Error>> {
+        let family: NetworkFamily = network.into();
+        let provider = match family {
+            NetworkFamily::Evm => {
+                let provider = EvmProvider::from_env(network).await?;
+                provider.map(NetworkProvider::Evm)
+            }
+            NetworkFamily::Solana => {
+                let provider = SolanaProvider::from_env(network).await?;
+                provider.map(NetworkProvider::Solana)
+            }
+        };
+        Ok(provider)
+    }
 }
 
 pub trait NetworkProviderOps {
