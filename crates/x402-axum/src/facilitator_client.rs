@@ -173,6 +173,12 @@ impl FacilitatorClient {
         &self.settle_url
     }
 
+    /// Returns the computed `./supported` URL relative to [`FacilitatorClient::base_url`]
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn supported_url(&self) -> &Url {
+        &self.supported_url
+    }
+
     /// Returns any custom headers configured on the client.
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn headers(&self) -> &HeaderMap {
