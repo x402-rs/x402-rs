@@ -51,13 +51,13 @@ impl FacilitatorLocal {
                 NetworkProvider::Evm(_) => SupportedPaymentKind {
                     x402_version: X402Version::V1,
                     scheme: Scheme::Exact,
-                    network: *network,
+                    network: network.to_string(),
                     extra: None,
                 },
                 NetworkProvider::Solana(provider) => SupportedPaymentKind {
                     x402_version: X402Version::V1,
                     scheme: Scheme::Exact,
-                    network: *network,
+                    network: network.to_string(),
                     extra: Some(SupportedPaymentKindExtra {
                         fee_payer: provider.signer_address(),
                     }),

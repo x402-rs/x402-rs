@@ -1399,7 +1399,7 @@ impl Display for PaymentRequiredResponse {
 pub struct SupportedPaymentKind {
     pub x402_version: X402Version,
     pub scheme: Scheme,
-    pub network: Network,
+    pub network: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra: Option<SupportedPaymentKindExtra>,
 }
