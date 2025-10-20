@@ -687,7 +687,7 @@ impl Facilitator for EvmProvider {
     /// Report payment kinds supported by this provider on its current network.
     async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
         let kinds = vec![SupportedPaymentKind {
-            network: self.network(),
+            network: self.network().to_string(),
             x402_version: X402Version::V1,
             scheme: Scheme::Exact,
             extra: None,
