@@ -479,7 +479,7 @@ where
                         let extra = supported
                             .kinds
                             .iter()
-                            .find(|s| s.network == network)
+                            .find(|s| s.network == network.to_string())
                             .cloned()
                             .and_then(|s| s.extra);
                         if let Some(extra) = extra {
