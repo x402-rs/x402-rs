@@ -5,8 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
-x402-rs = { version = "0.7" }
-x402-axum = { version = "0.3", features = ["telemetry"] }
+x402-rs = { version = "0.8" }
+x402-axum = { version = "0.4", features = ["telemetry"] }
 
 axum = { version = "0.8.4" }
 tokio = { version = "1.45.0" }

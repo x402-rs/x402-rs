@@ -24,12 +24,12 @@ If no valid payment is provided, a `402 Payment Required` response is returned w
 Add to your `Cargo.toml`:
 
 ```toml
-x402-axum = "0.3"
+x402-axum = "0.4"
 ```
 
 If you want to enable tracing and OpenTelemetry support, use the telemetry feature (make sure to register a tracing subscriber in your application):
 ```toml
-x402-axum = { version = "0.3", features = ["telemetry"] }
+x402-axum = { version = "0.4", features = ["telemetry"] }
 ```
 
 ## Specifying Prices
@@ -204,7 +204,7 @@ To enable:
 
 ```toml
 [dependencies]
-x402-axum = { version = "0.3", features = ["telemetry"] }
+x402-axum = { version = "0.4", features = ["telemetry"] }
 ```
 
 ## Related Crates	

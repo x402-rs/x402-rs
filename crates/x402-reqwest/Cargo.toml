@@ -1,6 +1,6 @@
 [package]
 name = "x402-reqwest"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 description = "Wrapper for reqwest for transparent x402 payments"
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ categories = ["web-programming::http-client", "authentication", "cryptography", 
 readme = "README.md"
 
 [dependencies]
-x402-rs = { version = "0.7", default-features = false }
+x402-rs = { version = "0.8", default-features = false }
 reqwest = { version = "0.12.20" }
 http = { version = "1.3.1" }
 reqwest-middleware = { version = "0.4.2" }

@@ -1,6 +1,6 @@
 [package]
 name = "x402-rs"
-version = "0.7.9"
+version = "0.8.0"
 authors = ["Sergey Ukustov <sergey@ukstv.me>"]
 edition = "2024"
 license = "Apache-2.0"
@@ -26,8 +26,8 @@ alloy = { version = "1.0.7" }
 thiserror = { version = "2.0.12" }
 base64 = { version = "0.22.1" }
 rust_decimal = { version = "1.37.1" }
-async-trait = "0.1.88"
-dashmap = "6.1.0"
+async-trait = { version = "0.1.88" }
+dashmap = { version = "6.1.0" }
 
 # Solana
 solana-sdk = { version = "2.3.1", features = ["full"] }
