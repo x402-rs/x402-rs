@@ -104,10 +104,6 @@ impl Facilitator for FacilitatorClient {
         .await
     }
 
-    async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
-        FacilitatorClient::supported(self).await
-    }
-
     /// Attempts to settle a verified payment with the facilitator.
     /// Instruments a tracing span (only when telemetry feature is enabled).
     #[cfg(not(feature = "telemetry"))]
@@ -116,6 +112,10 @@ impl Facilitator for FacilitatorClient {
         request: &SettleRequest,
     ) -> Result<SettleResponse, FacilitatorClientError> {
         FacilitatorClient::settle(self, request).await
+    }
+
+    async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
+        FacilitatorClient::supported(self).await
     }
 }
 
