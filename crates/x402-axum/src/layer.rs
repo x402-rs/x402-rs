@@ -147,10 +147,6 @@ where
         }
     }
 
-    pub fn facilitator_url(&self) -> Url {
-        self.base_url()
-    }
-
     pub fn base_url(&self) -> Url {
         self.base_url
             .clone()
@@ -293,6 +289,12 @@ where
         };
         self.payment_offers = Arc::new(payment_offers);
         self
+    }
+}
+
+impl X402Middleware<FacilitatorClient> {
+    pub fn facilitator_url(&self) -> &Url {
+        self.facilitator.base_url()
     }
 }
 
