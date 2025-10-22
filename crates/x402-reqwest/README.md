@@ -29,13 +29,13 @@ Add the dependency:
 
 ```toml
 # Cargo.toml
-x402-reqwest = "0.3"
+x402-reqwest = "0.4"
 ```
 
 To enable tracing:
 
 ```toml
-x402-reqwest = { version = "0.3", features = ["telemetry"] }
+x402-reqwest = { version = "0.4", features = ["telemetry"] }
 ```
 
 ## 💡 Examples
@@ -81,7 +81,7 @@ See more examples on [docs.rs](https://docs.rs/x402-reqwest)
 
 Enable it via:
 ```toml
-x402-reqwest = { version = "0.3", features = ["telemetry"] }
+x402-reqwest = { version = "0.4", features = ["telemetry"] }
 ```
 
 ## Related Crates

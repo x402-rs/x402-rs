@@ -8904,7 +8904,7 @@ dependencies = [
 
 [[package]]
 name = "x402-axum"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "axum",
  "axum-core",
@@ -8938,7 +8938,7 @@ dependencies = [
 
 [[package]]
 name = "x402-reqwest"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "alloy",
  "async-trait",
@@ -8978,7 +8978,7 @@ dependencies = [
 
 [[package]]
 name = "x402-rs"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "alloy",
  "async-trait",
