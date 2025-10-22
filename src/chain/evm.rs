@@ -93,7 +93,7 @@ pub type InnerProvider = FillProvider<
 /// Chain descriptor used by the EVM provider.
 ///
 /// Wraps a `Network` enum and the concrete `chain_id` used for EIP-155 and EIP-712.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct EvmChain {
     /// x402 network name (Base, Avalanche, etc.).
     pub network: Network,
@@ -872,7 +872,7 @@ async fn assert_valid_payment<P: Provider>(
         .map_err(|e| FacilitatorLocalError::InvalidAddress(format!("{e:?}")))?;
     let contract = USDC::new(asset_address, provider);
 
-    let domain = assert_domain(&chain, &contract, payload, &asset_address, requirements).await?;
+    let domain = assert_domain(chain, &contract, payload, &asset_address, requirements).await?;
 
     let amount_required = requirements.max_amount_required.0;
     assert_enough_balance(
@@ -885,7 +885,7 @@ async fn assert_valid_payment<P: Provider>(
     assert_enough_value(&payer, &value, &amount_required)?;
 
     let payment = ExactEvmPayment {
-        chain: chain.clone(),
+        chain: *chain,
         from: payment_payload.authorization.from,
         to: payment_payload.authorization.to,
         value: payment_payload.authorization.value,
