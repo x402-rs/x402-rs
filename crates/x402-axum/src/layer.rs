@@ -130,10 +130,7 @@ impl TryFrom<String> for X402Middleware<FacilitatorClient> {
     }
 }
 
-impl<F> X402Middleware<F>
-where
-    F: Clone,
-{
+impl<F> X402Middleware<F> {
     pub fn new(facilitator: F) -> Self {
         Self {
             facilitator: Arc::new(facilitator),
@@ -152,7 +149,12 @@ where
             .clone()
             .unwrap_or(Url::parse("http://localhost/").unwrap())
     }
+}
 
+impl<F> X402Middleware<F>
+where
+    F: Clone,
+{
     /// Sets the description field on all generated payment requirements.
     pub fn with_description(&self, description: &str) -> Self {
         let mut this = self.clone();
