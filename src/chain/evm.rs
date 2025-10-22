@@ -76,6 +76,7 @@ sol! {
 const VALIDATOR_ADDRESS: alloy::primitives::Address =
     address!("0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B");
 
+/// Combined filler type for gas, blob gas, nonce, and chain ID.
 type InnerFiller = JoinFill<
     GasFiller,
     JoinFill<BlobGasFiller, JoinFill<NonceFiller<PendingNonceManager>, ChainIdFiller>>,
@@ -107,6 +108,7 @@ impl EvmChain {
         Self { network, chain_id }
     }
 
+    /// Returns the x402 network.
     pub fn network(&self) -> Network {
         self.network
     }
@@ -163,10 +165,15 @@ pub struct ExactEvmPayment {
 /// an `eip1559` toggle for gas pricing strategy, and the `EvmChain` context.
 #[derive(Debug)]
 pub struct EvmProvider {
+    /// Composed Alloy provider with all fillers.
     inner: InnerProvider,
+    /// Whether network supports EIP-1559 gas pricing.
     eip1559: bool,
+    /// Chain descriptor (network + chain ID).
     chain: EvmChain,
+    /// Available signer addresses for round-robin selection.
     signer_addresses: Arc<Vec<Address>>,
+    /// Current position in round-robin signer rotation.
     signer_cursor: Arc<AtomicUsize>,
 }
 
@@ -207,6 +214,7 @@ impl EvmProvider {
         })
     }
 
+    /// Round-robin selection of next signer from wallet.
     fn next_signer_address(&self) -> Address {
         debug_assert!(!self.signer_addresses.is_empty());
         if self.signer_addresses.len() == 1 {
@@ -221,12 +229,17 @@ impl EvmProvider {
 
 /// Trait for sending meta-transactions with custom target and calldata.
 pub trait MetaEvmProvider {
+    /// Error type for operations.
     type Error;
+    /// Underlying provider type.
     type Inner: Provider;
 
+    /// Returns reference to underlying provider.
     fn inner(&self) -> &Self::Inner;
+    /// Returns reference to chain descriptor.
     fn chain(&self) -> &EvmChain;
 
+    /// Sends a meta-transaction to the network.
     fn send_transaction(
         &self,
         tx: MetaTransaction,
