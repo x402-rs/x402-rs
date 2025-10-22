@@ -131,6 +131,7 @@ impl TryFrom<String> for X402Middleware<FacilitatorClient> {
 }
 
 impl<F> X402Middleware<F> {
+    /// Creates a new middleware instance with a default configuration.
     pub fn new(facilitator: F) -> Self {
         Self {
             facilitator: Arc::new(facilitator),
@@ -144,6 +145,7 @@ impl<F> X402Middleware<F> {
         }
     }
 
+    /// Returns the configured base URL for x402-protected resources, or `http://localhost/` if not set.
     pub fn base_url(&self) -> Url {
         self.base_url
             .clone()
