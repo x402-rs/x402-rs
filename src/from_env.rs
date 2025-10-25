@@ -13,6 +13,8 @@ pub const ENV_SOLANA_PRIVATE_KEY: &str = "SOLANA_PRIVATE_KEY";
 
 pub const ENV_RPC_BASE: &str = "RPC_URL_BASE";
 pub const ENV_RPC_BASE_SEPOLIA: &str = "RPC_URL_BASE_SEPOLIA";
+pub const ENV_RPC_BSC_TESTNET: &str = "RPC_URL_BSC_TESTNET";
+pub const ENV_RPC_BSC: &str = "RPC_URL_BSC";
 pub const ENV_RPC_XDC: &str = "RPC_URL_XDC";
 pub const ENV_RPC_AVALANCHE_FUJI: &str = "RPC_URL_AVALANCHE_FUJI";
 pub const ENV_RPC_AVALANCHE: &str = "RPC_URL_AVALANCHE";
@@ -27,6 +29,8 @@ pub fn rpc_env_name_from_network(network: Network) -> &'static str {
     match network {
         Network::BaseSepolia => ENV_RPC_BASE_SEPOLIA,
         Network::Base => ENV_RPC_BASE,
+        Network::BscTestnet => ENV_RPC_BSC_TESTNET,
+        Network::Bsc => ENV_RPC_BSC,
         Network::XdcMainnet => ENV_RPC_XDC,
         Network::AvalancheFuji => ENV_RPC_AVALANCHE_FUJI,
         Network::Avalanche => ENV_RPC_AVALANCHE,

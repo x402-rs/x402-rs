@@ -125,6 +125,8 @@ impl TryFrom<Network> for EvmChain {
         match value {
             Network::BaseSepolia => Ok(EvmChain::new(value, 84532)),
             Network::Base => Ok(EvmChain::new(value, 8453)),
+            Network::BscTestnet => Ok(EvmChain::new(value, 97)),
+            Network::Bsc => Ok(EvmChain::new(value, 56)),
             Network::XdcMainnet => Ok(EvmChain::new(value, 50)),
             Network::AvalancheFuji => Ok(EvmChain::new(value, 43113)),
             Network::Avalanche => Ok(EvmChain::new(value, 43114)),
@@ -349,6 +351,8 @@ impl FromEnvByNetworkBuild for EvmProvider {
         let is_eip1559 = match network {
             Network::BaseSepolia => true,
             Network::Base => true,
+            Network::BscTestnet => false,
+            Network::Bsc => false,
             Network::XdcMainnet => false,
             Network::AvalancheFuji => true,
             Network::Avalanche => true,

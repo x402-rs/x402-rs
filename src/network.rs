@@ -24,6 +24,12 @@ pub enum Network {
     /// Base mainnet (chain ID 8453).
     #[serde(rename = "base")]
     Base,
+    /// Bsc testnet (chain ID 97).
+    #[serde(rename = "bsc-testnet")]
+    BscTestnet,
+    /// Bsc mainnet (chain ID 56).
+    #[serde(rename = "bsc")]
+    Bsc,
     /// XDC mainnet (chain ID 50).
     #[serde(rename = "xdc")]
     XdcMainnet,
@@ -58,6 +64,8 @@ impl Display for Network {
         match self {
             Network::BaseSepolia => write!(f, "base-sepolia"),
             Network::Base => write!(f, "base"),
+            Network::BscTestnet => write!(f, "bsc-testnet"),
+            Network::Bsc => write!(f, "bsc"),
             Network::XdcMainnet => write!(f, "xdc"),
             Network::AvalancheFuji => write!(f, "avalanche-fuji"),
             Network::Avalanche => write!(f, "avalanche"),
@@ -82,6 +90,8 @@ impl From<Network> for NetworkFamily {
         match value {
             Network::BaseSepolia => NetworkFamily::Evm,
             Network::Base => NetworkFamily::Evm,
+            Network::BscTestnet => NetworkFamily::Evm,
+            Network::Bsc => NetworkFamily::Evm,
             Network::XdcMainnet => NetworkFamily::Evm,
             Network::AvalancheFuji => NetworkFamily::Evm,
             Network::Avalanche => NetworkFamily::Evm,
@@ -101,6 +111,8 @@ impl Network {
         &[
             Network::BaseSepolia,
             Network::Base,
+             Network::BscTestnet,
+            Network::Bsc,
             Network::XdcMainnet,
             Network::AvalancheFuji,
             Network::Avalanche,
@@ -137,6 +149,37 @@ static USDC_BASE: Lazy<USDCDeployment> = Lazy::new(|| {
             network: Network::Base,
         },
         decimals: 6,
+        eip712: Some(TokenDeploymentEip712 {
+            name: "USD Coin".into(),
+            version: "2".into(),
+        }),
+    })
+});
+
+
+/// Lazily initialized known USDC deployment on BSC Testnet as [`USDCDeployment`].
+static USDC_BSC_TESTNET: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0xb48249ef5b895d6e7ad398186df2b0c3cec2bf94").into(),
+            network: Network::BscTestnet,
+        },
+        decimals: 18,
+        eip712: Some(TokenDeploymentEip712 {
+            name: "USDC".into(),
+            version: "2".into(),
+        }),
+    })
+});
+
+/// Lazily initialized known USDC deployment on Bsc mainnet as [`USDCDeployment`].
+static USDC_BSC: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d").into(),
+            network: Network::Bsc,
+        },
+        decimals: 18,
         eip712: Some(TokenDeploymentEip712 {
             name: "USD Coin".into(),
             version: "2".into(),
@@ -313,6 +356,8 @@ impl USDCDeployment {
         match network.borrow() {
             Network::BaseSepolia => &USDC_BASE_SEPOLIA,
             Network::Base => &USDC_BASE,
+            Network::BscTestnet => &USDC_BSC_TESTNET,
+            Network::Bsc => &USDC_BSC,
             Network::XdcMainnet => &USDC_XDC,
             Network::AvalancheFuji => &USDC_AVALANCHE_FUJI,
             Network::Avalanche => &USDC_AVALANCHE,
