@@ -16,6 +16,7 @@ pub const ENV_RPC_BASE_SEPOLIA: &str = "RPC_URL_BASE_SEPOLIA";
 pub const ENV_RPC_XDC: &str = "RPC_URL_XDC";
 pub const ENV_RPC_AVALANCHE_FUJI: &str = "RPC_URL_AVALANCHE_FUJI";
 pub const ENV_RPC_AVALANCHE: &str = "RPC_URL_AVALANCHE";
+pub const ENV_RPC_XRPL_EVM: &str = "RPC_URL_XRPL_EVM";
 pub const ENV_RPC_SOLANA: &str = "RPC_URL_SOLANA";
 pub const ENV_RPC_SOLANA_DEVNET: &str = "RPC_URL_SOLANA_DEVNET";
 pub const ENV_RPC_POLYGON_AMOY: &str = "RPC_URL_POLYGON_AMOY";
@@ -30,6 +31,7 @@ pub fn rpc_env_name_from_network(network: Network) -> &'static str {
         Network::XdcMainnet => ENV_RPC_XDC,
         Network::AvalancheFuji => ENV_RPC_AVALANCHE_FUJI,
         Network::Avalanche => ENV_RPC_AVALANCHE,
+        Network::XrplEvm => ENV_RPC_XRPL_EVM,
         Network::Solana => ENV_RPC_SOLANA,
         Network::SolanaDevnet => ENV_RPC_SOLANA_DEVNET,
         Network::PolygonAmoy => ENV_RPC_POLYGON_AMOY,
