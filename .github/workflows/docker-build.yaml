@@ -8,7 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  DOCKER_REPO: berachain
 
 jobs:
   build-and-push:
@@ -33,16 +32,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Derive image tags
+      - name: Extract Docker metadata
         id: meta
-        run: |
-          TAG_LATEST=$(git describe --tags --abbrev=0)
-          echo "TAG_LATEST=$TAG_LATEST" >> "$GITHUB_OUTPUT"
+        uses: docker/metadata-action@v5.8.0
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/x402-rs
 
-      - name: Build and push Docker images
-        env:
-          TAG: ${{ steps.meta.outputs.tag_latest }}
-        run: |
-          docker build -t ${{env.REGISTRY}}/${{env.DOCKER_REPO}}/x402-rs:${{env.TAG}} .
-          docker push -t ${{env.REGISTRY}}/${{env.DOCKER_REPO}}/x402-rs:${{env.TAG}}
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tag_latest }}
+          labels: ${{ steps.meta.outputs.labels }}
 
