@@ -1,0 +1,47 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+env:
+  REGISTRY: ghcr.io
+  DOCKER_REPO: berachain
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # change to `write` to allow the workflow to publish releeases
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image tags
+        id: meta
+        run: |
+          TAG_LATEST="git describe --tags --abbrev=0"
+
+          echo "TAG_LATEST=$TAG_LATEST" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Docker images
+        env:
+          TAG: ${{ steps.meta.outputs.tag_latest }}
+        run: |
+          docker build -t ${{env.REGISTRY}}/${{env.DOCKER_REPO}}/x402-rs:${{env.TAG}} .
+          docker push -t ${{env.REGISTRY}}/${{env.DOCKER_REPO}}/x402-rs:${{env.TAG}}
+

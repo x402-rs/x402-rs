@@ -3,3 +3,5 @@
 .env
 crates/*/target/
 examples/*/.env
+env.example
+.env
