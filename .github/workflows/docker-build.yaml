@@ -35,7 +35,6 @@ jobs:
         id: meta
         run: |
           TAG_LATEST=$(git describe --tags --abbrev=0)
-
           echo "TAG_LATEST=$TAG_LATEST" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker images
