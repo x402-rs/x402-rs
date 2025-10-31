@@ -34,7 +34,7 @@ jobs:
       - name: Derive image tags
         id: meta
         run: |
-          TAG_LATEST="git describe --tags --abbrev=0"
+          TAG_LATEST=$(git describe --tags --abbrev=0)
 
           echo "TAG_LATEST=$TAG_LATEST" >> "$GITHUB_OUTPUT"
 
