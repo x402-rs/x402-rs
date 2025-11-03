@@ -11,6 +11,7 @@ x402-axum = { version = "0.5", features = ["telemetry"] }
 axum = { version = "0.8.4" }
 tokio = { version = "1.45.0" }
 dotenvy = { version = "0.15.7" }
+serde_json = { version = "1.0" }
 
 # Tracing and OpenTelemetry
 tracing = { version = "0.1.41" }

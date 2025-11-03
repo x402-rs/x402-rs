@@ -8927,6 +8927,7 @@ dependencies = [
  "axum",
  "dotenvy",
  "opentelemetry",
+ "serde_json",
  "tokio",
  "tower-http",
  "tracing",

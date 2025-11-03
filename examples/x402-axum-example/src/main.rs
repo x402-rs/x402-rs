@@ -4,6 +4,7 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use dotenvy::dotenv;
 use opentelemetry::trace::Status;
+use serde_json::json;
 use std::env;
 use tower_http::trace::TraceLayer;
 use tracing::instrument;
@@ -37,10 +38,74 @@ async fn main() {
         .route(
             "/protected-route",
             get(my_handler).layer(
-                x402.with_description("Premium API")
+                x402.with_description("Premium API - Discoverable")
                     .with_mime_type("application/json")
+                    .with_input_schema(serde_json::json!({
+                        "type": "http",
+                        "method": "GET",
+                        "discoverable": true,
+                        "description": "Access premium content"
+                    }))
+                    .with_output_schema(serde_json::json!({
+                        "type": "string",
+                        "description": "VIP content response"
+                    }))
                     .with_price_tag(usdc_solana.amount(0.0025).unwrap())
                     .or_price_tag(usdc_base_sepolia.amount(0.0025).unwrap()),
+            ),
+        )
+        .route(
+            "/api/weather",
+            get(weather_handler).layer(
+                x402.with_description("Weather API - Public endpoint with query params")
+                    .with_mime_type("application/json")
+                    .with_input_schema(serde_json::json!({
+                        "type": "http",
+                        "method": "GET",
+                        "discoverable": true,
+                        "queryParams": {
+                            "location": {
+                                "type": "string",
+                                "description": "City name or coordinates",
+                                "required": true
+                            },
+                            "units": {
+                                "type": "string",
+                                "enum": ["metric", "imperial"],
+                                "default": "metric"
+                            }
+                        }
+                    }))
+                    .with_output_schema(serde_json::json!({
+                        "type": "object",
+                        "properties": {
+                            "temperature": { "type": "number", "description": "Current temperature" },
+                            "conditions": { "type": "string", "description": "Weather conditions" },
+                            "humidity": { "type": "number", "description": "Humidity percentage" }
+                        },
+                        "required": ["temperature", "conditions"]
+                    }))
+                    .with_price_tag(usdc_base_sepolia.amount(0.001).unwrap()),
+            ),
+        )
+        .route(
+            "/api/internal",
+            get(internal_handler).layer(
+                x402.with_description("Internal API - Private endpoint")
+                    .with_mime_type("application/json")
+                    .with_input_schema(serde_json::json!({
+                        "type": "http",
+                        "method": "GET",
+                        "discoverable": false,
+                        "description": "Internal admin functions - direct access only"
+                    }))
+                    .with_output_schema(serde_json::json!({
+                        "type": "object",
+                        "properties": {
+                            "status": { "type": "string" }
+                        }
+                    }))
+                    .with_price_tag(usdc_base_sepolia.amount(1.00).unwrap()),
             ),
         )
         .layer(
@@ -103,4 +168,26 @@ async fn main() {
 #[instrument(skip_all)]
 async fn my_handler() -> impl IntoResponse {
     (StatusCode::OK, "This is a VIP content!")
+}
+
+#[instrument(skip_all)]
+async fn weather_handler() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        axum::Json(json!({
+            "temperature": 72,
+            "conditions": "sunny",
+            "humidity": 45
+        })),
+    )
+}
+
+#[instrument(skip_all)]
+async fn internal_handler() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        axum::Json(json!({
+            "status": "admin_access_granted"
+        })),
+    )
 }

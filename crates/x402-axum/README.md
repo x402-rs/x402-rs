@@ -191,6 +191,98 @@ If no valid payment is included, the middleware responds with:
 }
 ```
 
+## Configuring Input and Output Schemas
+
+You can provide detailed metadata about your API endpoints using `with_input_schema()` and `with_output_schema()`. These schemas are embedded in the `PaymentRequirements.outputSchema` field and can be used by discovery services, documentation generators, or clients to understand your API.
+
+### Input Schema
+
+The input schema describes the expected request format, including HTTP method, query parameters, headers, and whether the endpoint is publicly discoverable:
+
+```rust
+use serde_json::json;
+
+let x402 = X402Middleware::try_from("https://x402.org/facilitator/").unwrap();
+
+let app = Router::new().route(
+    "/api/weather",
+    get(handler).layer(
+        x402.with_description("Weather API")
+            .with_input_schema(json!({
+                "type": "http",
+                "method": "GET",
+                "discoverable": true,  // Endpoint appears in discovery services
+                "queryParams": {
+                    "location": {
+                        "type": "string",
+                        "description": "City name or coordinates",
+                        "required": true
+                    },
+                    "units": {
+                        "type": "string",
+                        "enum": ["metric", "imperial"],
+                        "default": "metric"
+                    }
+                }
+            }))
+            .with_price_tag(usdc.amount("0.001").unwrap())
+    ),
+);
+```
+
+### Output Schema
+
+The output schema describes the response format:
+
+```rust
+let app = Router::new().route(
+    "/api/weather",
+    get(handler).layer(
+        x402.with_output_schema(json!({
+            "type": "object",
+            "properties": {
+                "temperature": { "type": "number", "description": "Current temperature" },
+                "conditions": { "type": "string", "description": "Weather conditions" },
+                "humidity": { "type": "number", "description": "Humidity percentage" }
+            },
+            "required": ["temperature", "conditions"]
+        }))
+        .with_price_tag(usdc.amount("0.001").unwrap())
+    ),
+);
+```
+
+### Discoverable vs Private Endpoints
+
+You can control whether your endpoint appears in public discovery services by setting the `discoverable` flag:
+
+```rust
+// Public endpoint - will appear in x402 Bazaar
+x402.with_input_schema(json!({
+    "type": "http",
+    "method": "GET",
+    "discoverable": true,
+    "description": "Public weather API"
+}))
+
+// Private endpoint - direct access only
+x402.with_input_schema(json!({
+    "type": "http",
+    "method": "GET",
+    "discoverable": false,
+    "description": "Internal admin API - private access only"
+}))
+```
+
+The combined input and output schemas are automatically embedded in `PaymentRequirements.outputSchema` as:
+
+```json
+{
+  "input": { /* your input schema */ },
+  "output": { /* your output schema */ }
+}
+```
+
 ## Optional Telemetry
 
 If the `telemetry` feature is enabled, the middleware emits structured tracing spans such as:

@@ -104,6 +104,10 @@ pub struct X402Middleware<F> {
     price_tag: Vec<PriceTag>,
     /// Timeout in seconds for payment settlement.
     max_timeout_seconds: u64,
+    /// Optional input schema describing the API endpoint's input specification.
+    input_schema: Option<serde_json::Value>,
+    /// Optional output schema describing the API endpoint's output specification.
+    output_schema: Option<serde_json::Value>,
     /// Cached set of payment offers for this middleware instance.
     ///
     /// This field holds either:
@@ -141,6 +145,8 @@ impl<F> X402Middleware<F> {
             base_url: None,
             max_timeout_seconds: 300,
             price_tag: Vec::new(),
+            input_schema: None,
+            output_schema: None,
             payment_offers: Arc::new(PaymentOffers::Ready(Arc::new(Vec::new()))),
         }
     }
@@ -222,6 +228,65 @@ where
         this.recompute_offers()
     }
 
+    /// Sets the input schema describing the API endpoint's expected inputs.
+    ///
+    /// The input schema will be embedded in `PaymentRequirements.outputSchema.input`.
+    /// This can include information about HTTP method, query parameters, headers, body schema, etc.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use serde_json::json;
+    ///
+    /// let input_schema = json!({
+    ///     "type": "http",
+    ///     "method": "GET",
+    ///     "discoverable": true,
+    ///     "queryParams": {
+    ///         "location": {
+    ///             "type": "string",
+    ///             "description": "City name",
+    ///             "required": true
+    ///         }
+    ///     }
+    /// });
+    ///
+    /// x402.with_input_schema(input_schema)
+    /// ```
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn with_input_schema(&self, schema: serde_json::Value) -> Self {
+        let mut this = self.clone();
+        this.input_schema = Some(schema);
+        this.recompute_offers()
+    }
+
+    /// Sets the output schema describing the API endpoint's response format.
+    ///
+    /// The output schema will be embedded in `PaymentRequirements.outputSchema.output`.
+    /// This can include information about the response structure, content type, etc.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use serde_json::json;
+    ///
+    /// let output_schema = json!({
+    ///     "type": "object",
+    ///     "properties": {
+    ///         "temperature": { "type": "number" },
+    ///         "conditions": { "type": "string" }
+    ///     }
+    /// });
+    ///
+    /// x402.with_output_schema(output_schema)
+    /// ```
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn with_output_schema(&self, schema: serde_json::Value) -> Self {
+        let mut this = self.clone();
+        this.output_schema = Some(schema);
+        this.recompute_offers()
+    }
+
     fn recompute_offers(mut self) -> Self {
         let base_url = self.base_url();
         let description = self.description.clone().unwrap_or_default();
@@ -230,6 +295,22 @@ where
             .clone()
             .unwrap_or("application/json".to_string());
         let max_timeout_seconds = self.max_timeout_seconds;
+
+        // Construct the complete output_schema from input and output schemas
+        let complete_output_schema = match (&self.input_schema, &self.output_schema) {
+            (Some(input), Some(output)) => Some(json!({
+                "input": input,
+                "output": output
+            })),
+            (Some(input), None) => Some(json!({
+                "input": input
+            })),
+            (None, Some(output)) => Some(json!({
+                "output": output
+            })),
+            (None, None) => None,
+        };
+
         let payment_offers = if let Some(resource) = self.resource.clone() {
             let payment_requirements = self
                 .price_tag
@@ -254,7 +335,7 @@ where
                         max_timeout_seconds,
                         asset: price_tag.token.address(),
                         extra,
-                        output_schema: None,
+                        output_schema: complete_output_schema.clone(),
                     }
                 })
                 .collect::<Vec<_>>();
@@ -282,7 +363,7 @@ where
                         max_timeout_seconds,
                         asset: price_tag.token.address(),
                         extra,
-                        output_schema: None,
+                        output_schema: complete_output_schema.clone(),
                     }
                 })
                 .collect::<Vec<_>>();
