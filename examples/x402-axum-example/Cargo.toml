@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 x402-rs = { version = "0.9" }
-x402-axum = { version = "0.5", features = ["telemetry"] }
+x402-axum = { version = "0.6", features = ["telemetry"] }
 
 axum = { version = "0.8.4" }
 tokio = { version = "1.45.0" }

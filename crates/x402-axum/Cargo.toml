@@ -1,6 +1,6 @@
 [package]
 name = "x402-axum"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 description = "Axum middleware for enforcing x402 protocol payments on protected routes"
 license = "Apache-2.0"
