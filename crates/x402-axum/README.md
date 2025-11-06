@@ -15,7 +15,8 @@ If no valid payment is provided, a `402 Payment Required` response is returned w
 
 - Built for [Axum](https://github.com/tokio-rs/axum)
 - Fluent builder API for composing payment requirements and prices
-- Enforces on-chain payment before executing protected handlers
+- Enforces on-chain payment verification before executing protected handlers
+- Configurable settlement timing (before or after request execution)
 - Returns standards-compliant `402 Payment Required` responses
 - Emits rich tracing spans with optional OpenTelemetry integration (`telemetry` feature)
 - Compatible with any x402 facilitator (remote or in-process)
@@ -138,6 +139,20 @@ let app: Router = Router::new()
         get(my_handler).layer(x402.with_price_tag(asset.amount("0.25").unwrap())),
     );
 ```
+
+## Settlement Timing
+
+By default, the middleware settles payments **after** request execution. You can control this behavior with `settle_before_execution`.
+
+```rust
+let x402 = X402Middleware::try_from("https://x402.org/facilitator/").unwrap()
+    .settle_before_execution();
+```
+
+This is useful when you want to:
+- Avoid failed settlements requiring external retry mechanisms
+- Prevent payment authorization expiration before final settlement
+- Ensure payment is settled before granting access to the resource
 
 ## Example
 
