@@ -755,15 +755,20 @@ where
     /// Converts a [`SettleResponse`] into an HTTP header value.
     ///
     /// Returns an error response if conversion fails.
-    fn settlement_to_header(&self, settlement: SettleResponse) -> Result<HeaderValue, Response> {
+    fn settlement_to_header(
+        &self,
+        settlement: SettleResponse,
+    ) -> Result<HeaderValue, Box<Response>> {
         let payment_header: Base64Bytes = settlement.try_into().map_err(|err| {
             X402Error::settlement_failed(err, self.payment_requirements.as_ref().clone())
                 .into_response()
         })?;
 
         HeaderValue::from_bytes(payment_header.as_ref()).map_err(|err| {
-            X402Error::settlement_failed(err, self.payment_requirements.as_ref().clone())
-                .into_response()
+            let response =
+                X402Error::settlement_failed(err, self.payment_requirements.as_ref().clone())
+                    .into_response();
+            Box::new(response)
         })
     }
 
@@ -836,7 +841,7 @@ where
 
             let header_value = match self.settlement_to_header(settlement) {
                 Ok(header) => header,
-                Err(response) => return response,
+                Err(response) => return *response,
             };
 
             // Settlement succeeded, now execute the request
@@ -870,7 +875,7 @@ where
 
             let header_value = match self.settlement_to_header(settlement) {
                 Ok(header) => header,
-                Err(response) => return response,
+                Err(response) => return *response,
             };
 
             let mut res = response;
