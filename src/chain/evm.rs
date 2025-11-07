@@ -175,6 +175,8 @@ pub struct EvmProvider {
     signer_addresses: Arc<Vec<Address>>,
     /// Current position in round-robin signer rotation.
     signer_cursor: Arc<AtomicUsize>,
+    /// Nonce manager for resetting nonces on transaction failures.
+    nonce_manager: PendingNonceManager,
 }
 
 impl EvmProvider {
@@ -197,7 +199,20 @@ impl EvmProvider {
             .connect(rpc_url)
             .await
             .map_err(|e| format!("Failed to connect to {network}: {e}"))?;
-        let filler = InnerFiller::default();
+
+        // Create nonce manager explicitly so we can store a reference for error handling
+        let nonce_manager = PendingNonceManager::default();
+
+        // Build the filler stack: Gas -> BlobGas -> Nonce -> ChainId
+        // This mirrors the InnerFiller type but with our custom nonce manager
+        let filler = JoinFill::new(
+            GasFiller,
+            JoinFill::new(
+                BlobGasFiller,
+                JoinFill::new(NonceFiller::new(nonce_manager.clone()), ChainIdFiller::default()),
+            ),
+        );
+
         let inner = ProviderBuilder::default()
             .filler(filler)
             .wallet(wallet)
@@ -211,6 +226,7 @@ impl EvmProvider {
             chain,
             signer_addresses,
             signer_cursor,
+            nonce_manager,
         })
     }
 
@@ -274,10 +290,22 @@ impl MetaEvmProvider for EvmProvider {
     /// selects the next available signer using round-robin selection, and handles gas pricing
     /// based on whether the network supports EIP-1559.
     ///
+    /// If the transaction fails at any point (during submission or receipt fetching), the nonce
+    /// for the sending address is reset to force a fresh query on the next transaction. This
+    /// ensures correctness even when transactions partially succeed (e.g., submitted but receipt
+    /// fetch times out).
+    ///
     /// # Gas Pricing Strategy
     ///
     /// - **EIP-1559 networks**: Uses automatic gas pricing via the provider's fillers.
     /// - **Legacy networks**: Fetches the current gas price using `get_gas_price()` and sets it explicitly.
+    ///
+    /// # Timeout Configuration
+    ///
+    /// Receipt fetching is subject to a configurable timeout:
+    /// - Default: 30 seconds
+    /// - Override via `TX_RECEIPT_TIMEOUT_SECS` environment variable
+    /// - If the timeout expires, the nonce is reset and an error is returned
     ///
     /// # Parameters
     ///
@@ -292,14 +320,15 @@ impl MetaEvmProvider for EvmProvider {
     /// Returns [`FacilitatorLocalError::ContractCall`] if:
     /// - Gas price fetching fails (on legacy networks)
     /// - Transaction sending fails
-    /// - Receipt retrieval fails
+    /// - Receipt retrieval fails or times out
     async fn send_transaction(
         &self,
         tx: MetaTransaction,
     ) -> Result<TransactionReceipt, Self::Error> {
+        let from_address = self.next_signer_address();
         let mut txr = TransactionRequest::default()
             .with_to(tx.to)
-            .with_from(self.next_signer_address())
+            .with_from(from_address)
             .with_input(tx.calldata);
         if !self.eip1559 {
             let provider = &self.inner;
@@ -310,16 +339,38 @@ impl MetaEvmProvider for EvmProvider {
                 .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
             txr.set_gas_price(gas);
         }
-        let pending_tx = self
-            .inner
-            .send_transaction(txr)
-            .await
-            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
-        pending_tx
+
+        // Send transaction with error handling for nonce reset
+        let pending_tx = match self.inner.send_transaction(txr).await {
+            Ok(pending) => pending,
+            Err(e) => {
+                // Transaction submission failed - reset nonce to force requery
+                self.nonce_manager.reset_nonce(from_address).await;
+                return Err(FacilitatorLocalError::ContractCall(format!("{e:?}")));
+            }
+        };
+
+        // Get receipt with timeout and error handling for nonce reset
+        // Default timeout of 30 seconds is reasonable for most EVM chains
+        let timeout = std::time::Duration::from_secs(
+            std::env::var("TX_RECEIPT_TIMEOUT_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(30)
+        );
+
+        let watcher = pending_tx
             .with_required_confirmations(tx.confirmations)
-            .get_receipt()
-            .await
-            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))
+            .with_timeout(Some(timeout));
+
+        match watcher.get_receipt().await {
+            Ok(receipt) => Ok(receipt),
+            Err(e) => {
+                // Receipt fetch failed (timeout or other error) - reset nonce to force requery
+                self.nonce_manager.reset_nonce(from_address).await;
+                Err(FacilitatorLocalError::ContractCall(format!("{e:?}")))
+            }
+        }
     }
 }
 
@@ -1158,5 +1209,170 @@ impl NonceManager for PendingNonceManager {
         };
         *nonce = new_nonce;
         Ok(new_nonce)
+    }
+}
+
+impl PendingNonceManager {
+    /// Resets the cached nonce for a given address, forcing a fresh query on next use.
+    ///
+    /// This should be called when a transaction fails, as we cannot be certain of the
+    /// actual on-chain state (the transaction may or may not have reached the mempool).
+    /// By resetting to the sentinel value, the next call to `get_next_nonce` will query
+    /// the RPC provider using `.pending()`, which includes mempool transactions.
+    pub async fn reset_nonce(&self, address: Address) {
+        if let Some(nonce_lock) = self.nonces.get(&address) {
+            let mut nonce = nonce_lock.lock().await;
+            *nonce = u64::MAX; // NONE sentinel - will trigger fresh query
+            tracing::debug!(%address, "reset nonce cache, will requery on next use");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::primitives::address;
+
+    #[tokio::test]
+    async fn test_reset_nonce_clears_cache() {
+        let manager = PendingNonceManager::default();
+        let test_address = address!("0000000000000000000000000000000000000001");
+
+        // Manually set a nonce in the cache (simulating it was fetched)
+        {
+            let nonce_lock = manager
+                .nonces
+                .entry(test_address)
+                .or_insert_with(|| Arc::new(Mutex::new(0)));
+            let mut nonce = nonce_lock.lock().await;
+            *nonce = 42;
+        }
+
+        // Verify nonce is cached
+        {
+            let nonce_lock = manager.nonces.get(&test_address).unwrap();
+            let nonce = nonce_lock.lock().await;
+            assert_eq!(*nonce, 42);
+        }
+
+        // Reset the nonce
+        manager.reset_nonce(test_address).await;
+
+        // Verify nonce is reset to sentinel value (u64::MAX)
+        {
+            let nonce_lock = manager.nonces.get(&test_address).unwrap();
+            let nonce = nonce_lock.lock().await;
+            assert_eq!(*nonce, u64::MAX);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_reset_nonce_after_allocation_sequence() {
+        let manager = PendingNonceManager::default();
+        let test_address = address!("0000000000000000000000000000000000000002");
+
+        // Simulate nonce allocations
+        {
+            let nonce_lock = manager
+                .nonces
+                .entry(test_address)
+                .or_insert_with(|| Arc::new(Mutex::new(0)));
+            let mut nonce = nonce_lock.lock().await;
+            *nonce = 50; // First allocation
+            *nonce = 51; // Second allocation
+            *nonce = 52; // Third allocation
+        }
+
+        // Simulate a transaction failure - reset nonce
+        manager.reset_nonce(test_address).await;
+
+        // Verify nonce is back to sentinel for requery
+        {
+            let nonce_lock = manager.nonces.get(&test_address).unwrap();
+            let nonce = nonce_lock.lock().await;
+            assert_eq!(*nonce, u64::MAX);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_reset_nonce_on_nonexistent_address() {
+        let manager = PendingNonceManager::default();
+        let test_address = address!("0000000000000000000000000000000000000099");
+
+        // Reset should not panic on address that hasn't been used
+        manager.reset_nonce(test_address).await;
+
+        // Verify nonce map still doesn't have this address
+        assert!(!manager.nonces.contains_key(&test_address));
+    }
+
+    #[tokio::test]
+    async fn test_multiple_addresses_independent_nonces() {
+        let manager = PendingNonceManager::default();
+        let address1 = address!("0000000000000000000000000000000000000001");
+        let address2 = address!("0000000000000000000000000000000000000002");
+
+        // Set nonces for both addresses
+        {
+            let nonce_lock1 = manager
+                .nonces
+                .entry(address1)
+                .or_insert_with(|| Arc::new(Mutex::new(0)));
+            *nonce_lock1.lock().await = 10;
+
+            let nonce_lock2 = manager
+                .nonces
+                .entry(address2)
+                .or_insert_with(|| Arc::new(Mutex::new(0)));
+            *nonce_lock2.lock().await = 20;
+        }
+
+        // Reset address1
+        manager.reset_nonce(address1).await;
+
+        // address1 should be reset, address2 should be unchanged
+        {
+            let nonce_lock1 = manager.nonces.get(&address1).unwrap();
+            assert_eq!(*nonce_lock1.lock().await, u64::MAX);
+
+            let nonce_lock2 = manager.nonces.get(&address2).unwrap();
+            assert_eq!(*nonce_lock2.lock().await, 20);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_reset_and_access() {
+        let manager = Arc::new(PendingNonceManager::default());
+        let test_address = address!("0000000000000000000000000000000000000003");
+
+        // Set initial nonce
+        {
+            let nonce_lock = manager
+                .nonces
+                .entry(test_address)
+                .or_insert_with(|| Arc::new(Mutex::new(0)));
+            *nonce_lock.lock().await = 100;
+        }
+
+        // Spawn concurrent tasks
+        let manager1 = Arc::clone(&manager);
+        let handle1 = tokio::spawn(async move {
+            manager1.reset_nonce(test_address).await;
+        });
+
+        let manager2 = Arc::clone(&manager);
+        let handle2 = tokio::spawn(async move {
+            manager2.reset_nonce(test_address).await;
+        });
+
+        // Wait for both to complete
+        handle1.await.unwrap();
+        handle2.await.unwrap();
+
+        // Verify nonce is reset (both resets should work fine)
+        {
+            let nonce_lock = manager.nonces.get(&test_address).unwrap();
+            assert_eq!(*nonce_lock.lock().await, u64::MAX);
+        }
     }
 }
