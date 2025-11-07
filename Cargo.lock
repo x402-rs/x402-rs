@@ -8979,7 +8979,7 @@ dependencies = [
 
 [[package]]
 name = "x402-rs"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "alloy",
  "async-trait",
