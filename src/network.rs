@@ -207,8 +207,6 @@ static USDC_SOLANA: Lazy<USDCDeployment> = Lazy::new(|| {
         },
         decimals: 6,
         eip712: None,
-
-
     })
 });
 
@@ -223,8 +221,6 @@ static USDC_SOLANA_DEVNET: Lazy<USDCDeployment> = Lazy::new(|| {
         },
         decimals: 6,
         eip712: None,
-
-
     })
 });
 
@@ -239,8 +235,6 @@ static USDC_POLYGON_AMOY: Lazy<USDCDeployment> = Lazy::new(|| {
         eip712: Some(TokenDeploymentEip712 {
             name: "USDC".into(),
             version: "2".into(),
-
-
         }),
     })
 });
@@ -299,7 +293,6 @@ impl Deref for USDCDeployment {
         &self.0
     }
 }
-
 
 /// Lazily initialized known USDC deployment on XRPL EVM mainnet as [`USDCDeployment`].
 static USDC_XRPL_EVM: Lazy<USDCDeployment> = Lazy::new(|| {
