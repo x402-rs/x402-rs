@@ -33,6 +33,9 @@ pub enum Network {
     /// Avalanche Mainnet (chain ID 43114)
     #[serde(rename = "avalanche")]
     Avalanche,
+    /// XRPL EVM mainnet (chain ID 1440000)
+    #[serde(rename = "xrpl-evm")]
+    XrplEvm,
     /// Solana Mainnet - Live production environment for deployed applications
     #[serde(rename = "solana")]
     Solana,
@@ -61,6 +64,7 @@ impl Display for Network {
             Network::XdcMainnet => write!(f, "xdc"),
             Network::AvalancheFuji => write!(f, "avalanche-fuji"),
             Network::Avalanche => write!(f, "avalanche"),
+            Network::XrplEvm => write!(f, "xrpl-evm"),
             Network::Solana => write!(f, "solana"),
             Network::SolanaDevnet => write!(f, "solana-devnet"),
             Network::PolygonAmoy => write!(f, "polygon-amoy"),
@@ -85,6 +89,7 @@ impl From<Network> for NetworkFamily {
             Network::XdcMainnet => NetworkFamily::Evm,
             Network::AvalancheFuji => NetworkFamily::Evm,
             Network::Avalanche => NetworkFamily::Evm,
+            Network::XrplEvm => NetworkFamily::Evm,
             Network::Solana => NetworkFamily::Solana,
             Network::SolanaDevnet => NetworkFamily::Solana,
             Network::PolygonAmoy => NetworkFamily::Evm,
@@ -104,6 +109,7 @@ impl Network {
             Network::XdcMainnet,
             Network::AvalancheFuji,
             Network::Avalanche,
+            Network::XrplEvm,
             Network::Solana,
             Network::SolanaDevnet,
             Network::PolygonAmoy,
@@ -182,6 +188,7 @@ static USDC_AVALANCHE: Lazy<USDCDeployment> = Lazy::new(|| {
             network: Network::Avalanche,
         },
         decimals: 6,
+
         eip712: Some(TokenDeploymentEip712 {
             name: "USD Coin".into(),
             version: "2".into(),
@@ -265,7 +272,7 @@ static USDC_SEI_TESTNET: Lazy<USDCDeployment> = Lazy::new(|| {
     USDCDeployment(TokenDeployment {
         asset: TokenAsset {
             address: address!("0x4fCF1784B31630811181f670Aea7A7bEF803eaED").into(),
-            network: Network::Sei,
+            network: Network::SeiTestnet,
         },
         decimals: 6,
         eip712: Some(TokenDeploymentEip712 {
@@ -286,6 +293,19 @@ impl Deref for USDCDeployment {
         &self.0
     }
 }
+
+/// Lazily initialized known USDC deployment on XRPL EVM mainnet as [`USDCDeployment`].
+static USDC_XRPL_EVM: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0xDaF4556169c4F3f2231d8ab7BC8772Ddb7D4c84C").into(),
+            network: Network::XrplEvm,
+        },
+        decimals: 6,
+        // EIP-712 domain fields (name/version) are resolved dynamically if not provided.
+        eip712: None,
+    })
+});
 
 impl From<&USDCDeployment> for TokenDeployment {
     fn from(deployment: &USDCDeployment) -> Self {
@@ -316,6 +336,7 @@ impl USDCDeployment {
             Network::XdcMainnet => &USDC_XDC,
             Network::AvalancheFuji => &USDC_AVALANCHE_FUJI,
             Network::Avalanche => &USDC_AVALANCHE,
+            Network::XrplEvm => &USDC_XRPL_EVM,
             Network::Solana => &USDC_SOLANA,
             Network::SolanaDevnet => &USDC_SOLANA_DEVNET,
             Network::PolygonAmoy => &USDC_POLYGON_AMOY,
