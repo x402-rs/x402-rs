@@ -345,6 +345,82 @@ where
         this
     }
 
+    /// Enables dynamic, per-request price computation via a callback.
+    ///
+    /// The callback receives request headers, URI, and base URL, and returns the
+    /// price amount for this request. The resource URL is automatically constructed
+    /// from the base URL and request URI, and all partial requirements are updated
+    /// with the dynamically computed price.
+    ///
+    /// This is suitable for dynamic pricing flows where the exact amount depends on
+    /// request content, user context, or other runtime factors.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use x402_axum::layer::DynamicPriceCallback;
+    ///
+    /// let callback: Box<DynamicPriceCallback> = Box::new(move |headers, uri, base_url| {
+    ///     Box::pin(async move {
+    ///         // Compute price based on request
+    ///         Ok(TokenAmount::from(1000000))
+    ///     })
+    /// });
+    ///
+    /// x402.with_dynamic_price(callback);
+    /// ```
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn with_dynamic_price<P>(&self, price_callback: P) -> Self
+    where
+        P: for<'a> Fn(
+                &'a HeaderMap,
+                &'a Uri,
+                &'a Url,
+            )
+                -> Pin<Box<dyn Future<Output = Result<TokenAmount, X402Error>> + Send + 'a>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        let mut this = self.clone();
+        let base_url = this.base_url();
+        let description = this.description.clone().unwrap_or_default();
+        let mime_type = this
+            .mime_type
+            .clone()
+            .unwrap_or("application/json".to_string());
+        let max_timeout_seconds = this.max_timeout_seconds;
+        let partial = this
+            .price_tag
+            .iter()
+            .map(|price_tag| {
+                let extra = if let Some(eip712) = price_tag.token.eip712.clone() {
+                    Some(json!({ "name": eip712.name, "version": eip712.version }))
+                } else {
+                    None
+                };
+                PaymentRequirementsNoResource {
+                    scheme: Scheme::Exact,
+                    network: price_tag.token.network(),
+                    max_amount_required: price_tag.amount,
+                    description: description.clone(),
+                    mime_type: mime_type.clone(),
+                    pay_to: price_tag.pay_to.clone(),
+                    max_timeout_seconds,
+                    asset: price_tag.token.address(),
+                    extra,
+                    output_schema: None,
+                }
+            })
+            .collect::<Vec<_>>();
+        this.payment_offers = Arc::new(PaymentOffers::DynamicPrice {
+            partial,
+            base_url,
+            price_callback: DynamicPriceFn::new(price_callback),
+        });
+        this
+    }
+
     fn recompute_offers(mut self) -> Self {
         let base_url = self.base_url();
         let description = self.description.clone().unwrap_or_default();
@@ -493,15 +569,20 @@ where
 
     /// Intercepts the request, injects payment enforcement logic, and forwards to the wrapped service.
     fn call(&mut self, req: Request) -> Self::Future {
-        let payment_requirements =
-            gather_payment_requirements(self.payment_offers.as_ref(), req.uri());
-        let gate = X402Paygate {
-            facilitator: self.facilitator.clone(),
-            payment_requirements,
-            settle_before_execution: self.settle_before_execution,
-        };
+        let offers = self.payment_offers.clone();
+        let facilitator = self.facilitator.clone();
         let inner = self.inner.clone();
-        Box::pin(gate.call(inner, req))
+        let settle_before_execution = self.settle_before_execution;
+        Box::pin(async move {
+            let payment_requirements =
+                gather_payment_requirements(offers.as_ref(), req.uri(), req.headers()).await;
+            let gate = X402Paygate {
+                facilitator,
+                payment_requirements,
+                settle_before_execution,
+            };
+            gate.call(inner, req).await
+        })
     }
 }
 
@@ -933,6 +1014,13 @@ pub enum PaymentOffers {
         partial: Vec<PaymentRequirementsNoResource>,
         base_url: Url,
     },
+    /// Dynamically computed price per request using a user-provided callback.
+    /// The resource URL is automatically constructed from base URL and request URI.
+    DynamicPrice {
+        partial: Vec<PaymentRequirementsNoResource>,
+        base_url: Url,
+        price_callback: DynamicPriceFn,
+    },
 }
 
 /// Constructs a full list of [`PaymentRequirements`] for a request.
@@ -944,18 +1032,23 @@ pub enum PaymentOffers {
 /// - If `payment_offers` is [`PaymentOffers::NoResource`], it dynamically constructs the `resource` URI
 ///   by combining the `base_url` with the request's path and query, and completes each
 ///   partial `PaymentRequirementsNoResource` into a full `PaymentRequirements`.
+/// - If `payment_offers` is [`PaymentOffers::DynamicPrice`], it constructs the resource URL,
+///   calls the price callback to get the dynamic price, updates all partial requirements with
+///   the new price, and converts them to full `PaymentRequirements`.
 ///
 /// # Arguments
 ///
 /// * `payment_offers` - The current payment offer configuration, either precomputed or partial.
 /// * `req_uri` - The incoming request URI used to construct the full resource path if needed.
+/// * `req_headers` - The incoming request headers passed to the price callback if needed.
 ///
 /// # Returns
 ///
 /// An `Arc<Vec<PaymentRequirements>>` ready to be passed to a facilitator for verification.
-fn gather_payment_requirements(
+async fn gather_payment_requirements(
     payment_offers: &PaymentOffers,
     req_uri: &Uri,
+    req_headers: &HeaderMap,
 ) -> Arc<Vec<PaymentRequirements>> {
     match payment_offers {
         PaymentOffers::Ready(requirements) => {
@@ -975,5 +1068,135 @@ fn gather_payment_requirements(
                 .collect::<Vec<_>>();
             Arc::new(payment_requirements)
         }
+        PaymentOffers::DynamicPrice {
+            partial,
+            base_url,
+            price_callback,
+        } => {
+            // Build resource URL from base_url and request URI
+            let resource = {
+                let mut resource_url = base_url.clone();
+                resource_url.set_path(req_uri.path());
+                resource_url.set_query(req_uri.query());
+                resource_url
+            };
+
+            // Call the price callback to get the dynamic price
+            match price_callback
+                .get_price(req_headers, req_uri, base_url)
+                .await
+            {
+                Ok(dynamic_price) => {
+                    // Update all partial requirements with the dynamic price
+                    let payment_requirements = partial
+                        .iter()
+                        .map(|partial| {
+                            let mut req = partial.to_payment_requirements(resource.clone());
+                            req.max_amount_required = dynamic_price;
+                            req
+                        })
+                        .collect::<Vec<_>>();
+                    Arc::new(payment_requirements)
+                }
+                Err(_) => {
+                    // If price callback fails, fall back to NoResource behavior (use original prices)
+                    let payment_requirements = partial
+                        .iter()
+                        .map(|partial| partial.to_payment_requirements(resource.clone()))
+                        .collect::<Vec<_>>();
+                    Arc::new(payment_requirements)
+                }
+            }
+        }
+    }
+}
+
+/// Type alias for a dynamic price callback function signature.
+///
+/// This callback receives request headers, URI, and base URL, and returns
+/// the price amount for the request. It's used with [`X402Middleware::with_dynamic_price`].
+///
+/// The callback signature is:
+/// ```rust,ignore
+/// for<'a> Fn(
+///     &'a HeaderMap,
+///     &'a Uri,
+///     &'a Url,
+/// ) -> Pin<Box<dyn Future<Output = Result<TokenAmount, X402Error>> + Send + 'a>>
+/// ```
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use x402_axum::layer::DynamicPriceCallback;
+/// use x402_rs::types::TokenAmount;
+///
+/// // Define your price calculation logic
+/// async fn calculate_price(
+///     headers: &HeaderMap,
+///     uri: &Uri,
+///     base_url: &Url,
+/// ) -> Result<TokenAmount, X402Error> {
+///     // Extract price from headers, cache, or compute dynamically
+///     Ok(TokenAmount::from(1000000))
+/// }
+///
+/// // Use it with with_dynamic_price
+/// let callback = move |headers: &HeaderMap, uri: &Uri, base_url: &Url| {
+///     Box::pin(calculate_price(headers, uri, base_url))
+/// };
+///
+/// x402.with_dynamic_price(callback);
+/// ```
+pub type DynamicPriceCallback = dyn for<'a> Fn(
+        &'a HeaderMap,
+        &'a Uri,
+        &'a Url,
+    ) -> Pin<Box<dyn Future<Output = Result<TokenAmount, X402Error>> + Send + 'a>>
+    + Send
+    + Sync;
+
+/// A clonable wrapper for an async price callback function that computes per-request prices.
+#[derive(Clone)]
+pub struct DynamicPriceFn(Arc<DynamicPriceCallback>);
+
+impl Debug for DynamicPriceFn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DynamicPriceFn(<function>)")
+    }
+}
+
+impl PartialEq for DynamicPriceFn {
+    fn eq(&self, _other: &Self) -> bool {
+        // Function pointers can't be meaningfully compared for equality
+        false
+    }
+}
+
+impl Eq for DynamicPriceFn {}
+
+impl DynamicPriceFn {
+    pub fn new<P>(price_callback: P) -> Self
+    where
+        P: for<'a> Fn(
+                &'a HeaderMap,
+                &'a Uri,
+                &'a Url,
+            )
+                -> Pin<Box<dyn Future<Output = Result<TokenAmount, X402Error>> + Send + 'a>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        DynamicPriceFn(Arc::new(price_callback))
+    }
+
+    pub async fn get_price(
+        &self,
+        headers: &HeaderMap,
+        uri: &Uri,
+        base_url: &Url,
+    ) -> Result<TokenAmount, X402Error> {
+        (self.0)(headers, uri, base_url).await
     }
 }
