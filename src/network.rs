@@ -51,6 +51,12 @@ pub enum Network {
     /// Sei testnet (chain ID 1328).
     #[serde(rename = "sei-testnet")]
     SeiTestnet,
+    /// Berachain mainnet (chain ID 80094).
+    #[serde(rename = "berachain")]
+    Berachain,
+    /// Berachain testnet (chain ID 80069).
+    #[serde(rename = "bepolia")]
+    Bepolia,
 }
 
 impl Display for Network {
@@ -67,6 +73,8 @@ impl Display for Network {
             Network::Polygon => write!(f, "polygon"),
             Network::Sei => write!(f, "sei"),
             Network::SeiTestnet => write!(f, "sei-testnet"),
+            Network::Berachain => write!(f, "berachain"),
+            Network::Bepolia => write!(f, "bepolia"),
         }
     }
 }
@@ -91,6 +99,8 @@ impl From<Network> for NetworkFamily {
             Network::Polygon => NetworkFamily::Evm,
             Network::Sei => NetworkFamily::Evm,
             Network::SeiTestnet => NetworkFamily::Evm,
+            Network::Berachain => NetworkFamily::Evm,
+            Network::Bepolia => NetworkFamily::Evm,
         }
     }
 }
@@ -110,6 +120,8 @@ impl Network {
             Network::Polygon,
             Network::Sei,
             Network::SeiTestnet,
+            Network::Berachain,
+            Network::Bepolia,
         ]
     }
 }
@@ -275,6 +287,34 @@ static USDC_SEI_TESTNET: Lazy<USDCDeployment> = Lazy::new(|| {
     })
 });
 
+static USDC_BERACHAIN: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0x549943e04f40284185054145c6E4e9568C1D3241").into(),
+            network: Network::Berachain,
+        },
+        decimals: 6,
+        eip712: Some(TokenDeploymentEip712 {
+            name: "Bridged USDC (Stargate)".into(),
+            version: "2".into(),
+        }),
+    })
+});
+
+static USDC_BEPOLIA: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0x406f530cc683E668d74F76d13da1Ec5E8cE582ea").into(),
+            network: Network::Bepolia,
+        },
+        decimals: 6,
+        eip712: Some(TokenDeploymentEip712 {
+            name: "bxUSDC".into(),
+            version: "2".into(),
+        }),
+    })
+});
+
 /// A known USDC deployment as a wrapper around [`TokenDeployment`].
 #[derive(Clone, Debug)]
 pub struct USDCDeployment(pub TokenDeployment);
@@ -322,6 +362,8 @@ impl USDCDeployment {
             Network::Polygon => &USDC_POLYGON,
             Network::Sei => &USDC_SEI,
             Network::SeiTestnet => &USDC_SEI_TESTNET,
+            Network::Berachain => &USDC_BERACHAIN,
+            Network::Bepolia => &USDC_BEPOLIA,
         }
     }
 }
