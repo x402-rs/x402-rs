@@ -326,6 +326,19 @@ impl MetaEvmProvider for EvmProvider {
         tx: MetaTransaction,
     ) -> Result<TransactionReceipt, Self::Error> {
         let from_address = self.next_signer_address();
+        let request_id = crate::telemetry::get_request_id();
+
+        tracing::info!(
+            event = "transaction_prepare",
+            request_id = %request_id,
+            relayer = %from_address,
+            to = %tx.to,
+            network = %self.chain.network,
+            chain_id = %self.chain.chain_id,
+            eip1559 = %self.eip1559,
+            "preparing transaction for relay"
+        );
+
         let mut txr = TransactionRequest::default()
             .with_to(tx.to)
             .with_from(from_address)
@@ -342,10 +355,36 @@ impl MetaEvmProvider for EvmProvider {
 
         // Send transaction with error handling for nonce reset
         let pending_tx = match self.inner.send_transaction(txr).await {
-            Ok(pending) => pending,
+            Ok(pending) => {
+                tracing::info!(
+                    event = "transaction_sent",
+                    request_id = %request_id,
+                    relayer = %from_address,
+                    tx_hash = %pending.tx_hash(),
+                    network = %self.chain.network,
+                    "transaction broadcast to network"
+                );
+                pending
+            }
             Err(e) => {
                 // Transaction submission failed - reset nonce to force requery
+                tracing::warn!(
+                    event = "nonce_reset",
+                    request_id = %request_id,
+                    relayer = %from_address,
+                    network = %self.chain.network,
+                    reason = "transaction_send_failed",
+                    "resetting nonce cache due to transaction send failure"
+                );
                 self.nonce_manager.reset_nonce(from_address).await;
+                tracing::error!(
+                    event = "transaction_send_failed",
+                    request_id = %request_id,
+                    relayer = %from_address,
+                    network = %self.chain.network,
+                    error = %e,
+                    "failed to send transaction"
+                );
                 return Err(FacilitatorLocalError::ContractCall(format!("{e:?}")));
             }
         };
@@ -359,15 +398,47 @@ impl MetaEvmProvider for EvmProvider {
                 .unwrap_or(30)
         );
 
+        let tx_hash = *pending_tx.tx_hash();
         let watcher = pending_tx
             .with_required_confirmations(tx.confirmations)
             .with_timeout(Some(timeout));
 
         match watcher.get_receipt().await {
-            Ok(receipt) => Ok(receipt),
+            Ok(receipt) => {
+                tracing::info!(
+                    event = "transaction_confirmed",
+                    request_id = %request_id,
+                    relayer = %from_address,
+                    tx_hash = %tx_hash,
+                    network = %self.chain.network,
+                    block_number = %receipt.block_number.unwrap_or_default(),
+                    gas_used = %receipt.gas_used,
+                    status = %receipt.status(),
+                    "transaction confirmed on-chain"
+                );
+                Ok(receipt)
+            }
             Err(e) => {
                 // Receipt fetch failed (timeout or other error) - reset nonce to force requery
+                tracing::warn!(
+                    event = "nonce_reset",
+                    request_id = %request_id,
+                    relayer = %from_address,
+                    tx_hash = %tx_hash,
+                    network = %self.chain.network,
+                    reason = "receipt_fetch_failed",
+                    "resetting nonce cache due to receipt fetch failure"
+                );
                 self.nonce_manager.reset_nonce(from_address).await;
+                tracing::error!(
+                    event = "transaction_receipt_failed",
+                    request_id = %request_id,
+                    relayer = %from_address,
+                    tx_hash = %tx_hash,
+                    network = %self.chain.network,
+                    error = %e,
+                    "failed to get transaction receipt"
+                );
                 Err(FacilitatorLocalError::ContractCall(format!("{e:?}")))
             }
         }

@@ -120,13 +120,43 @@ where
     A: Facilitator,
     A::Error: IntoResponse,
 {
+    let request_id = crate::telemetry::get_request_id();
+
+    // Extract key business data for logging
+    let network = body.payment_payload.network.to_string();
+    let scheme = body.payment_payload.scheme.to_string();
+
+    tracing::info!(
+        event = "verify_start",
+        request_id = %request_id,
+        network = %network,
+        scheme = %scheme,
+        "processing verify request"
+    );
+
     match facilitator.verify(&body).await {
-        Ok(valid_response) => (StatusCode::OK, Json(valid_response)).into_response(),
+        Ok(valid_response) => {
+            let (is_valid, payer) = match &valid_response {
+                VerifyResponse::Valid { payer } => (true, Some(payer.to_string())),
+                VerifyResponse::Invalid { payer, .. } => (false, payer.as_ref().map(|p| p.to_string())),
+            };
+            tracing::info!(
+                event = "verify_completed",
+                request_id = %request_id,
+                network = %network,
+                payer = ?payer,
+                valid = %is_valid,
+                "payment verification completed"
+            );
+            (StatusCode::OK, Json(valid_response)).into_response()
+        }
         Err(error) => {
             tracing::warn!(
+                event = "verify_error",
+                request_id = %request_id,
+                network = %network,
                 error = ?error,
-                body = %serde_json::to_string(&body).unwrap_or_else(|_| "<can-not-serialize>".to_string()),
-                "Verification failed"
+                "verification encountered error"
             );
             error.into_response()
         }
@@ -148,13 +178,56 @@ where
     A: Facilitator,
     A::Error: IntoResponse,
 {
+    let request_id = crate::telemetry::get_request_id();
+
+    // Extract key business data for logging
+    let network = body.payment_payload.network.to_string();
+    let scheme = body.payment_payload.scheme.to_string();
+    let (payer, payee, amount) = match &body.payment_payload.payload {
+        crate::types::ExactPaymentPayload::Evm(evm) => (
+            Some(evm.authorization.from.to_string()),
+            Some(evm.authorization.to.to_string()),
+            Some(evm.authorization.value.to_string()),
+        ),
+        crate::types::ExactPaymentPayload::Solana(_) => (None, None, None),
+    };
+
+    tracing::info!(
+        event = "settle_start",
+        request_id = %request_id,
+        payer = ?payer,
+        payee = ?payee,
+        network = %network,
+        scheme = %scheme,
+        amount = ?amount,
+        "processing settle request"
+    );
+
     match facilitator.settle(&body).await {
-        Ok(valid_response) => (StatusCode::OK, Json(valid_response)).into_response(),
+        Ok(valid_response) => {
+            tracing::info!(
+                event = "settle_success",
+                request_id = %request_id,
+                payer = ?payer,
+                payee = ?payee,
+                network = %network,
+                amount = ?amount,
+                transaction = ?valid_response.transaction,
+                success = %valid_response.success,
+                "payment settlement completed"
+            );
+            (StatusCode::OK, Json(valid_response)).into_response()
+        }
         Err(error) => {
             tracing::warn!(
+                event = "settle_error",
+                request_id = %request_id,
+                payer = ?payer,
+                payee = ?payee,
+                network = %network,
+                amount = ?amount,
                 error = ?error,
-                body = %serde_json::to_string(&body).unwrap_or_else(|_| "<can-not-serialize>".to_string()),
-                "Settlement failed"
+                "settlement encountered error"
             );
             error.into_response()
         }

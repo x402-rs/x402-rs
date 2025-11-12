@@ -13,10 +13,42 @@ use opentelemetry_semantic_conventions::{
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::time::Duration;
-use tower_http::trace::{MakeSpan, OnResponse, TraceLayer};
+use tower_http::trace::{MakeSpan, OnRequest, OnResponse, TraceLayer};
 use tracing::Span;
 use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer, OpenTelemetrySpanExt};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+
+/// Extracts or generates a request correlation ID from the current span context.
+///
+/// This ID serves as a correlation ID to link logs from a single operation,
+/// making it easy to filter and debug individual requests in log aggregation systems like Datadog.
+///
+/// **When OpenTelemetry is enabled:**
+/// Returns the OpenTelemetry trace ID (a 32-character hex string shared across all spans in a trace).
+///
+/// **When OpenTelemetry is disabled:**
+/// Returns the current tracing span ID as a hex string. Note that each span level (http_request,
+/// post_verify, etc.) gets a different ID. To correlate all logs from a single HTTP request,
+/// use the `request_id` field that's recorded on the root `http_request` span, or filter by
+/// timestamp + other fields like `payer`, `network`, or transaction details.
+///
+/// Returns "unknown" only if no span context exists at all (should be rare).
+pub fn get_request_id() -> String {
+    use opentelemetry::trace::TraceContextExt;
+
+    // First, try to get the OpenTelemetry trace ID (when OTEL is enabled)
+    let context = Span::current().context();
+    let span = context.span();
+    let span_context = span.span_context();
+
+    if span_context.is_valid() {
+        return span_context.trace_id().to_string();
+    }
+
+    // Fallback when OTEL is disabled: Use the current span's ID
+    // Note: This changes at different span levels, so logs from child spans will have different IDs
+    Span::current().id().map(|id| format!("{:x}", id.into_u64())).unwrap_or_else(|| "unknown".to_string())
+}
 
 /// Supported telemetry transport protocols for exporting OTLP data.
 ///
@@ -270,7 +302,13 @@ impl Telemetry {
                     // per-layer filtering to target the telemetry layer specifically,
                     // e.g. by target matching.
                     .with(tracing_subscriber::filter::LevelFilter::INFO)
-                    .with(tracing_subscriber::fmt::layer())
+                    .with(
+                        tracing_subscriber::fmt::layer()
+                            .json()
+                            .with_ansi(false)
+                            .with_current_span(true)
+                            .with_span_list(true)
+                    )
                     .with(MetricsLayer::new(meter_provider.clone()))
                     .with(OpenTelemetryLayer::new(tracer))
                     .init();
@@ -288,7 +326,13 @@ impl Telemetry {
                 // Fallback: just use local logging
                 tracing_subscriber::registry()
                     .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "trace".into()))
-                    .with(tracing_subscriber::fmt::layer())
+                    .with(
+                        tracing_subscriber::fmt::layer()
+                            .json()
+                            .with_ansi(false)
+                            .with_current_span(true)
+                            .with_span_list(true)
+                    )
                     .init();
 
                 tracing::info!("OpenTelemetry is not enabled");
@@ -338,11 +382,12 @@ impl TelemetryProviders {
     ) -> TraceLayer<
         tower_http::classify::SharedClassifier<tower_http::classify::ServerErrorsAsFailures>,
         FacilitatorHttpMakeSpan,
-        tower_http::trace::DefaultOnRequest,
+        FacilitatorHttpOnRequest,
         FacilitatorHttpOnResponse,
     > {
         TraceLayer::new_for_http()
             .make_span_with(FacilitatorHttpMakeSpan)
+            .on_request(FacilitatorHttpOnRequest)
             .on_response(FacilitatorHttpOnResponse)
     }
 }
@@ -352,14 +397,40 @@ pub struct FacilitatorHttpMakeSpan;
 
 impl<A> MakeSpan<A> for FacilitatorHttpMakeSpan {
     fn make_span(&mut self, request: &Request<A>) -> Span {
-        tracing::info_span!(
+        let span = tracing::info_span!(
             "http_request",
             otel.kind = "server",
             otel.name = %format!("{} {}", request.method(), request.uri()),
             method = %request.method(),
             uri = %request.uri(),
             version = ?request.version(),
-        )
+            request_id = tracing::field::Empty,
+        );
+
+        // When OTEL is not enabled, generate a correlation ID from the span ID
+        // This ID will be shared across all logs within this span's context
+        let correlation_id = span.id().map(|id| format!("{:x}", id.into_u64())).unwrap_or_else(|| "unknown".to_string());
+        span.record("request_id", &correlation_id);
+
+        span
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FacilitatorHttpOnRequest;
+
+impl<A> OnRequest<A> for FacilitatorHttpOnRequest {
+    fn on_request(&mut self, request: &Request<A>, _span: &Span) {
+        let request_id = get_request_id();
+        tracing::info!(
+            event = "request_start",
+            request_id = %request_id,
+            method = %request.method(),
+            uri = %request.uri(),
+            path = %request.uri().path(),
+            user_agent = ?request.headers().get("user-agent"),
+            "request received"
+        );
     }
 }
 
@@ -388,10 +459,13 @@ impl<A> OnResponse<A> for FacilitatorHttpOnResponse {
             ));
         }
 
+        let request_id = get_request_id();
         tracing::info!(
-            "status={} elapsed={}ms",
-            response.status().as_u16(),
-            latency.as_millis()
+            event = "request_completed",
+            request_id = %request_id,
+            status = %response.status().as_u16(),
+            elapsed_ms = %latency.as_millis(),
+            "request completed"
         );
     }
 }
