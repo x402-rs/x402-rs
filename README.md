@@ -9,7 +9,7 @@
 
 This repository provides:
 
-- `x402-rs` (current crate):
+- [`x402-rs`](./crates/x402-rs):
   - Core protocol types, facilitator traits, and logic for on-chain payment verification and settlement
   - Facilitator binary - production-grade HTTP server to verify and settle x402 payments
 - [`x402-axum`](./crates/x402-axum) - Axum middleware for accepting x402 payments,
