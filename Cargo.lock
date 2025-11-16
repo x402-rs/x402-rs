@@ -8922,7 +8922,7 @@ dependencies = [
 
 [[package]]
 name = "x402-axum-example"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "axum",
  "dotenvy",
@@ -8962,7 +8962,7 @@ dependencies = [
 
 [[package]]
 name = "x402-reqwest-example"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "alloy",
  "bincode",
