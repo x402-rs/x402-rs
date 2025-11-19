@@ -209,7 +209,10 @@ impl EvmProvider {
             GasFiller,
             JoinFill::new(
                 BlobGasFiller,
-                JoinFill::new(NonceFiller::new(nonce_manager.clone()), ChainIdFiller::default()),
+                JoinFill::new(
+                    NonceFiller::new(nonce_manager.clone()),
+                    ChainIdFiller::default(),
+                ),
             ),
         );
 
@@ -356,7 +359,7 @@ impl MetaEvmProvider for EvmProvider {
             std::env::var("TX_RECEIPT_TIMEOUT_SECS")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(30)
+                .unwrap_or(30),
         );
 
         let watcher = pending_tx
