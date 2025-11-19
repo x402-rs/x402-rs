@@ -42,6 +42,7 @@ impl TryFrom<Network> for SolanaChain {
             Network::XdcMainnet => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::AvalancheFuji => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::Avalanche => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::XrplEvm => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::PolygonAmoy => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::Polygon => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::Sei => Err(FacilitatorLocalError::UnsupportedNetwork(None)),

@@ -128,6 +128,7 @@ impl TryFrom<Network> for EvmChain {
             Network::XdcMainnet => Ok(EvmChain::new(value, 50)),
             Network::AvalancheFuji => Ok(EvmChain::new(value, 43113)),
             Network::Avalanche => Ok(EvmChain::new(value, 43114)),
+            Network::XrplEvm => Ok(EvmChain::new(value, 1440000)),
             Network::Solana => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::SolanaDevnet => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::PolygonAmoy => Ok(EvmChain::new(value, 80002)),
@@ -406,6 +407,7 @@ impl FromEnvByNetworkBuild for EvmProvider {
             Network::XdcMainnet => false,
             Network::AvalancheFuji => true,
             Network::Avalanche => true,
+            Network::XrplEvm => false,
             Network::Solana => false,
             Network::SolanaDevnet => false,
             Network::PolygonAmoy => true,
@@ -837,8 +839,21 @@ async fn assert_domain<P: Provider>(
         .extra
         .as_ref()
         .and_then(|e| e.get("name")?.as_str().map(str::to_string))
-        .or_else(|| usdc.eip712.clone().map(|e| e.name))
-        .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+        .or_else(|| usdc.eip712.clone().map(|e| e.name));
+    let name = if let Some(name) = name {
+        name
+    } else {
+        token_contract
+            .name()
+            .call()
+            .into_future()
+            .instrument(tracing::info_span!(
+                "fetch_eip712_name",
+                otel.kind = "client",
+            ))
+            .await
+            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?
+    };
     let chain_id = chain.chain_id;
     let version = requirements
         .extra
