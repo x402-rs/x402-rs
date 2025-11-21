@@ -73,12 +73,9 @@ impl TryFrom<MixedAddress> for SolanaAddress {
 
     fn try_from(value: MixedAddress) -> Result<Self, Self::Error> {
         match value {
-            MixedAddress::Evm(_) => Err(FacilitatorLocalError::InvalidAddress(
-                "expected Solana address".to_string(),
-            )),
-            MixedAddress::Offchain(_) => Err(FacilitatorLocalError::InvalidAddress(
-                "expected Solana address".to_string(),
-            )),
+            MixedAddress::Evm(_) | MixedAddress::Offchain(_) => Err(
+                FacilitatorLocalError::InvalidAddress("expected Solana address".to_string()),
+            ),
             MixedAddress::Solana(pubkey) => Ok(Self { pubkey }),
         }
     }
@@ -95,6 +92,8 @@ pub struct SolanaProvider {
     keypair: Arc<Keypair>,
     chain: SolanaChain,
     rpc_client: Arc<RpcClient>,
+    max_compute_unit_limit: u32,
+    max_compute_unit_price: u64,
 }
 
 impl Debug for SolanaProvider {
@@ -108,21 +107,68 @@ impl Debug for SolanaProvider {
 }
 
 impl SolanaProvider {
+    fn max_compute_unit_limit_from_env(network: Network) -> u32 {
+        let suffix = match network {
+            Network::Solana => "SOLANA",
+            Network::SolanaDevnet => "SOLANA_DEVNET",
+            _ => return 200_000, // fallback (shouldn't be used)
+        };
+
+        let limit_var = format!("X402_SOLANA_MAX_COMPUTE_UNIT_LIMIT_{}", suffix);
+        std::env::var(&limit_var)
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(match network {
+                Network::Solana => 400_000,
+                Network::SolanaDevnet => 200_000,
+                _ => 200_000,
+            })
+    }
+
+    fn max_compute_unit_price_from_env(network: Network) -> u64 {
+        let suffix = match network {
+            Network::Solana => "SOLANA",
+            Network::SolanaDevnet => "SOLANA_DEVNET",
+            _ => return 100_000, // fallback (shouldn't be used)
+        };
+
+        let price_var = format!("X402_SOLANA_MAX_COMPUTE_UNIT_PRICE_{}", suffix);
+        std::env::var(&price_var)
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(match network {
+                Network::Solana => 1_000_000,
+                Network::SolanaDevnet => 100_000,
+                _ => 100_000,
+            })
+    }
+
     pub fn try_new(
         keypair: Keypair,
         rpc_url: String,
         network: Network,
+        max_compute_unit_limit: u32,
+        max_compute_unit_price: u64,
     ) -> Result<Self, FacilitatorLocalError> {
         let chain = SolanaChain::try_from(network)?;
         {
             let signer_addresses = vec![keypair.pubkey()];
-            tracing::info!(network=%network, rpc=rpc_url, signers=?signer_addresses, "Initialized provider");
+            tracing::info!(
+                network = %network,
+                rpc = rpc_url,
+                signers = ?signer_addresses,
+                max_compute_unit_limit,
+                max_compute_unit_price,
+                "Initialized Solana provider"
+            );
         }
         let rpc_client = RpcClient::new(rpc_url);
         Ok(Self {
             keypair: Arc::new(keypair),
             chain,
             rpc_client: Arc::new(rpc_client),
+            max_compute_unit_limit,
+            max_compute_unit_price,
         })
     }
 
@@ -184,10 +230,11 @@ impl SolanaProvider {
         // It is ComputeBudgetInstruction definitely by now!
         let mut buf = [0u8; 8];
         buf.copy_from_slice(&data[1..]);
-        // TODO: allow the facilitator to pass in an optional max compute unit price - from JS
         let microlamports = u64::from_le_bytes(buf);
-        if microlamports > 5 * 1_000_000 {
-            return Err(FacilitatorLocalError::DecodingError("invalid_exact_svm_payload_transaction_instructions_compute_price_instruction_too_high".to_string()));
+        if microlamports > self.max_compute_unit_price {
+            return Err(FacilitatorLocalError::DecodingError(
+                "compute unit price exceeds facilitator maximum".to_string(),
+            ));
         }
         Ok(())
     }
@@ -446,6 +493,11 @@ impl SolanaProvider {
         // perform transaction introspection to validate the transaction structure and details
         let instructions = transaction.message.instructions();
         let compute_units = self.verify_compute_limit_instruction(&transaction, 0)?;
+        if compute_units > self.max_compute_unit_limit {
+            return Err(FacilitatorLocalError::DecodingError(
+                "compute unit limit exceeds facilitator maximum".to_string(),
+            ));
+        }
         tracing::debug!(compute_units = compute_units, "Verified compute unit limit");
         self.verify_compute_price_instruction(&transaction, 1)?;
         let transfer_instruction = if instructions.len() == 3 {
@@ -528,7 +580,15 @@ impl FromEnvByNetworkBuild for SolanaProvider {
             }
         };
         let keypair = from_env::SignerType::from_env()?.make_solana_wallet()?;
-        let provider = SolanaProvider::try_new(keypair, rpc_url, network)?;
+        let max_compute_unit_limit = Self::max_compute_unit_limit_from_env(network);
+        let max_compute_unit_price = Self::max_compute_unit_price_from_env(network);
+        let provider = SolanaProvider::try_new(
+            keypair,
+            rpc_url,
+            network,
+            max_compute_unit_limit,
+            max_compute_unit_price,
+        )?;
         Ok(Some(provider))
     }
 }
