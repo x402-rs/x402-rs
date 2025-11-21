@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 x402-reqwest = { version = "0.4" }
-x402-rs = { version = "0.9" }
+x402-rs = { version = "0.10" }
 alloy = { version = "1.0.12" }
 reqwest = { version = "0.12.20" }
 tokio = { version = "1.45.1" }
