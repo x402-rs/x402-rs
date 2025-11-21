@@ -106,41 +106,6 @@ impl SignerType {
     }
 }
 
-/// Reads configurable compute budget limits for Solana providers from environment variables.
-///
-/// Returns (limit, price) as (u32, u64).
-pub fn solana_compute_config_from_env(network: Network) -> (u32, u64) {
-    // Convert network to uppercase env suffix (e.g., "solana" → "SOLANA")
-    let suffix = match network {
-        Network::Solana => "SOLANA",
-        Network::SolanaDevnet => "SOLANA_DEVNET",
-        _ => return (200_000, 100_000), // fallback (shouldn't be used)
-    };
-
-    let limit_var = format!("X402_SOLANA_MAX_COMPUTE_UNIT_LIMIT_{}", suffix);
-    let price_var = format!("X402_SOLANA_MAX_COMPUTE_UNIT_PRICE_{}", suffix);
-
-    let limit = env::var(&limit_var)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(match network {
-            Network::Solana => 400_000,
-            Network::SolanaDevnet => 200_000,
-            _ => 200_000,
-        });
-
-    let price = env::var(&price_var)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(match network {
-            Network::Solana => 1_000_000,
-            Network::SolanaDevnet => 100_000,
-            _ => 100_000,
-        });
-
-    (limit, price)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

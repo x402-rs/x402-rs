@@ -106,6 +106,42 @@ impl Debug for SolanaProvider {
 }
 
 impl SolanaProvider {
+    fn max_compute_unit_limit_from_env(network: Network) -> u32 {
+        let suffix = match network {
+            Network::Solana => "SOLANA",
+            Network::SolanaDevnet => "SOLANA_DEVNET",
+            _ => return 200_000, // fallback (shouldn't be used)
+        };
+
+        let limit_var = format!("X402_SOLANA_MAX_COMPUTE_UNIT_LIMIT_{}", suffix);
+        std::env::var(&limit_var)
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(match network {
+                Network::Solana => 400_000,
+                Network::SolanaDevnet => 200_000,
+                _ => 200_000,
+            })
+    }
+
+    fn max_compute_unit_price_from_env(network: Network) -> u64 {
+        let suffix = match network {
+            Network::Solana => "SOLANA",
+            Network::SolanaDevnet => "SOLANA_DEVNET",
+            _ => return 100_000, // fallback (shouldn't be used)
+        };
+
+        let price_var = format!("X402_SOLANA_MAX_COMPUTE_UNIT_PRICE_{}", suffix);
+        std::env::var(&price_var)
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(match network {
+                Network::Solana => 1_000_000,
+                Network::SolanaDevnet => 100_000,
+                _ => 100_000,
+            })
+    }
+
     pub fn try_new(
         keypair: Keypair,
         rpc_url: String,
@@ -543,8 +579,8 @@ impl FromEnvByNetworkBuild for SolanaProvider {
             }
         };
         let keypair = from_env::SignerType::from_env()?.make_solana_wallet()?;
-        let (max_compute_unit_limit, max_compute_unit_price) =
-            from_env::solana_compute_config_from_env(network);
+        let max_compute_unit_limit = Self::max_compute_unit_limit_from_env(network);
+        let max_compute_unit_price = Self::max_compute_unit_price_from_env(network);
         let provider = SolanaProvider::try_new(
             keypair,
             rpc_url,
