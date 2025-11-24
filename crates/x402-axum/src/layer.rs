@@ -1270,42 +1270,42 @@ pub type DynamicPriceCallback = dyn for<'a> Fn(
 pub struct DynamicPriceFn(Arc<DynamicPriceCallback>);
 
 impl Debug for DynamicPriceFn {
-fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "DynamicPriceFn(<function>)")
-}
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DynamicPriceFn(<function>)")
+    }
 }
 
 impl PartialEq for DynamicPriceFn {
-fn eq(&self, _other: &Self) -> bool {
-    // Function pointers can't be meaningfully compared for equality
-    false
-}
-}
+    fn eq(&self, _other: &Self) -> bool {
+        // Function pointers can't be meaningfully compared for equality
+        false
+    }
+    }
 
 impl Eq for DynamicPriceFn {}
 
 impl DynamicPriceFn {
-pub fn new<P>(price_callback: P) -> Self
-where
-    P: for<'a> Fn(
-            &'a HeaderMap,
-            &'a Uri,
-            &'a Url,
-        )
-            -> Pin<Box<dyn Future<Output = Result<TokenAmount, X402Error>> + Send + 'a>>
-        + Send
-        + Sync
-        + 'static,
-{
-    DynamicPriceFn(Arc::new(price_callback))
-}
+    pub fn new<P>(price_callback: P) -> Self
+    where
+        P: for<'a> Fn(
+                &'a HeaderMap,
+                &'a Uri,
+                &'a Url,
+            )
+                -> Pin<Box<dyn Future<Output = Result<TokenAmount, X402Error>> + Send + 'a>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        DynamicPriceFn(Arc::new(price_callback))
+    }
 
-pub async fn get_price(
-    &self,
-    headers: &HeaderMap,
-    uri: &Uri,
-    base_url: &Url,
-) -> Result<TokenAmount, X402Error> {
-    (self.0)(headers, uri, base_url).await
+    pub async fn get_price(
+        &self,
+        headers: &HeaderMap,
+        uri: &Uri,
+        base_url: &Url,
+    ) -> Result<TokenAmount, X402Error> {
+        (self.0)(headers, uri, base_url).await
     }
 }
