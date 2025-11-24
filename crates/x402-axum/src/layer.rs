@@ -1258,12 +1258,12 @@ async fn gather_payment_requirements(
 /// x402.with_dynamic_price(callback);
 /// ```
 pub type DynamicPriceCallback = dyn for<'a> Fn(
-    &'a HeaderMap,
-    &'a Uri,
-    &'a Url,
-) -> Pin<Box<dyn Future<Output = Result<TokenAmount, X402Error>> + Send + 'a>>
-+ Send
-+ Sync;
+        &'a HeaderMap,
+        &'a Uri,
+        &'a Url,
+    ) -> Pin<Box<dyn Future<Output = Result<TokenAmount, X402Error>> + Send + 'a>>
+    + Send
+    + Sync;
 
 /// A clonable wrapper for an async price callback function that computes per-request prices.
 #[derive(Clone)]
@@ -1280,7 +1280,7 @@ impl PartialEq for DynamicPriceFn {
         // Function pointers can't be meaningfully compared for equality
         false
     }
-    }
+}
 
 impl Eq for DynamicPriceFn {}
 
