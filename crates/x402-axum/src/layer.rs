@@ -1099,7 +1099,7 @@ pub enum PaymentOffers {
     },
 }
 
-const STALE_PAYMENT_VALIDITY_MILLIS: u128 = 5_000; // 5 seconds
+const STALE_PAYMENT_VALIDITY_MILLIS: u128 = 5_000; // 5 seconds TODO: configurable
 
 #[derive(Clone, Debug)]
 pub struct StalePaymentOffers {
