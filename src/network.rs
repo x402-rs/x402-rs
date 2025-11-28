@@ -54,6 +54,12 @@ pub enum Network {
     /// Sei testnet (chain ID 1328).
     #[serde(rename = "sei-testnet")]
     SeiTestnet,
+
+    #[serde(rename = "monad")]
+    Monad,
+
+    #[serde(rename = "monad-testnet")]
+    MonadTestnet,
 }
 
 impl Display for Network {
@@ -71,6 +77,8 @@ impl Display for Network {
             Network::Polygon => write!(f, "polygon"),
             Network::Sei => write!(f, "sei"),
             Network::SeiTestnet => write!(f, "sei-testnet"),
+            Network::Monad => write!(f, "monad"),
+            Network::MonadTestnet => write!(f, "monad-testnet"),
         }
     }
 }
@@ -96,6 +104,8 @@ impl From<Network> for NetworkFamily {
             Network::Polygon => NetworkFamily::Evm,
             Network::Sei => NetworkFamily::Evm,
             Network::SeiTestnet => NetworkFamily::Evm,
+            Network::Monad => NetworkFamily::Evm,
+            Network::MonadTestnet => NetworkFamily::Evm,
         }
     }
 }
@@ -116,6 +126,8 @@ impl Network {
             Network::Polygon,
             Network::Sei,
             Network::SeiTestnet,
+            Network::Monad,
+            Network::MonadTestnet,
         ]
     }
 }
@@ -282,6 +294,36 @@ static USDC_SEI_TESTNET: Lazy<USDCDeployment> = Lazy::new(|| {
     })
 });
 
+/// Lazily initialized known USDC deployment on Monad mainnet as [`USDCDeployment`].
+static USDC_MONAD: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0x754704Bc059F8C67012fEd69BC8A327a5aafb603").into(),
+            network: Network::Monad,
+        },
+        decimals: 6,
+        eip712: Some(TokenDeploymentEip712 {
+            name: "USD Coin".into(),
+            version: "2".into(),
+        }),
+    })
+});
+
+/// Lazily initialized known USDC deployment on Monad testnet as [`USDCDeployment`].
+static USDC_MONAD_TESTNET: Lazy<USDCDeployment> = Lazy::new(|| {
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: address!("0x534b2f3A21130d7a60830c2Df862319e593943A3").into(),
+            network: Network::MonadTestnet,
+        },
+        decimals: 6,
+        eip712: Some(TokenDeploymentEip712 {
+            name: "USD Coin".into(),
+            version: "2".into(),
+        }),
+    })
+});
+
 /// A known USDC deployment as a wrapper around [`TokenDeployment`].
 #[derive(Clone, Debug)]
 pub struct USDCDeployment(pub TokenDeployment);
@@ -343,6 +385,8 @@ impl USDCDeployment {
             Network::Polygon => &USDC_POLYGON,
             Network::Sei => &USDC_SEI,
             Network::SeiTestnet => &USDC_SEI_TESTNET,
+            Network::Monad => &USDC_MONAD,
+            Network::MonadTestnet => &USDC_MONAD_TESTNET,
         }
     }
 }
