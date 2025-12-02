@@ -184,20 +184,7 @@ async fn my_handler(Extension(settlement): Extension<Option<SettleResponse>>) ->
 }
 
 #[instrument(skip_all)]
-async fn weather_handler(
-    Extension(settlement): Extension<Option<SettleResponse>>,
-) -> impl IntoResponse {
-    if let Some(settlement) = settlement {
-        tracing::info!(
-            success = settlement.success,
-            transaction = ?settlement.transaction,
-            payer = ?settlement.payer,
-            network = ?settlement.network,
-            "Weather API payment settled before execution"
-        );
-    } else {
-        tracing::info!("Weather API payment will be settled after execution");
-    }
+async fn weather_handler() -> impl IntoResponse {
     (
         StatusCode::OK,
         axum::Json(json!({
