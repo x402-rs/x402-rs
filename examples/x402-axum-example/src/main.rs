@@ -1,3 +1,4 @@
+use axum::Extension;
 use axum::Router;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -12,6 +13,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 use x402_axum::{IntoPriceTag, X402Middleware};
 use x402_rs::network::{Network, USDCDeployment};
 use x402_rs::telemetry::Telemetry;
+use x402_rs::types::SettleResponse;
 use x402_rs::{address_evm, address_sol};
 
 #[tokio::main]
@@ -166,7 +168,18 @@ async fn main() {
 }
 
 #[instrument(skip_all)]
-async fn my_handler() -> impl IntoResponse {
+async fn my_handler(Extension(settlement): Extension<Option<SettleResponse>>) -> impl IntoResponse {
+    if let Some(settlement) = settlement {
+        tracing::info!(
+            success = settlement.success,
+            transaction = ?settlement.transaction,
+            payer = ?settlement.payer,
+            network = ?settlement.network,
+            "Payment settled before execution"
+        );
+    } else {
+        tracing::info!("Payment will be settled after execution");
+    }
     (StatusCode::OK, "This is a VIP content!")
 }
 
