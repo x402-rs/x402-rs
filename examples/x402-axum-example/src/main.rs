@@ -196,20 +196,7 @@ async fn weather_handler() -> impl IntoResponse {
 }
 
 #[instrument(skip_all)]
-async fn internal_handler(
-    Extension(settlement): Extension<Option<SettleResponse>>,
-) -> impl IntoResponse {
-    if let Some(settlement) = settlement {
-        tracing::info!(
-            success = settlement.success,
-            transaction = ?settlement.transaction,
-            payer = ?settlement.payer,
-            network = ?settlement.network,
-            "Internal API payment settled before execution"
-        );
-    } else {
-        tracing::info!("Internal API payment will be settled after execution");
-    }
+async fn internal_handler() -> impl IntoResponse {
     (
         StatusCode::OK,
         axum::Json(json!({
