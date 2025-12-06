@@ -9,7 +9,7 @@ This small demo shows how to configure a reqwest client to:
 ## What it does
 
 On startup, this example:
-- Reads your private key from env variable `PRIVATE_KEY`
+- Reads your private key from env variable `EVM_PRIVATE_KEY` or `SOLANA_PRIVATE_KEY`
 - Builds a `reqwest` client using [`reqwest-middleware`](https://crates.io/crates/reqwest-middleware) and  [`x402-reqwest`](https://crates.io/crates/x402-reqwest)
 - Sends a request to a protected endpoint
 
@@ -25,14 +25,14 @@ Just set your token preferences and treat it like any other `reqwest` HTTP clien
 # Prerequisites
 - A private key with testnet funds (Base Sepolia USDC)
 -	Rust + Cargo
--	`PRIVATE_KEY` set in your environment (or in `.env` file, see `.env.example`)
+-	`EVM_PRIVATE_KEY` or `SOLANA_PRIVATE_KEY` set in your environment (or in `.env` file, see `.env.example`)
 
 ## Running the Example
 ```shell
 # 1. Clone the repo and cd into this example folder
 # 2. Create `.env` file
 cp .env.example .env
-# 3. Set your PRIVATE_KEY inside `.env`
+# 3. Set your EVM_PRIVATE_KEY or SOLANA_PRIVATE_KEY inside `.env`
 # 4. Run
 cargo run
 ```
