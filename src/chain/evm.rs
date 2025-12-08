@@ -30,7 +30,7 @@ use alloy::providers::{
     Identity, MULTICALL3_ADDRESS, MulticallItem, Provider, RootProvider, WalletProvider,
 };
 use alloy::rpc::client::RpcClient;
-use alloy::rpc::types::{TransactionReceipt, TransactionRequest};
+use alloy::rpc::types::{BlockId, TransactionReceipt, TransactionRequest};
 use alloy::sol_types::{Eip712Domain, SolCall, SolStruct, eip712_domain};
 use alloy::{hex, sol};
 use async_trait::async_trait;
@@ -342,6 +342,24 @@ impl MetaEvmProvider for EvmProvider {
                 .await
                 .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
             txr.set_gas_price(gas);
+        }
+
+        // On Flashbots / OP-stack chains, force gas estimation against latest block to avoid
+        // trigger reverts during estimation.
+        if matches!(self.chain.network, Network::Base | Network::BaseSepolia) && txr.gas.is_none() {
+            match self
+                .inner
+                .estimate_gas(txr.clone())
+                .block(BlockId::latest())
+                .await
+            {
+                Ok(gas_limit) => {
+                    txr.set_gas_limit(gas_limit);
+                }
+                Err(e) => {
+                    tracing::warn!(network=%self.chain.network, error=?e, "gas estimation (latest) failed, continuing without explicit limit");
+                }
+            }
         }
 
         // Send transaction with error handling for nonce reset
