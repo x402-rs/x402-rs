@@ -920,12 +920,16 @@ where
                 Err(err) => return err.into_response(),
             };
 
-            let header_value = match self.settlement_to_header(settlement) {
+            let header_value = match self.settlement_to_header(settlement.clone()) {
                 Ok(header) => header,
                 Err(response) => return *response,
             };
 
-            // Settlement succeeded, now execute the request
+            // Settlement succeeded, add it as an extension and execute the request
+            let (mut parts, body) = req.into_parts();
+            parts.extensions.insert(Some(settlement));
+            let req = http::Request::from_parts(parts, body);
+
             let response = match Self::call_inner(inner, req).await {
                 Ok(response) => response,
                 Err(err) => return err.into_response(),
@@ -939,6 +943,11 @@ where
             // Settlement after execution (default): call inner handler first, then settle
             #[cfg(feature = "telemetry")]
             tracing::debug!("Settling payment after request execution");
+
+            // Add None to extensions since we haven't settled yet
+            let (mut parts, body) = req.into_parts();
+            parts.extensions.insert(None::<SettleResponse>);
+            let req = http::Request::from_parts(parts, body);
 
             let response = match Self::call_inner(inner, req).await {
                 Ok(response) => response,

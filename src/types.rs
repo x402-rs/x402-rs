@@ -902,7 +902,7 @@ impl VerifyRequest {
 /// to be used for settlement.
 pub type SettleRequest = VerifyRequest;
 
-#[derive(Debug, Serialize, Deserialize, thiserror::Error)]
+#[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
 #[serde(untagged, rename_all = "camelCase")]
 pub enum FacilitatorErrorReason {
     /// Payer doesn't have sufficient funds.
@@ -927,7 +927,7 @@ pub enum FacilitatorErrorReason {
 
 /// Returned from a facilitator after attempting to settle a payment on-chain.
 /// Indicates success/failure, transaction hash, and payer identity.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettleResponse {
     pub success: bool,
