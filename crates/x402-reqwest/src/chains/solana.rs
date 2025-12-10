@@ -1,14 +1,15 @@
 use async_trait::async_trait;
-use solana_client::rpc_client::RpcClient;
-use solana_client::rpc_config::RpcSimulateTransactionConfig;
+use solana_compute_budget_interface::ComputeBudgetInstruction;
+use solana_compute_budget_interface::ID as ComputeBudgetInstructionId;
 use solana_hash::Hash;
+use solana_instruction::Instruction;
 use solana_keypair::Keypair;
 use solana_message::VersionedMessage;
 use solana_message::v0::Message as MessageV0;
 use solana_program_pack::Pack;
 use solana_pubkey::Pubkey;
-use solana_sdk::compute_budget::ComputeBudgetInstruction;
-use solana_sdk::instruction::Instruction;
+use solana_rpc_client::api::config::RpcSimulateTransactionConfig;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_signature::Signature;
 use solana_signer::Signer;
 use solana_transaction::versioned::VersionedTransaction;
@@ -38,11 +39,15 @@ impl SolanaSenderWallet {
         }
     }
 
-    fn fetch_mint(&self, mint_address: &SolanaAddress) -> Result<Mint, X402PaymentsError> {
+    async fn fetch_mint(&self, mint_address: &SolanaAddress) -> Result<Mint, X402PaymentsError> {
         let mint_address: Pubkey = mint_address.clone().into();
-        let account = self.rpc_client.get_account(&mint_address).map_err(|e| {
-            X402PaymentsError::SigningError(format!("failed to fetch mint {mint_address}: {e}"))
-        })?;
+        let account = self
+            .rpc_client
+            .get_account(&mint_address)
+            .await
+            .map_err(|e| {
+                X402PaymentsError::SigningError(format!("failed to fetch mint {mint_address}: {e}"))
+            })?;
         if account.owner == spl_token::id() {
             let mint = spl_token::state::Mint::unpack(&account.data).map_err(|e| {
                 X402PaymentsError::SigningError(format!(
@@ -97,7 +102,7 @@ impl SenderWallet for SolanaSenderWallet {
                 "failed to convert asset to SolanaAddress: {e}"
             ))
         })?;
-        let mint = self.fetch_mint(&asset)?;
+        let mint = self.fetch_mint(&asset).await?;
         // create the ATA (if needed)
         let fee_payer = selected
             .extra
@@ -133,6 +138,7 @@ impl SenderWallet for SolanaSenderWallet {
         let ata_account = self
             .rpc_client
             .get_account_with_commitment(&ata, self.rpc_client.commitment())
+            .await
             .map_err(|e| X402PaymentsError::SigningError(format!("{e}")))?
             .value;
         let create_ata_instruction = if ata_account.is_some() {
@@ -214,15 +220,17 @@ impl SenderWallet for SolanaSenderWallet {
         let recent_blockhash = self
             .rpc_client
             .get_latest_blockhash()
+            .await
             .map_err(|e| X402PaymentsError::SigningError(format!("{e:?}")))?;
         let fee = get_priority_fee_micro_lamports(
             self.rpc_client.as_ref(),
             &[fee_payer, destination_ata, source_ata],
-        )?;
+        )
+        .await?;
         let (msg_to_sim, instructions) =
             build_message_to_simulate(fee_payer, &transfer_instructions, fee, recent_blockhash)?;
         // 2) Estimate CU via simulation
-        let estimated_cu = estimate_compute_units(self.rpc_client.as_ref(), &msg_to_sim)?;
+        let estimated_cu = estimate_compute_units(self.rpc_client.as_ref(), &msg_to_sim).await?;
         // prepend the CU limit instruction
         let cu_ix = ComputeBudgetInstruction::set_compute_unit_limit(estimated_cu);
         let msg = {
@@ -299,7 +307,7 @@ pub fn build_message_to_simulate(
 }
 
 /// 2) Estimate compute units by simulating the unsigned/signed tx. (We sign with the fee payer so simulation accepts it.)
-pub fn estimate_compute_units(
+pub async fn estimate_compute_units(
     rpc: &RpcClient,
     message: &MessageV0,
 ) -> Result<u32, X402PaymentsError> {
@@ -321,6 +329,7 @@ pub fn estimate_compute_units(
                 ..RpcSimulateTransactionConfig::default()
             },
         )
+        .await
         .map_err(|e| X402PaymentsError::SigningError(format!("{e:?}")))?;
     let units = sim
         .value
@@ -331,12 +340,13 @@ pub fn estimate_compute_units(
     Ok(units as u32)
 }
 
-pub fn get_priority_fee_micro_lamports(
+pub async fn get_priority_fee_micro_lamports(
     rpc: &RpcClient,
     writeable_accounts: &[Pubkey],
 ) -> Result<u64, X402PaymentsError> {
     let fee = rpc
         .get_recent_prioritization_fees(writeable_accounts)
+        .await
         .map_err(|e| X402PaymentsError::SigningError(format!("{e:?}")))?
         .iter()
         .filter(|e| e.prioritization_fee > 0)
@@ -350,7 +360,7 @@ pub fn get_priority_fee_micro_lamports(
 /// Update the first set_compute_unit_limit ix if it exists, else append a new one.
 pub fn update_or_append_set_compute_unit_limit(ixs: &mut Vec<Instruction>, units: u32) {
     // opcode 0x02 = SetComputeUnitLimit
-    let target_program = solana_sdk::compute_budget::id();
+    let target_program = ComputeBudgetInstructionId;
     let new_ix = ComputeBudgetInstruction::set_compute_unit_limit(units);
 
     // find first ix targeting the ComputeBudget program with opcode=2
