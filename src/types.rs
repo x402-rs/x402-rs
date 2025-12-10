@@ -7,8 +7,8 @@
 //! This module supports ERC-3009 style authorization for tokens (EIP-712 typed signatures),
 //! and provides serialization logic compatible with external clients.
 
-use alloy_primitives::hex;
 use alloy::sol;
+use alloy_primitives::hex;
 use alloy_primitives::{Bytes, U256};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as b64;

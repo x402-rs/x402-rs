@@ -14,23 +14,23 @@
 //! - Settlement is atomic: deploy (if needed) + transfer happen in a single user flow.
 //! - Verification does not persist state.
 
+use alloy::sol;
 use alloy_contract::SolCallBuilder;
-use alloy::dyn_abi::SolType;
-use alloy::providers::ProviderBuilder;
-use alloy::providers::bindings::IMulticall3;
-use alloy::providers::fillers::NonceManager;
-use alloy::providers::fillers::{
+use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
+use alloy_primitives::hex;
+use alloy_primitives::{Address, Bytes, FixedBytes, U256, address};
+use alloy_provider::ProviderBuilder;
+use alloy_provider::bindings::IMulticall3;
+use alloy_provider::fillers::NonceManager;
+use alloy_provider::fillers::{
     BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
 };
-use alloy::providers::{
+use alloy_provider::{
     Identity, MULTICALL3_ADDRESS, MulticallItem, Provider, RootProvider, WalletProvider,
 };
-use alloy::rpc::client::RpcClient;
-use alloy::rpc::types::{TransactionReceipt, TransactionRequest};
-use alloy_primitives::hex;
-use alloy::sol;
-use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
-use alloy_primitives::{Address, Bytes, FixedBytes, U256, address};
+use alloy_rpc_client::RpcClient;
+use alloy_rpc_types_eth::{TransactionReceipt, TransactionRequest};
+use alloy_sol_types::SolType;
 use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, eip712_domain};
 use async_trait::async_trait;
 use dashmap::DashMap;
