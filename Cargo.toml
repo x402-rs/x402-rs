@@ -46,7 +46,7 @@ solana-commitment-config = { version = "2.2.1" } # Older version due to compatib
 bincode = { version = "1.3.3" } # Older version due to compatibility with solana-sdk
 spl-token = { version = "8.0.0" }
 spl-token-2022 = { version = "9.0.0" }
-solana-client = { version = "2.3.7" }
+solana-client = { version = "2.3.13" }
 
 # Tracing and OpenTelemetry
 tracing = { version = "0.1.41" }
