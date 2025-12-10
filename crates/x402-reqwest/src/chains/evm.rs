@@ -1,5 +1,5 @@
 use alloy_signer::Signer;
-use alloy::sol_types::{SolStruct, eip712_domain};
+use alloy_sol_types::{SolStruct, eip712_domain};
 use alloy_primitives::FixedBytes;
 use alloy_signer_local::PrivateKeySigner;
 use async_trait::async_trait;
