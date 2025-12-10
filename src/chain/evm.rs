@@ -16,7 +16,7 @@
 
 use alloy::contract::SolCallBuilder;
 use alloy::dyn_abi::SolType;
-use alloy::network::{
+use alloy_network::{
     Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder,
 };
 use alloy_primitives::{Address, Bytes, FixedBytes, U256, address};

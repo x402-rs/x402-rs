@@ -9136,6 +9136,7 @@ name = "x402-rs"
 version = "0.10.0"
 dependencies = [
  "alloy",
+ "alloy-network",
  "alloy-primitives",
  "async-trait",
  "axum",
