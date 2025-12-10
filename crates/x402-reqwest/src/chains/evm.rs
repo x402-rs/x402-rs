@@ -1,6 +1,4 @@
-use crate::X402PaymentsError;
-use crate::chains::{IntoSenderWallet, SenderWallet};
-use alloy::primitives::FixedBytes;
+use alloy_primitives::FixedBytes;
 use alloy::signers::Signer;
 use alloy::signers::local::PrivateKeySigner;
 use alloy::sol_types::{SolStruct, eip712_domain};
@@ -14,6 +12,9 @@ use x402_rs::types::{
     EvmSignature, ExactEvmPayload, ExactEvmPayloadAuthorization, ExactPaymentPayload,
     HexEncodedNonce, PaymentPayload, PaymentRequirements, Scheme, TransferWithAuthorization,
 };
+
+use crate::X402PaymentsError;
+use crate::chains::{IntoSenderWallet, SenderWallet};
 
 #[derive(Clone)]
 pub struct EvmSenderWallet {

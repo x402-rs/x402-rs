@@ -4,7 +4,7 @@
 //! and provides statically known USDC deployments per network.
 
 use crate::types::{MixedAddress, TokenAsset, TokenDeployment, TokenDeploymentEip712};
-use alloy::primitives::address;
+use alloy_primitives::address;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;

@@ -19,7 +19,7 @@ use alloy::dyn_abi::SolType;
 use alloy::network::{
     Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder,
 };
-use alloy::primitives::{Address, Bytes, FixedBytes, U256, address};
+use alloy_primitives::{Address, Bytes, FixedBytes, U256, address};
 use alloy::providers::ProviderBuilder;
 use alloy::providers::bindings::IMulticall3;
 use alloy::providers::fillers::NonceManager;
@@ -1249,7 +1249,7 @@ impl PendingNonceManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy::primitives::address;
+    use alloy_primitives::address;
 
     #[tokio::test]
     async fn test_reset_nonce_clears_cache() {
