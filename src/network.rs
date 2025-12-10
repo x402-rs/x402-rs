@@ -7,7 +7,7 @@ use crate::types::{MixedAddress, TokenAsset, TokenDeployment, TokenDeploymentEip
 use alloy_primitives::address;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use std::borrow::Borrow;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;

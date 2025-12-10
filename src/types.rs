@@ -18,8 +18,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, Zero};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use solana_sdk::bs58;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -656,7 +655,7 @@ macro_rules! address_evm {
 #[macro_export]
 macro_rules! address_sol {
     ($s:literal) => {
-        $crate::types::MixedAddress::Solana($crate::__reexports::solana_sdk::pubkey!($s))
+        $crate::types::MixedAddress::Solana($crate::__reexports::solana_pubkey::pubkey!($s))
     };
 }
 

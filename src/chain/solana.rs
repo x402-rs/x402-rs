@@ -1,13 +1,13 @@
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
 use solana_commitment_config::CommitmentConfig;
+use solana_compute_budget_interface::ID as ComputeBudgetInstructionId;
 use solana_keypair::Keypair;
-use solana_sdk::instruction::CompiledInstruction;
-use solana_sdk::pubkey;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use solana_sdk::signer::Signer;
-use solana_sdk::transaction::VersionedTransaction;
+use solana_message::compiled_instruction::CompiledInstruction;
+use solana_pubkey::{Pubkey, pubkey};
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client_types::config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
+use solana_signature::Signature;
+use solana_signer::Signer;
+use solana_transaction::versioned::VersionedTransaction;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
@@ -186,11 +186,12 @@ impl SolanaProvider {
                     "invalid_exact_svm_payload_transaction_instructions_length".to_string(),
                 ))?;
         let account = instruction.program_id(transaction.message.static_account_keys());
-        let compute_budget = solana_sdk::compute_budget::ID;
         let data = instruction.data.as_slice();
 
         // Verify program ID, discriminator, and data length (1 byte discriminator + 4 bytes u32)
-        if compute_budget.ne(account) || data.first().cloned().unwrap_or(0) != 2 || data.len() != 5
+        if ComputeBudgetInstructionId.ne(account)
+            || data.first().cloned().unwrap_or(0) != 2
+            || data.len() != 5
         {
             return Err(FacilitatorLocalError::DecodingError(
                 "invalid_exact_svm_payload_transaction_compute_limit_instruction".to_string(),
@@ -219,7 +220,7 @@ impl SolanaProvider {
                         .to_string(),
                 ))?;
         let account = instruction.program_id(transaction.message.static_account_keys());
-        let compute_budget = solana_sdk::compute_budget::ID;
+        let compute_budget = solana_compute_budget_interface::ID;
         let data = instruction.data.as_slice();
         if compute_budget.ne(account) || data.first().cloned().unwrap_or(0) != 3 || data.len() != 9
         {

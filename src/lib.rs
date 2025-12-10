@@ -32,5 +32,5 @@ pub mod types;
 #[doc(hidden)]
 pub mod __reexports {
     pub use alloy_primitives;
-    pub use solana_sdk;
+    pub use solana_pubkey;
 }
