@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
+use solana_hash::Hash;
 use solana_keypair::Keypair;
 use solana_program_pack::Pack;
 use solana_pubkey::Pubkey;
 use solana_sdk::compute_budget::ComputeBudgetInstruction;
-use solana_sdk::hash::Hash;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::message::{VersionedMessage, v0::Message as MessageV0};
 use solana_signature::Signature;
