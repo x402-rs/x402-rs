@@ -9097,6 +9097,7 @@ version = "0.4.1"
 dependencies = [
  "alloy",
  "alloy-primitives",
+ "alloy-signer",
  "alloy-signer-local",
  "async-trait",
  "bincode",
