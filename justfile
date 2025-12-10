@@ -20,3 +20,10 @@ clippy-all:
   cd crates/x402-reqwest && cargo clippy
   cd examples/x402-axum-example && cargo clippy
   cd examples/x402-reqwest-example && cargo clippy
+
+check-all:
+  cargo check
+  cd crates/x402-axum && cargo check
+  cd crates/x402-reqwest && cargo check
+  cd examples/x402-axum-example && cargo check
+  cd examples/x402-reqwest-example && cargo check

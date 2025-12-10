@@ -1,4 +1,4 @@
-use alloy::signers::local::PrivateKeySigner;
+use alloy_signer_local::PrivateKeySigner;
 use dotenvy::dotenv;
 use reqwest::Client;
 use solana_sdk::signature::Keypair;

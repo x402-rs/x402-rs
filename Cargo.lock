@@ -9096,6 +9096,8 @@ name = "x402-reqwest"
 version = "0.4.1"
 dependencies = [
  "alloy",
+ "alloy-primitives",
+ "alloy-signer-local",
  "async-trait",
  "bincode",
  "http 1.4.0",
@@ -9119,6 +9121,7 @@ name = "x402-reqwest-example"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-signer-local",
  "bincode",
  "dotenvy",
  "reqwest",
@@ -9138,6 +9141,7 @@ dependencies = [
  "alloy",
  "alloy-network",
  "alloy-primitives",
+ "alloy-signer-local",
  "async-trait",
  "axum",
  "base64 0.22.1",

@@ -21,7 +21,7 @@
 //! spends more than a configured amount per token. This helps prevent overpayment or abuse.
 //!
 //! ```rust,no_run
-//! use alloy::signers::local::PrivateKeySigner;
+//! use alloy_signer_local::PrivateKeySigner;
 //! use x402_reqwest::{MaxTokenAmountFromAmount, X402Payments};
 //! use x402_rs::network::{Network, USDCDeployment};
 //!
@@ -38,7 +38,7 @@
 //! ```rust,no_run
 //! use reqwest::ClientBuilder;
 //! use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, MaxTokenAmountFromAmount};
-//! use alloy::signers::local::PrivateKeySigner;
+//! use alloy_signer_local::PrivateKeySigner;
 //! use x402_rs::network::{Network, USDCDeployment};
 //!
 //! #[tokio::main]
@@ -63,7 +63,7 @@
 //! ```rust,no_run
 //! use reqwest::Client;
 //! use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, MaxTokenAmountFromAmount};
-//! use alloy::signers::local::PrivateKeySigner;
+//! use alloy_signer_local::PrivateKeySigner;
 //! use x402_rs::network::{Network, USDCDeployment};
 //!
 //! #[tokio::main]
@@ -86,7 +86,7 @@
 //!
 //! ### Advanced: using [`reqwest_middleware::ClientBuilder`]
 //! ```rust,no_run
-//! use alloy::signers::local::PrivateKeySigner;
+//! use alloy_signer_local::PrivateKeySigner;
 //! use reqwest::Client;
 //! use reqwest_middleware as rqm;
 //! use x402_reqwest::{MaxTokenAmountFromAmount, X402Payments};

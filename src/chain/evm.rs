@@ -16,10 +16,6 @@
 
 use alloy::contract::SolCallBuilder;
 use alloy::dyn_abi::SolType;
-use alloy_network::{
-    Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder,
-};
-use alloy_primitives::{Address, Bytes, FixedBytes, U256, address};
 use alloy::providers::ProviderBuilder;
 use alloy::providers::bindings::IMulticall3;
 use alloy::providers::fillers::NonceManager;
@@ -33,6 +29,8 @@ use alloy::rpc::client::RpcClient;
 use alloy::rpc::types::{TransactionReceipt, TransactionRequest};
 use alloy::sol_types::{Eip712Domain, SolCall, SolStruct, eip712_domain};
 use alloy::{hex, sol};
+use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
+use alloy_primitives::{Address, Bytes, FixedBytes, U256, address};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use std::sync::Arc;

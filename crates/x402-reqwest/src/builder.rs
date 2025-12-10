@@ -6,7 +6,7 @@
 //! ```rust,no_run
 //! use reqwest::Client;
 //! use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild};
-//! use alloy::signers::local::PrivateKeySigner;
+//! use alloy_signer_local::PrivateKeySigner;
 //!
 //! let signer: PrivateKeySigner = "...".parse().unwrap();
 //!
