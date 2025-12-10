@@ -27,12 +27,14 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::cors;
 
+use crate::config::Config;
 use crate::facilitator_local::FacilitatorLocal;
 use crate::provider_cache::ProviderCache;
 use crate::sig_down::SigDown;
 use crate::telemetry::Telemetry;
 
 mod chain;
+mod config;
 mod facilitator;
 mod facilitator_local;
 mod from_env;
@@ -84,13 +86,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .allow_headers(cors::Any),
         );
 
-    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
-    let port = std::env::var("PORT")
-        .ok()
-        .and_then(|s| s.parse::<u16>().ok())
-        .unwrap_or(8080);
+    let config = Config::load().unwrap_or_else(|e| {
+        tracing::error!("Failed to load configuration: {}", e);
+        std::process::exit(1);
+    });
 
-    let addr = SocketAddr::new(host.parse().expect("HOST must be a valid IP address"), port);
+    let addr = SocketAddr::new(config.host(), config.port());
     tracing::info!("Starting server at http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr)
