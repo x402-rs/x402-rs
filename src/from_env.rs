@@ -1,11 +1,12 @@
-use crate::network::Network;
 use alloy_network::EthereumWallet;
 use alloy_signer_local::PrivateKeySigner;
 use serde::Deserialize;
 use serde::Serialize;
-use solana_sdk::signature::Keypair;
+use solana_keypair::Keypair;
 use std::env;
 use std::str::FromStr;
+
+use crate::network::Network;
 
 pub const ENV_SIGNER_TYPE: &str = "SIGNER_TYPE";
 pub const ENV_EVM_PRIVATE_KEY: &str = "EVM_PRIVATE_KEY";
