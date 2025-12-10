@@ -64,6 +64,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_version(env!("CARGO_PKG_VERSION"))
         .register();
 
+    let config = Config::load().unwrap_or_else(|e| {
+        tracing::error!("Failed to load configuration: {}", e);
+        std::process::exit(1);
+    });
+
     let provider_cache = ProviderCache::from_env().await;
     // Abort if we can't initialise Ethereum providers early
     let provider_cache = match provider_cache {
@@ -85,11 +90,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .allow_methods([Method::GET, Method::POST])
                 .allow_headers(cors::Any),
         );
-
-    let config = Config::load().unwrap_or_else(|e| {
-        tracing::error!("Failed to load configuration: {}", e);
-        std::process::exit(1);
-    });
 
     let addr = SocketAddr::new(config.host(), config.port());
     tracing::info!("Starting server at http://{}", addr);

@@ -1,4 +1,14 @@
 {
   "port": 8080,
-  "host": "0.0.0.0"
+  "host": "0.0.0.0",
+  "chains": {
+    "eip155:84532": {
+        "v1_name": "base-sepolia",
+        "eip1559": true,
+        "flashblocks": true
+    },
+    "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
+        "v1_name": "solana"
+    }
+  }
 }

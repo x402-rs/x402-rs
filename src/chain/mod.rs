@@ -9,6 +9,7 @@ use crate::types::{
     VerifyRequest, VerifyResponse,
 };
 
+pub mod chain_id;
 pub mod evm;
 pub mod solana;
 

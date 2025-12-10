@@ -1,4 +1,4 @@
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::fmt;
 use std::str::FromStr;
 
@@ -29,7 +29,7 @@ impl FromStr for Namespace {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ChainId {
     pub namespace: Namespace,
     pub chain_id: String,
@@ -38,6 +38,12 @@ pub struct ChainId {
 impl fmt::Display for ChainId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.namespace, self.chain_id)
+    }
+}
+
+impl fmt::Debug for ChainId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
@@ -51,7 +57,10 @@ impl FromStr for ChainId {
         }
         let namespace = Namespace::from_str(parts[0])?;
         let chain_id = parts[1].to_string();
-        Ok(ChainId { namespace, chain_id })
+        Ok(ChainId {
+            namespace,
+            chain_id,
+        })
     }
 }
 
@@ -107,7 +116,8 @@ mod tests {
 
     #[test]
     fn test_chain_id_deserialize_solana() {
-        let chain_id: ChainId = serde_json::from_str("\"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp\"").unwrap();
+        let chain_id: ChainId =
+            serde_json::from_str("\"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp\"").unwrap();
         assert_eq!(chain_id.namespace, Namespace::Solana);
         assert_eq!(chain_id.chain_id, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
     }

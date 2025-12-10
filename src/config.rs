@@ -1,10 +1,13 @@
 //! Configuration module for the x402 facilitator server.
 
 use clap::Parser;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::net::IpAddr;
 use std::path::PathBuf;
+
+use crate::chain::chain_id::ChainId;
 
 /// CLI arguments for the x402 facilitator server.
 #[derive(Parser, Debug)]
@@ -26,6 +29,113 @@ pub struct Config {
     port: u16,
     #[serde(default = "config_defaults::default_host")]
     host: IpAddr,
+    #[serde(default, with = "chains_serde")]
+    chains: ChainsConfigMap,
+}
+
+/// A mapping from CAIP-2 chain identifiers to their respective chain configurations.
+pub type ChainsConfigMap = HashMap<ChainId, ChainConfig>;
+
+/// Configuration for a specific chain.
+///
+/// This enum represents chain-specific configuration that varies by chain family
+/// (EVM vs Solana). The chain family is determined by the CAIP-2 prefix of the
+/// chain identifier key (e.g., "eip155:" for EVM, "solana:" for Solana).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum ChainConfig {
+    /// EVM chain configuration (for chains with "eip155:" prefix).
+    Evm(EvmChainConfig),
+    /// Solana chain configuration (for chains with "solana:" prefix).
+    Solana(SolanaChainConfig),
+}
+
+/// Configuration specific to EVM-compatible chains.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EvmChainConfig {
+    /// The v1 protocol name for this chain (e.g., "base-sepolia").
+    pub v1_name: String,
+    /// Whether the chain supports EIP-1559 gas pricing.
+    #[serde(default)]
+    pub eip1559: bool,
+    /// Whether the chain supports flashblocks.
+    #[serde(default)]
+    pub flashblocks: bool,
+}
+
+/// Configuration specific to Solana chains.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SolanaChainConfig {
+    /// The v1 protocol name for this chain (e.g., "solana").
+    pub v1_name: String,
+}
+
+/// Custom serde module for deserializing the chains map with type discrimination
+/// based on the CAIP-2 chain identifier prefix.
+mod chains_serde {
+    use super::{ChainConfig, ChainId, EvmChainConfig, SolanaChainConfig};
+    use crate::chain::chain_id::Namespace;
+    use serde::de::{MapAccess, Visitor};
+    use serde::ser::SerializeMap;
+    use serde::{Deserializer, Serializer};
+    use std::collections::HashMap;
+    use std::fmt;
+
+    #[allow(dead_code)]
+    pub fn serialize<S>(
+        chains: &HashMap<ChainId, ChainConfig>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(chains.len()))?;
+        for (key, value) in chains {
+            map.serialize_entry(key, value)?;
+        }
+        map.end()
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<HashMap<ChainId, ChainConfig>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ChainsVisitor;
+
+        impl<'de> Visitor<'de> for ChainsVisitor {
+            type Value = HashMap<ChainId, ChainConfig>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a map of chain identifiers to chain configurations")
+            }
+
+            fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut map = HashMap::with_capacity(access.size_hint().unwrap_or(0));
+
+                while let Some(key) = access.next_key::<ChainId>()? {
+                    let config = match key.namespace {
+                        Namespace::Eip155 => {
+                            let evm_config: EvmChainConfig = access.next_value()?;
+                            ChainConfig::Evm(evm_config)
+                        }
+                        Namespace::Solana => {
+                            let solana_config: SolanaChainConfig = access.next_value()?;
+                            ChainConfig::Solana(solana_config)
+                        }
+                    };
+
+                    map.insert(key, config);
+                }
+
+                Ok(map)
+            }
+        }
+
+        deserializer.deserialize_map(ChainsVisitor)
+    }
 }
 
 impl Default for Config {
@@ -33,6 +143,7 @@ impl Default for Config {
         Config {
             port: config_defaults::default_port(),
             host: config_defaults::default_host(),
+            chains: HashMap::new(),
         }
     }
 }
@@ -124,12 +235,20 @@ impl Config {
     pub fn host(&self) -> IpAddr {
         self.host
     }
+
+    /// Get the chains configuration map.
+    ///
+    /// Keys are CAIP-2 chain identifiers (e.g., "eip155:84532", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").
+    pub fn chains(&self) -> &HashMap<ChainId, ChainConfig> {
+        &self.chains
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::env;
+    use std::str::FromStr;
 
     #[test]
     fn test_config_parsing_full() {
@@ -206,5 +325,100 @@ mod tests {
         // Result depends on whether config.json exists in cwd
         // We just verify it doesn't panic
         let _ = path;
+    }
+
+    #[test]
+    fn test_config_parsing_with_chains() {
+        let json = r#"{
+            "port": 3000,
+            "host": "127.0.0.1",
+            "chains": {
+                "eip155:84532": {
+                    "v1_name": "base-sepolia",
+                    "eip1559": true,
+                    "flashblocks": true
+                },
+                "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
+                    "v1_name": "solana"
+                }
+            }
+        }"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.port(), 3000);
+        assert_eq!(config.host().to_string(), "127.0.0.1");
+        assert_eq!(config.chains().len(), 2);
+
+        // Verify EVM chain config
+        let evm_key = ChainId::from_str("eip155:84532").unwrap();
+        let evm_config = config.chains().get(&evm_key).unwrap();
+        match evm_config {
+            ChainConfig::Evm(evm) => {
+                assert_eq!(evm.v1_name, "base-sepolia");
+                assert!(evm.eip1559);
+                assert!(evm.flashblocks);
+            }
+            _ => panic!("Expected EVM config"),
+        }
+
+        // Verify Solana chain config
+        let solana_key = ChainId::from_str("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").unwrap();
+        let solana_config = config.chains().get(&solana_key).unwrap();
+        match solana_config {
+            ChainConfig::Solana(solana) => {
+                assert_eq!(solana.v1_name, "solana");
+            }
+            _ => panic!("Expected Solana config"),
+        }
+    }
+
+    #[test]
+    fn test_config_parsing_evm_defaults() {
+        let json = r#"{
+            "chains": {
+                "eip155:8453": {
+                    "v1_name": "base"
+                }
+            }
+        }"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        let evm_key = ChainId::from_str("eip155:8453").unwrap();
+        let evm_config = config.chains().get(&evm_key).unwrap();
+        match evm_config {
+            ChainConfig::Evm(evm) => {
+                assert_eq!(evm.v1_name, "base");
+                assert!(!evm.eip1559); // default false
+                assert!(!evm.flashblocks); // default false
+            }
+            _ => panic!("Expected EVM config"),
+        }
+    }
+
+    #[test]
+    fn test_config_parsing_unknown_chain_family() {
+        let json = r#"{
+            "chains": {
+                "unknown:12345": {
+                    "v1_name": "test"
+                }
+            }
+        }"#;
+        let result: Result<Config, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("unknown namespace"));
+    }
+
+    #[test]
+    fn test_config_parsing_empty_chains() {
+        let json = r#"{"chains": {}}"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert!(config.chains().is_empty());
+    }
+
+    #[test]
+    fn test_config_parsing_no_chains_field() {
+        let json = r#"{"port": 8080}"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert!(config.chains().is_empty());
     }
 }
