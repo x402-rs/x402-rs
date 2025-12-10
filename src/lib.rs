@@ -31,6 +31,6 @@ pub mod types;
 // Hidden re-exports just for macro expansion.
 #[doc(hidden)]
 pub mod __reexports {
-    pub use alloy;
+    pub use alloy_primitives;
     pub use solana_sdk;
 }

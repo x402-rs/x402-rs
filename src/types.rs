@@ -7,9 +7,9 @@
 //! This module supports ERC-3009 style authorization for tokens (EIP-712 typed signatures),
 //! and provides serialization logic compatible with external clients.
 
-use alloy::sol;
-use alloy_primitives::hex;
+use alloy_primitives::{Address, hex};
 use alloy_primitives::{Bytes, U256};
+use alloy_sol_types::sol;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as b64;
 use once_cell::sync::Lazy;
@@ -158,10 +158,10 @@ impl Serialize for EvmSignature {
 
 /// Represents an EVM address.
 ///
-/// Wrapper around `alloy::primitives::Address`, providing display/serialization support.
+/// Wrapper around `alloy_primitives::Address`, providing display/serialization support.
 /// Used throughout the protocol for typed Ethereum address handling.
 #[derive(Debug, Copy, Clone, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub struct EvmAddress(pub alloy::primitives::Address);
+pub struct EvmAddress(pub Address);
 
 impl Display for EvmAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -176,8 +176,7 @@ pub struct EvmAddressDecodingError;
 impl FromStr for EvmAddress {
     type Err = EvmAddressDecodingError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let address =
-            alloy::primitives::Address::from_str(s).map_err(|_| EvmAddressDecodingError)?;
+        let address = Address::from_str(s).map_err(|_| EvmAddressDecodingError)?;
         Ok(Self(address))
     }
 }
@@ -189,20 +188,20 @@ impl TryFrom<&str> for EvmAddress {
     }
 }
 
-impl From<EvmAddress> for alloy::primitives::Address {
+impl From<EvmAddress> for Address {
     fn from(address: EvmAddress) -> Self {
         address.0
     }
 }
 
-impl From<alloy::primitives::Address> for EvmAddress {
-    fn from(address: alloy::primitives::Address) -> Self {
+impl From<Address> for EvmAddress {
+    fn from(address: Address) -> Self {
         EvmAddress(address)
     }
 }
 
-impl PartialEq<alloy::primitives::Address> for EvmAddress {
-    fn eq(&self, other: &alloy::primitives::Address) -> bool {
+impl PartialEq<Address> for EvmAddress {
+    fn eq(&self, other: &Address) -> bool {
         let other = *other;
         self.0 == other
     }
@@ -650,9 +649,7 @@ pub enum MixedAddress {
 #[macro_export]
 macro_rules! address_evm {
     ($s:literal) => {
-        $crate::types::MixedAddress::Evm(
-            $crate::__reexports::alloy::primitives::address!($s).into(),
-        )
+        $crate::types::MixedAddress::Evm($crate::__reexports::alloy_primitives::address!($s).into())
     };
 }
 
@@ -669,13 +666,13 @@ impl From<Pubkey> for MixedAddress {
     }
 }
 
-impl From<alloy::primitives::Address> for MixedAddress {
-    fn from(value: alloy::primitives::Address) -> Self {
+impl From<Address> for MixedAddress {
+    fn from(value: Address) -> Self {
         MixedAddress::Evm(value.into())
     }
 }
 
-impl TryFrom<MixedAddress> for alloy::primitives::Address {
+impl TryFrom<MixedAddress> for Address {
     type Error = MixedAddressError;
 
     fn try_from(value: MixedAddress) -> Result<Self, Self::Error> {
