@@ -1,7 +1,7 @@
-use alloy_signer::Signer;
-use alloy_sol_types::{SolStruct, eip712_domain};
 use alloy_primitives::FixedBytes;
+use alloy_signer::Signer;
 use alloy_signer_local::PrivateKeySigner;
+use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
 use rand::{Rng, rng};
 use std::sync::Arc;
