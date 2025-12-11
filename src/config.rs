@@ -111,6 +111,89 @@ pub struct RpcConfig {
 // Environment Variable Resolution
 // ============================================================================
 
+/// A transparent wrapper that resolves environment variables during deserialization.
+///
+/// Supports both literal values and environment variable references:
+/// - Literal: `"http://localhost:8083"`
+/// - Simple env var: `"$TREASURY_URL"`
+/// - Braced env var: `"${TREASURY_URL}"`
+///
+/// The wrapper implements `Deref` to provide transparent access to the inner type.
+#[derive(Debug, Clone)]
+pub struct LiteralOrEnv<T>(T);
+
+impl<T> LiteralOrEnv<T> {
+    /// Get a reference to the inner value
+    #[allow(dead_code)]
+    pub fn inner(&self) -> &T {
+        &self.0
+    }
+
+    /// Consume the wrapper and return the inner value
+    #[allow(dead_code)]
+    pub fn into_inner(self) -> T {
+        self.0
+    }
+}
+
+impl<T> std::ops::Deref for LiteralOrEnv<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> std::ops::DerefMut for LiteralOrEnv<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<'de, T> Deserialize<'de> for LiteralOrEnv<T>
+where
+    T: FromStr,
+    T::Err: std::fmt::Display,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+
+        // Check if it's an environment variable reference
+        let value = if let Some(var_name) = parse_env_var_syntax(&s) {
+            std::env::var(&var_name).map_err(|_| {
+                serde::de::Error::custom(format!(
+                    "Environment variable '{}' not found (referenced as '{}')",
+                    var_name, s
+                ))
+            })?
+        } else {
+            s
+        };
+
+        // Parse the value as type T
+        let parsed = value
+            .parse::<T>()
+            .map_err(|e| serde::de::Error::custom(format!("Failed to parse value: {}", e)))?;
+
+        Ok(LiteralOrEnv(parsed))
+    }
+}
+
+impl<T> serde::Serialize for LiteralOrEnv<T>
+where
+    T: std::fmt::Display,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
 /// Parse environment variable syntax from a string.
 /// Returns the variable name if the string matches `$VAR` or `${VAR}` syntax.
 fn parse_env_var_syntax(s: &str) -> Option<String> {
@@ -146,6 +229,12 @@ fn resolve_env_value(s: &str) -> Result<String, String> {
         })
     } else {
         Ok(s.to_string())
+    }
+}
+
+impl<T: PartialEq> PartialEq for LiteralOrEnv<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
     }
 }
 
@@ -343,109 +432,31 @@ impl PartialEq for SolanaPrivateKey {
     }
 }
 
-// ============================================================================
-// Solana Signers Configuration
-// ============================================================================
+impl std::str::FromStr for SolanaPrivateKey {
+    type Err = String;
 
-/// Configuration for Solana signers.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_base58(s)
+    }
+}
+
+impl std::fmt::Display for SolanaPrivateKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_base58())
+    }
+}
+
+/// Type alias for Solana signer configuration.
 ///
-/// Deserializes an array of private key strings (base58 format, 32 bytes) into
-/// a list of validated private keys. The first key is treated as the primary signer.
-///
-/// Each string can be:
-/// - A literal base58-encoded 32-byte private key
-/// - An environment variable reference: `"$SOLANA_KEY"` or `"${SOLANA_KEY}"`
+/// Uses `LiteralOrEnv` to support both literal base58 keys and environment variable references.
 ///
 /// Example JSON:
 /// ```json
 /// {
-///   "signers": ["$SOLANA_FACILITATOR_KEY"]
+///   "signer": "$SOLANA_FACILITATOR_KEY"
 /// }
 /// ```
-#[derive(Clone, Debug)]
-pub struct SolanaSignersConfig(Vec<SolanaPrivateKey>);
-
-impl PartialEq for SolanaSignersConfig {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl SolanaSignersConfig {
-    /// Get the list of private keys.
-    pub fn keys(&self) -> &[SolanaPrivateKey] {
-        &self.0
-    }
-
-    /// Get the number of keys.
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-}
-
-impl<'de> Deserialize<'de> for SolanaSignersConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct SolanaSignersVisitor;
-
-        impl<'de> Visitor<'de> for SolanaSignersVisitor {
-            type Value = SolanaSignersConfig;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str(
-                    "an array of base58-encoded 32-byte private keys or env var references",
-                )
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let mut keys: Vec<SolanaPrivateKey> = Vec::new();
-
-                while let Some(key_str) = seq.next_element::<String>()? {
-                    let resolved = resolve_env_value(&key_str).map_err(serde::de::Error::custom)?;
-
-                    let key = SolanaPrivateKey::from_base58(&resolved).map_err(|e| {
-                        serde::de::Error::custom(format!(
-                            "Failed to parse Solana private key: {}",
-                            e
-                        ))
-                    })?;
-                    keys.push(key);
-                }
-
-                if keys.is_empty() {
-                    return Err(serde::de::Error::custom(
-                        "signers array must contain at least one private key",
-                    ));
-                }
-
-                Ok(SolanaSignersConfig(keys))
-            }
-        }
-
-        deserializer.deserialize_seq(SolanaSignersVisitor)
-    }
-}
-
-impl Serialize for SolanaSignersConfig {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeSeq;
-        // Serialize as an array of public keys (we can't serialize private keys)
-        let keys = self.keys();
-        let mut seq = serializer.serialize_seq(Some(keys.len()))?;
-        for private_key in keys {
-            seq.serialize_element(&private_key.to_string())?;
-        }
-        seq.end()
-    }
-}
+pub type SolanaSignerConfig = LiteralOrEnv<SolanaPrivateKey>;
 
 // ============================================================================
 // Chain Configurations
@@ -481,8 +492,8 @@ pub struct SolanaChainConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usdc: Option<USDCConfig>,
     /// Signer configuration for this chain (required).
-    /// Array of private keys (base58 format) or env var references.
-    pub signers: SolanaSignersConfig,
+    /// A single private key (base58 format, 64 bytes) or env var reference.
+    pub signer: SolanaSignerConfig,
     /// RPC provider configuration for this chain (required).
     pub rpc: RpcConfig,
 }
@@ -795,7 +806,7 @@ mod tests {
                         "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
                         "decimals": 6
                     }},
-                    "signers": ["{}"],
+                    "signer": "{}",
                     "rpc": {{
                         "default": {{
                             "http": "https://mainnet.helius-rpc.com/?api-key=key"
@@ -844,8 +855,8 @@ mod tests {
                 assert_eq!(usdc.decimals, 6);
                 assert!(usdc.eip712.is_none());
                 assert!(!solana.rpc.providers.is_empty());
-                // Verify signers
-                assert_eq!(solana.signers.len(), 1);
+                // Verify signer is present (using Deref)
+                let _: &SolanaPrivateKey = &solana.signer;
             }
             _ => panic!("Expected Solana config"),
         }
@@ -907,7 +918,7 @@ mod tests {
                 }},
                 "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {{
                     "v1_name": "solana",
-                    "signers": ["{}"],
+                    "signer": "{}",
                     "rpc": {{
                         "default": {{
                             "http": "https://solana-rpc.example.com/"
@@ -992,7 +1003,7 @@ mod tests {
                 }},
                 "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {{
                     "v1_name": "solana",
-                    "signers": ["{}"],
+                    "signer": "{}",
                     "rpc": {{
                         "helius": {{
                             "http": "https://mainnet.helius-rpc.com/?api-key=key",
@@ -1117,36 +1128,6 @@ mod tests {
         assert_eq!(parse_env_var_syntax("$invalid-chars"), None);
     }
 
-    #[test]
-    fn test_resolve_env_value_literal() {
-        let result = resolve_env_value("literal_value");
-        assert_eq!(result, Ok("literal_value".to_string()));
-    }
-
-    #[test]
-    fn test_resolve_env_value_env_var() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        unsafe { env::set_var("TEST_RESOLVE_VAR", "resolved_value") };
-
-        let result = resolve_env_value("$TEST_RESOLVE_VAR");
-        assert_eq!(result, Ok("resolved_value".to_string()));
-
-        let result_braced = resolve_env_value("${TEST_RESOLVE_VAR}");
-        assert_eq!(result_braced, Ok("resolved_value".to_string()));
-
-        unsafe { env::remove_var("TEST_RESOLVE_VAR") };
-    }
-
-    #[test]
-    fn test_resolve_env_value_missing_var() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        unsafe { env::remove_var("MISSING_VAR_FOR_TEST") };
-
-        let result = resolve_env_value("$MISSING_VAR_FOR_TEST");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("MISSING_VAR_FOR_TEST"));
-    }
-
     // ========================================================================
     // EVM Signers Config Tests
     // ========================================================================
@@ -1232,58 +1213,59 @@ mod tests {
     }
 
     // ========================================================================
-    // Solana Signers Config Tests
+    // Solana Signer Config Tests
     // ========================================================================
 
     #[test]
-    fn test_solana_signers_single_key() {
-        let json = format!(r#"["{}"]"#, TEST_SOLANA_KEY);
-        let signers: SolanaSignersConfig = serde_json::from_str(&json).unwrap();
-        assert_eq!(signers.len(), 1);
+    fn test_solana_signer_single_key() {
+        let json = format!(r#""{}""#, TEST_SOLANA_KEY);
+        let signer: SolanaSignerConfig = serde_json::from_str(&json).unwrap();
+        // Verify we can access the key via Deref
+        let _: &SolanaPrivateKey = &signer;
     }
 
     #[test]
-    fn test_solana_signers_from_env_var() {
+    fn test_solana_signer_from_env_var() {
         let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         unsafe { env::set_var("TEST_SOLANA_KEY", TEST_SOLANA_KEY) };
 
-        let json = r#"["$TEST_SOLANA_KEY"]"#;
-        let signers: SolanaSignersConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(signers.len(), 1);
+        let json = r#""$TEST_SOLANA_KEY""#;
+        let signer: SolanaSignerConfig = serde_json::from_str(json).unwrap();
+        let _: &SolanaPrivateKey = &signer;
 
         unsafe { env::remove_var("TEST_SOLANA_KEY") };
     }
 
     #[test]
-    fn test_solana_signers_from_braced_env_var() {
+    fn test_solana_signer_from_braced_env_var() {
         let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         unsafe { env::set_var("TEST_SOLANA_KEY_BRACED", TEST_SOLANA_KEY) };
 
-        let json = r#"["${TEST_SOLANA_KEY_BRACED}"]"#;
-        let signers: SolanaSignersConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(signers.len(), 1);
+        let json = r#""${TEST_SOLANA_KEY_BRACED}""#;
+        let signer: SolanaSignerConfig = serde_json::from_str(json).unwrap();
+        let _: &SolanaPrivateKey = &signer;
 
         unsafe { env::remove_var("TEST_SOLANA_KEY_BRACED") };
     }
 
     #[test]
-    fn test_solana_signers_empty_array_fails() {
-        let json = r#"[]"#;
-        let result: Result<SolanaSignersConfig, _> = serde_json::from_str(json);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("at least one private key"));
-    }
-
-    #[test]
-    fn test_solana_signers_missing_env_var_fails() {
+    fn test_solana_signer_missing_env_var_fails() {
         let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         unsafe { env::remove_var("NONEXISTENT_SOLANA_KEY") };
 
-        let json = r#"["$NONEXISTENT_SOLANA_KEY"]"#;
-        let result: Result<SolanaSignersConfig, _> = serde_json::from_str(json);
+        let json = r#""$NONEXISTENT_SOLANA_KEY""#;
+        let result: Result<SolanaSignerConfig, _> = serde_json::from_str(json);
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("NONEXISTENT_SOLANA_KEY"));
+    }
+
+    #[test]
+    fn test_solana_signer_invalid_key_fails() {
+        let json = r#""not-a-valid-base58-key""#;
+        let result: Result<SolanaSignerConfig, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Failed to parse"));
     }
 }

@@ -30,10 +30,8 @@
             "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "decimals": 6
         },
-        "_comment": "Solana signers must be 64-byte keypairs in base58 encoding (32-byte secret + 32-byte public)",
-        "signers": [
-            "$SOLANA_PRIVATE_KEY"
-        ],
+        "_comment": "Solana signer must be a 64-byte keypair in base58 encoding (32-byte secret + 32-byte public)",
+        "signer": "$SOLANA_PRIVATE_KEY",
         "rpc": {
             "helius": {
                 "http": "https://mainnet.helius-rpc.com/?api-key=your-api-key"
