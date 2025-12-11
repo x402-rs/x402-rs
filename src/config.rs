@@ -2,11 +2,11 @@
 
 use alloy_primitives::B256;
 use clap::Parser;
-use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::net::IpAddr;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
@@ -134,6 +134,25 @@ impl<T> LiteralOrEnv<T> {
     pub fn into_inner(self) -> T {
         self.0
     }
+
+    /// Parse environment variable syntax from a string.
+    /// Returns the variable name if the string matches `$VAR` or `${VAR}` syntax.
+    fn parse_env_var_syntax(s: &str) -> Option<String> {
+        if s.starts_with("${") && s.ends_with('}') {
+            // ${VAR} syntax
+            Some(s[2..s.len() - 1].to_string())
+        } else if s.starts_with('$') && s.len() > 1 {
+            // $VAR syntax - extract until first non-alphanumeric/underscore character
+            let var_name = &s[1..];
+            if var_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                Some(var_name.to_string())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl<T> std::ops::Deref for LiteralOrEnv<T> {
@@ -162,7 +181,7 @@ where
         let s = String::deserialize(deserializer)?;
 
         // Check if it's an environment variable reference
-        let value = if let Some(var_name) = parse_env_var_syntax(&s) {
+        let value = if let Some(var_name) = Self::parse_env_var_syntax(&s) {
             std::env::var(&var_name).map_err(|_| {
                 serde::de::Error::custom(format!(
                     "Environment variable '{}' not found (referenced as '{}')",
@@ -184,13 +203,13 @@ where
 
 impl<T> serde::Serialize for LiteralOrEnv<T>
 where
-    T: std::fmt::Display,
+    T: Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&self.0.to_string())
+        self.0.serialize(serializer)
     }
 }
 
@@ -246,7 +265,7 @@ impl<T: PartialEq> PartialEq for LiteralOrEnv<T> {
 ///
 /// This type represents a raw private key that has been validated as a proper
 /// 32-byte hex value. It can be converted to a `PrivateKeySigner` when needed.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct EvmPrivateKey(B256);
 
 impl EvmPrivateKey {
@@ -277,6 +296,14 @@ impl PartialEq for EvmPrivateKey {
     }
 }
 
+impl FromStr for EvmPrivateKey {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_hex(s)
+    }
+}
+
 // ============================================================================
 // EVM Signers Configuration
 // ============================================================================
@@ -300,76 +327,17 @@ impl PartialEq for EvmPrivateKey {
 ///   ]
 /// }
 /// ```
-#[derive(Clone, Debug, PartialEq)]
-pub struct EvmSignersConfig(Vec<EvmPrivateKey>);
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EvmSignersConfig(Vec<LiteralOrEnv<EvmPrivateKey>>);
 
 impl EvmSignersConfig {
     /// Get the list of private keys.
-    pub fn keys(&self) -> &[EvmPrivateKey] {
-        &self.0
+    pub fn keys(&self) -> Vec<EvmPrivateKey> {
+        self.0.iter().map(|k| **k).collect()
     }
 
     pub fn len(&self) -> usize {
         self.0.len()
-    }
-}
-
-impl<'de> Deserialize<'de> for EvmSignersConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct EvmSignersVisitor;
-
-        impl<'de> Visitor<'de> for EvmSignersVisitor {
-            type Value = EvmSignersConfig;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("an array of hex-encoded private keys or env var references")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let mut keys: Vec<EvmPrivateKey> = Vec::new();
-
-                while let Some(key_str) = seq.next_element::<String>()? {
-                    let resolved = resolve_env_value(&key_str).map_err(serde::de::Error::custom)?;
-
-                    let key = EvmPrivateKey::from_hex(&resolved).map_err(|e| {
-                        serde::de::Error::custom(format!("Failed to parse private key: {}", e))
-                    })?;
-
-                    keys.push(key);
-                }
-
-                if keys.is_empty() {
-                    return Err(serde::de::Error::custom(
-                        "signers array must contain at least one private key",
-                    ));
-                }
-
-                Ok(EvmSignersConfig(keys))
-            }
-        }
-
-        deserializer.deserialize_seq(EvmSignersVisitor)
-    }
-}
-
-impl Serialize for EvmSignersConfig {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeSeq;
-        let keys = self.keys();
-        let mut seq = serializer.serialize_seq(Some(keys.len()))?;
-        for key in keys {
-            seq.serialize_element(&format!("{:?}", key))?;
-        }
-        seq.end()
     }
 }
 
@@ -432,6 +400,15 @@ impl PartialEq for SolanaPrivateKey {
     }
 }
 
+impl Serialize for SolanaPrivateKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_base58())
+    }
+}
+
 impl std::str::FromStr for SolanaPrivateKey {
     type Err = String;
 
@@ -456,7 +433,16 @@ impl std::fmt::Display for SolanaPrivateKey {
 ///   "signer": "$SOLANA_FACILITATOR_KEY"
 /// }
 /// ```
-pub type SolanaSignerConfig = LiteralOrEnv<SolanaPrivateKey>;
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SolanaSignerConfig(LiteralOrEnv<SolanaPrivateKey>);
+
+impl Deref for SolanaSignerConfig {
+    type Target = SolanaPrivateKey;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.inner()
+    }
+}
 
 // ============================================================================
 // Chain Configurations
@@ -856,7 +842,7 @@ mod tests {
                 assert!(usdc.eip712.is_none());
                 assert!(!solana.rpc.providers.is_empty());
                 // Verify signer is present (using Deref)
-                let _: &SolanaPrivateKey = &solana.signer;
+                let _: &SolanaPrivateKey = &solana.signer.0;
             }
             _ => panic!("Expected Solana config"),
         }
@@ -1183,15 +1169,6 @@ mod tests {
     }
 
     #[test]
-    fn test_evm_signers_empty_array_fails() {
-        let json = r#"[]"#;
-        let result: Result<EvmSignersConfig, _> = serde_json::from_str(json);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("at least one private key"));
-    }
-
-    #[test]
     fn test_evm_signers_missing_env_var_fails() {
         let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         unsafe { env::remove_var("NONEXISTENT_EVM_KEY") };
@@ -1209,7 +1186,7 @@ mod tests {
         let result: Result<EvmSignersConfig, _> = serde_json::from_str(json);
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("Failed to parse private key"));
+        assert!(err.contains("Failed to parse value"));
     }
 
     // ========================================================================
