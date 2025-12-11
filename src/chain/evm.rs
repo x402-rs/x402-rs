@@ -14,6 +14,7 @@
 //! - Settlement is atomic: deploy (if needed) + transfer happen in a single user flow.
 //! - Verification does not persist state.
 
+use std::fmt::{Display, Formatter};
 use alloy_contract::SolCallBuilder;
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
 use alloy_primitives::hex;
@@ -92,30 +93,40 @@ pub type InnerProvider = FillProvider<
     RootProvider,
 >;
 
-/// Chain descriptor used by the EVM provider.
-///
-/// Wraps a `Network` enum and the concrete `chain_id` used for EIP-155 and EIP-712.
-#[derive(Clone, Copy, Debug)]
-pub struct EvmChain {
-    /// x402 network name (Base, Avalanche, etc.).
-    pub network: Network,
-    /// Numeric chain id used in transactions and EIP-712 domains.
-    pub chain_id: u64,
-}
+#[derive(Debug, Copy, Clone)]
+pub struct EvmChainReference(u64);
 
-impl EvmChain {
-    /// Construct a chain descriptor from a network and chain id.
-    pub fn new(network: Network, chain_id: u64) -> Self {
-        Self { network, chain_id }
-    }
-
-    /// Returns the x402 network.
-    pub fn network(&self) -> Network {
-        self.network
+impl Into<ChainId> for EvmChainReference {
+    fn into(self) -> ChainId {
+        ChainId {
+            namespace: Namespace::Eip155,
+            reference: self.0.to_string(),
+        }
     }
 }
 
-impl TryFrom<Network> for EvmChain {
+impl Into<ChainId> for &EvmChainReference {
+    fn into(self) -> ChainId {
+        ChainId {
+            namespace: Namespace::Eip155,
+            reference: self.0.to_string(),
+        }
+    }
+}
+
+impl EvmChainReference {
+    pub fn new(chain_id: u64) -> Self {
+        Self(chain_id)
+    }
+}
+
+impl Display for EvmChainReference {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<Network> for EvmChainReference {
     type Error = FacilitatorLocalError;
 
     /// Map a `Network` to its canonical `chain_id`.
@@ -124,18 +135,18 @@ impl TryFrom<Network> for EvmChain {
     /// Returns [`FacilitatorLocalError::UnsupportedNetwork`] for non-EVM networks (e.g. Solana).
     fn try_from(value: Network) -> Result<Self, Self::Error> {
         match value {
-            Network::BaseSepolia => Ok(EvmChain::new(value, 84532)),
-            Network::Base => Ok(EvmChain::new(value, 8453)),
-            Network::XdcMainnet => Ok(EvmChain::new(value, 50)),
-            Network::AvalancheFuji => Ok(EvmChain::new(value, 43113)),
-            Network::Avalanche => Ok(EvmChain::new(value, 43114)),
-            Network::XrplEvm => Ok(EvmChain::new(value, 1440000)),
+            Network::BaseSepolia => Ok(EvmChainReference::new(84532)),
+            Network::Base => Ok(EvmChainReference::new(8453)),
+            Network::XdcMainnet => Ok(EvmChainReference::new(50)),
+            Network::AvalancheFuji => Ok(EvmChainReference::new(43113)),
+            Network::Avalanche => Ok(EvmChainReference::new(43114)),
+            Network::XrplEvm => Ok(EvmChainReference::new(1440000)),
             Network::Solana => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::SolanaDevnet => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
-            Network::PolygonAmoy => Ok(EvmChain::new(value, 80002)),
-            Network::Polygon => Ok(EvmChain::new(value, 137)),
-            Network::Sei => Ok(EvmChain::new(value, 1329)),
-            Network::SeiTestnet => Ok(EvmChain::new(value, 1328)),
+            Network::PolygonAmoy => Ok(EvmChainReference::new(80002)),
+            Network::Polygon => Ok(EvmChainReference::new(137)),
+            Network::Sei => Ok(EvmChainReference::new(1329)),
+            Network::SeiTestnet => Ok(EvmChainReference::new(1328)),
         }
     }
 }
@@ -143,8 +154,7 @@ impl TryFrom<Network> for EvmChain {
 /// A fully specified ERC-3009 authorization payload for EVM settlement.
 pub struct ExactEvmPayment {
     /// Target chain for settlement.
-    #[allow(dead_code)] // Just in case.
-    pub chain: EvmChain,
+    pub chain: EvmChainReference,
     /// Authorized sender (`from`) — EOA or smart wallet.
     pub from: EvmAddress,
     /// Authorized recipient (`to`).
@@ -172,7 +182,7 @@ pub struct EvmProvider {
     /// Whether network supports EIP-1559 gas pricing.
     eip1559: bool,
     /// Chain descriptor (network + chain ID).
-    chain: EvmChain,
+    chain: EvmChainReference,
     /// Available signer addresses for round-robin selection.
     signer_addresses: Arc<Vec<Address>>,
     /// Current position in round-robin signer rotation.
@@ -189,7 +199,7 @@ impl EvmProvider {
         eip1559: bool,
         network: Network,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let chain = EvmChain::try_from(network)?;
+        let chain = EvmChainReference::try_from(network)?;
         let signer_addresses: Vec<Address> =
             NetworkWallet::<AlloyEthereum>::signer_addresses(&wallet).collect();
         if signer_addresses.is_empty() {
@@ -258,7 +268,7 @@ pub trait MetaEvmProvider {
     /// Returns reference to underlying provider.
     fn inner(&self) -> &Self::Inner;
     /// Returns reference to chain descriptor.
-    fn chain(&self) -> &EvmChain;
+    fn chain(&self) -> &EvmChainReference;
 
     /// Sends a meta-transaction to the network.
     fn send_transaction(
@@ -285,7 +295,7 @@ impl MetaEvmProvider for EvmProvider {
         &self.inner
     }
 
-    fn chain(&self) -> &EvmChain {
+    fn chain(&self) -> &EvmChainReference {
         &self.chain
     }
 
@@ -388,7 +398,7 @@ impl NetworkProviderOps for EvmProvider {
     fn chain_id(&self) -> ChainId {
         ChainId {
             namespace: Namespace::Eip155,
-            reference: self.chain.chain_id.to_string(),
+            reference: self.chain.to_string(),
         }
     }
 }
@@ -672,8 +682,12 @@ where
 
     /// Report payment kinds supported by this provider on its current network.
     async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
+        let chain_id: ChainId = self.chain().into();
+        let network: Network = chain_id
+            .try_into()
+            .map_err(FacilitatorLocalError::NetworkConversionError)?;
         let kinds = vec![SupportedPaymentKind {
-            network: self.chain().network().to_string(),
+            network: network.to_string(),
             x402_version: X402Version::V1,
             scheme: Scheme::Exact,
             extra: None,
@@ -831,7 +845,7 @@ async fn is_contract_deployed<P: Provider>(
     asset = %asset_address
 ))]
 async fn assert_domain<P: Provider>(
-    chain: &EvmChain,
+    chain: &EvmChainReference,
     token_contract: &USDC::USDCInstance<P>,
     payload: &PaymentPayload,
     asset_address: &Address,
@@ -857,7 +871,6 @@ async fn assert_domain<P: Provider>(
             .await
             .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?
     };
-    let chain_id = chain.chain_id;
     let version = requirements
         .extra
         .as_ref()
@@ -887,7 +900,7 @@ async fn assert_domain<P: Provider>(
     let domain = eip712_domain! {
         name: name,
         version: version,
-        chain_id: chain_id,
+        chain_id: chain.0,
         verifying_contract: *asset_address,
     };
     Ok(domain)
@@ -902,7 +915,7 @@ async fn assert_domain<P: Provider>(
 #[instrument(skip_all, err)]
 async fn assert_valid_payment<P: Provider>(
     provider: P,
-    chain: &EvmChain,
+    chain: &EvmChainReference,
     payload: &PaymentPayload,
     requirements: &PaymentRequirements,
 ) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), FacilitatorLocalError> {
@@ -913,17 +926,18 @@ async fn assert_valid_payment<P: Provider>(
         }
     };
     let payer = payment_payload.authorization.from;
-    if payload.network != chain.network {
+    let chain_id: ChainId = chain.into();
+    if payload.network.as_chain_id() != chain_id {
         return Err(FacilitatorLocalError::NetworkMismatch(
             Some(payer.into()),
-            chain.network.as_chain_id(),
+            chain_id,
             payload.network.as_chain_id(),
         ));
     }
-    if requirements.network != chain.network {
+    if requirements.network.as_chain_id() != chain_id {
         return Err(FacilitatorLocalError::NetworkMismatch(
             Some(payer.into()),
-            chain.network.as_chain_id(),
+            chain_id,
             requirements.network.as_chain_id(),
         ));
     }
@@ -970,7 +984,7 @@ async fn assert_valid_payment<P: Provider>(
     assert_enough_value(&payer, &value, &amount_required)?;
 
     let payment = ExactEvmPayment {
-        chain: *chain,
+        chain: (*chain).into(),
         from: payment_payload.authorization.from,
         to: payment_payload.authorization.to,
         value: payment_payload.authorization.value,
