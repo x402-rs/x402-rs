@@ -1,3 +1,4 @@
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_commitment_config::CommitmentConfig;
 use solana_compute_budget_interface::ID as ComputeBudgetInstructionId;
 use solana_keypair::Keypair;
@@ -8,7 +9,8 @@ use solana_rpc_client_types::config::{RpcSendTransactionConfig, RpcSimulateTrans
 use solana_signature::Signature;
 use solana_signer::Signer;
 use solana_transaction::versioned::VersionedTransaction;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing_core::Level;
@@ -26,12 +28,90 @@ use crate::types::{Scheme, X402Version};
 
 const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
-#[derive(Clone, Debug)]
-pub struct SolanaChain {
-    pub network: Network,
+/// A Solana chain reference consisting of 32 ASCII characters.
+/// The genesis hash is the first 32 characters of the base58-encoded genesis block hash.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SolanaChainReference([u8; 32]);
+
+impl SolanaChainReference {
+    /// Creates a new SolanaChainReference from a 32-byte array.
+    /// Returns None if any byte is not a valid ASCII character.
+    pub fn new(bytes: [u8; 32]) -> Option<Self> {
+        if bytes.iter().all(|b| b.is_ascii()) {
+            Some(Self(bytes))
+        } else {
+            None
+        }
+    }
+
+    /// Returns the underlying bytes.
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+
+    /// Returns the chain reference as a string.
+    pub fn as_str(&self) -> &str {
+        // Safe because we validate ASCII on construction
+        std::str::from_utf8(&self.0).expect("SolanaChainReference contains valid ASCII")
+    }
 }
 
-impl TryFrom<Network> for SolanaChain {
+/// Error type for parsing a SolanaChainReference from a string.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum SolanaChainReferenceParseError {
+    #[error("invalid length: expected 32 characters, got {0}")]
+    InvalidLength(usize),
+    #[error("string contains non-ASCII characters")]
+    NonAscii,
+}
+
+impl FromStr for SolanaChainReference {
+    type Err = SolanaChainReferenceParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() != 32 {
+            return Err(SolanaChainReferenceParseError::InvalidLength(s.len()));
+        }
+        if !s.is_ascii() {
+            return Err(SolanaChainReferenceParseError::NonAscii);
+        }
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(s.as_bytes());
+        Ok(Self(bytes))
+    }
+}
+
+impl Display for SolanaChainReference {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl Serialize for SolanaChainReference {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for SolanaChainReference {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SolanaChain {
+    pub network: Network, // FIXME Network v1
+}
+
+impl TryFrom<Network> for SolanaChain { // FIXME Network v1
     type Error = FacilitatorLocalError;
 
     fn try_from(value: Network) -> Result<Self, Self::Error> {
