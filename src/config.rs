@@ -1,11 +1,14 @@
 //! Configuration module for the x402 facilitator server.
 
+use alloy_primitives::B256;
 use clap::Parser;
+use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::net::IpAddr;
 use std::path::PathBuf;
+use std::str::FromStr;
 use url::Url;
 
 use crate::chain::chain_id::ChainId;
@@ -104,6 +107,350 @@ pub struct RpcConfig {
     pub providers: BTreeMap<String, RpcProviderConfig>,
 }
 
+// ============================================================================
+// Environment Variable Resolution
+// ============================================================================
+
+/// Parse environment variable syntax from a string.
+/// Returns the variable name if the string matches `$VAR` or `${VAR}` syntax.
+fn parse_env_var_syntax(s: &str) -> Option<String> {
+    if s.starts_with("${") && s.ends_with('}') {
+        // ${VAR} syntax
+        Some(s[2..s.len() - 1].to_string())
+    } else if s.starts_with('$') && s.len() > 1 {
+        // $VAR syntax - extract until first non-alphanumeric/underscore character
+        let var_name = &s[1..];
+        if var_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            Some(var_name.to_string())
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+/// Resolve a string value that may contain an environment variable reference.
+///
+/// Supports both literal values and environment variable references:
+/// - Literal: `"0xcafe..."`
+/// - Simple env var: `"$PRIVATE_KEY"`
+/// - Braced env var: `"${PRIVATE_KEY}"`
+fn resolve_env_value(s: &str) -> Result<String, String> {
+    if let Some(var_name) = parse_env_var_syntax(s) {
+        std::env::var(&var_name).map_err(|_| {
+            format!(
+                "Environment variable '{}' not found (referenced as '{}')",
+                var_name, s
+            )
+        })
+    } else {
+        Ok(s.to_string())
+    }
+}
+
+// ============================================================================
+// EVM Private Key
+// ============================================================================
+
+/// A validated EVM private key (32 bytes).
+///
+/// This type represents a raw private key that has been validated as a proper
+/// 32-byte hex value. It can be converted to a `PrivateKeySigner` when needed.
+#[derive(Clone, Debug)]
+pub struct EvmPrivateKey(B256);
+
+impl EvmPrivateKey {
+    /// Parse a hex string (with or without 0x prefix) into a private key.
+    pub fn from_hex(s: &str) -> Result<Self, String> {
+        let hex_str = s.strip_prefix("0x").unwrap_or(s);
+
+        if hex_str.len() != 64 {
+            return Err(format!(
+                "Private key must be 32 bytes (64 hex chars), got {} chars",
+                hex_str.len()
+            ));
+        }
+
+        let bytes = B256::from_str(s).map_err(|e| format!("Invalid hex: {}", e))?;
+        Ok(Self(bytes))
+    }
+
+    /// Get the raw 32 bytes of the private key.
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        self.0.as_ref()
+    }
+}
+
+impl PartialEq for EvmPrivateKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+// ============================================================================
+// EVM Signers Configuration
+// ============================================================================
+
+/// Configuration for EVM signers.
+///
+/// Deserializes an array of private key strings (hex format, 0x-prefixed) and
+/// validates them as valid 32-byte private keys. The `EthereumWallet` is created
+/// lazily when needed via the `wallet()` method.
+///
+/// Each string can be:
+/// - A literal hex private key: `"0xcafe..."`
+/// - An environment variable reference: `"$PRIVATE_KEY"` or `"${PRIVATE_KEY}"`
+///
+/// Example JSON:
+/// ```json
+/// {
+///   "signers": [
+///     "$HOT_WALLET_KEY",
+///     "0xcafe000000000000000000000000000000000000000000000000000000000001"
+///   ]
+/// }
+/// ```
+#[derive(Clone, Debug, PartialEq)]
+pub struct EvmSignersConfig(Vec<EvmPrivateKey>);
+
+impl EvmSignersConfig {
+    /// Get the list of private keys.
+    pub fn keys(&self) -> &[EvmPrivateKey] {
+        &self.0
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl<'de> Deserialize<'de> for EvmSignersConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct EvmSignersVisitor;
+
+        impl<'de> Visitor<'de> for EvmSignersVisitor {
+            type Value = EvmSignersConfig;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("an array of hex-encoded private keys or env var references")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut keys: Vec<EvmPrivateKey> = Vec::new();
+
+                while let Some(key_str) = seq.next_element::<String>()? {
+                    let resolved = resolve_env_value(&key_str).map_err(serde::de::Error::custom)?;
+
+                    let key = EvmPrivateKey::from_hex(&resolved).map_err(|e| {
+                        serde::de::Error::custom(format!("Failed to parse private key: {}", e))
+                    })?;
+
+                    keys.push(key);
+                }
+
+                if keys.is_empty() {
+                    return Err(serde::de::Error::custom(
+                        "signers array must contain at least one private key",
+                    ));
+                }
+
+                Ok(EvmSignersConfig(keys))
+            }
+        }
+
+        deserializer.deserialize_seq(EvmSignersVisitor)
+    }
+}
+
+impl Serialize for EvmSignersConfig {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeSeq;
+        let keys = self.keys();
+        let mut seq = serializer.serialize_seq(Some(keys.len()))?;
+        for key in keys {
+            seq.serialize_element(&format!("{:?}", key))?;
+        }
+        seq.end()
+    }
+}
+
+// ============================================================================
+// Solana Private Key
+// ============================================================================
+
+/// A validated Solana private key (64 bytes in standard Solana format).
+///
+/// This type represents a standard Solana keypair in its 64-byte format:
+/// - First 32 bytes: the Ed25519 secret key (seed)
+/// - Last 32 bytes: the Ed25519 public key
+///
+/// The key is stored and parsed as a base58-encoded 64-byte array,
+/// which is the standard format used by Solana CLI and wallets.
+#[derive(Clone, Debug)]
+pub struct SolanaPrivateKey([u8; 64]);
+
+impl SolanaPrivateKey {
+    /// Parse a base58 string into a private key (64 bytes in standard Solana format).
+    ///
+    /// The standard Solana keypair format is 64 bytes:
+    /// - First 32 bytes: secret key (seed)
+    /// - Last 32 bytes: public key
+    pub fn from_base58(s: &str) -> Result<Self, String> {
+        let bytes = bs58::decode(s)
+            .into_vec()
+            .map_err(|e| format!("Invalid base58: {}", e))?;
+
+        if bytes.len() != 64 {
+            return Err(format!(
+                "Private key must be 64 bytes (standard Solana format), got {} bytes",
+                bytes.len()
+            ));
+        }
+
+        let mut arr = [0u8; 64];
+        arr.copy_from_slice(&bytes);
+        Ok(Self(arr))
+    }
+
+    /// Get the raw 64 bytes of the keypair.
+    pub fn as_bytes(&self) -> &[u8; 64] {
+        &self.0
+    }
+
+    /// Encode the keypair back to base58.
+    pub fn to_base58(&self) -> String {
+        bs58::encode(&self.0).into_string()
+    }
+
+    pub fn to_string(&self) -> String {
+        self.to_base58()
+    }
+}
+
+impl PartialEq for SolanaPrivateKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+// ============================================================================
+// Solana Signers Configuration
+// ============================================================================
+
+/// Configuration for Solana signers.
+///
+/// Deserializes an array of private key strings (base58 format, 32 bytes) into
+/// a list of validated private keys. The first key is treated as the primary signer.
+///
+/// Each string can be:
+/// - A literal base58-encoded 32-byte private key
+/// - An environment variable reference: `"$SOLANA_KEY"` or `"${SOLANA_KEY}"`
+///
+/// Example JSON:
+/// ```json
+/// {
+///   "signers": ["$SOLANA_FACILITATOR_KEY"]
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct SolanaSignersConfig(Vec<SolanaPrivateKey>);
+
+impl PartialEq for SolanaSignersConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl SolanaSignersConfig {
+    /// Get the list of private keys.
+    pub fn keys(&self) -> &[SolanaPrivateKey] {
+        &self.0
+    }
+
+    /// Get the number of keys.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl<'de> Deserialize<'de> for SolanaSignersConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct SolanaSignersVisitor;
+
+        impl<'de> Visitor<'de> for SolanaSignersVisitor {
+            type Value = SolanaSignersConfig;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str(
+                    "an array of base58-encoded 32-byte private keys or env var references",
+                )
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut keys: Vec<SolanaPrivateKey> = Vec::new();
+
+                while let Some(key_str) = seq.next_element::<String>()? {
+                    let resolved = resolve_env_value(&key_str).map_err(serde::de::Error::custom)?;
+
+                    let key = SolanaPrivateKey::from_base58(&resolved).map_err(|e| {
+                        serde::de::Error::custom(format!(
+                            "Failed to parse Solana private key: {}",
+                            e
+                        ))
+                    })?;
+                    keys.push(key);
+                }
+
+                if keys.is_empty() {
+                    return Err(serde::de::Error::custom(
+                        "signers array must contain at least one private key",
+                    ));
+                }
+
+                Ok(SolanaSignersConfig(keys))
+            }
+        }
+
+        deserializer.deserialize_seq(SolanaSignersVisitor)
+    }
+}
+
+impl Serialize for SolanaSignersConfig {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeSeq;
+        // Serialize as an array of public keys (we can't serialize private keys)
+        let keys = self.keys();
+        let mut seq = serializer.serialize_seq(Some(keys.len()))?;
+        for private_key in keys {
+            seq.serialize_element(&private_key.to_string())?;
+        }
+        seq.end()
+    }
+}
+
+// ============================================================================
+// Chain Configurations
+// ============================================================================
+
 /// Configuration specific to EVM-compatible chains.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EvmChainConfig {
@@ -118,6 +465,9 @@ pub struct EvmChainConfig {
     /// USDC deployment configuration for this chain (optional).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usdc: Option<USDCConfig>,
+    /// Signer configuration for this chain (required).
+    /// Array of private keys (hex format) or env var references.
+    pub signers: EvmSignersConfig,
     /// RPC provider configuration for this chain (required).
     pub rpc: RpcConfig,
 }
@@ -130,6 +480,9 @@ pub struct SolanaChainConfig {
     /// USDC deployment configuration for this chain (optional).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usdc: Option<USDCConfig>,
+    /// Signer configuration for this chain (required).
+    /// Array of private keys (base58 format) or env var references.
+    pub signers: SolanaSignersConfig,
     /// RPC provider configuration for this chain (required).
     pub rpc: RpcConfig,
 }
@@ -313,6 +666,21 @@ mod tests {
     use super::*;
     use std::env;
     use std::str::FromStr;
+    use std::sync::Mutex;
+
+    // Mutex to prevent concurrent env var modifications in tests
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    // Test private keys (DO NOT use in production!)
+    const TEST_EVM_KEY_1: &str =
+        "0xcafe000000000000000000000000000000000000000000000000000000000001";
+    const TEST_EVM_KEY_2: &str =
+        "0xcafe000000000000000000000000000000000000000000000000000000000002";
+    // A valid 64-byte Solana keypair in base58 format (test key, DO NOT use in production!)
+    // Standard Solana format: 32-byte secret key + 32-byte public key
+    // Generated with `solana_keypair::Keypair::new()`
+    const TEST_SOLANA_KEY: &str =
+        "D2hT1mgysgZYJ8ZaS93m5sgZSRUPntaUdMoN7b5potSnidpfTd2nsRhzyi333BhY7PvGBtMiUHkXL3gTNDsdCYK";
 
     #[test]
     fn test_config_parsing_full() {
@@ -324,6 +692,7 @@ mod tests {
 
     #[test]
     fn test_config_parsing_partial_port_only() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         // Clear env vars for predictable test
         // SAFETY: This is safe in a single-threaded test context
         unsafe { env::remove_var("HOST") };
@@ -336,6 +705,7 @@ mod tests {
 
     #[test]
     fn test_config_parsing_partial_host_only() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         // Clear env vars for predictable test
         // SAFETY: This is safe in a single-threaded test context
         unsafe { env::remove_var("PORT") };
@@ -348,6 +718,7 @@ mod tests {
 
     #[test]
     fn test_config_parsing_empty() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         // Clear env vars for predictable test
         // SAFETY: This is safe in a single-threaded test context
         unsafe {
@@ -363,6 +734,7 @@ mod tests {
 
     #[test]
     fn test_config_default() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         // Clear env vars for predictable test
         // SAFETY: This is safe in a single-threaded test context
         unsafe {
@@ -392,44 +764,49 @@ mod tests {
     }
 
     #[test]
-    fn test_config_parsing_with_chains() {
-        let json = r#"{
+    fn test_config_parsing_with_chains_and_signers() {
+        let json = format!(
+            r#"{{
             "port": 3000,
             "host": "127.0.0.1",
-            "chains": {
-                "eip155:84532": {
+            "chains": {{
+                "eip155:84532": {{
                     "v1_name": "base-sepolia",
                     "eip1559": true,
                     "flashblocks": true,
-                    "usdc": {
+                    "usdc": {{
                         "address": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
                         "decimals": 6,
-                        "eip712": {
+                        "eip712": {{
                             "name": "USDC",
                             "version": "2"
-                        }
-                    },
-                    "rpc": {
-                        "default": {
+                        }}
+                    }},
+                    "signers": ["{}"],
+                    "rpc": {{
+                        "default": {{
                             "http": "https://example.quiknode.pro/"
-                        }
-                    }
-                },
-                "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
+                        }}
+                    }}
+                }},
+                "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {{
                     "v1_name": "solana",
-                    "usdc": {
+                    "usdc": {{
                         "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
                         "decimals": 6
-                    },
-                    "rpc": {
-                        "default": {
+                    }},
+                    "signers": ["{}"],
+                    "rpc": {{
+                        "default": {{
                             "http": "https://mainnet.helius-rpc.com/?api-key=key"
-                        }
-                    }
-                }
-            }
-        }"#;
-        let config: Config = serde_json::from_str(json).unwrap();
+                        }}
+                    }}
+                }}
+            }}
+        }}"#,
+            TEST_EVM_KEY_1, TEST_SOLANA_KEY
+        );
+        let config: Config = serde_json::from_str(&json).unwrap();
         assert_eq!(config.port(), 3000);
         assert_eq!(config.host().to_string(), "127.0.0.1");
         assert_eq!(config.chains().len(), 2);
@@ -450,6 +827,8 @@ mod tests {
                 assert_eq!(eip712.name, "USDC");
                 assert_eq!(eip712.version, "2");
                 assert!(!evm.rpc.providers.is_empty());
+                // Verify signers
+                assert_eq!(evm.signers.len(), 1);
             }
             _ => panic!("Expected EVM config"),
         }
@@ -465,33 +844,39 @@ mod tests {
                 assert_eq!(usdc.decimals, 6);
                 assert!(usdc.eip712.is_none());
                 assert!(!solana.rpc.providers.is_empty());
+                // Verify signers
+                assert_eq!(solana.signers.len(), 1);
             }
             _ => panic!("Expected Solana config"),
         }
     }
 
     #[test]
-    fn test_config_parsing_evm_defaults() {
-        let json = r#"{
-            "chains": {
-                "eip155:8453": {
+    fn test_config_parsing_evm_defaults_with_signers() {
+        let json = format!(
+            r#"{{
+            "chains": {{
+                "eip155:8453": {{
                     "v1_name": "base",
-                    "usdc": {
+                    "usdc": {{
                         "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-                        "eip712": {
+                        "eip712": {{
                             "name": "USD Coin",
                             "version": "2"
-                        }
-                    },
-                    "rpc": {
-                        "default": {
+                        }}
+                    }},
+                    "signers": ["{}"],
+                    "rpc": {{
+                        "default": {{
                             "http": "https://base-rpc.example.com/"
-                        }
-                    }
-                }
-            }
-        }"#;
-        let config: Config = serde_json::from_str(json).unwrap();
+                        }}
+                    }}
+                }}
+            }}
+        }}"#,
+            TEST_EVM_KEY_1
+        );
+        let config: Config = serde_json::from_str(&json).unwrap();
         let evm_key = ChainId::from_str("eip155:8453").unwrap();
         let evm_config = config.chains().get(&evm_key).unwrap();
         match evm_config {
@@ -507,29 +892,34 @@ mod tests {
     }
 
     #[test]
-    fn test_config_parsing_without_usdc() {
-        let json = r#"{
-            "chains": {
-                "eip155:8453": {
+    fn test_config_parsing_without_usdc_with_signers() {
+        let json = format!(
+            r#"{{
+            "chains": {{
+                "eip155:8453": {{
                     "v1_name": "base",
-                    "rpc": {
-                        "default": {
+                    "signers": ["{}"],
+                    "rpc": {{
+                        "default": {{
                             "http": "https://base-rpc.example.com/"
-                        }
-                    }
-                },
-                "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
+                        }}
+                    }}
+                }},
+                "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {{
                     "v1_name": "solana",
-                    "rpc": {
-                        "default": {
+                    "signers": ["{}"],
+                    "rpc": {{
+                        "default": {{
                             "http": "https://solana-rpc.example.com/"
-                        }
-                    }
-                }
-            }
-        }"#;
-        let config: Config = serde_json::from_str(json).unwrap();
-        
+                        }}
+                    }}
+                }}
+            }}
+        }}"#,
+            TEST_EVM_KEY_1, TEST_SOLANA_KEY
+        );
+        let config: Config = serde_json::from_str(&json).unwrap();
+
         // Verify EVM chain config without usdc
         let evm_key = ChainId::from_str("eip155:8453").unwrap();
         let evm_config = config.chains().get(&evm_key).unwrap();
@@ -583,33 +973,38 @@ mod tests {
     }
 
     #[test]
-    fn test_config_parsing_with_rpc() {
-        let json = r#"{
-            "chains": {
-                "eip155:84532": {
+    fn test_config_parsing_with_rpc_and_signers() {
+        let json = format!(
+            r#"{{
+            "chains": {{
+                "eip155:84532": {{
                     "v1_name": "base-sepolia",
-                    "rpc": {
-                        "quicknode": {
+                    "signers": ["{}"],
+                    "rpc": {{
+                        "quicknode": {{
                             "http": "https://example.quiknode.pro/",
                             "rate_limit": 50
-                        },
-                        "alchemy": {
+                        }},
+                        "alchemy": {{
                             "http": "https://base-sepolia.g.alchemy.com/v2/key"
-                        }
-                    }
-                },
-                "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
+                        }}
+                    }}
+                }},
+                "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {{
                     "v1_name": "solana",
-                    "rpc": {
-                        "helius": {
+                    "signers": ["{}"],
+                    "rpc": {{
+                        "helius": {{
                             "http": "https://mainnet.helius-rpc.com/?api-key=key",
                             "rate_limit": 100
-                        }
-                    }
-                }
-            }
-        }"#;
-        let config: Config = serde_json::from_str(json).unwrap();
+                        }}
+                    }}
+                }}
+            }}
+        }}"#,
+            TEST_EVM_KEY_1, TEST_SOLANA_KEY
+        );
+        let config: Config = serde_json::from_str(&json).unwrap();
         assert_eq!(config.chains().len(), 2);
 
         // Verify EVM chain config with RPC
@@ -618,13 +1013,16 @@ mod tests {
         match evm_config {
             ChainConfig::Evm(evm) => {
                 assert_eq!(evm.rpc.providers.len(), 2);
-                
+
                 let quicknode = evm.rpc.providers.get("quicknode").unwrap();
                 assert_eq!(quicknode.http.as_str(), "https://example.quiknode.pro/");
                 assert_eq!(quicknode.rate_limit, Some(50));
-                
+
                 let alchemy = evm.rpc.providers.get("alchemy").unwrap();
-                assert_eq!(alchemy.http.as_str(), "https://base-sepolia.g.alchemy.com/v2/key");
+                assert_eq!(
+                    alchemy.http.as_str(),
+                    "https://base-sepolia.g.alchemy.com/v2/key"
+                );
                 assert!(alchemy.rate_limit.is_none());
             }
             _ => panic!("Expected EVM config"),
@@ -636,9 +1034,12 @@ mod tests {
         match solana_config {
             ChainConfig::Solana(solana) => {
                 assert_eq!(solana.rpc.providers.len(), 1);
-                
+
                 let helius = solana.rpc.providers.get("helius").unwrap();
-                assert_eq!(helius.http.as_str(), "https://mainnet.helius-rpc.com/?api-key=key");
+                assert_eq!(
+                    helius.http.as_str(),
+                    "https://mainnet.helius-rpc.com/?api-key=key"
+                );
                 assert_eq!(helius.rate_limit, Some(100));
             }
             _ => panic!("Expected Solana config"),
@@ -646,17 +1047,243 @@ mod tests {
     }
 
     #[test]
-    fn test_config_parsing_missing_rpc_fails() {
+    fn test_config_parsing_missing_signers_fails() {
         let json = r#"{
             "chains": {
                 "eip155:8453": {
-                    "v1_name": "base"
+                    "v1_name": "base",
+                    "rpc": {
+                        "default": {
+                            "http": "https://base-rpc.example.com/"
+                        }
+                    }
                 }
             }
         }"#;
         let result: Result<Config, _> = serde_json::from_str(json);
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
+        assert!(err.contains("signers") || err.contains("missing field"));
+    }
+
+    #[test]
+    fn test_config_parsing_missing_rpc_fails() {
+        let json = format!(
+            r#"{{
+            "chains": {{
+                "eip155:8453": {{
+                    "v1_name": "base",
+                    "signers": ["{}"]
+                }}
+            }}
+        }}"#,
+            TEST_EVM_KEY_1
+        );
+        let result: Result<Config, _> = serde_json::from_str(&json);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
         assert!(err.contains("rpc") || err.contains("missing field"));
+    }
+
+    // ========================================================================
+    // Environment Variable Resolution Tests
+    // ========================================================================
+
+    #[test]
+    fn test_parse_env_var_syntax_dollar_var() {
+        assert_eq!(parse_env_var_syntax("$VAR"), Some("VAR".to_string()));
+        assert_eq!(
+            parse_env_var_syntax("$MY_VAR_123"),
+            Some("MY_VAR_123".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_env_var_syntax_braced_var() {
+        assert_eq!(parse_env_var_syntax("${VAR}"), Some("VAR".to_string()));
+        assert_eq!(
+            parse_env_var_syntax("${MY_VAR_123}"),
+            Some("MY_VAR_123".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_env_var_syntax_literal() {
+        assert_eq!(parse_env_var_syntax("literal"), None);
+        assert_eq!(parse_env_var_syntax("http://example.com"), None);
+        assert_eq!(parse_env_var_syntax("0xcafe..."), None);
+        assert_eq!(parse_env_var_syntax("$"), None);
+        assert_eq!(parse_env_var_syntax("${"), None);
+        assert_eq!(parse_env_var_syntax("$invalid-chars"), None);
+    }
+
+    #[test]
+    fn test_resolve_env_value_literal() {
+        let result = resolve_env_value("literal_value");
+        assert_eq!(result, Ok("literal_value".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_env_value_env_var() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        unsafe { env::set_var("TEST_RESOLVE_VAR", "resolved_value") };
+
+        let result = resolve_env_value("$TEST_RESOLVE_VAR");
+        assert_eq!(result, Ok("resolved_value".to_string()));
+
+        let result_braced = resolve_env_value("${TEST_RESOLVE_VAR}");
+        assert_eq!(result_braced, Ok("resolved_value".to_string()));
+
+        unsafe { env::remove_var("TEST_RESOLVE_VAR") };
+    }
+
+    #[test]
+    fn test_resolve_env_value_missing_var() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        unsafe { env::remove_var("MISSING_VAR_FOR_TEST") };
+
+        let result = resolve_env_value("$MISSING_VAR_FOR_TEST");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("MISSING_VAR_FOR_TEST"));
+    }
+
+    // ========================================================================
+    // EVM Signers Config Tests
+    // ========================================================================
+
+    #[test]
+    fn test_evm_signers_single_key() {
+        let json = format!(r#"["{}"]"#, TEST_EVM_KEY_1);
+        let signers: EvmSignersConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(signers.len(), 1);
+    }
+
+    #[test]
+    fn test_evm_signers_multiple_keys() {
+        let json = format!(r#"["{}", "{}"]"#, TEST_EVM_KEY_1, TEST_EVM_KEY_2);
+        let signers: EvmSignersConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(signers.len(), 2);
+    }
+
+    #[test]
+    fn test_evm_signers_from_env_var() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        unsafe { env::set_var("TEST_EVM_KEY", TEST_EVM_KEY_1) };
+
+        let json = r#"["$TEST_EVM_KEY"]"#;
+        let signers: EvmSignersConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(signers.len(), 1);
+
+        unsafe { env::remove_var("TEST_EVM_KEY") };
+    }
+
+    #[test]
+    fn test_evm_signers_from_braced_env_var() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        unsafe { env::set_var("TEST_EVM_KEY_BRACED", TEST_EVM_KEY_1) };
+
+        let json = r#"["${TEST_EVM_KEY_BRACED}"]"#;
+        let signers: EvmSignersConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(signers.len(), 1);
+
+        unsafe { env::remove_var("TEST_EVM_KEY_BRACED") };
+    }
+
+    #[test]
+    fn test_evm_signers_mixed_literal_and_env() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        unsafe { env::set_var("TEST_EVM_KEY_MIXED", TEST_EVM_KEY_2) };
+
+        let json = format!(r#"["{}", "$TEST_EVM_KEY_MIXED"]"#, TEST_EVM_KEY_1);
+        let signers: EvmSignersConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(signers.len(), 2);
+
+        unsafe { env::remove_var("TEST_EVM_KEY_MIXED") };
+    }
+
+    #[test]
+    fn test_evm_signers_empty_array_fails() {
+        let json = r#"[]"#;
+        let result: Result<EvmSignersConfig, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("at least one private key"));
+    }
+
+    #[test]
+    fn test_evm_signers_missing_env_var_fails() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        unsafe { env::remove_var("NONEXISTENT_EVM_KEY") };
+
+        let json = r#"["$NONEXISTENT_EVM_KEY"]"#;
+        let result: Result<EvmSignersConfig, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("NONEXISTENT_EVM_KEY"));
+    }
+
+    #[test]
+    fn test_evm_signers_invalid_key_fails() {
+        let json = r#"["not-a-valid-hex-key"]"#;
+        let result: Result<EvmSignersConfig, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Failed to parse private key"));
+    }
+
+    // ========================================================================
+    // Solana Signers Config Tests
+    // ========================================================================
+
+    #[test]
+    fn test_solana_signers_single_key() {
+        let json = format!(r#"["{}"]"#, TEST_SOLANA_KEY);
+        let signers: SolanaSignersConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(signers.len(), 1);
+    }
+
+    #[test]
+    fn test_solana_signers_from_env_var() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        unsafe { env::set_var("TEST_SOLANA_KEY", TEST_SOLANA_KEY) };
+
+        let json = r#"["$TEST_SOLANA_KEY"]"#;
+        let signers: SolanaSignersConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(signers.len(), 1);
+
+        unsafe { env::remove_var("TEST_SOLANA_KEY") };
+    }
+
+    #[test]
+    fn test_solana_signers_from_braced_env_var() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        unsafe { env::set_var("TEST_SOLANA_KEY_BRACED", TEST_SOLANA_KEY) };
+
+        let json = r#"["${TEST_SOLANA_KEY_BRACED}"]"#;
+        let signers: SolanaSignersConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(signers.len(), 1);
+
+        unsafe { env::remove_var("TEST_SOLANA_KEY_BRACED") };
+    }
+
+    #[test]
+    fn test_solana_signers_empty_array_fails() {
+        let json = r#"[]"#;
+        let result: Result<SolanaSignersConfig, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("at least one private key"));
+    }
+
+    #[test]
+    fn test_solana_signers_missing_env_var_fails() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        unsafe { env::remove_var("NONEXISTENT_SOLANA_KEY") };
+
+        let json = r#"["$NONEXISTENT_SOLANA_KEY"]"#;
+        let result: Result<SolanaSignersConfig, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("NONEXISTENT_SOLANA_KEY"));
     }
 }

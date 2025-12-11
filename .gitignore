@@ -3,3 +3,4 @@
 .env
 crates/*/target/
 examples/*/.env
+config.json
