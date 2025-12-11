@@ -296,19 +296,7 @@ impl FromStr for EvmPrivateKey {
 ///   ]
 /// }
 /// ```
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct EvmSignersConfig(Vec<LiteralOrEnv<EvmPrivateKey>>);
-
-impl EvmSignersConfig {
-    /// Get the list of private keys.
-    pub fn keys(&self) -> Vec<EvmPrivateKey> {
-        self.0.iter().map(|k| **k).collect()
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-}
+pub type EvmSignersConfig = Vec<LiteralOrEnv<EvmPrivateKey>>;
 
 // ============================================================================
 // Solana Private Key
@@ -832,7 +820,7 @@ mod tests {
 
         // Verify EVM chain config
         let evm_key = ChainId::from_str("eip155:84532").unwrap();
-        let evm_config = config.chains().get(&evm_key).unwrap();
+        let evm_config = config.chains().iter().find(|c| c.chain_id().eq(&evm_key)).unwrap();
         match evm_config {
             ChainConfig::Evm(evm) => {
                 assert!(evm.eip1559());
@@ -853,7 +841,7 @@ mod tests {
 
         // Verify Solana chain config
         let solana_key = ChainId::from_str("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").unwrap();
-        let solana_config = config.chains().get(&solana_key).unwrap();
+        let solana_config = config.chains().iter().find(|c| c.chain_id().eq(&solana_key)).unwrap();
         match solana_config {
             ChainConfig::Solana(solana) => {
                 assert!(solana.usdc().is_some());
@@ -895,7 +883,7 @@ mod tests {
         );
         let config: Config = serde_json::from_str(&json).unwrap();
         let evm_key = ChainId::from_str("eip155:8453").unwrap();
-        let evm_config = config.chains().get(&evm_key).unwrap();
+        let evm_config = config.chains().iter().find(|c| c.chain_id().eq(&evm_key)).unwrap();
         match evm_config {
             ChainConfig::Evm(evm) => {
                 assert!(!evm.eip1559()); // default false
@@ -938,7 +926,7 @@ mod tests {
 
         // Verify EVM chain config without usdc
         let evm_key = ChainId::from_str("eip155:8453").unwrap();
-        let evm_config = config.chains().get(&evm_key).unwrap();
+        let evm_config = config.chains().iter().find(|c| c.chain_id().eq(&evm_key)).unwrap();
         match evm_config {
             ChainConfig::Evm(evm) => {
                 assert!(evm.usdc().is_none());
@@ -948,7 +936,7 @@ mod tests {
 
         // Verify Solana chain config without usdc
         let solana_key = ChainId::from_str("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").unwrap();
-        let solana_config = config.chains().get(&solana_key).unwrap();
+        let solana_config = config.chains().iter().find(|c| c.chain_id().eq(&solana_key)).unwrap();
         match solana_config {
             ChainConfig::Solana(solana) => {
                 assert!(solana.usdc().is_none());
@@ -969,7 +957,7 @@ mod tests {
         let result: Result<Config, _> = serde_json::from_str(json);
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("unknown namespace"));
+        assert!(err.contains("unsupported namespace"));
     }
 
     #[test]
@@ -1023,7 +1011,7 @@ mod tests {
 
         // Verify EVM chain config with RPC
         let evm_key = ChainId::from_str("eip155:84532").unwrap();
-        let evm_config = config.chains().get(&evm_key).unwrap();
+        let evm_config = config.chains().iter().find(|c| c.chain_id().eq(&evm_key)).unwrap();
         match evm_config {
             ChainConfig::Evm(evm) => {
                 assert_eq!(evm.rpc().providers.len(), 2);
@@ -1044,7 +1032,7 @@ mod tests {
 
         // Verify Solana chain config with RPC
         let solana_key = ChainId::from_str("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").unwrap();
-        let solana_config = config.chains().get(&solana_key).unwrap();
+        let solana_config = config.chains().iter().find(|c| c.chain_id().eq(&solana_key)).unwrap();
         match solana_config {
             ChainConfig::Solana(solana) => {
                 assert_eq!(solana.rpc().providers.len(), 1);

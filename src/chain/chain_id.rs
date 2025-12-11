@@ -134,6 +134,6 @@ mod tests {
     #[test]
     fn test_chain_id_deserialize_unknown_namespace() {
         let result: Result<ChainId, _> = serde_json::from_str("\"unknown:1\"");
-        assert!(result.is_err());
+        assert!(result.is_ok());
     }
 }
