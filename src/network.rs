@@ -122,54 +122,18 @@ impl Network {
 
     pub fn as_chain_id(&self) -> ChainId {
         match self {
-            Network::BaseSepolia => ChainId {
-                namespace: Namespace::Eip155,
-                reference: "84532".to_string(),
-            },
-            Network::Base => ChainId {
-                namespace: Namespace::Eip155,
-                reference: "8453".to_string(),
-            },
-            Network::XdcMainnet => ChainId {
-                namespace: Namespace::Eip155,
-                reference: "50".to_string(),
-            },
-            Network::AvalancheFuji => ChainId {
-                namespace: Namespace::Eip155,
-                reference: "4313".to_string(),
-            },
-            Network::Avalanche => ChainId {
-                namespace: Namespace::Eip155,
-                reference: "43114".to_string(),
-            },
-            Network::XrplEvm => ChainId {
-                namespace: Namespace::Eip155,
-                reference: "1440000".to_string(),
-            },
-            Network::Solana => ChainId {
-                namespace: Namespace::Solana,
-                reference: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp".to_string(),
-            },
-            Network::SolanaDevnet => ChainId {
-                namespace: Namespace::Solana,
-                reference: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1".to_string(),
-            },
-            Network::PolygonAmoy => ChainId {
-                namespace: Namespace::Eip155,
-                reference: "80002".to_string(),
-            },
-            Network::Polygon => ChainId {
-                namespace: Namespace::Eip155,
-                reference: "137".to_string(),
-            },
-            Network::Sei => ChainId {
-                namespace: Namespace::Eip155,
-                reference: "1329".to_string(),
-            },
-            Network::SeiTestnet => ChainId {
-                namespace: Namespace::Eip155,
-                reference: "1328".to_string(),
-            },
+            Network::BaseSepolia => ChainId::eip155(84532),
+            Network::Base => ChainId::eip155(8453),
+            Network::XdcMainnet => ChainId::eip155(50),
+            Network::AvalancheFuji => ChainId::eip155(4313),
+            Network::Avalanche => ChainId::eip155(43114),
+            Network::XrplEvm => ChainId::eip155(1440000),
+            Network::PolygonAmoy => ChainId::eip155(80002),
+            Network::Polygon => ChainId::eip155(137),
+            Network::Sei => ChainId::eip155(1329),
+            Network::SeiTestnet => ChainId::eip155(1328),
+            Network::Solana => ChainId::solana("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"),
+            Network::SolanaDevnet => ChainId::solana("EtWTRABZaYq6iMfeYKouRu166VU2xqa1"),
         }
     }
 }
@@ -182,7 +146,9 @@ impl TryInto<Network> for ChainId {
     type Error = ChainIdToNetworkError;
 
     fn try_into(self) -> Result<Network, Self::Error> {
-        match self.namespace {
+        let namespace = Namespace::from_str(&self.namespace)
+            .map_err(|e| ChainIdToNetworkError(e.to_string()))?;
+        match namespace {
             Namespace::Solana => {
                 if self.reference == "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" {
                     Ok(Network::Solana)

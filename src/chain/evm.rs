@@ -14,7 +14,6 @@
 //! - Settlement is atomic: deploy (if needed) + transfer happen in a single user flow.
 //! - Verification does not persist state.
 
-use std::fmt::{Display, Formatter};
 use alloy_contract::SolCallBuilder;
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
 use alloy_primitives::hex;
@@ -36,13 +35,14 @@ use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, eip712_domain};
 use alloy_transport::TransportResult;
 use async_trait::async_trait;
 use dashmap::DashMap;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Mutex;
 use tracing::{Instrument, instrument};
 use tracing_core::Level;
 
-use crate::chain::chain_id::{ChainId, Namespace};
+use crate::chain::chain_id::{ChainId, ChainIdError, Namespace};
 use crate::chain::{FacilitatorLocalError, FromEnvByNetworkBuild, NetworkProviderOps};
 use crate::facilitator::Facilitator;
 use crate::from_env;
@@ -98,19 +98,30 @@ pub struct EvmChainReference(u64);
 
 impl Into<ChainId> for EvmChainReference {
     fn into(self) -> ChainId {
-        ChainId {
-            namespace: Namespace::Eip155,
-            reference: self.0.to_string(),
-        }
+        ChainId::eip155(self.0)
     }
 }
 
 impl Into<ChainId> for &EvmChainReference {
     fn into(self) -> ChainId {
-        ChainId {
-            namespace: Namespace::Eip155,
-            reference: self.0.to_string(),
+        ChainId::eip155(self.0)
+    }
+}
+
+impl TryFrom<ChainId> for EvmChainReference {
+    type Error = ChainIdError;
+
+    fn try_from(value: ChainId) -> Result<Self, Self::Error> {
+        if value.namespace != Namespace::Eip155.to_string() {
+            return Err(ChainIdError::UnexpectedNamespace(
+                value.namespace,
+                Namespace::Eip155,
+            ));
         }
+        let chain_id: u64 = value.reference.parse().map_err(|e| {
+            ChainIdError::InvalidReference(value.reference, Namespace::Eip155, format!("{e:?}"))
+        })?;
+        Ok(EvmChainReference(chain_id))
     }
 }
 
@@ -396,10 +407,7 @@ impl NetworkProviderOps for EvmProvider {
     }
 
     fn chain_id(&self) -> ChainId {
-        ChainId {
-            namespace: Namespace::Eip155,
-            reference: self.chain.to_string(),
-        }
+        ChainId::eip155(self.chain.0)
     }
 }
 

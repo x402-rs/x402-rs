@@ -3,7 +3,7 @@
 use alloy_primitives::B256;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fs;
 use std::net::IpAddr;
 use std::ops::Deref;
@@ -12,6 +12,8 @@ use std::str::FromStr;
 use url::Url;
 
 use crate::chain::chain_id::ChainId;
+use crate::chain::evm::EvmChainReference;
+use crate::chain::solana::SolanaChainReference;
 use crate::types::MixedAddress;
 
 /// CLI arguments for the x402 facilitator server.
@@ -35,19 +37,15 @@ pub struct Config {
     #[serde(default = "config_defaults::default_host")]
     host: IpAddr,
     #[serde(default, with = "chains_serde")]
-    chains: ChainsConfigMap,
+    chains: Vec<ChainConfig>,
 }
-
-/// A mapping from CAIP-2 chain identifiers to their respective chain configurations.
-pub type ChainsConfigMap = HashMap<ChainId, ChainConfig>;
 
 /// Configuration for a specific chain.
 ///
 /// This enum represents chain-specific configuration that varies by chain family
 /// (EVM vs Solana). The chain family is determined by the CAIP-2 prefix of the
 /// chain identifier key (e.g., "eip155:" for EVM, "solana:" for Solana).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 pub enum ChainConfig {
     /// EVM chain configuration (for chains with "eip155:" prefix).
     Evm(EvmChainConfig),
@@ -56,7 +54,7 @@ pub enum ChainConfig {
 }
 
 /// EIP-712 domain configuration for token signatures.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Eip712Config {
     /// The name field for EIP-712 domain (e.g., "USDC", "USD Coin").
     pub name: String,
@@ -65,7 +63,7 @@ pub struct Eip712Config {
 }
 
 /// USDC deployment configuration for a specific chain.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct USDCConfig {
     /// The USDC contract address (EVM 0x-prefixed hex or Solana base58).
     pub address: MixedAddress,
@@ -448,9 +446,51 @@ impl Deref for SolanaSignerConfig {
 // Chain Configurations
 // ============================================================================
 
-/// Configuration specific to EVM-compatible chains.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct EvmChainConfig {
+    chain_reference: EvmChainReference,
+    inner: EvmChainConfigInner,
+}
+
+impl EvmChainConfig {
+    pub fn eip1559(&self) -> bool {
+        self.inner.eip1559
+    }
+    pub fn flashblocks(&self) -> bool {
+        self.inner.flashblocks
+    }
+    pub fn usdc(&self) -> Option<&USDCConfig> {
+        self.inner.usdc.as_ref()
+    }
+    pub fn signers(&self) -> &EvmSignersConfig {
+        &self.inner.signers
+    }
+    pub fn rpc(&self) -> &RpcConfig {
+        &self.inner.rpc
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SolanaChainConfig {
+    chain_reference: SolanaChainReference,
+    inner: SolanaChainConfigInner,
+}
+
+impl SolanaChainConfig {
+    pub fn usdc(&self) -> Option<&USDCConfig> {
+        self.inner.usdc.as_ref()
+    }
+    pub fn signer(&self) -> &SolanaSignerConfig {
+        &self.inner.signer
+    }
+    pub fn rpc(&self) -> &RpcConfig {
+        &self.inner.rpc
+    }
+}
+
+/// Configuration specific to EVM-compatible chains.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvmChainConfigInner {
     /// Whether the chain supports EIP-1559 gas pricing.
     #[serde(default)]
     pub eip1559: bool,
@@ -468,8 +508,8 @@ pub struct EvmChainConfig {
 }
 
 /// Configuration specific to Solana chains.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SolanaChainConfig {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SolanaChainConfigInner {
     /// USDC deployment configuration for this chain (optional).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usdc: Option<USDCConfig>,
@@ -483,37 +523,48 @@ pub struct SolanaChainConfig {
 /// Custom serde module for deserializing the chains map with type discrimination
 /// based on the CAIP-2 chain identifier prefix.
 mod chains_serde {
-    use super::{ChainConfig, ChainId, EvmChainConfig, SolanaChainConfig};
+    use super::{
+        ChainConfig, ChainId, EvmChainConfig, EvmChainConfigInner, SolanaChainConfig,
+        SolanaChainConfigInner,
+    };
     use crate::chain::chain_id::Namespace;
     use serde::de::{MapAccess, Visitor};
     use serde::ser::SerializeMap;
     use serde::{Deserializer, Serializer};
-    use std::collections::HashMap;
     use std::fmt;
+    use std::str::FromStr;
 
     #[allow(dead_code)]
-    pub fn serialize<S>(
-        chains: &HashMap<ChainId, ChainConfig>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(chains: &Vec<ChainConfig>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let mut map = serializer.serialize_map(Some(chains.len()))?;
-        for (key, value) in chains {
-            map.serialize_entry(key, value)?;
+        for chain_config in chains {
+            match chain_config {
+                ChainConfig::Evm(config) => {
+                    let chain_id: ChainId = config.chain_reference.clone().into();
+                    let inner = &config.inner;
+                    map.serialize_entry(&chain_id, inner)?;
+                }
+                ChainConfig::Solana(config) => {
+                    let chain_id: ChainId = config.chain_reference.clone().into();
+                    let inner = &config.inner;
+                    map.serialize_entry(&chain_id, inner)?;
+                }
+            }
         }
         map.end()
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<HashMap<ChainId, ChainConfig>, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<ChainConfig>, D::Error>
     where
         D: Deserializer<'de>,
     {
         struct ChainsVisitor;
 
         impl<'de> Visitor<'de> for ChainsVisitor {
-            type Value = HashMap<ChainId, ChainConfig>;
+            type Value = Vec<ChainConfig>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a map of chain identifiers to chain configurations")
@@ -523,24 +574,38 @@ mod chains_serde {
             where
                 M: MapAccess<'de>,
             {
-                let mut map = HashMap::with_capacity(access.size_hint().unwrap_or(0));
+                let mut chains = Vec::with_capacity(access.size_hint().unwrap_or(0));
 
-                while let Some(key) = access.next_key::<ChainId>()? {
-                    let config = match key.namespace {
+                while let Some(chain_id) = access.next_key::<ChainId>()? {
+                    let namespace = Namespace::from_str(&chain_id.namespace)
+                        .map_err(|e| serde::de::Error::custom(format!("{}", e)))?;
+                    let config = match namespace {
                         Namespace::Eip155 => {
-                            let evm_config: EvmChainConfig = access.next_value()?;
-                            ChainConfig::Evm(evm_config)
+                            let inner: EvmChainConfigInner = access.next_value()?;
+                            let config = EvmChainConfig {
+                                chain_reference: chain_id
+                                    .try_into()
+                                    .map_err(|e| serde::de::Error::custom(format!("{}", e)))?,
+                                inner,
+                            };
+                            ChainConfig::Evm(config)
                         }
                         Namespace::Solana => {
-                            let solana_config: SolanaChainConfig = access.next_value()?;
-                            ChainConfig::Solana(solana_config)
+                            let inner: SolanaChainConfigInner = access.next_value()?;
+                            let config = SolanaChainConfig {
+                                chain_reference: chain_id
+                                    .try_into()
+                                    .map_err(|e| serde::de::Error::custom(format!("{}", e)))?,
+                                inner,
+                            };
+                            ChainConfig::Solana(config)
                         }
                     };
 
-                    map.insert(key, config);
+                    chains.push(config)
                 }
 
-                Ok(map)
+                Ok(chains)
             }
         }
 
@@ -553,7 +618,7 @@ impl Default for Config {
         Config {
             port: config_defaults::default_port(),
             host: config_defaults::default_host(),
-            chains: HashMap::new(),
+            chains: Vec::new(),
         }
     }
 }
@@ -649,7 +714,7 @@ impl Config {
     /// Get the chains configuration map.
     ///
     /// Keys are CAIP-2 chain identifiers (e.g., "eip155:84532", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").
-    pub fn chains(&self) -> &HashMap<ChainId, ChainConfig> {
+    pub fn chains(&self) -> &Vec<ChainConfig> {
         &self.chains
     }
 }
@@ -809,19 +874,18 @@ mod tests {
         let evm_config = config.chains().get(&evm_key).unwrap();
         match evm_config {
             ChainConfig::Evm(evm) => {
-                assert_eq!(evm.v1_name, "base-sepolia");
-                assert!(evm.eip1559);
-                assert!(evm.flashblocks);
-                assert!(evm.usdc.is_some());
-                let usdc = evm.usdc.as_ref().unwrap();
+                assert!(evm.eip1559());
+                assert!(evm.flashblocks());
+                assert!(evm.usdc().is_some());
+                let usdc = evm.usdc().unwrap();
                 assert_eq!(usdc.decimals, 6);
                 assert!(usdc.eip712.is_some());
                 let eip712 = usdc.eip712.as_ref().unwrap();
                 assert_eq!(eip712.name, "USDC");
                 assert_eq!(eip712.version, "2");
-                assert!(!evm.rpc.providers.is_empty());
+                assert!(!evm.rpc().providers.is_empty());
                 // Verify signers
-                assert_eq!(evm.signers.len(), 1);
+                assert_eq!(evm.signers().len(), 1);
             }
             _ => panic!("Expected EVM config"),
         }
@@ -831,14 +895,13 @@ mod tests {
         let solana_config = config.chains().get(&solana_key).unwrap();
         match solana_config {
             ChainConfig::Solana(solana) => {
-                assert_eq!(solana.v1_name, "solana");
-                assert!(solana.usdc.is_some());
-                let usdc = solana.usdc.as_ref().unwrap();
+                assert!(solana.usdc().is_some());
+                let usdc = solana.usdc().unwrap();
                 assert_eq!(usdc.decimals, 6);
                 assert!(usdc.eip712.is_none());
-                assert!(!solana.rpc.providers.is_empty());
+                assert!(!solana.rpc().providers.is_empty());
                 // Verify signer is present (using Deref)
-                let _: &SolanaPrivateKey = &solana.signer.0;
+                let _: &SolanaPrivateKey = &solana.signer().0;
             }
             _ => panic!("Expected Solana config"),
         }
@@ -874,11 +937,10 @@ mod tests {
         let evm_config = config.chains().get(&evm_key).unwrap();
         match evm_config {
             ChainConfig::Evm(evm) => {
-                assert_eq!(evm.v1_name, "base");
-                assert!(!evm.eip1559); // default false
-                assert!(!evm.flashblocks); // default false
-                assert!(evm.usdc.is_some());
-                assert_eq!(evm.usdc.as_ref().unwrap().decimals, 6); // default 6
+                assert!(!evm.eip1559()); // default false
+                assert!(!evm.flashblocks()); // default false
+                assert!(evm.usdc().is_some());
+                assert_eq!(evm.usdc().unwrap().decimals, 6); // default 6
             }
             _ => panic!("Expected EVM config"),
         }
@@ -918,8 +980,7 @@ mod tests {
         let evm_config = config.chains().get(&evm_key).unwrap();
         match evm_config {
             ChainConfig::Evm(evm) => {
-                assert_eq!(evm.v1_name, "base");
-                assert!(evm.usdc.is_none());
+                assert!(evm.usdc().is_none());
             }
             _ => panic!("Expected EVM config"),
         }
@@ -929,8 +990,7 @@ mod tests {
         let solana_config = config.chains().get(&solana_key).unwrap();
         match solana_config {
             ChainConfig::Solana(solana) => {
-                assert_eq!(solana.v1_name, "solana");
-                assert!(solana.usdc.is_none());
+                assert!(solana.usdc().is_none());
             }
             _ => panic!("Expected Solana config"),
         }
@@ -1005,13 +1065,13 @@ mod tests {
         let evm_config = config.chains().get(&evm_key).unwrap();
         match evm_config {
             ChainConfig::Evm(evm) => {
-                assert_eq!(evm.rpc.providers.len(), 2);
+                assert_eq!(evm.rpc().providers.len(), 2);
 
-                let quicknode = evm.rpc.providers.get("quicknode").unwrap();
+                let quicknode = evm.rpc().providers.get("quicknode").unwrap();
                 assert_eq!(quicknode.http.as_str(), "https://example.quiknode.pro/");
                 assert_eq!(quicknode.rate_limit, Some(50));
 
-                let alchemy = evm.rpc.providers.get("alchemy").unwrap();
+                let alchemy = evm.rpc().providers.get("alchemy").unwrap();
                 assert_eq!(
                     alchemy.http.as_str(),
                     "https://base-sepolia.g.alchemy.com/v2/key"
@@ -1026,9 +1086,9 @@ mod tests {
         let solana_config = config.chains().get(&solana_key).unwrap();
         match solana_config {
             ChainConfig::Solana(solana) => {
-                assert_eq!(solana.rpc.providers.len(), 1);
+                assert_eq!(solana.rpc().providers.len(), 1);
 
-                let helius = solana.rpc.providers.get("helius").unwrap();
+                let helius = solana.rpc().providers.get("helius").unwrap();
                 assert_eq!(
                     helius.http.as_str(),
                     "https://mainnet.helius-rpc.com/?api-key=key"

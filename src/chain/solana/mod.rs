@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing_core::Level;
 
-use crate::chain::chain_id::{ChainId, Namespace};
+use crate::chain::chain_id::{ChainId, ChainIdError, Namespace};
 use crate::chain::{FacilitatorLocalError, FromEnvByNetworkBuild, NetworkProviderOps};
 use crate::facilitator::Facilitator;
 use crate::from_env;
@@ -125,6 +125,29 @@ impl TryFrom<Network> for SolanaChainReference {
             Network::Sei => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::SeiTestnet => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
         }
+    }
+}
+
+impl Into<ChainId> for SolanaChainReference {
+    fn into(self) -> ChainId {
+        ChainId::solana(self.as_str())
+    }
+}
+
+impl TryFrom<ChainId> for SolanaChainReference {
+    type Error = ChainIdError;
+
+    fn try_from(value: ChainId) -> Result<Self, Self::Error> {
+        if value.namespace != Namespace::Solana.to_string() {
+            return Err(ChainIdError::UnexpectedNamespace(
+                value.namespace,
+                Namespace::Solana,
+            ));
+        }
+        let solana_chain_reference = Self::from_str(&value.reference).map_err(|e| {
+            ChainIdError::InvalidReference(value.reference, Namespace::Solana, format!("{e:?}"))
+        })?;
+        Ok(solana_chain_reference)
     }
 }
 
@@ -721,10 +744,7 @@ impl NetworkProviderOps for SolanaProvider {
     }
 
     fn chain_id(&self) -> ChainId {
-        ChainId {
-            namespace: Namespace::Solana,
-            reference: self.chain.to_string(),
-        }
+        ChainId::solana(self.chain.as_str())
     }
 }
 
