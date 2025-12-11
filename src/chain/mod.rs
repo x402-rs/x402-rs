@@ -11,7 +11,10 @@ use std::time::SystemTimeError;
 
 pub mod chain_id;
 pub mod evm;
+pub mod namespace;
 pub mod solana;
+
+pub use namespace::*;
 
 pub enum NetworkProvider {
     Evm(EvmProvider),

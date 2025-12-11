@@ -2,38 +2,9 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::fmt;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Namespace {
-    Solana,
-    Eip155,
-}
+use crate::chain::Namespace;
 
-impl fmt::Display for Namespace {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Use serde_json to get the serialized string value
-        let json = serde_json::to_string(self).map_err(|_| fmt::Error)?;
-        // Remove the surrounding quotes from JSON string
-        let s = json.trim_matches('"');
-        write!(f, "{}", s)
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("unsupported namespace {0}")]
-pub struct UnsupportedNamespaceError(String);
-
-impl FromStr for Namespace {
-    type Err = UnsupportedNamespaceError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Use serde_json to deserialize from the string value
-        let json = format!("\"{}\"", s);
-        serde_json::from_str(&json).map_err(|_| UnsupportedNamespaceError(s.to_string()))
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChainId {
     pub namespace: String,
     pub reference: String,
@@ -55,23 +26,9 @@ impl ChainId {
     }
 }
 
-impl TryInto<Namespace> for ChainId {
-    type Error = UnsupportedNamespaceError;
-
-    fn try_into(self) -> Result<Namespace, Self::Error> {
-        Namespace::from_str(&self.namespace)
-    }
-}
-
 impl fmt::Display for ChainId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.namespace, self.reference)
-    }
-}
-
-impl fmt::Debug for ChainId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
     }
 }
 
@@ -140,7 +97,7 @@ mod tests {
     #[test]
     fn test_chain_id_deserialize_eip155() {
         let chain_id: ChainId = serde_json::from_str("\"eip155:1\"").unwrap();
-        assert_eq!(chain_id.namespace, Namespace::Eip155.to_string());
+        assert_eq!(chain_id.namespace, "eip155");
         assert_eq!(chain_id.reference, "1");
     }
 
@@ -148,7 +105,7 @@ mod tests {
     fn test_chain_id_deserialize_solana() {
         let chain_id: ChainId =
             serde_json::from_str("\"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp\"").unwrap();
-        assert_eq!(chain_id.namespace, Namespace::Solana.to_string());
+        assert_eq!(chain_id.namespace, "solana");
         assert_eq!(chain_id.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
     }
 
@@ -178,18 +135,5 @@ mod tests {
     fn test_chain_id_deserialize_unknown_namespace() {
         let result: Result<ChainId, _> = serde_json::from_str("\"unknown:1\"");
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_namespace_display() {
-        assert_eq!(Namespace::Eip155.to_string(), "eip155");
-        assert_eq!(Namespace::Solana.to_string(), "solana");
-    }
-
-    #[test]
-    fn test_namespace_from_str() {
-        assert_eq!(Namespace::from_str("eip155").unwrap(), Namespace::Eip155);
-        assert_eq!(Namespace::from_str("solana").unwrap(), Namespace::Solana);
-        assert!(Namespace::from_str("unknown").is_err());
     }
 }
