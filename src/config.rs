@@ -2,10 +2,11 @@
 
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::net::IpAddr;
 use std::path::PathBuf;
+use url::Url;
 
 use crate::chain::chain_id::ChainId;
 use crate::types::MixedAddress;
@@ -77,6 +78,32 @@ fn default_usdc_decimals() -> u8 {
     6
 }
 
+/// RPC provider configuration for a single provider.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RpcProviderConfig {
+    /// HTTP URL for the RPC endpoint.
+    pub http: Url,
+    /// Rate limit for requests per second (optional).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rate_limit: Option<u32>,
+}
+
+/// RPC configuration containing multiple named providers.
+///
+/// Uses serde flatten to allow a map of provider names to their configurations:
+/// ```json
+/// {
+///   "quicknode": { "http": "https://...", "rate_limit": 50 },
+///   "alchemy": { "http": "https://...", "rate_limit": 100 }
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RpcConfig {
+    /// Map of provider name to provider configuration.
+    #[serde(flatten)]
+    pub providers: BTreeMap<String, RpcProviderConfig>,
+}
+
 /// Configuration specific to EVM-compatible chains.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EvmChainConfig {
@@ -91,6 +118,8 @@ pub struct EvmChainConfig {
     /// USDC deployment configuration for this chain (optional).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usdc: Option<USDCConfig>,
+    /// RPC provider configuration for this chain (required).
+    pub rpc: RpcConfig,
 }
 
 /// Configuration specific to Solana chains.
@@ -101,6 +130,8 @@ pub struct SolanaChainConfig {
     /// USDC deployment configuration for this chain (optional).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usdc: Option<USDCConfig>,
+    /// RPC provider configuration for this chain (required).
+    pub rpc: RpcConfig,
 }
 
 /// Custom serde module for deserializing the chains map with type discrimination
@@ -377,6 +408,11 @@ mod tests {
                             "name": "USDC",
                             "version": "2"
                         }
+                    },
+                    "rpc": {
+                        "default": {
+                            "http": "https://example.quiknode.pro/"
+                        }
                     }
                 },
                 "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
@@ -384,6 +420,11 @@ mod tests {
                     "usdc": {
                         "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
                         "decimals": 6
+                    },
+                    "rpc": {
+                        "default": {
+                            "http": "https://mainnet.helius-rpc.com/?api-key=key"
+                        }
                     }
                 }
             }
@@ -408,6 +449,7 @@ mod tests {
                 let eip712 = usdc.eip712.as_ref().unwrap();
                 assert_eq!(eip712.name, "USDC");
                 assert_eq!(eip712.version, "2");
+                assert!(!evm.rpc.providers.is_empty());
             }
             _ => panic!("Expected EVM config"),
         }
@@ -422,6 +464,7 @@ mod tests {
                 let usdc = solana.usdc.as_ref().unwrap();
                 assert_eq!(usdc.decimals, 6);
                 assert!(usdc.eip712.is_none());
+                assert!(!solana.rpc.providers.is_empty());
             }
             _ => panic!("Expected Solana config"),
         }
@@ -438,6 +481,11 @@ mod tests {
                         "eip712": {
                             "name": "USD Coin",
                             "version": "2"
+                        }
+                    },
+                    "rpc": {
+                        "default": {
+                            "http": "https://base-rpc.example.com/"
                         }
                     }
                 }
@@ -463,10 +511,20 @@ mod tests {
         let json = r#"{
             "chains": {
                 "eip155:8453": {
-                    "v1_name": "base"
+                    "v1_name": "base",
+                    "rpc": {
+                        "default": {
+                            "http": "https://base-rpc.example.com/"
+                        }
+                    }
                 },
                 "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
-                    "v1_name": "solana"
+                    "v1_name": "solana",
+                    "rpc": {
+                        "default": {
+                            "http": "https://solana-rpc.example.com/"
+                        }
+                    }
                 }
             }
         }"#;
@@ -522,5 +580,83 @@ mod tests {
         let json = r#"{"port": 8080}"#;
         let config: Config = serde_json::from_str(json).unwrap();
         assert!(config.chains().is_empty());
+    }
+
+    #[test]
+    fn test_config_parsing_with_rpc() {
+        let json = r#"{
+            "chains": {
+                "eip155:84532": {
+                    "v1_name": "base-sepolia",
+                    "rpc": {
+                        "quicknode": {
+                            "http": "https://example.quiknode.pro/",
+                            "rate_limit": 50
+                        },
+                        "alchemy": {
+                            "http": "https://base-sepolia.g.alchemy.com/v2/key"
+                        }
+                    }
+                },
+                "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
+                    "v1_name": "solana",
+                    "rpc": {
+                        "helius": {
+                            "http": "https://mainnet.helius-rpc.com/?api-key=key",
+                            "rate_limit": 100
+                        }
+                    }
+                }
+            }
+        }"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.chains().len(), 2);
+
+        // Verify EVM chain config with RPC
+        let evm_key = ChainId::from_str("eip155:84532").unwrap();
+        let evm_config = config.chains().get(&evm_key).unwrap();
+        match evm_config {
+            ChainConfig::Evm(evm) => {
+                assert_eq!(evm.rpc.providers.len(), 2);
+                
+                let quicknode = evm.rpc.providers.get("quicknode").unwrap();
+                assert_eq!(quicknode.http.as_str(), "https://example.quiknode.pro/");
+                assert_eq!(quicknode.rate_limit, Some(50));
+                
+                let alchemy = evm.rpc.providers.get("alchemy").unwrap();
+                assert_eq!(alchemy.http.as_str(), "https://base-sepolia.g.alchemy.com/v2/key");
+                assert!(alchemy.rate_limit.is_none());
+            }
+            _ => panic!("Expected EVM config"),
+        }
+
+        // Verify Solana chain config with RPC
+        let solana_key = ChainId::from_str("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").unwrap();
+        let solana_config = config.chains().get(&solana_key).unwrap();
+        match solana_config {
+            ChainConfig::Solana(solana) => {
+                assert_eq!(solana.rpc.providers.len(), 1);
+                
+                let helius = solana.rpc.providers.get("helius").unwrap();
+                assert_eq!(helius.http.as_str(), "https://mainnet.helius-rpc.com/?api-key=key");
+                assert_eq!(helius.rate_limit, Some(100));
+            }
+            _ => panic!("Expected Solana config"),
+        }
+    }
+
+    #[test]
+    fn test_config_parsing_missing_rpc_fails() {
+        let json = r#"{
+            "chains": {
+                "eip155:8453": {
+                    "v1_name": "base"
+                }
+            }
+        }"#;
+        let result: Result<Config, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("rpc") || err.contains("missing field"));
     }
 }

@@ -13,6 +13,12 @@
                 "name": "USDC",
                 "version": "2"
             }
+        },
+        "rpc": {
+            "quicknode": {
+                "http": "https://example.base-sepolia.quiknode.pro/your-api-key/",
+                "rate_limit": 50
+            }
         }
     },
     "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
@@ -20,6 +26,11 @@
         "usdc": {
             "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "decimals": 6
+        },
+        "rpc": {
+            "helius": {
+                "http": "https://mainnet.helius-rpc.com/?api-key=your-api-key"
+            }
         }
     }
   }
