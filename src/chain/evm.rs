@@ -41,6 +41,7 @@ use tokio::sync::Mutex;
 use tracing::{Instrument, instrument};
 use tracing_core::Level;
 
+use crate::chain::chain_id::{ChainId, Namespace};
 use crate::chain::{FacilitatorLocalError, FromEnvByNetworkBuild, NetworkProviderOps};
 use crate::facilitator::Facilitator;
 use crate::from_env;
@@ -384,9 +385,11 @@ impl NetworkProviderOps for EvmProvider {
         self.inner.default_signer_address().into()
     }
 
-    /// x402 network handled by this provider.
-    fn network(&self) -> Network {
-        self.chain.network
+    fn chain_id(&self) -> ChainId {
+        ChainId {
+            namespace: Namespace::Eip155,
+            reference: self.chain.chain_id.to_string(),
+        }
     }
 }
 
@@ -913,15 +916,15 @@ async fn assert_valid_payment<P: Provider>(
     if payload.network != chain.network {
         return Err(FacilitatorLocalError::NetworkMismatch(
             Some(payer.into()),
-            chain.network,
-            payload.network,
+            chain.network.as_chain_id(),
+            payload.network.as_chain_id(),
         ));
     }
     if requirements.network != chain.network {
         return Err(FacilitatorLocalError::NetworkMismatch(
             Some(payer.into()),
-            chain.network,
-            requirements.network,
+            chain.network.as_chain_id(),
+            requirements.network.as_chain_id(),
         ));
     }
     if payload.scheme != requirements.scheme {

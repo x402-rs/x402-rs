@@ -198,6 +198,7 @@ impl IntoResponse for FacilitatorLocalError {
                 .into_response(),
             FacilitatorLocalError::ContractCall(..)
             | FacilitatorLocalError::InvalidAddress(..)
+            | FacilitatorLocalError::NetworkConversionError(..)
             | FacilitatorLocalError::ClockError(_) => bad_request,
             FacilitatorLocalError::DecodingError(reason) => (
                 StatusCode::OK,

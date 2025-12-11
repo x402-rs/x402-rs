@@ -1,13 +1,13 @@
-use std::time::SystemTimeError;
-
+use crate::chain::chain_id::ChainId;
 use crate::chain::evm::EvmProvider;
 use crate::chain::solana::SolanaProvider;
 use crate::facilitator::Facilitator;
-use crate::network::{Network, NetworkFamily};
+use crate::network::{ChainIdToNetworkError, Network, NetworkFamily};
 use crate::types::{
     MixedAddress, Scheme, SettleRequest, SettleResponse, SupportedPaymentKindsResponse,
     VerifyRequest, VerifyResponse,
 };
+use std::time::SystemTimeError;
 
 pub mod chain_id;
 pub mod evm;
@@ -43,7 +43,7 @@ impl FromEnvByNetworkBuild for NetworkProvider {
 
 pub trait NetworkProviderOps {
     fn signer_address(&self) -> MixedAddress;
-    fn network(&self) -> Network;
+    fn chain_id(&self) -> ChainId;
 }
 
 impl NetworkProviderOps for NetworkProvider {
@@ -54,10 +54,10 @@ impl NetworkProviderOps for NetworkProvider {
         }
     }
 
-    fn network(&self) -> Network {
+    fn chain_id(&self) -> ChainId {
         match self {
-            NetworkProvider::Evm(provider) => provider.network(),
-            NetworkProvider::Solana(provider) => provider.network(),
+            NetworkProvider::Evm(provider) => provider.chain_id(),
+            NetworkProvider::Solana(provider) => provider.chain_id(),
         }
     }
 }
@@ -94,7 +94,7 @@ pub enum FacilitatorLocalError {
     UnsupportedNetwork(Option<MixedAddress>),
     /// The network is not supported by this facilitator.
     #[error("Network mismatch: expected {1}, actual {2}")]
-    NetworkMismatch(Option<MixedAddress>, Network, Network),
+    NetworkMismatch(Option<MixedAddress>, ChainId, ChainId),
     /// Scheme mismatch.
     #[error("Scheme mismatch: expected {1}, actual {2}")]
     SchemeMismatch(Option<MixedAddress>, Scheme, Scheme),
@@ -125,4 +125,6 @@ pub enum FacilitatorLocalError {
     /// The payload decoding failed.
     #[error("Decoding error: {0}")]
     DecodingError(String),
+    #[error("Can not convert chain ID to network")]
+    NetworkConversionError(#[source] ChainIdToNetworkError),
 }

@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing_core::Level;
 
+use crate::chain::chain_id::{ChainId, Namespace};
 use crate::chain::{FacilitatorLocalError, FromEnvByNetworkBuild, NetworkProviderOps};
 use crate::facilitator::Facilitator;
 use crate::from_env;
@@ -106,12 +107,34 @@ impl<'de> Deserialize<'de> for SolanaChainReference {
     }
 }
 
+impl TryFrom<Network> for SolanaChainReference {
+    type Error = FacilitatorLocalError;
+
+    fn try_from(value: Network) -> Result<Self, Self::Error> {
+        match value {
+            Network::Solana => Ok(Self(*b"5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")),
+            Network::SolanaDevnet => Ok(Self(*b"EtWTRABZaYq6iMfeYKouRu166VU2xqa1")),
+            Network::BaseSepolia => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::Base => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::XdcMainnet => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::AvalancheFuji => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::Avalanche => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::XrplEvm => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::PolygonAmoy => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::Polygon => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::Sei => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::SeiTestnet => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SolanaChain {
     pub network: Network, // FIXME Network v1
 }
 
-impl TryFrom<Network> for SolanaChain { // FIXME Network v1
+impl TryFrom<Network> for SolanaChain {
+    // FIXME Network v1
     type Error = FacilitatorLocalError;
 
     fn try_from(value: Network) -> Result<Self, Self::Error> {
@@ -171,7 +194,7 @@ impl From<SolanaAddress> for MixedAddress {
 #[derive(Clone)]
 pub struct SolanaProvider {
     keypair: Arc<Keypair>,
-    chain: SolanaChain,
+    chain: SolanaChainReference,
     rpc_client: Arc<RpcClient>,
     max_compute_unit_limit: u32,
     max_compute_unit_price: u64,
@@ -231,7 +254,7 @@ impl SolanaProvider {
         max_compute_unit_limit: u32,
         max_compute_unit_price: u64,
     ) -> Result<Self, FacilitatorLocalError> {
-        let chain = SolanaChain::try_from(network)?;
+        let chain = SolanaChainReference::try_from(network)?;
         {
             let signer_addresses = vec![keypair.pubkey()];
             tracing::info!(
@@ -544,18 +567,18 @@ impl SolanaProvider {
             }
             ExactPaymentPayload::Solana(payload) => payload,
         };
-        if payload.network != self.network() {
+        if payload.network.as_chain_id() != self.chain_id() {
             return Err(FacilitatorLocalError::NetworkMismatch(
                 None,
-                self.network(),
-                payload.network,
+                self.chain_id(),
+                payload.network.as_chain_id(),
             ));
         }
-        if requirements.network != self.network() {
+        if requirements.network.as_chain_id() != self.chain_id() {
             return Err(FacilitatorLocalError::NetworkMismatch(
                 None,
-                self.network(),
-                requirements.network,
+                self.chain_id(),
+                requirements.network.as_chain_id(),
             ));
         }
         if payload.scheme != requirements.scheme {
@@ -697,8 +720,11 @@ impl NetworkProviderOps for SolanaProvider {
         self.fee_payer()
     }
 
-    fn network(&self) -> Network {
-        self.chain.network
+    fn chain_id(&self) -> ChainId {
+        ChainId {
+            namespace: Namespace::Solana,
+            reference: self.chain.to_string(),
+        }
     }
 }
 
@@ -721,7 +747,10 @@ impl Facilitator for SolanaProvider {
                 error_reason: Some(FacilitatorErrorReason::UnexpectedSettleError),
                 payer: verification.payer.into(),
                 transaction: None,
-                network: self.network(),
+                network: self
+                    .chain_id()
+                    .try_into()
+                    .map_err(FacilitatorLocalError::NetworkConversionError)?,
             });
         }
         let tx_sig = tx
@@ -732,14 +761,21 @@ impl Facilitator for SolanaProvider {
             error_reason: None,
             payer: verification.payer.into(),
             transaction: Some(TransactionHash::Solana(*tx_sig.as_array())),
-            network: self.network(),
+            network: self
+                .chain_id()
+                .try_into()
+                .map_err(FacilitatorLocalError::NetworkConversionError)?,
         };
         Ok(settle_response)
     }
 
     async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
+        let network: Network = self
+            .chain_id()
+            .try_into()
+            .map_err(FacilitatorLocalError::NetworkConversionError)?;
         let kinds = vec![SupportedPaymentKind {
-            network: self.network().to_string(),
+            network: network.to_string(),
             scheme: Scheme::Exact,
             x402_version: X402Version::V1,
             extra: Some(SupportedPaymentKindExtra {

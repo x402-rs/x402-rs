@@ -3,6 +3,7 @@
 //! This module defines supported networks and their chain IDs,
 //! and provides statically known USDC deployments per network.
 
+use crate::chain::chain_id::{ChainId, Namespace};
 use crate::types::{MixedAddress, TokenAsset, TokenDeployment, TokenDeploymentEip712};
 use alloy_primitives::address;
 use once_cell::sync::Lazy;
@@ -117,6 +118,112 @@ impl Network {
             Network::Sei,
             Network::SeiTestnet,
         ]
+    }
+
+    pub fn as_chain_id(&self) -> ChainId {
+        match self {
+            Network::BaseSepolia => ChainId {
+                namespace: Namespace::Eip155,
+                reference: "84532".to_string(),
+            },
+            Network::Base => ChainId {
+                namespace: Namespace::Eip155,
+                reference: "8453".to_string(),
+            },
+            Network::XdcMainnet => ChainId {
+                namespace: Namespace::Eip155,
+                reference: "50".to_string(),
+            },
+            Network::AvalancheFuji => ChainId {
+                namespace: Namespace::Eip155,
+                reference: "4313".to_string(),
+            },
+            Network::Avalanche => ChainId {
+                namespace: Namespace::Eip155,
+                reference: "43114".to_string(),
+            },
+            Network::XrplEvm => ChainId {
+                namespace: Namespace::Eip155,
+                reference: "1440000".to_string(),
+            },
+            Network::Solana => ChainId {
+                namespace: Namespace::Solana,
+                reference: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp".to_string(),
+            },
+            Network::SolanaDevnet => ChainId {
+                namespace: Namespace::Solana,
+                reference: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1".to_string(),
+            },
+            Network::PolygonAmoy => ChainId {
+                namespace: Namespace::Eip155,
+                reference: "80002".to_string(),
+            },
+            Network::Polygon => ChainId {
+                namespace: Namespace::Eip155,
+                reference: "137".to_string(),
+            },
+            Network::Sei => ChainId {
+                namespace: Namespace::Eip155,
+                reference: "1329".to_string(),
+            },
+            Network::SeiTestnet => ChainId {
+                namespace: Namespace::Eip155,
+                reference: "1328".to_string(),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("Failed to convert chain ID to network: {0}")]
+pub struct ChainIdToNetworkError(String);
+
+impl TryInto<Network> for ChainId {
+    type Error = ChainIdToNetworkError;
+
+    fn try_into(self) -> Result<Network, Self::Error> {
+        match self.namespace {
+            Namespace::Solana => {
+                if self.reference == "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" {
+                    Ok(Network::Solana)
+                } else if self.reference == "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" {
+                    Ok(Network::SolanaDevnet)
+                } else {
+                    Err(ChainIdToNetworkError(format!(
+                        "Unknown Solana chain ID: {}",
+                        self.reference
+                    )))
+                }
+            }
+            Namespace::Eip155 => {
+                if self.reference == "84532" {
+                    Ok(Network::BaseSepolia)
+                } else if self.reference == "8453" {
+                    Ok(Network::Base)
+                } else if self.reference == "50" {
+                    Ok(Network::XdcMainnet)
+                } else if self.reference == "4313" {
+                    Ok(Network::AvalancheFuji)
+                } else if self.reference == "43114" {
+                    Ok(Network::Avalanche)
+                } else if self.reference == "1440000" {
+                    Ok(Network::XrplEvm)
+                } else if self.reference == "80002" {
+                    Ok(Network::PolygonAmoy)
+                } else if self.reference == "137" {
+                    Ok(Network::Polygon)
+                } else if self.reference == "1329" {
+                    Ok(Network::Sei)
+                } else if self.reference == "1328" {
+                    Ok(Network::SeiTestnet)
+                } else {
+                    Err(ChainIdToNetworkError(format!(
+                        "Unknown EIP-155 chain ID: {}",
+                        self.reference
+                    )))
+                }
+            }
+        }
     }
 }
 

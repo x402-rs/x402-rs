@@ -32,12 +32,12 @@ impl FromStr for Namespace {
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ChainId {
     pub namespace: Namespace,
-    pub chain_id: String,
+    pub reference: String,
 }
 
 impl fmt::Display for ChainId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.namespace, self.chain_id)
+        write!(f, "{}:{}", self.namespace, self.reference)
     }
 }
 
@@ -59,7 +59,7 @@ impl FromStr for ChainId {
         let chain_id = parts[1].to_string();
         Ok(ChainId {
             namespace,
-            chain_id,
+            reference: chain_id,
         })
     }
 }
@@ -91,7 +91,7 @@ mod tests {
     fn test_chain_id_serialize_eip155() {
         let chain_id = ChainId {
             namespace: Namespace::Eip155,
-            chain_id: "1".to_string(),
+            reference: "1".to_string(),
         };
         let serialized = serde_json::to_string(&chain_id).unwrap();
         assert_eq!(serialized, "\"eip155:1\"");
@@ -101,7 +101,7 @@ mod tests {
     fn test_chain_id_serialize_solana() {
         let chain_id = ChainId {
             namespace: Namespace::Solana,
-            chain_id: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp".to_string(),
+            reference: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp".to_string(),
         };
         let serialized = serde_json::to_string(&chain_id).unwrap();
         assert_eq!(serialized, "\"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp\"");
@@ -111,7 +111,7 @@ mod tests {
     fn test_chain_id_deserialize_eip155() {
         let chain_id: ChainId = serde_json::from_str("\"eip155:1\"").unwrap();
         assert_eq!(chain_id.namespace, Namespace::Eip155);
-        assert_eq!(chain_id.chain_id, "1");
+        assert_eq!(chain_id.reference, "1");
     }
 
     #[test]
@@ -119,14 +119,14 @@ mod tests {
         let chain_id: ChainId =
             serde_json::from_str("\"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp\"").unwrap();
         assert_eq!(chain_id.namespace, Namespace::Solana);
-        assert_eq!(chain_id.chain_id, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+        assert_eq!(chain_id.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
     }
 
     #[test]
     fn test_chain_id_roundtrip_eip155() {
         let original = ChainId {
             namespace: Namespace::Eip155,
-            chain_id: "8453".to_string(),
+            reference: "8453".to_string(),
         };
         let serialized = serde_json::to_string(&original).unwrap();
         let deserialized: ChainId = serde_json::from_str(&serialized).unwrap();
@@ -137,7 +137,7 @@ mod tests {
     fn test_chain_id_roundtrip_solana() {
         let original = ChainId {
             namespace: Namespace::Solana,
-            chain_id: "devnet".to_string(),
+            reference: "devnet".to_string(),
         };
         let serialized = serde_json::to_string(&original).unwrap();
         let deserialized: ChainId = serde_json::from_str(&serialized).unwrap();
