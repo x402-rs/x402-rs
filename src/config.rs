@@ -409,7 +409,7 @@ impl Serialize for SolanaPrivateKey {
     }
 }
 
-impl std::str::FromStr for SolanaPrivateKey {
+impl FromStr for SolanaPrivateKey {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
