@@ -44,6 +44,7 @@ use tracing_core::Level;
 
 use crate::chain::chain_id::{ChainId, ChainIdError};
 use crate::chain::{FacilitatorLocalError, FromEnvByNetworkBuild, Namespace, NetworkProviderOps};
+use crate::config::EvmChainConfig;
 use crate::facilitator::Facilitator;
 use crate::from_env;
 use crate::network::{Network, USDCDeployment};
@@ -203,6 +204,10 @@ pub struct EvmProvider {
 }
 
 impl EvmProvider {
+    pub async fn from_config(config: &EvmChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
+        todo!("EvmProvider::from_config not implemented")
+    }
+
     /// Build an [`EvmProvider`] from a pre-composed Alloy ethereum provider [`InnerProvider`].
     pub async fn try_new(
         wallet: EthereumWallet,

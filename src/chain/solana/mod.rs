@@ -17,6 +17,7 @@ use tracing_core::Level;
 
 use crate::chain::chain_id::{ChainId, ChainIdError};
 use crate::chain::{FacilitatorLocalError, FromEnvByNetworkBuild, Namespace, NetworkProviderOps};
+use crate::config::SolanaChainConfig;
 use crate::facilitator::Facilitator;
 use crate::from_env;
 use crate::network::Network;
@@ -37,12 +38,8 @@ pub struct SolanaChainReference([u8; 32]);
 impl SolanaChainReference {
     /// Creates a new SolanaChainReference from a 32-byte array.
     /// Returns None if any byte is not a valid ASCII character.
-    pub fn new(bytes: [u8; 32]) -> Option<Self> {
-        if bytes.iter().all(|b| b.is_ascii()) {
-            Some(Self(bytes))
-        } else {
-            None
-        }
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
     }
 
     /// Returns the underlying bytes.
@@ -207,6 +204,10 @@ impl Debug for SolanaProvider {
 }
 
 impl SolanaProvider {
+    pub fn from_config(config: &SolanaChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
+        todo!("SolanaProvider::from_config not implemented")
+    }
+
     fn max_compute_unit_limit_from_env(network: Network) -> u32 {
         let suffix = match network {
             Network::Solana => "SOLANA",

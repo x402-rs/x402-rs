@@ -53,6 +53,15 @@ pub enum ChainConfig {
     Solana(SolanaChainConfig),
 }
 
+impl ChainConfig {
+    pub fn chain_id(&self) -> ChainId {
+        match self {
+            ChainConfig::Evm(config) => config.chain_reference.into(),
+            ChainConfig::Solana(config) => config.chain_reference.clone().into(),
+        }
+    }
+}
+
 /// EIP-712 domain configuration for token signatures.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Eip712Config {
@@ -208,44 +217,6 @@ where
         S: serde::Serializer,
     {
         self.0.serialize(serializer)
-    }
-}
-
-/// Parse environment variable syntax from a string.
-/// Returns the variable name if the string matches `$VAR` or `${VAR}` syntax.
-fn parse_env_var_syntax(s: &str) -> Option<String> {
-    if s.starts_with("${") && s.ends_with('}') {
-        // ${VAR} syntax
-        Some(s[2..s.len() - 1].to_string())
-    } else if s.starts_with('$') && s.len() > 1 {
-        // $VAR syntax - extract until first non-alphanumeric/underscore character
-        let var_name = &s[1..];
-        if var_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            Some(var_name.to_string())
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
-/// Resolve a string value that may contain an environment variable reference.
-///
-/// Supports both literal values and environment variable references:
-/// - Literal: `"0xcafe..."`
-/// - Simple env var: `"$PRIVATE_KEY"`
-/// - Braced env var: `"${PRIVATE_KEY}"`
-fn resolve_env_value(s: &str) -> Result<String, String> {
-    if let Some(var_name) = parse_env_var_syntax(s) {
-        std::env::var(&var_name).map_err(|_| {
-            format!(
-                "Environment variable '{}' not found (referenced as '{}')",
-                var_name, s
-            )
-        })
-    } else {
-        Ok(s.to_string())
     }
 }
 
@@ -1126,38 +1097,6 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("rpc") || err.contains("missing field"));
-    }
-
-    // ========================================================================
-    // Environment Variable Resolution Tests
-    // ========================================================================
-
-    #[test]
-    fn test_parse_env_var_syntax_dollar_var() {
-        assert_eq!(parse_env_var_syntax("$VAR"), Some("VAR".to_string()));
-        assert_eq!(
-            parse_env_var_syntax("$MY_VAR_123"),
-            Some("MY_VAR_123".to_string())
-        );
-    }
-
-    #[test]
-    fn test_parse_env_var_syntax_braced_var() {
-        assert_eq!(parse_env_var_syntax("${VAR}"), Some("VAR".to_string()));
-        assert_eq!(
-            parse_env_var_syntax("${MY_VAR_123}"),
-            Some("MY_VAR_123".to_string())
-        );
-    }
-
-    #[test]
-    fn test_parse_env_var_syntax_literal() {
-        assert_eq!(parse_env_var_syntax("literal"), None);
-        assert_eq!(parse_env_var_syntax("http://example.com"), None);
-        assert_eq!(parse_env_var_syntax("0xcafe..."), None);
-        assert_eq!(parse_env_var_syntax("$"), None);
-        assert_eq!(parse_env_var_syntax("${"), None);
-        assert_eq!(parse_env_var_syntax("$invalid-chars"), None);
     }
 
     // ========================================================================

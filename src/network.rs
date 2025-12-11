@@ -78,7 +78,7 @@ impl Display for Network {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum NetworkFamily {
+pub enum NetworkFamily { // FIXME v1 DELETE NETWORK
     Evm,
     Solana,
 }

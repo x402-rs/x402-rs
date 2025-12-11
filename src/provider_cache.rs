@@ -21,8 +21,10 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
+use crate::chain::ChainId;
 use crate::chain::FromEnvByNetworkBuild;
 use crate::chain::NetworkProvider;
+use crate::config::ChainConfig;
 use crate::network::Network;
 
 /// A cache of pre-initialized [`EthereumProvider`] instances keyed by network.
@@ -32,7 +34,7 @@ use crate::network::Network;
 ///
 /// Use [`ProviderCache::from_env`] to load credentials and connect using environment variables.
 pub struct ProviderCache {
-    providers: HashMap<Network, NetworkProvider>,
+    providers: HashMap<ChainId, NetworkProvider>,
 }
 
 /// A generic cache of pre-initialized Ethereum provider instances [`ProviderMap::Value`] keyed by network.
@@ -43,15 +45,15 @@ pub trait ProviderMap {
     type Value;
 
     /// Returns the Ethereum provider for the specified network, if configured.
-    fn by_network<N: Borrow<Network>>(&self, network: N) -> Option<&Self::Value>;
+    fn by_chain_id<N: Borrow<ChainId>>(&self, chain_id: N) -> Option<&Self::Value>;
 
     /// An iterator visiting all values in arbitrary order.
     fn values(&self) -> impl Iterator<Item = &Self::Value> + Send;
 }
 
 impl<'a> IntoIterator for &'a ProviderCache {
-    type Item = (&'a Network, &'a NetworkProvider);
-    type IntoIter = std::collections::hash_map::Iter<'a, Network, NetworkProvider>;
+    type Item = (&'a ChainId, &'a NetworkProvider);
+    type IntoIter = std::collections::hash_map::Iter<'a, ChainId, NetworkProvider>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.providers.iter()
@@ -72,8 +74,18 @@ impl ProviderCache {
         for network in Network::variants() {
             let network_provider = NetworkProvider::from_env(*network).await?;
             if let Some(network_provider) = network_provider {
-                providers.insert(*network, network_provider);
+                let chain_id = network.as_chain_id();
+                providers.insert(chain_id, network_provider);
             }
+        }
+        Ok(Self { providers })
+    }
+
+    pub async fn from_config(chains: &Vec<ChainConfig>) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut providers = HashMap::new();
+        for chain in chains {
+            let network_provider = NetworkProvider::from_config(chain).await?;
+            providers.insert(chain.chain_id(), network_provider);
         }
         Ok(Self { providers })
     }
@@ -82,8 +94,8 @@ impl ProviderCache {
 impl ProviderMap for ProviderCache {
     type Value = NetworkProvider;
 
-    fn by_network<N: Borrow<Network>>(&self, network: N) -> Option<&NetworkProvider> {
-        self.providers.get(network.borrow())
+    fn by_chain_id<N: Borrow<ChainId>>(&self, chain_id: N) -> Option<&Self::Value> {
+        self.providers.get(chain_id.borrow())
     }
 
     fn values(&self) -> impl Iterator<Item = &Self::Value> {

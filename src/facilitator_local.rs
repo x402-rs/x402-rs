@@ -63,10 +63,10 @@ where
     /// - unsupported network.
     #[instrument(skip_all, err, fields(network = %request.payment_payload.network))]
     async fn verify(&self, request: &VerifyRequest) -> Result<VerifyResponse, Self::Error> {
-        let network = request.network();
+        let chain_id = request.network().as_chain_id();
         let provider = self
             .provider_map
-            .by_network(network)
+            .by_chain_id(&chain_id)
             .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
         let verify_response = provider.verify(request).await?;
         Ok(verify_response)
@@ -85,10 +85,10 @@ where
     /// in the response on success or failure.
     #[instrument(skip_all, err, fields(network = %request.payment_payload.network))]
     async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
-        let network = request.network();
+        let chain_id = request.network().as_chain_id();
         let provider = self
             .provider_map
-            .by_network(network)
+            .by_chain_id(&chain_id)
             .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
         let settle_response = provider.settle(request).await?;
         Ok(settle_response)

@@ -27,6 +27,7 @@ pub mod sig_down;
 pub mod telemetry;
 pub mod timestamp;
 pub mod types;
+pub mod config;
 
 // Hidden re-exports just for macro expansion.
 #[doc(hidden)]

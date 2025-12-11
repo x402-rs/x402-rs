@@ -1,12 +1,3 @@
-use crate::chain::chain_id::ChainId;
-use crate::chain::evm::EvmProvider;
-use crate::chain::solana::SolanaProvider;
-use crate::facilitator::Facilitator;
-use crate::network::{ChainIdToNetworkError, Network, NetworkFamily};
-use crate::types::{
-    MixedAddress, Scheme, SettleRequest, SettleResponse, SupportedPaymentKindsResponse,
-    VerifyRequest, VerifyResponse,
-};
 use std::time::SystemTimeError;
 
 pub mod chain_id;
@@ -15,10 +6,37 @@ pub mod namespace;
 pub mod solana;
 
 pub use namespace::*;
+pub use chain_id::*;
+
+use crate::chain::evm::EvmProvider;
+use crate::chain::solana::SolanaProvider;
+use crate::facilitator::Facilitator;
+use crate::network::{ChainIdToNetworkError, Network, NetworkFamily};
+use crate::types::{
+    MixedAddress, Scheme, SettleRequest, SettleResponse, SupportedPaymentKindsResponse,
+    VerifyRequest, VerifyResponse,
+};
+use crate::config::ChainConfig;
 
 pub enum NetworkProvider {
     Evm(EvmProvider),
     Solana(SolanaProvider),
+}
+
+impl NetworkProvider {
+    pub async fn from_config(config: &ChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
+        let provider = match config {
+            ChainConfig::Evm(config) => {
+                let provider = EvmProvider::from_config(config).await?;
+                NetworkProvider::Evm(provider)
+            }
+            ChainConfig::Solana(config) => {
+                let provider = SolanaProvider::from_config(config)?;
+                NetworkProvider::Solana(provider)
+            }
+        };
+        Ok(provider)
+    }
 }
 
 pub trait FromEnvByNetworkBuild: Sized {

@@ -69,7 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     });
 
-    let provider_cache = ProviderCache::from_env().await;
+    let provider_cache = ProviderCache::from_config(config.chains()).await;
     // Abort if we can't initialise Ethereum providers early
     let provider_cache = match provider_cache {
         Ok(provider_cache) => provider_cache,

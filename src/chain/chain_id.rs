@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use crate::chain::Namespace;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ChainId {
     pub namespace: String,
     pub reference: String,
