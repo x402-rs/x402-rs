@@ -451,8 +451,6 @@ impl Deref for SolanaSignerConfig {
 /// Configuration specific to EVM-compatible chains.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EvmChainConfig {
-    /// The v1 protocol name for this chain (e.g., "base-sepolia").
-    pub v1_name: String,
     /// Whether the chain supports EIP-1559 gas pricing.
     #[serde(default)]
     pub eip1559: bool,
@@ -472,8 +470,6 @@ pub struct EvmChainConfig {
 /// Configuration specific to Solana chains.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SolanaChainConfig {
-    /// The v1 protocol name for this chain (e.g., "solana").
-    pub v1_name: String,
     /// USDC deployment configuration for this chain (optional).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usdc: Option<USDCConfig>,
