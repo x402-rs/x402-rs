@@ -3,7 +3,8 @@
 //! This module defines supported networks and their chain IDs,
 //! and provides statically known USDC deployments per network.
 
-use crate::chain::chain_id::{ChainId, Namespace};
+use crate::chain::Namespace;
+use crate::chain::chain_id::ChainId;
 use crate::types::{MixedAddress, TokenAsset, TokenDeployment, TokenDeploymentEip712};
 use alloy_primitives::address;
 use once_cell::sync::Lazy;

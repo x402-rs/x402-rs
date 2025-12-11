@@ -351,7 +351,7 @@ impl EvmSignersConfig {
 ///
 /// The key is stored and parsed as a base58-encoded 64-byte array,
 /// which is the standard format used by Solana CLI and wallets.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SolanaPrivateKey([u8; 64]);
 
 impl SolanaPrivateKey {
@@ -385,16 +385,6 @@ impl SolanaPrivateKey {
     /// Encode the keypair back to base58.
     pub fn to_base58(&self) -> String {
         bs58::encode(&self.0).into_string()
-    }
-
-    pub fn to_string(&self) -> String {
-        self.to_base58()
-    }
-}
-
-impl PartialEq for SolanaPrivateKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
     }
 }
 
@@ -527,7 +517,7 @@ mod chains_serde {
         ChainConfig, ChainId, EvmChainConfig, EvmChainConfigInner, SolanaChainConfig,
         SolanaChainConfigInner,
     };
-    use crate::chain::chain_id::Namespace;
+    use crate::chain::Namespace;
     use serde::de::{MapAccess, Visitor};
     use serde::ser::SerializeMap;
     use serde::{Deserializer, Serializer};

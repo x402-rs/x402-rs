@@ -42,8 +42,8 @@ use tokio::sync::Mutex;
 use tracing::{Instrument, instrument};
 use tracing_core::Level;
 
-use crate::chain::chain_id::{ChainId, ChainIdError, Namespace};
-use crate::chain::{FacilitatorLocalError, FromEnvByNetworkBuild, NetworkProviderOps};
+use crate::chain::chain_id::{ChainId, ChainIdError};
+use crate::chain::{FacilitatorLocalError, FromEnvByNetworkBuild, Namespace, NetworkProviderOps};
 use crate::facilitator::Facilitator;
 use crate::from_env;
 use crate::network::{Network, USDCDeployment};
