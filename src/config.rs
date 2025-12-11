@@ -8,6 +8,7 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 
 use crate::chain::chain_id::ChainId;
+use crate::types::MixedAddress;
 
 /// CLI arguments for the x402 facilitator server.
 #[derive(Parser, Debug)]
@@ -50,6 +51,32 @@ pub enum ChainConfig {
     Solana(SolanaChainConfig),
 }
 
+/// EIP-712 domain configuration for token signatures.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Eip712Config {
+    /// The name field for EIP-712 domain (e.g., "USDC", "USD Coin").
+    pub name: String,
+    /// The version field for EIP-712 domain (e.g., "2").
+    pub version: String,
+}
+
+/// USDC deployment configuration for a specific chain.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct USDCConfig {
+    /// The USDC contract address (EVM 0x-prefixed hex or Solana base58).
+    pub address: MixedAddress,
+    /// Number of decimals for the token (typically 6 for USDC).
+    #[serde(default = "default_usdc_decimals")]
+    pub decimals: u8,
+    /// EIP-712 domain configuration (required for EVM chains, optional for Solana).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eip712: Option<Eip712Config>,
+}
+
+fn default_usdc_decimals() -> u8 {
+    6
+}
+
 /// Configuration specific to EVM-compatible chains.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EvmChainConfig {
@@ -61,6 +88,9 @@ pub struct EvmChainConfig {
     /// Whether the chain supports flashblocks.
     #[serde(default)]
     pub flashblocks: bool,
+    /// USDC deployment configuration for this chain (optional).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usdc: Option<USDCConfig>,
 }
 
 /// Configuration specific to Solana chains.
@@ -68,6 +98,9 @@ pub struct EvmChainConfig {
 pub struct SolanaChainConfig {
     /// The v1 protocol name for this chain (e.g., "solana").
     pub v1_name: String,
+    /// USDC deployment configuration for this chain (optional).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usdc: Option<USDCConfig>,
 }
 
 /// Custom serde module for deserializing the chains map with type discrimination
@@ -336,10 +369,22 @@ mod tests {
                 "eip155:84532": {
                     "v1_name": "base-sepolia",
                     "eip1559": true,
-                    "flashblocks": true
+                    "flashblocks": true,
+                    "usdc": {
+                        "address": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+                        "decimals": 6,
+                        "eip712": {
+                            "name": "USDC",
+                            "version": "2"
+                        }
+                    }
                 },
                 "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
-                    "v1_name": "solana"
+                    "v1_name": "solana",
+                    "usdc": {
+                        "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+                        "decimals": 6
+                    }
                 }
             }
         }"#;
@@ -356,6 +401,13 @@ mod tests {
                 assert_eq!(evm.v1_name, "base-sepolia");
                 assert!(evm.eip1559);
                 assert!(evm.flashblocks);
+                assert!(evm.usdc.is_some());
+                let usdc = evm.usdc.as_ref().unwrap();
+                assert_eq!(usdc.decimals, 6);
+                assert!(usdc.eip712.is_some());
+                let eip712 = usdc.eip712.as_ref().unwrap();
+                assert_eq!(eip712.name, "USDC");
+                assert_eq!(eip712.version, "2");
             }
             _ => panic!("Expected EVM config"),
         }
@@ -366,6 +418,10 @@ mod tests {
         match solana_config {
             ChainConfig::Solana(solana) => {
                 assert_eq!(solana.v1_name, "solana");
+                assert!(solana.usdc.is_some());
+                let usdc = solana.usdc.as_ref().unwrap();
+                assert_eq!(usdc.decimals, 6);
+                assert!(usdc.eip712.is_none());
             }
             _ => panic!("Expected Solana config"),
         }
@@ -376,7 +432,14 @@ mod tests {
         let json = r#"{
             "chains": {
                 "eip155:8453": {
-                    "v1_name": "base"
+                    "v1_name": "base",
+                    "usdc": {
+                        "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                        "eip712": {
+                            "name": "USD Coin",
+                            "version": "2"
+                        }
+                    }
                 }
             }
         }"#;
@@ -388,8 +451,47 @@ mod tests {
                 assert_eq!(evm.v1_name, "base");
                 assert!(!evm.eip1559); // default false
                 assert!(!evm.flashblocks); // default false
+                assert!(evm.usdc.is_some());
+                assert_eq!(evm.usdc.as_ref().unwrap().decimals, 6); // default 6
             }
             _ => panic!("Expected EVM config"),
+        }
+    }
+
+    #[test]
+    fn test_config_parsing_without_usdc() {
+        let json = r#"{
+            "chains": {
+                "eip155:8453": {
+                    "v1_name": "base"
+                },
+                "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
+                    "v1_name": "solana"
+                }
+            }
+        }"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        
+        // Verify EVM chain config without usdc
+        let evm_key = ChainId::from_str("eip155:8453").unwrap();
+        let evm_config = config.chains().get(&evm_key).unwrap();
+        match evm_config {
+            ChainConfig::Evm(evm) => {
+                assert_eq!(evm.v1_name, "base");
+                assert!(evm.usdc.is_none());
+            }
+            _ => panic!("Expected EVM config"),
+        }
+
+        // Verify Solana chain config without usdc
+        let solana_key = ChainId::from_str("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").unwrap();
+        let solana_config = config.chains().get(&solana_key).unwrap();
+        match solana_config {
+            ChainConfig::Solana(solana) => {
+                assert_eq!(solana.v1_name, "solana");
+                assert!(solana.usdc.is_none());
+            }
+            _ => panic!("Expected Solana config"),
         }
     }
 
