@@ -1484,12 +1484,21 @@ impl Display for PaymentRequiredResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(untagged, rename_all = "camelCase")]
+#[serde(untagged)]
 pub enum SupportedPaymentKind {
+    #[serde(rename_all = "camelCase")]
     V1 {
         x402_version: X402VersionV1,
         scheme: Scheme,
         network: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        extra: Option<SupportedPaymentKindExtra>,
+    },
+    #[serde(rename_all = "camelCase")]
+    V2 {
+        x402_version: X402VersionV2,
+        scheme: Scheme,
+        network: ChainId,
         #[serde(skip_serializing_if = "Option::is_none")]
         extra: Option<SupportedPaymentKindExtra>,
     },

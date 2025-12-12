@@ -29,9 +29,9 @@ use crate::facilitator::Facilitator;
 use crate::network::Network;
 use crate::types::{
     Base64Bytes, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, PaymentRequirements,
-    SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
+    Scheme, SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
     SupportedResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse, X402VersionV1,
-    Scheme
+    X402VersionV2,
 };
 
 const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -738,22 +738,36 @@ impl Facilitator for SolanaProvider {
     }
 
     async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
-        let network: Network = self
-            .chain_id()
-            .try_into()
-            .map_err(FacilitatorLocalError::NetworkConversionError)?;
-        let extra = self
-            .signer_addresses()
-            .first()
-            .map(|address| SupportedPaymentKindExtra {
-                fee_payer: address.clone(),
-            });
-        let kinds = vec![SupportedPaymentKind::V1 {
-            network: network.to_string(),
-            scheme: Scheme::Exact,
-            x402_version: X402VersionV1,
-            extra,
-        }];
+        let kinds = {
+            let mut kinds = Vec::with_capacity(2);
+            let extra = self
+                .signer_addresses()
+                .first()
+                .map(|address| SupportedPaymentKindExtra {
+                    fee_payer: address.clone(),
+                });
+            match extra {
+                None => kinds,
+                Some(extra) => {
+                    let network: Option<Network> = self.chain_id().try_into().ok();
+                    if let Some(network) = network {
+                        kinds.push(SupportedPaymentKind::V1 {
+                            x402_version: X402VersionV1,
+                            scheme: Scheme::Exact,
+                            network: network.to_string(),
+                            extra: Some(extra.clone()),
+                        });
+                    }
+                    kinds.push(SupportedPaymentKind::V2 {
+                        x402_version: X402VersionV2,
+                        scheme: Scheme::Exact,
+                        network: self.chain_id(),
+                        extra: Some(extra),
+                    });
+                    kinds
+                }
+            }
+        };
         let signers = {
             let mut signers = HashMap::with_capacity(1);
             signers.insert(self.chain_id(), self.signer_addresses());

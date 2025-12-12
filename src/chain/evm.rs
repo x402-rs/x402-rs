@@ -59,7 +59,7 @@ use crate::types::{
     EvmAddress, EvmSignature, ExactPaymentPayload, FacilitatorErrorReason, HexEncodedNonce,
     MixedAddress, PaymentPayload, PaymentRequirements, Scheme, SettleRequest, SettleResponse,
     SupportedPaymentKind, SupportedResponse, TokenAmount, TransactionHash,
-    TransferWithAuthorization, VerifyRequest, VerifyResponse, X402VersionV1,
+    TransferWithAuthorization, VerifyRequest, VerifyResponse, X402VersionV1, X402VersionV2,
 };
 
 sol!(
@@ -740,6 +740,12 @@ where
         let chain_id: ChainId = self.chain().into();
         let kinds = {
             let mut kinds = Vec::with_capacity(2);
+            kinds.push(SupportedPaymentKind::V2 {
+                x402_version: X402VersionV2,
+                scheme: Scheme::Exact,
+                network: chain_id.clone(),
+                extra: None,
+            });
             let network: Option<Network> = chain_id.try_into().ok();
             if let Some(network) = network {
                 kinds.push(SupportedPaymentKind::V1 {
