@@ -31,17 +31,105 @@ use crate::chain::ChainId;
 use crate::network::Network;
 use crate::timestamp::UnixTimestamp;
 
-/// Represents the protocol version. Currently only version 1 is supported.
-#[derive(Debug, Copy, Clone)]
+/// Version 1 of the x402 protocol.
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+pub struct X402VersionV1;
+
+impl X402VersionV1 {
+    const VALUE: u8 = 1;
+}
+
+impl Serialize for X402VersionV1 {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u8(Self::VALUE)
+    }
+}
+
+impl<'de> Deserialize<'de> for X402VersionV1 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let num = u8::deserialize(deserializer)?;
+        if num == Self::VALUE {
+            Ok(X402VersionV1)
+        } else {
+            Err(serde::de::Error::custom(format!(
+                "expected version {}, got {}",
+                Self::VALUE,
+                num
+            )))
+        }
+    }
+}
+
+impl Display for X402VersionV1 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", Self::VALUE)
+    }
+}
+
+/// Version 2 of the x402 protocol.
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+pub struct X402VersionV2;
+
+impl X402VersionV2 {
+    const VALUE: u8 = 2;
+}
+
+impl Serialize for X402VersionV2 {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u8(Self::VALUE)
+    }
+}
+
+impl<'de> Deserialize<'de> for X402VersionV2 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let num = u8::deserialize(deserializer)?;
+        if num == Self::VALUE {
+            Ok(X402VersionV2)
+        } else {
+            Err(serde::de::Error::custom(format!(
+                "expected version {}, got {}",
+                Self::VALUE,
+                num
+            )))
+        }
+    }
+}
+
+impl Display for X402VersionV2 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", Self::VALUE)
+    }
+}
+
+/// Represents the protocol version. Versions 1 and 2 are supported.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum X402Version {
     /// Version `1`.
-    V1,
+    V1(X402VersionV1),
+    /// Version `2`.
+    V2(X402VersionV2),
+}
+
+impl X402Version {
+    pub fn v1() -> X402Version {
+        X402Version::V1(X402VersionV1)
+    }
+    pub fn v2() -> X402Version {
+        X402Version::V2(X402VersionV2)
+    }
 }
 
 impl Serialize for X402Version {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
-            X402Version::V1 => serializer.serialize_u8(1),
+            X402Version::V1(v) => v.serialize(serializer),
+            X402Version::V2(v) => v.serialize(serializer),
         }
     }
 }
@@ -49,7 +137,8 @@ impl Serialize for X402Version {
 impl Display for X402Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            X402Version::V1 => write!(f, "1"),
+            X402Version::V1(v) => Display::fmt(v, f),
+            X402Version::V2(v) => Display::fmt(v, f),
         }
     }
 }
@@ -70,7 +159,8 @@ impl TryFrom<u8> for X402Version {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            1 => Ok(X402Version::V1),
+            X402VersionV1::VALUE => Ok(X402Version::V1(X402VersionV1)),
+            X402VersionV2::VALUE => Ok(X402Version::V2(X402VersionV2)),
             _ => Err(X402VersionError(value)),
         }
     }

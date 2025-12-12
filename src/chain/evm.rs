@@ -743,7 +743,7 @@ where
             .map_err(FacilitatorLocalError::NetworkConversionError)?;
         let kinds = vec![SupportedPaymentKind {
             network: network.to_string(),
-            x402_version: X402Version::V1,
+            x402_version: X402Version::v1(),
             scheme: Scheme::Exact,
             extra: None,
         }];

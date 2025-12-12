@@ -751,7 +751,7 @@ impl Facilitator for SolanaProvider {
         let kinds = vec![SupportedPaymentKind {
             network: network.to_string(),
             scheme: Scheme::Exact,
-            x402_version: X402Version::V1,
+            x402_version: X402Version::v1(),
             extra,
         }];
         let signers = {
