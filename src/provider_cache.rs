@@ -22,17 +22,15 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 
 use crate::chain::ChainId;
-use crate::chain::FromEnvByNetworkBuild;
 use crate::chain::NetworkProvider;
 use crate::config::ChainConfig;
-use crate::network::Network;
 
 /// A cache of pre-initialized [`EthereumProvider`] instances keyed by network.
 ///
 /// This struct is responsible for lazily connecting to all configured RPC URLs
 /// and wrapping them with appropriate signing and filler middleware.
 ///
-/// Use [`ProviderCache::from_env`] to load credentials and connect using environment variables.
+/// Use [`ProviderCache::from_config`] to load credentials and connect using environment variables.
 pub struct ProviderCache {
     providers: HashMap<ChainId, NetworkProvider>,
 }
@@ -61,27 +59,9 @@ impl<'a> IntoIterator for &'a ProviderCache {
 }
 
 impl ProviderCache {
-    /// Constructs a new [`ProviderCache`] from environment variables.
-    ///
-    /// Expects the following to be set:
-    /// - `SIGNER_TYPE` — currently only `"private-key"` is supported
-    /// - `EVM_PRIVATE_KEY` — comma-separated list of private keys used to sign transactions
-    /// - `RPC_URL_BASE`, `RPC_URL_BASE_SEPOLIA` — RPC endpoints per network
-    ///
-    /// Fails if required env vars are missing or if the provider cannot connect.
-    pub async fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
-        let mut providers = HashMap::new();
-        for network in Network::variants() {
-            let network_provider = NetworkProvider::from_env(*network).await?;
-            if let Some(network_provider) = network_provider {
-                let chain_id = network.as_chain_id();
-                providers.insert(chain_id, network_provider);
-            }
-        }
-        Ok(Self { providers })
-    }
-
-    pub async fn from_config(chains: &Vec<ChainConfig>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn from_config(
+        chains: &Vec<ChainConfig>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut providers = HashMap::new();
         for chain in chains {
             let network_provider = NetworkProvider::from_config(chain).await?;

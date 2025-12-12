@@ -16,8 +16,8 @@
 
 use alloy_contract::SolCallBuilder;
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
-use alloy_primitives::hex;
 use alloy_primitives::{Address, Bytes, FixedBytes, U256, address};
+use alloy_primitives::{B256, hex};
 use alloy_provider::ProviderBuilder;
 use alloy_provider::bindings::IMulticall3;
 use alloy_provider::fillers::NonceManager;
@@ -28,25 +28,30 @@ use alloy_provider::{
     Identity, MULTICALL3_ADDRESS, MulticallItem, Provider, RootProvider, WalletProvider,
 };
 use alloy_rpc_client::RpcClient;
-use alloy_rpc_types_eth::{TransactionReceipt, TransactionRequest};
+use alloy_rpc_types_eth::{BlockId, TransactionReceipt, TransactionRequest};
+use alloy_signer::Signer;
+use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::SolType;
 use alloy_sol_types::sol;
 use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, eip712_domain};
 use alloy_transport::TransportResult;
+use alloy_transport::layers::{FallbackLayer, ThrottleLayer};
+use alloy_transport_http::Http;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use std::fmt::{Display, Formatter};
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Mutex;
+use tower::ServiceBuilder;
 use tracing::{Instrument, instrument};
 use tracing_core::Level;
 
 use crate::chain::chain_id::{ChainId, ChainIdError};
-use crate::chain::{FacilitatorLocalError, FromEnvByNetworkBuild, Namespace, NetworkProviderOps};
+use crate::chain::{FacilitatorLocalError, Namespace, NetworkProviderOps};
 use crate::config::EvmChainConfig;
 use crate::facilitator::Facilitator;
-use crate::from_env;
 use crate::network::{Network, USDCDeployment};
 use crate::timestamp::UnixTimestamp;
 use crate::types::{
@@ -130,6 +135,9 @@ impl EvmChainReference {
     pub fn new(chain_id: u64) -> Self {
         Self(chain_id)
     }
+    pub fn inner(&self) -> u64 {
+        self.0
+    }
 }
 
 impl Display for EvmChainReference {
@@ -191,8 +199,7 @@ pub struct ExactEvmPayment {
 pub struct EvmProvider {
     /// Composed Alloy provider with all fillers.
     inner: InnerProvider,
-    /// Whether network supports EIP-1559 gas pricing.
-    eip1559: bool,
+    props: ChainProps,
     /// Chain descriptor (network + chain ID).
     chain: EvmChainReference,
     /// Available signer addresses for round-robin selection.
@@ -203,34 +210,77 @@ pub struct EvmProvider {
     nonce_manager: PendingNonceManager,
 }
 
+#[derive(Debug)]
+pub struct ChainProps {
+    /// Whether network supports EIP-1559 gas pricing.
+    eip1559: bool,
+    flashblocks: bool,
+}
+
 impl EvmProvider {
     pub async fn from_config(config: &EvmChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
-        todo!("EvmProvider::from_config not implemented")
-    }
-
-    /// Build an [`EvmProvider`] from a pre-composed Alloy ethereum provider [`InnerProvider`].
-    pub async fn try_new(
-        wallet: EthereumWallet,
-        rpc_url: &str,
-        eip1559: bool,
-        network: Network,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let chain = EvmChainReference::try_from(network)?;
-        let signer_addresses: Vec<Address> =
-            NetworkWallet::<AlloyEthereum>::signer_addresses(&wallet).collect();
-        if signer_addresses.is_empty() {
-            return Err("wallet must contain at least one signer".into());
+        // 1. Signers
+        let signers = config
+            .signers()
+            .iter()
+            .map(|s| B256::from_slice(s.inner().as_bytes()))
+            .map(|b| {
+                PrivateKeySigner::from_bytes(&b)
+                    .map(|s| s.with_chain_id(Some(config.chain_reference().inner())))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if signers.is_empty() {
+            return Err("at least one signer should be provided".into());
         }
+        let wallet = {
+            let mut iter = signers.into_iter();
+            let first_signer = iter
+                .next()
+                .expect("iterator contains at least one element by construction");
+            let mut wallet = EthereumWallet::from(first_signer);
+            for signer in iter {
+                wallet.register_signer(signer);
+            }
+            wallet
+        };
+        let signer_addresses =
+            NetworkWallet::<AlloyEthereum>::signer_addresses(&wallet).collect::<Vec<_>>();
         let signer_addresses = Arc::new(signer_addresses);
         let signer_cursor = Arc::new(AtomicUsize::new(0));
-        let client = RpcClient::builder()
-            .connect(rpc_url)
-            .await
-            .map_err(|e| format!("Failed to connect to {network}: {e}"))?;
 
+        // 2. Transports
+        let transports = config
+            .rpc()
+            .providers
+            .values()
+            .filter_map(|provider_config| {
+                let scheme = provider_config.http.scheme();
+                let is_http = scheme == "http" || scheme == "https";
+                if !is_http {
+                    return None;
+                }
+                let rpc_url = provider_config.http.clone();
+                tracing::info!(chain=%config.chain_id(), rpc_url=%rpc_url, rate_limit=?provider_config.rate_limit, "using HTTP transport");
+                let rate_limit = provider_config.rate_limit.unwrap_or(u32::MAX);
+                let service = ServiceBuilder::new()
+                    .layer(ThrottleLayer::new(rate_limit))
+                    .service(Http::new(rpc_url));
+                Some(service)
+            })
+            .collect::<Vec<_>>();
+        let fallback = ServiceBuilder::new()
+            .layer(
+                FallbackLayer::default().with_active_transport_count(
+                    NonZeroUsize::new(transports.len())
+                        .expect("Non-zero amount of stateless transports"),
+                ),
+            )
+            .service(transports);
+        let client = RpcClient::new(fallback, false);
+
+        // 3. Provider
         // Create nonce manager explicitly so we can store a reference for error handling
         let nonce_manager = PendingNonceManager::default();
-
         // Build the filler stack: Gas -> BlobGas -> Nonce -> ChainId
         // This mirrors the InnerFiller type but with our custom nonce manager
         let filler = JoinFill::new(
@@ -243,18 +293,22 @@ impl EvmProvider {
                 ),
             ),
         );
-
-        let inner = ProviderBuilder::default()
+        let inner: InnerProvider = ProviderBuilder::default()
             .filler(filler)
             .wallet(wallet)
             .connect_client(client);
 
-        tracing::info!(network=%network, rpc=rpc_url, signers=?signer_addresses, "Initialized provider");
+        tracing::info!(chain=%config.chain_id(), signers=?signer_addresses, "initialized provider");
+
+        let props = ChainProps {
+            eip1559: config.eip1559(),
+            flashblocks: config.flashblocks(),
+        };
 
         Ok(Self {
             inner,
-            eip1559,
-            chain,
+            props,
+            chain: config.chain_reference().clone(),
             signer_addresses,
             signer_cursor,
             nonce_manager,
@@ -361,7 +415,8 @@ impl MetaEvmProvider for EvmProvider {
             .with_to(tx.to)
             .with_from(from_address)
             .with_input(tx.calldata);
-        if !self.eip1559 {
+
+        if !self.props.eip1559 {
             let provider = &self.inner;
             let gas: u128 = provider
                 .get_gas_price()
@@ -369,6 +424,22 @@ impl MetaEvmProvider for EvmProvider {
                 .await
                 .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
             txr.set_gas_price(gas);
+        }
+
+        // Estimate gas if not provided
+        if txr.gas.is_none() {
+            let block_id = if self.props.flashblocks {
+                BlockId::latest()
+            } else {
+                BlockId::pending()
+            };
+            let gas_limit = self
+                .inner
+                .estimate_gas(txr.clone())
+                .block(block_id)
+                .await
+                .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+            txr.set_gas_limit(gas_limit)
         }
 
         // Send transaction with error handling for nonce reset
@@ -413,36 +484,6 @@ impl NetworkProviderOps for EvmProvider {
 
     fn chain_id(&self) -> ChainId {
         ChainId::eip155(self.chain.0)
-    }
-}
-
-impl FromEnvByNetworkBuild for EvmProvider {
-    async fn from_env(network: Network) -> Result<Option<Self>, Box<dyn std::error::Error>> {
-        let env_var = from_env::rpc_env_name_from_network(network);
-        let rpc_url = match std::env::var(env_var).ok() {
-            Some(rpc_url) => rpc_url,
-            None => {
-                tracing::warn!(network=%network, "no RPC URL configured, skipping");
-                return Ok(None);
-            }
-        };
-        let wallet = from_env::SignerType::from_env()?.make_evm_wallet()?;
-        let is_eip1559 = match network {
-            Network::BaseSepolia => true,
-            Network::Base => true,
-            Network::XdcMainnet => false,
-            Network::AvalancheFuji => true,
-            Network::Avalanche => true,
-            Network::XrplEvm => false,
-            Network::Solana => false,
-            Network::SolanaDevnet => false,
-            Network::PolygonAmoy => true,
-            Network::Polygon => true,
-            Network::Sei => true,
-            Network::SeiTestnet => true,
-        };
-        let provider = EvmProvider::try_new(wallet, &rpc_url, is_eip1559, network).await?;
-        Ok(Some(provider))
     }
 }
 

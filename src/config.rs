@@ -402,6 +402,9 @@ pub struct EvmChainConfig {
 }
 
 impl EvmChainConfig {
+    pub fn chain_id(&self) -> ChainId {
+        self.chain_reference.into()
+    }
     pub fn eip1559(&self) -> bool {
         self.inner.eip1559
     }
@@ -416,6 +419,9 @@ impl EvmChainConfig {
     }
     pub fn rpc(&self) -> &RpcConfig {
         &self.inner.rpc
+    }
+    pub fn chain_reference(&self) -> &EvmChainReference {
+        &self.chain_reference
     }
 }
 
@@ -820,7 +826,11 @@ mod tests {
 
         // Verify EVM chain config
         let evm_key = ChainId::from_str("eip155:84532").unwrap();
-        let evm_config = config.chains().iter().find(|c| c.chain_id().eq(&evm_key)).unwrap();
+        let evm_config = config
+            .chains()
+            .iter()
+            .find(|c| c.chain_id().eq(&evm_key))
+            .unwrap();
         match evm_config {
             ChainConfig::Evm(evm) => {
                 assert!(evm.eip1559());
@@ -841,7 +851,11 @@ mod tests {
 
         // Verify Solana chain config
         let solana_key = ChainId::from_str("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").unwrap();
-        let solana_config = config.chains().iter().find(|c| c.chain_id().eq(&solana_key)).unwrap();
+        let solana_config = config
+            .chains()
+            .iter()
+            .find(|c| c.chain_id().eq(&solana_key))
+            .unwrap();
         match solana_config {
             ChainConfig::Solana(solana) => {
                 assert!(solana.usdc().is_some());
@@ -883,7 +897,11 @@ mod tests {
         );
         let config: Config = serde_json::from_str(&json).unwrap();
         let evm_key = ChainId::from_str("eip155:8453").unwrap();
-        let evm_config = config.chains().iter().find(|c| c.chain_id().eq(&evm_key)).unwrap();
+        let evm_config = config
+            .chains()
+            .iter()
+            .find(|c| c.chain_id().eq(&evm_key))
+            .unwrap();
         match evm_config {
             ChainConfig::Evm(evm) => {
                 assert!(!evm.eip1559()); // default false
@@ -926,7 +944,11 @@ mod tests {
 
         // Verify EVM chain config without usdc
         let evm_key = ChainId::from_str("eip155:8453").unwrap();
-        let evm_config = config.chains().iter().find(|c| c.chain_id().eq(&evm_key)).unwrap();
+        let evm_config = config
+            .chains()
+            .iter()
+            .find(|c| c.chain_id().eq(&evm_key))
+            .unwrap();
         match evm_config {
             ChainConfig::Evm(evm) => {
                 assert!(evm.usdc().is_none());
@@ -936,7 +958,11 @@ mod tests {
 
         // Verify Solana chain config without usdc
         let solana_key = ChainId::from_str("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").unwrap();
-        let solana_config = config.chains().iter().find(|c| c.chain_id().eq(&solana_key)).unwrap();
+        let solana_config = config
+            .chains()
+            .iter()
+            .find(|c| c.chain_id().eq(&solana_key))
+            .unwrap();
         match solana_config {
             ChainConfig::Solana(solana) => {
                 assert!(solana.usdc().is_none());
@@ -1011,7 +1037,11 @@ mod tests {
 
         // Verify EVM chain config with RPC
         let evm_key = ChainId::from_str("eip155:84532").unwrap();
-        let evm_config = config.chains().iter().find(|c| c.chain_id().eq(&evm_key)).unwrap();
+        let evm_config = config
+            .chains()
+            .iter()
+            .find(|c| c.chain_id().eq(&evm_key))
+            .unwrap();
         match evm_config {
             ChainConfig::Evm(evm) => {
                 assert_eq!(evm.rpc().providers.len(), 2);
@@ -1032,7 +1062,11 @@ mod tests {
 
         // Verify Solana chain config with RPC
         let solana_key = ChainId::from_str("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").unwrap();
-        let solana_config = config.chains().iter().find(|c| c.chain_id().eq(&solana_key)).unwrap();
+        let solana_config = config
+            .chains()
+            .iter()
+            .find(|c| c.chain_id().eq(&solana_key))
+            .unwrap();
         match solana_config {
             ChainConfig::Solana(solana) => {
                 assert_eq!(solana.rpc().providers.len(), 1);

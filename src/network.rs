@@ -20,6 +20,7 @@ use std::str::FromStr;
 /// Used to differentiate between testnet and mainnet environments for the x402 protocol.
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Network {
+    // FIXME v1 DELETE NETWORK
     /// Base Sepolia testnet (chain ID 84532).
     #[serde(rename = "base-sepolia")]
     BaseSepolia,
@@ -78,7 +79,8 @@ impl Display for Network {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum NetworkFamily { // FIXME v1 DELETE NETWORK
+pub enum NetworkFamily {
+    // FIXME v1 DELETE NETWORK
     Evm,
     Solana,
 }

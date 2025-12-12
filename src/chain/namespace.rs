@@ -5,6 +5,7 @@ use std::str::FromStr;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Namespace {
+    // FIXME Can we get rid of this?
     Solana,
     Eip155,
 }
