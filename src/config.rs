@@ -438,7 +438,7 @@ impl SolanaChainConfig {
     pub fn signer(&self) -> &SolanaSignerConfig {
         &self.inner.signer
     }
-    pub fn rpc(&self) -> &RpcConfig {
+    pub fn rpc(&self) -> &Url {
         &self.inner.rpc
     }
 }
@@ -472,7 +472,7 @@ pub struct SolanaChainConfigInner {
     /// A single private key (base58 format, 64 bytes) or env var reference.
     pub signer: SolanaSignerConfig,
     /// RPC provider configuration for this chain (required).
-    pub rpc: RpcConfig,
+    pub rpc: Url,
 }
 
 /// Custom serde module for deserializing the chains map with type discrimination
@@ -809,11 +809,7 @@ mod tests {
                         "decimals": 6
                     }},
                     "signer": "{}",
-                    "rpc": {{
-                        "default": {{
-                            "http": "https://mainnet.helius-rpc.com/?api-key=key"
-                        }}
-                    }}
+                    "rpc": "https://mainnet.helius-rpc.com/?api-key=key"
                 }}
             }}
         }}"#,
@@ -862,7 +858,10 @@ mod tests {
                 let usdc = solana.usdc().unwrap();
                 assert_eq!(usdc.decimals, 6);
                 assert!(usdc.eip712.is_none());
-                assert!(!solana.rpc().providers.is_empty());
+                assert_eq!(
+                    solana.rpc().to_string(),
+                    "https://mainnet.helius-rpc.com/?api-key=key"
+                );
                 // Verify signer is present (using Deref)
                 let _: &SolanaPrivateKey = &solana.signer().0;
             }
@@ -930,11 +929,7 @@ mod tests {
                 "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {{
                     "v1_name": "solana",
                     "signer": "{}",
-                    "rpc": {{
-                        "default": {{
-                            "http": "https://solana-rpc.example.com/"
-                        }}
-                    }}
+                    "rpc": "https://solana-rpc.example.com/"
                 }}
             }}
         }}"#,
@@ -1021,12 +1016,7 @@ mod tests {
                 "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {{
                     "v1_name": "solana",
                     "signer": "{}",
-                    "rpc": {{
-                        "helius": {{
-                            "http": "https://mainnet.helius-rpc.com/?api-key=key",
-                            "rate_limit": 100
-                        }}
-                    }}
+                    "rpc": "https://mainnet.helius-rpc.com/?api-key=key"
                 }}
             }}
         }}"#,
@@ -1069,14 +1059,10 @@ mod tests {
             .unwrap();
         match solana_config {
             ChainConfig::Solana(solana) => {
-                assert_eq!(solana.rpc().providers.len(), 1);
-
-                let helius = solana.rpc().providers.get("helius").unwrap();
                 assert_eq!(
-                    helius.http.as_str(),
+                    solana.rpc().as_str(),
                     "https://mainnet.helius-rpc.com/?api-key=key"
                 );
-                assert_eq!(helius.rate_limit, Some(100));
             }
             _ => panic!("Expected Solana config"),
         }
