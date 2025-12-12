@@ -260,7 +260,7 @@ impl EvmProvider {
                     return None;
                 }
                 let rpc_url = provider_config.http.clone();
-                tracing::info!(chain=%config.chain_id(), rpc_url=%rpc_url, rate_limit=?provider_config.rate_limit, "using HTTP transport");
+                tracing::info!(chain=%config.chain_id(), rpc_url=%rpc_url, rate_limit=?provider_config.rate_limit, "Using HTTP transport");
                 let rate_limit = provider_config.rate_limit.unwrap_or(u32::MAX);
                 let service = ServiceBuilder::new()
                     .layer(ThrottleLayer::new(rate_limit))
@@ -298,7 +298,7 @@ impl EvmProvider {
             .wallet(wallet)
             .connect_client(client);
 
-        tracing::info!(chain=%config.chain_id(), signers=?signer_addresses, "initialized provider");
+        tracing::info!(chain=%config.chain_id(), signers=?signer_addresses, "Initialized EVM provider");
 
         let props = ChainProps {
             eip1559: config.eip1559(),

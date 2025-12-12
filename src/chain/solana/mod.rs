@@ -32,7 +32,7 @@ const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTN
 
 /// A Solana chain reference consisting of 32 ASCII characters.
 /// The genesis hash is the first 32 characters of the base58-encoded genesis block hash.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SolanaChainReference([u8; 32]);
 
 impl SolanaChainReference {
@@ -205,7 +205,30 @@ impl Debug for SolanaProvider {
 
 impl SolanaProvider {
     pub fn from_config(config: &SolanaChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
-        todo!("SolanaProvider::from_config not implemented")
+        let rpc_url = config.rpc();
+        let keypair = Keypair::from_base58_string(&config.signer().to_string());
+        let max_compute_unit_limit = config.max_compute_unit_limit();
+        let max_compute_unit_price = config.max_compute_unit_price();
+        let chain = config.chain_reference();
+        {
+            let signer_addresses = vec![keypair.pubkey()];
+            tracing::info!(
+                chain = %config.chain_id(),
+                rpc = %rpc_url,
+                signers = ?signer_addresses,
+                max_compute_unit_limit,
+                max_compute_unit_price,
+                "Initialized Solana provider"
+            );
+        }
+        let rpc_client = RpcClient::new(rpc_url.to_string());
+        Ok(Self {
+            keypair: Arc::new(keypair),
+            chain: chain.clone(),
+            rpc_client: Arc::new(rpc_client),
+            max_compute_unit_limit,
+            max_compute_unit_price,
+        })
     }
 
     fn max_compute_unit_limit_from_env(network: Network) -> u32 {

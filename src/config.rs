@@ -420,8 +420,8 @@ impl EvmChainConfig {
     pub fn rpc(&self) -> &RpcConfig {
         &self.inner.rpc
     }
-    pub fn chain_reference(&self) -> &EvmChainReference {
-        &self.chain_reference
+    pub fn chain_reference(&self) -> EvmChainReference {
+        self.chain_reference
     }
 }
 
@@ -440,6 +440,18 @@ impl SolanaChainConfig {
     }
     pub fn rpc(&self) -> &Url {
         &self.inner.rpc
+    }
+    pub fn max_compute_unit_limit(&self) -> u32 {
+        self.inner.max_compute_unit_limit
+    }
+    pub fn max_compute_unit_price(&self) -> u64 {
+        self.inner.max_compute_unit_price
+    }
+    pub fn chain_reference(&self) -> SolanaChainReference {
+        self.chain_reference
+    }
+    pub fn chain_id(&self) -> ChainId {
+        self.chain_reference.into()
     }
 }
 
@@ -473,6 +485,21 @@ pub struct SolanaChainConfigInner {
     pub signer: SolanaSignerConfig,
     /// RPC provider configuration for this chain (required).
     pub rpc: Url,
+    // FIXME Comment
+    #[serde(default = "solana_chain_config::default_max_compute_unit_limit")]
+    pub max_compute_unit_limit: u32,
+    // FIXME Comment
+    #[serde(default = "solana_chain_config::default_max_compute_unit_price")]
+    pub max_compute_unit_price: u64,
+}
+
+mod solana_chain_config {
+    pub fn default_max_compute_unit_limit() -> u32 {
+        400_000
+    }
+    pub fn default_max_compute_unit_price() -> u64 {
+        1_000_000
+    }
 }
 
 /// Custom serde module for deserializing the chains map with type discrimination
