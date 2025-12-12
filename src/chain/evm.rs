@@ -59,7 +59,7 @@ use crate::types::{
     EvmAddress, EvmSignature, ExactPaymentPayload, FacilitatorErrorReason, HexEncodedNonce,
     MixedAddress, PaymentPayload, PaymentRequirements, Scheme, SettleRequest, SettleResponse,
     SupportedPaymentKind, SupportedResponse, TokenAmount, TransactionHash,
-    TransferWithAuthorization, VerifyRequest, VerifyResponse, X402Version,
+    TransferWithAuthorization, VerifyRequest, VerifyResponse, X402VersionV1,
 };
 
 sol!(
@@ -738,15 +738,19 @@ where
     /// Report payment kinds supported by this provider on its current network.
     async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
         let chain_id: ChainId = self.chain().into();
-        let network: Network = chain_id
-            .try_into()
-            .map_err(FacilitatorLocalError::NetworkConversionError)?;
-        let kinds = vec![SupportedPaymentKind {
-            network: network.to_string(),
-            x402_version: X402Version::v1(),
-            scheme: Scheme::Exact,
-            extra: None,
-        }];
+        let kinds = {
+            let mut kinds = Vec::with_capacity(2);
+            let network: Option<Network> = chain_id.try_into().ok();
+            if let Some(network) = network {
+                kinds.push(SupportedPaymentKind::V1 {
+                    network: network.to_string(),
+                    x402_version: X402VersionV1,
+                    scheme: Scheme::Exact,
+                    extra: None,
+                });
+            }
+            kinds
+        };
         let signers = {
             let mut signers = HashMap::with_capacity(1);
             signers.insert(self.chain_id(), self.signer_addresses());
