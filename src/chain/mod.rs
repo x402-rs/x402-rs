@@ -12,7 +12,7 @@ use crate::chain::evm::EvmProvider;
 use crate::chain::solana::SolanaProvider;
 use crate::config::ChainConfig;
 use crate::facilitator::Facilitator;
-use crate::network::{ChainIdToNetworkError, Network};
+use crate::network::ChainIdToNetworkError;
 use crate::types::{
     MixedAddress, Scheme, SettleRequest, SettleResponse, SupportedPaymentKindsResponse,
     VerifyRequest, VerifyResponse,
@@ -31,18 +31,12 @@ impl NetworkProvider {
                 NetworkProvider::Evm(provider)
             }
             ChainConfig::Solana(config) => {
-                let provider = SolanaProvider::from_config(config)?;
+                let provider = SolanaProvider::from_config(config);
                 NetworkProvider::Solana(provider)
             }
         };
         Ok(provider)
     }
-}
-
-pub trait FromEnvByNetworkBuild: Sized {
-    fn from_env(
-        network: Network,
-    ) -> impl Future<Output = Result<Option<Self>, Box<dyn std::error::Error>>> + Send;
 }
 
 pub trait NetworkProviderOps {

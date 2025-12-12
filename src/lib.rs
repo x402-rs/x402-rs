@@ -20,7 +20,6 @@ pub mod chain;
 pub mod config;
 pub mod facilitator;
 pub mod facilitator_local;
-pub mod from_env;
 pub mod handlers;
 pub mod network;
 pub mod provider_cache;

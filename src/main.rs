@@ -37,7 +37,6 @@ mod chain;
 mod config;
 mod facilitator;
 mod facilitator_local;
-mod from_env;
 mod handlers;
 mod network;
 mod provider_cache;

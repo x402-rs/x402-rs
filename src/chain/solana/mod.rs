@@ -1,3 +1,14 @@
+use crate::chain::chain_id::{ChainId, ChainIdError};
+use crate::chain::{FacilitatorLocalError, Namespace, NetworkProviderOps};
+use crate::config::SolanaChainConfig;
+use crate::facilitator::Facilitator;
+use crate::network::Network;
+use crate::types::{
+    Base64Bytes, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, PaymentRequirements,
+    SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
+    SupportedPaymentKindsResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse,
+};
+use crate::types::{Scheme, X402Version};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_commitment_config::CommitmentConfig;
 use solana_compute_budget_interface::ID as ComputeBudgetInstructionId;
@@ -14,19 +25,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing_core::Level;
-
-use crate::chain::chain_id::{ChainId, ChainIdError};
-use crate::chain::{FacilitatorLocalError, FromEnvByNetworkBuild, Namespace, NetworkProviderOps};
-use crate::config::SolanaChainConfig;
-use crate::facilitator::Facilitator;
-use crate::from_env;
-use crate::network::Network;
-use crate::types::{
-    Base64Bytes, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, PaymentRequirements,
-    SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
-    SupportedPaymentKindsResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse,
-};
-use crate::types::{Scheme, X402Version};
 
 const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
@@ -204,81 +202,33 @@ impl Debug for SolanaProvider {
 }
 
 impl SolanaProvider {
-    pub fn from_config(config: &SolanaChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_config(config: &SolanaChainConfig) -> Self {
         let rpc_url = config.rpc();
         let keypair = Keypair::from_base58_string(&config.signer().to_string());
         let max_compute_unit_limit = config.max_compute_unit_limit();
         let max_compute_unit_price = config.max_compute_unit_price();
         let chain = config.chain_reference();
-        {
-            let signer_addresses = vec![keypair.pubkey()];
-            tracing::info!(
-                chain = %config.chain_id(),
-                rpc = %rpc_url,
-                signers = ?signer_addresses,
-                max_compute_unit_limit,
-                max_compute_unit_price,
-                "Initialized Solana provider"
-            );
-        }
-        let rpc_client = RpcClient::new(rpc_url.to_string());
-        Ok(Self {
-            keypair: Arc::new(keypair),
-            chain: chain.clone(),
-            rpc_client: Arc::new(rpc_client),
+        SolanaProvider::new(
+            keypair,
+            rpc_url.to_string(),
+            chain,
             max_compute_unit_limit,
             max_compute_unit_price,
-        })
+        )
     }
 
-    fn max_compute_unit_limit_from_env(network: Network) -> u32 {
-        let suffix = match network {
-            Network::Solana => "SOLANA",
-            Network::SolanaDevnet => "SOLANA_DEVNET",
-            _ => return 200_000, // fallback (shouldn't be used)
-        };
-
-        let limit_var = format!("X402_SOLANA_MAX_COMPUTE_UNIT_LIMIT_{}", suffix);
-        std::env::var(&limit_var)
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(match network {
-                Network::Solana => 400_000,
-                Network::SolanaDevnet => 200_000,
-                _ => 200_000,
-            })
-    }
-
-    fn max_compute_unit_price_from_env(network: Network) -> u64 {
-        let suffix = match network {
-            Network::Solana => "SOLANA",
-            Network::SolanaDevnet => "SOLANA_DEVNET",
-            _ => return 100_000, // fallback (shouldn't be used)
-        };
-
-        let price_var = format!("X402_SOLANA_MAX_COMPUTE_UNIT_PRICE_{}", suffix);
-        std::env::var(&price_var)
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(match network {
-                Network::Solana => 1_000_000,
-                Network::SolanaDevnet => 100_000,
-                _ => 100_000,
-            })
-    }
-
-    pub fn try_new(
+    pub fn new(
         keypair: Keypair,
         rpc_url: String,
-        network: Network,
+        chain: SolanaChainReference,
         max_compute_unit_limit: u32,
         max_compute_unit_price: u64,
-    ) -> Result<Self, FacilitatorLocalError> {
-        let chain = SolanaChainReference::try_from(network)?;
+    ) -> Self {
         {
             let signer_addresses = vec![keypair.pubkey()];
+            let chain_id: ChainId = chain.into();
             tracing::info!(
-                network = %network,
+                chain = %chain_id,
                 rpc = rpc_url,
                 signers = ?signer_addresses,
                 max_compute_unit_limit,
@@ -287,13 +237,13 @@ impl SolanaProvider {
             );
         }
         let rpc_client = RpcClient::new(rpc_url);
-        Ok(Self {
+        Self {
             keypair: Arc::new(keypair),
             chain,
             rpc_client: Arc::new(rpc_client),
             max_compute_unit_limit,
             max_compute_unit_price,
-        })
+        }
     }
 
     pub fn verify_compute_limit_instruction(
@@ -691,30 +641,6 @@ impl SolanaProvider {
     pub fn fee_payer(&self) -> MixedAddress {
         let pubkey = self.keypair.pubkey();
         MixedAddress::Solana(pubkey)
-    }
-}
-
-impl FromEnvByNetworkBuild for SolanaProvider {
-    async fn from_env(network: Network) -> Result<Option<Self>, Box<dyn std::error::Error>> {
-        let env_var = from_env::rpc_env_name_from_network(network);
-        let rpc_url = match std::env::var(env_var).ok() {
-            Some(rpc_url) => rpc_url,
-            None => {
-                tracing::warn!(network=%network, "no RPC URL configured, skipping");
-                return Ok(None);
-            }
-        };
-        let keypair = from_env::SignerType::from_env()?.make_solana_wallet()?;
-        let max_compute_unit_limit = Self::max_compute_unit_limit_from_env(network);
-        let max_compute_unit_price = Self::max_compute_unit_price_from_env(network);
-        let provider = SolanaProvider::try_new(
-            keypair,
-            rpc_url,
-            network,
-            max_compute_unit_limit,
-            max_compute_unit_price,
-        )?;
-        Ok(Some(provider))
     }
 }
 

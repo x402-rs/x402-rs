@@ -3,9 +3,6 @@
 //! This module defines supported networks and their chain IDs,
 //! and provides statically known USDC deployments per network.
 
-use crate::chain::Namespace;
-use crate::chain::chain_id::ChainId;
-use crate::types::{MixedAddress, TokenAsset, TokenDeployment, TokenDeploymentEip712};
 use alloy_primitives::address;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -14,6 +11,10 @@ use std::borrow::Borrow;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::str::FromStr;
+
+use crate::chain::Namespace;
+use crate::chain::chain_id::ChainId;
+use crate::types::{MixedAddress, TokenAsset, TokenDeployment, TokenDeploymentEip712};
 
 /// Supported Ethereum-compatible networks.
 ///
@@ -74,32 +75,6 @@ impl Display for Network {
             Network::Polygon => write!(f, "polygon"),
             Network::Sei => write!(f, "sei"),
             Network::SeiTestnet => write!(f, "sei-testnet"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum NetworkFamily {
-    // FIXME v1 DELETE NETWORK
-    Evm,
-    Solana,
-}
-
-impl From<Network> for NetworkFamily {
-    fn from(value: Network) -> Self {
-        match value {
-            Network::BaseSepolia => NetworkFamily::Evm,
-            Network::Base => NetworkFamily::Evm,
-            Network::XdcMainnet => NetworkFamily::Evm,
-            Network::AvalancheFuji => NetworkFamily::Evm,
-            Network::Avalanche => NetworkFamily::Evm,
-            Network::XrplEvm => NetworkFamily::Evm,
-            Network::Solana => NetworkFamily::Solana,
-            Network::SolanaDevnet => NetworkFamily::Solana,
-            Network::PolygonAmoy => NetworkFamily::Evm,
-            Network::Polygon => NetworkFamily::Evm,
-            Network::Sei => NetworkFamily::Evm,
-            Network::SeiTestnet => NetworkFamily::Evm,
         }
     }
 }
