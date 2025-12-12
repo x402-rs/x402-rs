@@ -31,7 +31,7 @@ impl NetworkProvider {
                 NetworkProvider::Evm(provider)
             }
             ChainConfig::Solana(config) => {
-                let provider = SolanaProvider::from_config(config);
+                let provider = SolanaProvider::from_config(config).await?;
                 NetworkProvider::Solana(provider)
             }
         };

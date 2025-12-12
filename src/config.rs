@@ -453,6 +453,9 @@ impl SolanaChainConfig {
     pub fn chain_id(&self) -> ChainId {
         self.chain_reference.into()
     }
+    pub fn pubsub(&self) -> &Option<Url> {
+        &self.inner.pubsub
+    }
 }
 
 /// Configuration specific to EVM-compatible chains.
@@ -485,6 +488,9 @@ pub struct SolanaChainConfigInner {
     pub signer: SolanaSignerConfig,
     /// RPC provider configuration for this chain (required).
     pub rpc: Url,
+    // FIXME Comment
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pubsub: Option<Url>,
     // FIXME Comment
     #[serde(default = "solana_chain_config::default_max_compute_unit_limit")]
     pub max_compute_unit_limit: u32,

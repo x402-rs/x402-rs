@@ -1,6 +1,12 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
+use solana_client::pubsub_client::PubsubClientError;
+use solana_client::rpc_client::SerializableTransaction;
+use solana_client::rpc_config::{
+    RpcSendTransactionConfig, RpcSignatureSubscribeConfig, RpcSimulateTransactionConfig,
+};
+use solana_client::rpc_response::{Response, RpcSignatureResult, UiTransactionError};
 use solana_commitment_config::CommitmentConfig;
 use solana_compute_budget_interface::ID as ComputeBudgetInstructionId;
 use solana_keypair::Keypair;
@@ -188,6 +194,7 @@ pub struct SolanaProvider {
     keypair: Arc<Keypair>,
     chain: SolanaChainReference,
     rpc_client: Arc<RpcClient>,
+    pubsub_client: Arc<Option<PubsubClient>>,
     max_compute_unit_limit: u32,
     max_compute_unit_price: u64,
 }
@@ -203,8 +210,9 @@ impl Debug for SolanaProvider {
 }
 
 impl SolanaProvider {
-    pub fn from_config(config: &SolanaChainConfig) -> Self {
+    pub async fn from_config(config: &SolanaChainConfig) -> Result<Self, PubsubClientError> {
         let rpc_url = config.rpc();
+        let pubsub_url = config.pubsub().clone().map(|url| url.to_string());
         let keypair = Keypair::from_base58_string(&config.signer().to_string());
         let max_compute_unit_limit = config.max_compute_unit_limit();
         let max_compute_unit_price = config.max_compute_unit_price();
@@ -212,25 +220,29 @@ impl SolanaProvider {
         SolanaProvider::new(
             keypair,
             rpc_url.to_string(),
+            pubsub_url,
             chain,
             max_compute_unit_limit,
             max_compute_unit_price,
         )
+        .await
     }
 
-    pub fn new(
+    pub async fn new(
         keypair: Keypair,
         rpc_url: String,
+        pubsub_url: Option<String>,
         chain: SolanaChainReference,
         max_compute_unit_limit: u32,
         max_compute_unit_price: u64,
-    ) -> Self {
+    ) -> Result<Self, PubsubClientError> {
         {
             let signer_addresses = vec![keypair.pubkey()];
             let chain_id: ChainId = chain.into();
             tracing::info!(
                 chain = %chain_id,
                 rpc = rpc_url,
+                pubsub = ?pubsub_url,
                 signers = ?signer_addresses,
                 max_compute_unit_limit,
                 max_compute_unit_price,
@@ -238,13 +250,20 @@ impl SolanaProvider {
             );
         }
         let rpc_client = RpcClient::new(rpc_url);
-        Self {
+        let pubsub_client = if let Some(pubsub_url) = pubsub_url {
+            let client = PubsubClient::new(pubsub_url).await?;
+            Some(client)
+        } else {
+            None
+        };
+        Ok(Self {
             keypair: Arc::new(keypair),
             chain,
             rpc_client: Arc::new(rpc_client),
+            pubsub_client: Arc::new(pubsub_client),
             max_compute_unit_limit,
             max_compute_unit_price,
-        }
+        })
     }
 
     pub fn verify_compute_limit_instruction(
@@ -698,7 +717,11 @@ impl Facilitator for SolanaProvider {
             });
         }
         let tx_sig = tx
-            .send_and_confirm(&self.rpc_client, CommitmentConfig::confirmed())
+            .send_and_confirm(
+                &self.rpc_client,
+                &self.pubsub_client,
+                CommitmentConfig::confirmed(),
+            )
             .await?;
         let settle_response = SettleResponse {
             success: true,
@@ -863,18 +886,53 @@ impl TransactionInt {
     pub async fn send_and_confirm(
         &self,
         rpc_client: &RpcClient,
+        pubsub_client: &Option<PubsubClient>,
         commitment_config: CommitmentConfig,
     ) -> Result<Signature, FacilitatorLocalError> {
-        let tx_sig = self.send(rpc_client).await?;
-        loop {
-            let confirmed = rpc_client
-                .confirm_transaction_with_commitment(&tx_sig, commitment_config)
+        let tx_sig = self.inner.get_signature();
+
+        use futures_util::stream::StreamExt;
+
+        if let Some(pubsub_client) = pubsub_client {
+            let config = RpcSignatureSubscribeConfig {
+                commitment: Some(commitment_config),
+                enable_received_notification: None,
+            };
+            let (mut stream, unsubscribe) = pubsub_client
+                .signature_subscribe(tx_sig, Some(config))
                 .await
                 .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
-            if confirmed.value {
-                return Ok(tx_sig);
+            if let Err(e) = self.send(rpc_client).await {
+                tracing::error!(error = %e, "Failed to send transaction");
+                unsubscribe().await;
+                return Err(e);
             }
-            tokio::time::sleep(Duration::from_millis(500)).await;
+            while let Some(response) = stream.next().await {
+                let error = if let RpcSignatureResult::ProcessedSignature(r) = response.value {
+                    r.err
+                } else {
+                    None
+                };
+                return match error {
+                    None => Ok(tx_sig.clone()),
+                    Some(error) => Err(FacilitatorLocalError::ContractCall(format!("{error}"))),
+                };
+            }
+            Err(FacilitatorLocalError::DecodingError(
+                "signature_subscribe error".to_string(),
+            ))
+        } else {
+            self.send(rpc_client).await?;
+            loop {
+                let confirmed = rpc_client
+                    .confirm_transaction_with_commitment(tx_sig, commitment_config)
+                    .await
+                    .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
+                if confirmed.value {
+                    return Ok(tx_sig.clone());
+                }
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
         }
     }
 
