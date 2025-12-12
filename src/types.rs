@@ -7,9 +7,6 @@
 //! This module supports ERC-3009 style authorization for tokens (EIP-712 typed signatures),
 //! and provides serialization logic compatible with external clients.
 
-use crate::chain::ChainId;
-use crate::network::Network;
-use crate::timestamp::UnixTimestamp;
 use alloy_primitives::{Address, hex};
 use alloy_primitives::{Bytes, U256};
 use alloy_sol_types::sol;
@@ -29,6 +26,10 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::str::FromStr;
 use url::Url;
+
+use crate::chain::ChainId;
+use crate::network::Network;
+use crate::timestamp::UnixTimestamp;
 
 /// Represents the protocol version. Currently only version 1 is supported.
 #[derive(Debug, Copy, Clone)]
