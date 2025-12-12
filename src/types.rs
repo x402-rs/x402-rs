@@ -7,6 +7,9 @@
 //! This module supports ERC-3009 style authorization for tokens (EIP-712 typed signatures),
 //! and provides serialization logic compatible with external clients.
 
+use crate::chain::ChainId;
+use crate::network::Network;
+use crate::timestamp::UnixTimestamp;
 use alloy_primitives::{Address, hex};
 use alloy_primitives::{Bytes, U256};
 use alloy_sol_types::sol;
@@ -20,14 +23,12 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_pubkey::Pubkey;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::str::FromStr;
 use url::Url;
-
-use crate::network::Network;
-use crate::timestamp::UnixTimestamp;
 
 /// Represents the protocol version. Currently only version 1 is supported.
 #[derive(Debug, Copy, Clone)]
@@ -1410,8 +1411,12 @@ pub struct SupportedPaymentKindExtra {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct SupportedPaymentKindsResponse {
+pub struct SupportedResponse {
     pub kinds: Vec<SupportedPaymentKind>,
+    #[serde(default)]
+    pub extensions: Vec<String>,
+    #[serde(default)]
+    pub signers: HashMap<ChainId, Vec<MixedAddress>>,
 }
 
 sol!(

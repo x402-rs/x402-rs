@@ -39,6 +39,7 @@ use alloy_transport::layers::{FallbackLayer, ThrottleLayer};
 use alloy_transport_http::Http;
 use async_trait::async_trait;
 use dashmap::DashMap;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -57,7 +58,7 @@ use crate::timestamp::UnixTimestamp;
 use crate::types::{
     EvmAddress, EvmSignature, ExactPaymentPayload, FacilitatorErrorReason, HexEncodedNonce,
     MixedAddress, PaymentPayload, PaymentRequirements, Scheme, SettleRequest, SettleResponse,
-    SupportedPaymentKind, SupportedPaymentKindsResponse, TokenAmount, TransactionHash,
+    SupportedPaymentKind, SupportedResponse, TokenAmount, TransactionHash,
     TransferWithAuthorization, VerifyRequest, VerifyResponse, X402Version,
 };
 
@@ -478,8 +479,8 @@ impl MetaEvmProvider for EvmProvider {
 
 impl NetworkProviderOps for EvmProvider {
     /// Address of the default signer used by this provider (for tx sending).
-    fn signer_address(&self) -> MixedAddress {
-        self.inner.default_signer_address().into()
+    fn signer_addresses(&self) -> Vec<MixedAddress> {
+        self.inner.signer_addresses().map(|a| a.into()).collect()
     }
 
     fn chain_id(&self) -> ChainId {
@@ -489,7 +490,7 @@ impl NetworkProviderOps for EvmProvider {
 
 impl<P> Facilitator for P
 where
-    P: MetaEvmProvider + Sync,
+    P: MetaEvmProvider + NetworkProviderOps + Sync,
     FacilitatorLocalError: From<P::Error>,
 {
     type Error = FacilitatorLocalError;
@@ -735,7 +736,7 @@ where
     }
 
     /// Report payment kinds supported by this provider on its current network.
-    async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
+    async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
         let chain_id: ChainId = self.chain().into();
         let network: Network = chain_id
             .try_into()
@@ -746,7 +747,16 @@ where
             scheme: Scheme::Exact,
             extra: None,
         }];
-        Ok(SupportedPaymentKindsResponse { kinds })
+        let signers = {
+            let mut signers = HashMap::with_capacity(1);
+            signers.insert(self.chain_id(), self.signer_addresses());
+            signers
+        };
+        Ok(SupportedResponse {
+            kinds,
+            extensions: Vec::new(),
+            signers,
+        })
     }
 }
 

@@ -6,7 +6,7 @@ use solana_client::rpc_client::SerializableTransaction;
 use solana_client::rpc_config::{
     RpcSendTransactionConfig, RpcSignatureSubscribeConfig, RpcSimulateTransactionConfig,
 };
-use solana_client::rpc_response::{Response, RpcSignatureResult, UiTransactionError};
+use solana_client::rpc_response::RpcSignatureResult;
 use solana_commitment_config::CommitmentConfig;
 use solana_compute_budget_interface::ID as ComputeBudgetInstructionId;
 use solana_keypair::Keypair;
@@ -15,6 +15,7 @@ use solana_pubkey::{Pubkey, pubkey};
 use solana_signature::Signature;
 use solana_signer::Signer;
 use solana_transaction::versioned::VersionedTransaction;
+use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -29,7 +30,7 @@ use crate::network::Network;
 use crate::types::{
     Base64Bytes, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, PaymentRequirements,
     SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
-    SupportedPaymentKindsResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse,
+    SupportedResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse,
 };
 use crate::types::{Scheme, X402Version};
 
@@ -682,8 +683,8 @@ pub struct TransferCheckedInstruction {
 }
 
 impl NetworkProviderOps for SolanaProvider {
-    fn signer_address(&self) -> MixedAddress {
-        self.fee_payer()
+    fn signer_addresses(&self) -> Vec<MixedAddress> {
+        vec![self.fee_payer()]
     }
 
     fn chain_id(&self) -> ChainId {
@@ -736,20 +737,33 @@ impl Facilitator for SolanaProvider {
         Ok(settle_response)
     }
 
-    async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
+    async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
         let network: Network = self
             .chain_id()
             .try_into()
             .map_err(FacilitatorLocalError::NetworkConversionError)?;
+        let extra = self
+            .signer_addresses()
+            .first()
+            .map(|address| SupportedPaymentKindExtra {
+                fee_payer: address.clone(),
+            });
         let kinds = vec![SupportedPaymentKind {
             network: network.to_string(),
             scheme: Scheme::Exact,
             x402_version: X402Version::V1,
-            extra: Some(SupportedPaymentKindExtra {
-                fee_payer: self.signer_address(),
-            }),
+            extra,
         }];
-        Ok(SupportedPaymentKindsResponse { kinds })
+        let signers = {
+            let mut signers = HashMap::with_capacity(1);
+            signers.insert(self.chain_id(), self.signer_addresses());
+            signers
+        };
+        Ok(SupportedResponse {
+            kinds,
+            extensions: Vec::new(),
+            signers,
+        })
     }
 }
 

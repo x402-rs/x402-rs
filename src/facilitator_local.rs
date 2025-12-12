@@ -9,13 +9,14 @@
 //! - Contract interaction using Alloy
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
+use std::collections::HashMap;
 use tracing::instrument;
 
 use crate::chain::FacilitatorLocalError;
 use crate::facilitator::Facilitator;
 use crate::provider_cache::ProviderMap;
 use crate::types::{
-    SettleRequest, SettleResponse, SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
+    SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse,
 };
 
 /// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
@@ -94,13 +95,22 @@ where
         Ok(settle_response)
     }
 
-    async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
+    async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
         let mut kinds = vec![];
+        let mut signers = HashMap::new();
         for provider in self.provider_map.values() {
             let supported = provider.supported().await.ok();
-            let mut supported_kinds = supported.map(|k| k.kinds).unwrap_or_default();
-            kinds.append(&mut supported_kinds);
+            if let Some(mut supported) = supported {
+                kinds.append(&mut supported.kinds);
+                for (chain_id, signer_addresses) in supported.signers {
+                    signers.entry(chain_id).or_insert(signer_addresses);
+                }
+            }
         }
-        Ok(SupportedPaymentKindsResponse { kinds })
+        Ok(SupportedResponse {
+            kinds,
+            extensions: Vec::new(),
+            signers,
+        })
     }
 }

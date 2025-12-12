@@ -4,7 +4,7 @@
 //! against specified requirements [`Facilitator::verify`] and executing on-chain transfers [`Facilitator::settle`].
 
 use crate::types::{
-    SettleRequest, SettleResponse, SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
+    SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse,
 };
 use std::fmt::{Debug, Display};
 use std::sync::Arc;
@@ -53,9 +53,7 @@ pub trait Facilitator {
     ) -> impl Future<Output = Result<SettleResponse, Self::Error>> + Send;
 
     #[allow(dead_code)] // For some reason clippy believes it is not used.
-    fn supported(
-        &self,
-    ) -> impl Future<Output = Result<SupportedPaymentKindsResponse, Self::Error>> + Send;
+    fn supported(&self) -> impl Future<Output = Result<SupportedResponse, Self::Error>> + Send;
 }
 
 impl<T: Facilitator> Facilitator for Arc<T> {
@@ -75,9 +73,7 @@ impl<T: Facilitator> Facilitator for Arc<T> {
         self.as_ref().settle(request)
     }
 
-    fn supported(
-        &self,
-    ) -> impl Future<Output = Result<SupportedPaymentKindsResponse, Self::Error>> + Send {
+    fn supported(&self) -> impl Future<Output = Result<SupportedResponse, Self::Error>> + Send {
         self.as_ref().supported()
     }
 }
