@@ -34,8 +34,6 @@ use crate::types::{
     VerifyRequest, VerifyResponse,
 };
 
-pub type Address = Pubkey; // TODO Maybe use solana_address
-
 const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 /// A Solana chain reference consisting of 32 ASCII characters.
@@ -156,24 +154,28 @@ impl TryFrom<ChainId> for SolanaChainReference {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct SolanaAddress {
-    pubkey: Pubkey,
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Address(Pubkey);
+
+impl Address {
+    pub const fn new(pubkey: Pubkey) -> Self {
+        Self(pubkey)
+    }
 }
 
-impl From<Pubkey> for SolanaAddress {
+impl From<Pubkey> for Address {
     fn from(pubkey: Pubkey) -> Self {
-        Self { pubkey }
+        Self(pubkey)
     }
 }
 
-impl From<SolanaAddress> for Pubkey {
-    fn from(address: SolanaAddress) -> Self {
-        address.pubkey
+impl From<Address> for Pubkey {
+    fn from(address: Address) -> Self {
+        address.0
     }
 }
 
-impl TryFrom<MixedAddress> for SolanaAddress {
+impl TryFrom<MixedAddress> for Address {
     type Error = FacilitatorLocalError;
 
     fn try_from(value: MixedAddress) -> Result<Self, Self::Error> {
@@ -181,14 +183,50 @@ impl TryFrom<MixedAddress> for SolanaAddress {
             MixedAddress::Evm(_) | MixedAddress::Offchain(_) => Err(
                 FacilitatorLocalError::InvalidAddress("expected Solana address".to_string()),
             ),
-            MixedAddress::Solana(pubkey) => Ok(Self { pubkey }),
+            MixedAddress::Solana(pubkey) => Ok(Self(pubkey.0)),
         }
     }
 }
 
-impl From<SolanaAddress> for MixedAddress {
-    fn from(value: SolanaAddress) -> Self {
-        MixedAddress::Solana(value.pubkey)
+impl Serialize for Address {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer
+    {
+        let base58_string = self.0.to_string();
+        serializer.serialize_str(&base58_string)
+    }
+}
+
+impl<'de> Deserialize<'de> for Address {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>
+    {
+        let s = String::deserialize(deserializer)?;
+        let pubkey = Pubkey::from_str(&s).map_err(|_| serde::de::Error::custom("Failed to decode Solana address"))?;
+        Ok(Self(pubkey))
+    }
+}
+
+impl Display for Address {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.to_string())
+    }
+}
+
+impl FromStr for Address {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let pubkey = Pubkey::from_str(s).map_err(|_| format!("Failed to decode Solana address: {s}"))?;
+        Ok(Self(pubkey))
+    }
+}
+
+impl From<Address> for MixedAddress {
+    fn from(value: Address) -> Self {
+        MixedAddress::Solana(value)
     }
 }
 
@@ -385,14 +423,14 @@ impl SolanaProvider {
         instruction.account(5)?;
 
         // verify that the ATA is created for the expected payee
-        let pay_to: SolanaAddress = requirements.pay_to.clone().try_into()?;
+        let pay_to: Address = requirements.pay_to.clone().try_into()?;
         if owner != pay_to.into() {
             return Err(FacilitatorLocalError::DecodingError(
                 "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_payee"
                     .to_string(),
             ));
         }
-        let asset: SolanaAddress = requirements.asset.clone().try_into()?;
+        let asset: Address = requirements.asset.clone().try_into()?;
         if mint != asset.into() {
             return Err(FacilitatorLocalError::DecodingError(
                 "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_asset"
@@ -502,15 +540,15 @@ impl SolanaProvider {
             ));
         }
 
-        let asset_address: SolanaAddress = requirements.asset.clone().try_into()?;
-        let pay_to_address: SolanaAddress = requirements.pay_to.clone().try_into()?;
+        let asset_address: Address = requirements.asset.clone().try_into()?;
+        let pay_to_address: Address = requirements.pay_to.clone().try_into()?;
         let token_program = transfer_checked_instruction.token_program;
         // findAssociatedTokenPda
         let (ata, _) = Pubkey::find_program_address(
             &[
-                pay_to_address.pubkey.as_ref(),
+                pay_to_address.0.as_ref(),
                 token_program.as_ref(),
-                asset_address.pubkey.as_ref(),
+                asset_address.0.as_ref(),
             ],
             &ATA_PROGRAM_PUBKEY,
         );
@@ -657,17 +695,17 @@ impl SolanaProvider {
                 "invalid_exact_svm_payload_transaction_simulation_failed".to_string(),
             ));
         }
-        let payer: SolanaAddress = transfer_instruction.authority.into();
+        let payer: Address = transfer_instruction.authority.into();
         Ok(VerifyTransferResult { payer, transaction })
     }
 
     pub fn fee_payer(&self) -> Address {
-        self.keypair.pubkey()
+        Address(self.keypair.pubkey())
     }
 }
 
 pub struct VerifyTransferResult {
-    pub payer: SolanaAddress,
+    pub payer: Address,
     pub transaction: VersionedTransaction,
 }
 
@@ -742,24 +780,22 @@ impl Facilitator for SolanaProvider {
         let kinds: Vec<proto::SupportedPaymentKind> = {
             let mut kinds = Vec::with_capacity(2);
             let fee_payer = self.fee_payer();
-            kinds.push(
-                SupportedPaymentKind::V2 {
-                    scheme: Scheme::Exact,
-                    chain_id: self.chain_id(),
-                    fee_payer,
-                }
-                .into(),
-            );
+            let extra =
+                Some(serde_json::to_value(SupportedPaymentKindExtra { fee_payer }).unwrap());
+            kinds.push(proto::SupportedPaymentKind {
+                x402_version: proto::X402Version::v2().into(),
+                scheme: Scheme::Exact.into(),
+                network: self.chain_id().into(),
+                extra: extra.clone(),
+            });
             let network: Option<Network> = self.chain_id().try_into().ok();
             if let Some(network) = network {
-                kinds.push(
-                    SupportedPaymentKind::V1 {
-                        scheme: Scheme::Exact,
-                        network: network.to_string(),
-                        fee_payer,
-                    }
-                    .into(),
-                );
+                kinds.push(proto::SupportedPaymentKind {
+                    x402_version: proto::X402Version::v2().into(),
+                    scheme: Scheme::Exact.into(),
+                    network: network.into(),
+                    extra,
+                });
             }
             kinds
         };
@@ -970,48 +1006,8 @@ impl TransactionInt {
     }
 }
 
-pub enum SupportedPaymentKind {
-    V1 {
-        scheme: Scheme,
-        network: String,
-        fee_payer: Address,
-    },
-    V2 {
-        scheme: Scheme,
-        chain_id: ChainId,
-        fee_payer: Address,
-    },
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SupportedPaymentKindExtra {
     fee_payer: Address,
-}
-
-impl Into<proto::SupportedPaymentKind> for SupportedPaymentKind {
-    fn into(self) -> proto::SupportedPaymentKind {
-        match self {
-            SupportedPaymentKind::V1 {
-                scheme,
-                network,
-                fee_payer,
-            } => proto::SupportedPaymentKind {
-                x402_version: proto::v1::X402Version1.into(),
-                scheme: scheme.into(),
-                network,
-                extra: Some(serde_json::to_value(SupportedPaymentKindExtra { fee_payer }).unwrap()),
-            },
-            SupportedPaymentKind::V2 {
-                scheme,
-                chain_id,
-                fee_payer,
-            } => proto::SupportedPaymentKind {
-                x402_version: proto::v2::X402Version2.into(),
-                scheme: scheme.into(),
-                network: chain_id.to_string(),
-                extra: Some(serde_json::to_value(SupportedPaymentKindExtra { fee_payer }).unwrap()),
-            },
-        }
-    }
 }

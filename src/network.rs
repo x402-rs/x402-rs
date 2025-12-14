@@ -6,7 +6,6 @@
 use alloy_primitives::address;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use solana_pubkey::Pubkey;
 use std::borrow::Borrow;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
@@ -14,7 +13,8 @@ use std::str::FromStr;
 
 use crate::chain::Namespace;
 use crate::chain::chain_id::ChainId;
-use crate::types::{MixedAddress, TokenAsset, TokenDeployment, TokenDeploymentEip712};
+use crate::chain::solana;
+use crate::types::{TokenAsset, TokenDeployment, TokenDeploymentEip712};
 
 /// Supported Ethereum-compatible networks.
 ///
@@ -76,6 +76,12 @@ impl Display for Network {
             Network::Sei => write!(f, "sei"),
             Network::SeiTestnet => write!(f, "sei-testnet"),
         }
+    }
+}
+
+impl Into<String> for Network {
+    fn into(self) -> String {
+        self.to_string()
     }
 }
 
@@ -252,7 +258,7 @@ static USDC_SOLANA: Lazy<USDCDeployment> = Lazy::new(|| {
     USDCDeployment(TokenDeployment {
         asset: TokenAsset {
             address: MixedAddress::Solana(
-                Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+                solana::Address::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
             ),
             network: Network::Solana,
         },
@@ -266,7 +272,7 @@ static USDC_SOLANA_DEVNET: Lazy<USDCDeployment> = Lazy::new(|| {
     USDCDeployment(TokenDeployment {
         asset: TokenAsset {
             address: MixedAddress::Solana(
-                Pubkey::from_str("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU").unwrap(),
+                solana::Address::from_str("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU").unwrap(),
             ),
             network: Network::SolanaDevnet,
         },

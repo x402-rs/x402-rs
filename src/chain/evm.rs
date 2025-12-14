@@ -742,18 +742,20 @@ where
         let chain_id: ChainId = self.chain().into();
         let kinds = {
             let mut kinds = Vec::with_capacity(2);
-            let kind = SupportedPaymentKind::V2 {
-                scheme: Scheme::Exact,
-                chain_id: chain_id.clone(),
-            };
-            kinds.push(kind.into());
+            kinds.push(proto::SupportedPaymentKind {
+                x402_version: proto::X402Version::v2().into(),
+                scheme: Scheme::Exact.into(),
+                network: chain_id.to_string(),
+                extra: None,
+            });
             let network: Option<Network> = chain_id.try_into().ok();
             if let Some(network) = network {
-                let kind = SupportedPaymentKind::V1 {
-                    scheme: Scheme::Exact,
-                    network: network.to_string(),
-                };
-                kinds.push(kind.into());
+                kinds.push(proto::SupportedPaymentKind {
+                    x402_version: proto::X402Version::v2().into(),
+                    scheme: Scheme::Exact.into(),
+                    network: network.into(),
+                    extra: None,
+                });
             }
             kinds
         };
@@ -1329,30 +1331,6 @@ impl PendingNonceManager {
             let mut nonce = nonce_lock.lock().await;
             *nonce = u64::MAX; // NONE sentinel - will trigger fresh query
             tracing::debug!(%address, "reset nonce cache, will requery on next use");
-        }
-    }
-}
-
-pub enum SupportedPaymentKind {
-    V1 { scheme: Scheme, network: String },
-    V2 { scheme: Scheme, chain_id: ChainId },
-}
-
-impl Into<proto::SupportedPaymentKind> for SupportedPaymentKind {
-    fn into(self) -> proto::SupportedPaymentKind {
-        match self {
-            SupportedPaymentKind::V1 { scheme, network } => proto::SupportedPaymentKind {
-                x402_version: proto::v1::X402Version1.into(),
-                scheme: scheme.into(),
-                network,
-                extra: None,
-            },
-            SupportedPaymentKind::V2 { scheme, chain_id } => proto::SupportedPaymentKind {
-                x402_version: proto::v2::X402Version2.into(),
-                scheme: scheme.into(),
-                network: chain_id.into(),
-                extra: None,
-            },
         }
     }
 }

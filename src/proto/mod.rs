@@ -78,9 +78,11 @@ impl<'de> Deserialize<'de> for X402Version {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SupportedPaymentKind {
     pub x402_version: u8,
     pub scheme: String,
     pub network: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub extra: Option<serde_json::Value>,
 }
