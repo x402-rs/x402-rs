@@ -30,8 +30,8 @@ use url::Url;
 use crate::chain::ChainId;
 use crate::network::Network;
 use crate::proto::X402Version;
-use crate::proto::v1::X402Version1;
-use crate::proto::v2::X402Version2;
+use crate::proto::v1;
+use crate::proto::v2;
 use crate::timestamp::UnixTimestamp;
 
 /// Enumerates payment schemes. Only "exact" is supported in this implementation,
@@ -1346,7 +1346,7 @@ impl Display for PaymentRequiredResponse {
 pub enum SupportedPaymentKind {
     #[serde(rename_all = "camelCase")]
     V1 {
-        x402_version: X402Version1,
+        x402_version: v1::X402Version1,
         scheme: Scheme,
         network: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -1354,7 +1354,7 @@ pub enum SupportedPaymentKind {
     },
     #[serde(rename_all = "camelCase")]
     V2 {
-        x402_version: X402Version2,
+        x402_version: v2::X402Version2,
         scheme: Scheme,
         network: ChainId,
         #[serde(skip_serializing_if = "Option::is_none")]

@@ -2,9 +2,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::Display;
 
-use crate::proto::v1::X402Version1;
-use crate::proto::v2::X402Version2;
-
 pub mod v1;
 pub mod v2;
 
@@ -12,17 +9,17 @@ pub mod v2;
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum X402Version {
     /// Version `1`.
-    V1(X402Version1),
+    V1(v1::X402Version1),
     /// Version `2`.
-    V2(X402Version2),
+    V2(v2::X402Version2),
 }
 
 impl X402Version {
     pub fn v1() -> X402Version {
-        X402Version::V1(X402Version1)
+        X402Version::V1(v1::X402Version1)
     }
     pub fn v2() -> X402Version {
-        X402Version::V2(X402Version2)
+        X402Version::V2(v2::X402Version2)
     }
 }
 
@@ -53,8 +50,8 @@ impl TryFrom<u8> for X402Version {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            X402Version1::VALUE => Ok(X402Version::v1()),
-            X402Version2::VALUE => Ok(X402Version::v2()),
+            v1::X402Version1::VALUE => Ok(X402Version::v1()),
+            v2::X402Version2::VALUE => Ok(X402Version::v2()),
             _ => Err(X402VersionError(value)),
         }
     }
