@@ -33,26 +33,26 @@ use crate::timestamp::UnixTimestamp;
 
 /// Version 1 of the x402 protocol.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
-pub struct X402VersionV1;
+pub struct X402Version1;
 
-impl X402VersionV1 {
+impl X402Version1 {
     const VALUE: u8 = 1;
 }
 
-impl Serialize for X402VersionV1 {
+impl Serialize for X402Version1 {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_u8(Self::VALUE)
     }
 }
 
-impl<'de> Deserialize<'de> for X402VersionV1 {
+impl<'de> Deserialize<'de> for X402Version1 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         let num = u8::deserialize(deserializer)?;
         if num == Self::VALUE {
-            Ok(X402VersionV1)
+            Ok(X402Version1)
         } else {
             Err(serde::de::Error::custom(format!(
                 "expected version {}, got {}",
@@ -63,7 +63,7 @@ impl<'de> Deserialize<'de> for X402VersionV1 {
     }
 }
 
-impl Display for X402VersionV1 {
+impl Display for X402Version1 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", Self::VALUE)
     }
@@ -71,26 +71,26 @@ impl Display for X402VersionV1 {
 
 /// Version 2 of the x402 protocol.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
-pub struct X402VersionV2;
+pub struct X402Version2;
 
-impl X402VersionV2 {
+impl X402Version2 {
     const VALUE: u8 = 2;
 }
 
-impl Serialize for X402VersionV2 {
+impl Serialize for X402Version2 {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_u8(Self::VALUE)
     }
 }
 
-impl<'de> Deserialize<'de> for X402VersionV2 {
+impl<'de> Deserialize<'de> for X402Version2 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         let num = u8::deserialize(deserializer)?;
         if num == Self::VALUE {
-            Ok(X402VersionV2)
+            Ok(X402Version2)
         } else {
             Err(serde::de::Error::custom(format!(
                 "expected version {}, got {}",
@@ -101,8 +101,8 @@ impl<'de> Deserialize<'de> for X402VersionV2 {
     }
 }
 
-impl Display for X402VersionV2 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for X402Version2 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", Self::VALUE)
     }
 }
@@ -111,17 +111,17 @@ impl Display for X402VersionV2 {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum X402Version {
     /// Version `1`.
-    V1(X402VersionV1),
+    V1(X402Version1),
     /// Version `2`.
-    V2(X402VersionV2),
+    V2(X402Version2),
 }
 
 impl X402Version {
     pub fn v1() -> X402Version {
-        X402Version::V1(X402VersionV1)
+        X402Version::V1(X402Version1)
     }
     pub fn v2() -> X402Version {
-        X402Version::V2(X402VersionV2)
+        X402Version::V2(X402Version2)
     }
 }
 
@@ -159,8 +159,8 @@ impl TryFrom<u8> for X402Version {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            X402VersionV1::VALUE => Ok(X402Version::V1(X402VersionV1)),
-            X402VersionV2::VALUE => Ok(X402Version::V2(X402VersionV2)),
+            X402Version1::VALUE => Ok(X402Version::v1()),
+            X402Version2::VALUE => Ok(X402Version::v2()),
             _ => Err(X402VersionError(value)),
         }
     }
@@ -1488,7 +1488,7 @@ impl Display for PaymentRequiredResponse {
 pub enum SupportedPaymentKind {
     #[serde(rename_all = "camelCase")]
     V1 {
-        x402_version: X402VersionV1,
+        x402_version: X402Version1,
         scheme: Scheme,
         network: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -1496,7 +1496,7 @@ pub enum SupportedPaymentKind {
     },
     #[serde(rename_all = "camelCase")]
     V2 {
-        x402_version: X402VersionV2,
+        x402_version: X402Version2,
         scheme: Scheme,
         network: ChainId,
         #[serde(skip_serializing_if = "Option::is_none")]

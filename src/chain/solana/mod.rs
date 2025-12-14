@@ -30,8 +30,8 @@ use crate::network::Network;
 use crate::types::{
     Base64Bytes, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, PaymentRequirements,
     Scheme, SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
-    SupportedResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse, X402VersionV1,
-    X402VersionV2,
+    SupportedResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse, X402Version1,
+    X402Version2,
 };
 
 const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -752,14 +752,14 @@ impl Facilitator for SolanaProvider {
                     let network: Option<Network> = self.chain_id().try_into().ok();
                     if let Some(network) = network {
                         kinds.push(SupportedPaymentKind::V1 {
-                            x402_version: X402VersionV1,
+                            x402_version: X402Version1,
                             scheme: Scheme::Exact,
                             network: network.to_string(),
                             extra: Some(extra.clone()),
                         });
                     }
                     kinds.push(SupportedPaymentKind::V2 {
-                        x402_version: X402VersionV2,
+                        x402_version: X402Version2,
                         scheme: Scheme::Exact,
                         network: self.chain_id(),
                         extra: Some(extra),
