@@ -29,27 +29,11 @@ use url::Url;
 
 use crate::chain::ChainId;
 use crate::network::Network;
-use crate::proto::X402Version;
 use crate::proto::v1;
 use crate::proto::v2;
 use crate::timestamp::UnixTimestamp;
 
-/// Enumerates payment schemes. Only "exact" is supported in this implementation,
-/// meaning the amount to be transferred must match exactly.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Scheme {
-    Exact,
-}
-
-impl Display for Scheme {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            Scheme::Exact => "exact",
-        };
-        write!(f, "{s}")
-    }
-}
+pub use crate::proto::scheme::Scheme;
 
 /// Represents an EVM signature used in EIP-712 typed data.
 /// Serialized as 0x-prefixed hex string.
