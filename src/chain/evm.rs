@@ -16,8 +16,8 @@
 
 use alloy_contract::SolCallBuilder;
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
-use alloy_primitives::{Address, Bytes, FixedBytes, U256, address};
 use alloy_primitives::{B256, hex};
+use alloy_primitives::{Bytes, FixedBytes, U256, address};
 use alloy_provider::ProviderBuilder;
 use alloy_provider::bindings::IMulticall3;
 use alloy_provider::fillers::NonceManager;
@@ -58,11 +58,13 @@ use crate::proto::v1::X402Version1;
 use crate::proto::v2::X402Version2;
 use crate::timestamp::UnixTimestamp;
 use crate::types::{
-    EvmAddress, EvmSignature, ExactPaymentPayload, FacilitatorErrorReason, HexEncodedNonce,
-    MixedAddress, PaymentPayload, PaymentRequirements, Scheme, SettleRequest, SettleResponse,
+    EvmSignature, ExactPaymentPayload, FacilitatorErrorReason, HexEncodedNonce, MixedAddress,
+    PaymentPayload, PaymentRequirements, Scheme, SettleRequest, SettleResponse,
     SupportedPaymentKind, SupportedResponse, TokenAmount, TransactionHash,
     TransferWithAuthorization, VerifyRequest, VerifyResponse,
 };
+
+pub use alloy_primitives::Address;
 
 sol!(
     #[allow(missing_docs)]
@@ -179,9 +181,9 @@ pub struct ExactEvmPayment {
     /// Target chain for settlement.
     pub chain: EvmChainReference,
     /// Authorized sender (`from`) — EOA or smart wallet.
-    pub from: EvmAddress,
+    pub from: Address,
     /// Authorized recipient (`to`).
-    pub to: EvmAddress,
+    pub to: Address,
     /// Transfer amount (token units).
     pub value: TokenAmount,
     /// Not valid before this timestamp (inclusive).
@@ -842,11 +844,11 @@ fn assert_time(
 ))]
 async fn assert_enough_balance<P: Provider>(
     usdc_contract: &USDC::USDCInstance<P>,
-    sender: &EvmAddress,
+    sender: &Address,
     max_amount_required: U256,
 ) -> Result<(), FacilitatorLocalError> {
     let balance = usdc_contract
-        .balanceOf(sender.0)
+        .balanceOf(*sender)
         .call()
         .into_future()
         .instrument(tracing::info_span!(
@@ -876,7 +878,7 @@ async fn assert_enough_balance<P: Provider>(
     max_amount_required = %max_amount_required
 ))]
 fn assert_enough_value(
-    payer: &EvmAddress,
+    payer: &Address,
     sent: &U256,
     max_amount_required: &U256,
 ) -> Result<(), FacilitatorLocalError> {
@@ -1024,8 +1026,8 @@ async fn assert_valid_payment<P: Provider>(
             payload.scheme,
         ));
     }
-    let payload_to: EvmAddress = payment_payload.authorization.to;
-    let requirements_to: EvmAddress = requirements
+    let payload_to = payment_payload.authorization.to;
+    let requirements_to: Address = requirements
         .pay_to
         .clone()
         .try_into()
@@ -1179,8 +1181,8 @@ impl SignedMessage {
         domain: &Eip712Domain,
     ) -> Result<Self, FacilitatorLocalError> {
         let transfer_with_authorization = TransferWithAuthorization {
-            from: payment.from.0,
-            to: payment.to.0,
+            from: payment.from,
+            to: payment.to,
             value: payment.value.into(),
             validAfter: payment.valid_after.into(),
             validBefore: payment.valid_before.into(),

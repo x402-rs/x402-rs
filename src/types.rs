@@ -7,7 +7,7 @@
 //! This module supports ERC-3009 style authorization for tokens (EIP-712 typed signatures),
 //! and provides serialization logic compatible with external clients.
 
-use alloy_primitives::{Address, hex};
+use alloy_primitives::hex;
 use alloy_primitives::{Bytes, U256};
 use alloy_sol_types::sol;
 use base64::Engine;
@@ -27,7 +27,7 @@ use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::str::FromStr;
 use url::Url;
 
-use crate::chain::ChainId;
+use crate::chain::{ChainId, evm};
 use crate::network::Network;
 use crate::proto::X402Version;
 use crate::proto::v1;
@@ -90,57 +90,6 @@ impl Serialize for EvmSignature {
     }
 }
 
-/// Represents an EVM address.
-///
-/// Wrapper around `alloy_primitives::Address`, providing display/serialization support.
-/// Used throughout the protocol for typed Ethereum address handling.
-#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub struct EvmAddress(pub Address);
-
-impl Display for EvmAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("Failed to decode EVM address")]
-pub struct EvmAddressDecodingError;
-
-impl FromStr for EvmAddress {
-    type Err = EvmAddressDecodingError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let address = Address::from_str(s).map_err(|_| EvmAddressDecodingError)?;
-        Ok(Self(address))
-    }
-}
-
-impl TryFrom<&str> for EvmAddress {
-    type Error = EvmAddressDecodingError;
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        Self::from_str(value)
-    }
-}
-
-impl From<EvmAddress> for Address {
-    fn from(address: EvmAddress) -> Self {
-        address.0
-    }
-}
-
-impl From<Address> for EvmAddress {
-    fn from(address: Address) -> Self {
-        EvmAddress(address)
-    }
-}
-
-impl PartialEq<Address> for EvmAddress {
-    fn eq(&self, other: &Address) -> bool {
-        let other = *other;
-        self.0 == other
-    }
-}
-
 /// Represents a 32-byte random nonce, hex-encoded with 0x prefix.
 /// Must be exactly 64 hex characters long.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -192,8 +141,8 @@ impl Serialize for HexEncodedNonce {
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExactEvmPayloadAuthorization {
-    pub from: EvmAddress,
-    pub to: EvmAddress,
+    pub from: evm::Address,
+    pub to: evm::Address,
     pub value: TokenAmount,
     pub valid_after: UnixTimestamp,
     pub valid_before: UnixTimestamp,
@@ -574,7 +523,7 @@ impl From<u64> for TokenAmount {
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub enum MixedAddress {
     /// EVM address
-    Evm(EvmAddress),
+    Evm(evm::Address),
     /// Off-chain address in `^[A-Za-z0-9][A-Za-z0-9-]{0,34}[A-Za-z0-9]$` format.
     Offchain(String),
     Solana(Pubkey),
@@ -600,13 +549,13 @@ impl From<Pubkey> for MixedAddress {
     }
 }
 
-impl From<Address> for MixedAddress {
-    fn from(value: Address) -> Self {
+impl From<evm::Address> for MixedAddress {
+    fn from(value: evm::Address) -> Self {
         MixedAddress::Evm(value.into())
     }
 }
 
-impl TryFrom<MixedAddress> for Address {
+impl TryFrom<MixedAddress> for evm::Address {
     type Error = MixedAddressError;
 
     fn try_from(value: MixedAddress) -> Result<Self, Self::Error> {
@@ -618,30 +567,12 @@ impl TryFrom<MixedAddress> for Address {
     }
 }
 
-impl From<EvmAddress> for MixedAddress {
-    fn from(address: EvmAddress) -> Self {
-        MixedAddress::Evm(address)
-    }
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum MixedAddressError {
     #[error("Not an EVM address")]
     NotEvmAddress,
     #[error("Invalid address format")]
     InvalidAddressFormat,
-}
-
-impl TryInto<EvmAddress> for MixedAddress {
-    type Error = MixedAddressError;
-
-    fn try_into(self) -> Result<EvmAddress, Self::Error> {
-        match self {
-            MixedAddress::Evm(address) => Ok(address),
-            MixedAddress::Offchain(_) => Err(MixedAddressError::NotEvmAddress),
-            MixedAddress::Solana(_) => Err(MixedAddressError::NotEvmAddress),
-        }
-    }
 }
 
 impl Display for MixedAddress {
@@ -666,7 +597,7 @@ impl<'de> Deserialize<'de> for MixedAddress {
 
         let s = String::deserialize(deserializer)?;
         // 1) EVM address (e.g., 0x... 20 bytes, hex)
-        if let Ok(addr) = EvmAddress::from_str(&s) {
+        if let Ok(addr) = evm::Address::from_str(&s) {
             return Ok(MixedAddress::Evm(addr));
         }
         // 2) Solana Pubkey (base58, 32 bytes)
