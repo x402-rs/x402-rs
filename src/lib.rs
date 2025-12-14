@@ -22,6 +22,7 @@ pub mod facilitator;
 pub mod facilitator_local;
 pub mod handlers;
 pub mod network;
+pub mod proto;
 pub mod provider_cache;
 pub mod sig_down;
 pub mod telemetry;

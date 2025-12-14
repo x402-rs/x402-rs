@@ -29,83 +29,9 @@ use url::Url;
 
 use crate::chain::ChainId;
 use crate::network::Network;
+use crate::proto::v1::X402Version1;
+use crate::proto::v2::X402Version2;
 use crate::timestamp::UnixTimestamp;
-
-/// Version 1 of the x402 protocol.
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
-pub struct X402Version1;
-
-impl X402Version1 {
-    const VALUE: u8 = 1;
-}
-
-impl Serialize for X402Version1 {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_u8(Self::VALUE)
-    }
-}
-
-impl<'de> Deserialize<'de> for X402Version1 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let num = u8::deserialize(deserializer)?;
-        if num == Self::VALUE {
-            Ok(X402Version1)
-        } else {
-            Err(serde::de::Error::custom(format!(
-                "expected version {}, got {}",
-                Self::VALUE,
-                num
-            )))
-        }
-    }
-}
-
-impl Display for X402Version1 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", Self::VALUE)
-    }
-}
-
-/// Version 2 of the x402 protocol.
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
-pub struct X402Version2;
-
-impl X402Version2 {
-    const VALUE: u8 = 2;
-}
-
-impl Serialize for X402Version2 {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_u8(Self::VALUE)
-    }
-}
-
-impl<'de> Deserialize<'de> for X402Version2 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let num = u8::deserialize(deserializer)?;
-        if num == Self::VALUE {
-            Ok(X402Version2)
-        } else {
-            Err(serde::de::Error::custom(format!(
-                "expected version {}, got {}",
-                Self::VALUE,
-                num
-            )))
-        }
-    }
-}
-
-impl Display for X402Version2 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", Self::VALUE)
-    }
-}
 
 /// Represents the protocol version. Versions 1 and 2 are supported.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

@@ -27,11 +27,12 @@ use crate::chain::{FacilitatorLocalError, Namespace, NetworkProviderOps};
 use crate::config::SolanaChainConfig;
 use crate::facilitator::Facilitator;
 use crate::network::Network;
+use crate::proto::v1::X402Version1;
+use crate::proto::v2::X402Version2;
 use crate::types::{
     Base64Bytes, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, PaymentRequirements,
     Scheme, SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
-    SupportedResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse, X402Version1,
-    X402Version2,
+    SupportedResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse,
 };
 
 const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");

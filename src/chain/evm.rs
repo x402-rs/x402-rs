@@ -54,12 +54,14 @@ use crate::chain::{FacilitatorLocalError, Namespace, NetworkProviderOps};
 use crate::config::EvmChainConfig;
 use crate::facilitator::Facilitator;
 use crate::network::{Network, USDCDeployment};
+use crate::proto::v1::X402Version1;
+use crate::proto::v2::X402Version2;
 use crate::timestamp::UnixTimestamp;
 use crate::types::{
     EvmAddress, EvmSignature, ExactPaymentPayload, FacilitatorErrorReason, HexEncodedNonce,
     MixedAddress, PaymentPayload, PaymentRequirements, Scheme, SettleRequest, SettleResponse,
     SupportedPaymentKind, SupportedResponse, TokenAmount, TransactionHash,
-    TransferWithAuthorization, VerifyRequest, VerifyResponse, X402Version1, X402Version2,
+    TransferWithAuthorization, VerifyRequest, VerifyResponse,
 };
 
 sol!(

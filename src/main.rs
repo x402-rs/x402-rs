@@ -39,6 +39,7 @@ mod facilitator;
 mod facilitator_local;
 mod handlers;
 mod network;
+mod proto;
 mod provider_cache;
 mod sig_down;
 mod telemetry;
