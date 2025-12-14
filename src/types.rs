@@ -18,7 +18,6 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, Zero};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use solana_pubkey::Pubkey;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
@@ -27,7 +26,7 @@ use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::str::FromStr;
 use url::Url;
 
-use crate::chain::{ChainId, evm};
+use crate::chain::{ChainId, evm, solana};
 use crate::network::Network;
 use crate::proto::X402Version;
 use crate::proto::v1;
@@ -525,7 +524,7 @@ pub enum MixedAddress {
     /// EVM address
     Evm(evm::Address),
     /// Solana address
-    Solana(Pubkey),
+    Solana(solana::Address),
     /// Off-chain address in `^[A-Za-z0-9][A-Za-z0-9-]{0,34}[A-Za-z0-9]$` format.
     Offchain(String),
 }
@@ -544,8 +543,8 @@ macro_rules! address_sol {
     };
 }
 
-impl From<Pubkey> for MixedAddress {
-    fn from(value: Pubkey) -> Self {
+impl From<solana::Address> for MixedAddress {
+    fn from(value: solana::Address) -> Self {
         MixedAddress::Solana(value)
     }
 }
@@ -602,7 +601,7 @@ impl<'de> Deserialize<'de> for MixedAddress {
             return Ok(MixedAddress::Evm(addr));
         }
         // 2) Solana Pubkey (base58, 32 bytes)
-        if let Ok(pk) = Pubkey::from_str(&s) {
+        if let Ok(pk) = solana::Address::from_str(&s) {
             return Ok(MixedAddress::Solana(pk));
         }
         // 3) Off-chain address by regex

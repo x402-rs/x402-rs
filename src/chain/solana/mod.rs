@@ -35,6 +35,8 @@ use crate::types::{
     SupportedResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse,
 };
 
+pub type Address = Pubkey; // TODO Maybe use solana_address
+
 const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 /// A Solana chain reference consisting of 32 ASCII characters.
