@@ -78,7 +78,7 @@ impl<'de> Deserialize<'de> for X402Version {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SupportedKind {
+pub struct SupportedPaymentKind {
     pub x402_version: u8,
     pub scheme: String,
     pub network: String,

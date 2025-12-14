@@ -54,14 +54,12 @@ use crate::chain::{FacilitatorLocalError, Namespace, NetworkProviderOps};
 use crate::config::EvmChainConfig;
 use crate::facilitator::Facilitator;
 use crate::network::{Network, USDCDeployment};
-use crate::proto::v1::X402Version1;
-use crate::proto::v2::X402Version2;
+use crate::proto;
 use crate::timestamp::UnixTimestamp;
 use crate::types::{
     EvmSignature, ExactPaymentPayload, FacilitatorErrorReason, HexEncodedNonce, MixedAddress,
-    PaymentPayload, PaymentRequirements, Scheme, SettleRequest, SettleResponse,
-    SupportedPaymentKind, SupportedResponse, TokenAmount, TransactionHash,
-    TransferWithAuthorization, VerifyRequest, VerifyResponse,
+    PaymentPayload, PaymentRequirements, Scheme, SettleRequest, SettleResponse, SupportedResponse,
+    TokenAmount, TransactionHash, TransferWithAuthorization, VerifyRequest, VerifyResponse,
 };
 
 pub use alloy_primitives::Address;
@@ -744,20 +742,18 @@ where
         let chain_id: ChainId = self.chain().into();
         let kinds = {
             let mut kinds = Vec::with_capacity(2);
-            kinds.push(SupportedPaymentKind::V2 {
-                x402_version: X402Version2,
+            let kind = SupportedPaymentKind::V2 {
                 scheme: Scheme::Exact,
-                network: chain_id.clone(),
-                extra: None,
-            });
+                chain_id: chain_id.clone(),
+            };
+            kinds.push(kind.into());
             let network: Option<Network> = chain_id.try_into().ok();
             if let Some(network) = network {
-                kinds.push(SupportedPaymentKind::V1 {
-                    network: network.to_string(),
-                    x402_version: X402Version1,
+                let kind = SupportedPaymentKind::V1 {
                     scheme: Scheme::Exact,
-                    extra: None,
-                });
+                    network: network.to_string(),
+                };
+                kinds.push(kind.into());
             }
             kinds
         };
@@ -1333,6 +1329,30 @@ impl PendingNonceManager {
             let mut nonce = nonce_lock.lock().await;
             *nonce = u64::MAX; // NONE sentinel - will trigger fresh query
             tracing::debug!(%address, "reset nonce cache, will requery on next use");
+        }
+    }
+}
+
+pub enum SupportedPaymentKind {
+    V1 { scheme: Scheme, network: String },
+    V2 { scheme: Scheme, chain_id: ChainId },
+}
+
+impl Into<proto::SupportedPaymentKind> for SupportedPaymentKind {
+    fn into(self) -> proto::SupportedPaymentKind {
+        match self {
+            SupportedPaymentKind::V1 { scheme, network } => proto::SupportedPaymentKind {
+                x402_version: proto::v1::X402Version1.into(),
+                scheme: scheme.into(),
+                network,
+                extra: None,
+            },
+            SupportedPaymentKind::V2 { scheme, chain_id } => proto::SupportedPaymentKind {
+                x402_version: proto::v2::X402Version2.into(),
+                scheme: scheme.into(),
+                network: chain_id.into(),
+                extra: None,
+            },
         }
     }
 }

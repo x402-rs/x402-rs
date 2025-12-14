@@ -27,12 +27,11 @@ use crate::chain::{FacilitatorLocalError, Namespace, NetworkProviderOps};
 use crate::config::SolanaChainConfig;
 use crate::facilitator::Facilitator;
 use crate::network::Network;
-use crate::proto::v1::X402Version1;
-use crate::proto::v2::X402Version2;
+use crate::proto;
 use crate::types::{
     Base64Bytes, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, PaymentRequirements,
-    Scheme, SettleRequest, SettleResponse, SupportedPaymentKind, SupportedPaymentKindExtra,
-    SupportedResponse, TokenAmount, TransactionHash, VerifyRequest, VerifyResponse,
+    Scheme, SettleRequest, SettleResponse, SupportedResponse, TokenAmount, TransactionHash,
+    VerifyRequest, VerifyResponse,
 };
 
 pub type Address = Pubkey; // TODO Maybe use solana_address
@@ -662,9 +661,8 @@ impl SolanaProvider {
         Ok(VerifyTransferResult { payer, transaction })
     }
 
-    pub fn fee_payer(&self) -> MixedAddress {
-        let pubkey = self.keypair.pubkey();
-        MixedAddress::Solana(pubkey)
+    pub fn fee_payer(&self) -> Address {
+        self.keypair.pubkey()
     }
 }
 
@@ -687,7 +685,7 @@ pub struct TransferCheckedInstruction {
 
 impl NetworkProviderOps for SolanaProvider {
     fn signer_addresses(&self) -> Vec<MixedAddress> {
-        vec![self.fee_payer()]
+        vec![self.fee_payer().into()]
     }
 
     fn chain_id(&self) -> ChainId {
@@ -741,35 +739,29 @@ impl Facilitator for SolanaProvider {
     }
 
     async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
-        let kinds = {
+        let kinds: Vec<proto::SupportedPaymentKind> = {
             let mut kinds = Vec::with_capacity(2);
-            let extra = self
-                .signer_addresses()
-                .first()
-                .map(|address| SupportedPaymentKindExtra {
-                    fee_payer: address.clone(),
-                });
-            match extra {
-                None => kinds,
-                Some(extra) => {
-                    let network: Option<Network> = self.chain_id().try_into().ok();
-                    if let Some(network) = network {
-                        kinds.push(SupportedPaymentKind::V1 {
-                            x402_version: X402Version1,
-                            scheme: Scheme::Exact,
-                            network: network.to_string(),
-                            extra: Some(extra.clone()),
-                        });
-                    }
-                    kinds.push(SupportedPaymentKind::V2 {
-                        x402_version: X402Version2,
-                        scheme: Scheme::Exact,
-                        network: self.chain_id(),
-                        extra: Some(extra),
-                    });
-                    kinds
+            let fee_payer = self.fee_payer();
+            kinds.push(
+                SupportedPaymentKind::V2 {
+                    scheme: Scheme::Exact,
+                    chain_id: self.chain_id(),
+                    fee_payer,
                 }
+                .into(),
+            );
+            let network: Option<Network> = self.chain_id().try_into().ok();
+            if let Some(network) = network {
+                kinds.push(
+                    SupportedPaymentKind::V1 {
+                        scheme: Scheme::Exact,
+                        network: network.to_string(),
+                        fee_payer,
+                    }
+                    .into(),
+                );
             }
+            kinds
         };
         let signers = {
             let mut signers = HashMap::with_capacity(1);
@@ -975,5 +967,51 @@ impl TransactionInt {
         let string = String::from_utf8(base64_bytes.0.into_owned())
             .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
         Ok(string)
+    }
+}
+
+pub enum SupportedPaymentKind {
+    V1 {
+        scheme: Scheme,
+        network: String,
+        fee_payer: Address,
+    },
+    V2 {
+        scheme: Scheme,
+        chain_id: ChainId,
+        fee_payer: Address,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportedPaymentKindExtra {
+    fee_payer: Address,
+}
+
+impl Into<proto::SupportedPaymentKind> for SupportedPaymentKind {
+    fn into(self) -> proto::SupportedPaymentKind {
+        match self {
+            SupportedPaymentKind::V1 {
+                scheme,
+                network,
+                fee_payer,
+            } => proto::SupportedPaymentKind {
+                x402_version: proto::v1::X402Version1.into(),
+                scheme: scheme.into(),
+                network,
+                extra: Some(serde_json::to_value(SupportedPaymentKindExtra { fee_payer }).unwrap()),
+            },
+            SupportedPaymentKind::V2 {
+                scheme,
+                chain_id,
+                fee_payer,
+            } => proto::SupportedPaymentKind {
+                x402_version: proto::v2::X402Version2.into(),
+                scheme: scheme.into(),
+                network: chain_id.to_string(),
+                extra: Some(serde_json::to_value(SupportedPaymentKindExtra { fee_payer }).unwrap()),
+            },
+        }
     }
 }

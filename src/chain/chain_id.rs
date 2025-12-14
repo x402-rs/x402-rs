@@ -32,6 +32,12 @@ impl fmt::Display for ChainId {
     }
 }
 
+impl Into<String> for ChainId {
+    fn into(self) -> String {
+        self.to_string()
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ChainIdError {
     #[error("invalid chain id format {0}")]

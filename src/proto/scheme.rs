@@ -18,3 +18,9 @@ impl Display for Scheme {
         write!(f, "{s}")
     }
 }
+
+impl Into<String> for Scheme {
+    fn into(self) -> String {
+        self.to_string()
+    }
+}

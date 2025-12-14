@@ -28,9 +28,7 @@ use url::Url;
 
 use crate::chain::{ChainId, evm, solana};
 use crate::network::Network;
-use crate::proto::X402Version;
-use crate::proto::v1;
-use crate::proto::v2;
+use crate::proto;
 use crate::timestamp::UnixTimestamp;
 
 pub use crate::proto::scheme::Scheme;
@@ -175,7 +173,7 @@ pub enum ExactPaymentPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentPayload {
-    pub x402_version: X402Version,
+    pub x402_version: proto::X402Version,
     pub scheme: Scheme,
     pub network: Network,
     pub payload: ExactPaymentPayload,
@@ -740,7 +738,7 @@ impl PaymentRequirements {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifyRequest {
-    pub x402_version: X402Version,
+    pub x402_version: proto::X402Version,
     pub payment_payload: PaymentPayload,
     pub payment_requirements: PaymentRequirements,
 }
@@ -1242,7 +1240,7 @@ impl From<TokenDeployment> for TokenAsset {
 pub struct PaymentRequiredResponse {
     pub error: String,
     pub accepts: Vec<PaymentRequirements>,
-    pub x402_version: X402Version,
+    pub x402_version: proto::X402Version,
 }
 
 impl Display for PaymentRequiredResponse {
@@ -1258,37 +1256,10 @@ impl Display for PaymentRequiredResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum SupportedPaymentKind {
-    #[serde(rename_all = "camelCase")]
-    V1 {
-        x402_version: v1::X402Version1,
-        scheme: Scheme,
-        network: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        extra: Option<SupportedPaymentKindExtra>,
-    },
-    #[serde(rename_all = "camelCase")]
-    V2 {
-        x402_version: v2::X402Version2,
-        scheme: Scheme,
-        network: ChainId,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        extra: Option<SupportedPaymentKindExtra>,
-    },
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SupportedPaymentKindExtra {
-    pub fee_payer: MixedAddress,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct SupportedResponse {
-    pub kinds: Vec<SupportedPaymentKind>,
+    pub kinds: Vec<proto::SupportedPaymentKind>,
     #[serde(default)]
     pub extensions: Vec<String>,
     #[serde(default)]
