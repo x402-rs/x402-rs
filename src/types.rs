@@ -524,9 +524,10 @@ impl From<u64> for TokenAmount {
 pub enum MixedAddress {
     /// EVM address
     Evm(evm::Address),
+    /// Solana address
+    Solana(Pubkey),
     /// Off-chain address in `^[A-Za-z0-9][A-Za-z0-9-]{0,34}[A-Za-z0-9]$` format.
     Offchain(String),
-    Solana(Pubkey),
 }
 
 #[macro_export]
