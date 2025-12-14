@@ -29,6 +29,7 @@ use url::Url;
 
 use crate::chain::ChainId;
 use crate::network::Network;
+use crate::proto::X402Version;
 use crate::proto::v1;
 use crate::proto::v2;
 use crate::timestamp::UnixTimestamp;
