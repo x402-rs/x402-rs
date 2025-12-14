@@ -10,6 +10,12 @@ impl X402Version1 {
     pub const VALUE: u8 = 1;
 }
 
+impl Into<u8> for X402Version1 {
+    fn into(self) -> u8 {
+        Self::VALUE
+    }
+}
+
 impl Serialize for X402Version1 {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_u8(Self::VALUE)

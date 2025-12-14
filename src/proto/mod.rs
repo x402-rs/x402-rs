@@ -24,6 +24,15 @@ impl X402Version {
     }
 }
 
+impl Into<u8> for X402Version {
+    fn into(self) -> u8 {
+        match self {
+            X402Version::V1(v) => v.into(),
+            X402Version::V2(v) => v.into(),
+        }
+    }
+}
+
 impl Serialize for X402Version {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
@@ -66,4 +75,12 @@ impl<'de> Deserialize<'de> for X402Version {
         let num = u8::deserialize(deserializer)?;
         X402Version::try_from(num).map_err(serde::de::Error::custom)
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SupportedKind {
+    pub x402_version: u8,
+    pub scheme: String,
+    pub network: String,
+    pub extra: Option<serde_json::Value>,
 }
