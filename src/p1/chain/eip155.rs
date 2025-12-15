@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter};
 
-use crate::p1::chain::{ChainId, ChainIdError};
+use crate::config::Eip155ChainConfig;
+use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 
 pub const EIP155_NAMESPACE: &str = "eip155";
 
@@ -55,4 +56,28 @@ impl Display for Eip155ChainReference {
     }
 }
 
-pub struct Eip155ChainProvider {}
+#[derive(Debug)]
+pub struct Eip155ChainProvider {
+    chain: Eip155ChainReference,
+}
+
+impl Eip155ChainProvider {
+    pub async fn from_config(
+        config: &Eip155ChainConfig,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self {
+            chain: config.chain_reference(),
+        })
+    }
+}
+
+impl ChainProviderOps for Eip155ChainProvider {
+    fn signer_addresses(&self) -> Vec<Box<str>> {
+        // FIXME TODO
+        vec![]
+    }
+
+    fn chain_id(&self) -> ChainId {
+        self.chain.into()
+    }
+}

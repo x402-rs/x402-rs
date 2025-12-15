@@ -523,7 +523,7 @@ mod chains_serde {
                             return Err(serde::de::Error::custom(format!(
                                 "Unexpected namespace: {}",
                                 namespace
-                            )))
+                            )));
                         }
                     };
                     chains.push(config)

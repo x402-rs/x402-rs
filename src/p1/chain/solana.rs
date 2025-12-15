@@ -1,13 +1,15 @@
-use crate::p1::chain::{ChainId, ChainIdError};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter, Write};
 use std::str::FromStr;
+
+use crate::config::SolanaChainConfig;
+use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 
 pub const SOLANA_NAMESPACE: &str = "solana";
 
 /// A Solana chain reference consisting of 32 ASCII characters.
 /// The genesis hash is the first 32 characters of the base58-encoded genesis block hash.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct SolanaChainReference([u8; 32]);
 
 impl SolanaChainReference {
@@ -26,6 +28,14 @@ impl SolanaChainReference {
     pub fn as_str(&self) -> &str {
         // Safe because we validate ASCII on construction
         std::str::from_utf8(&self.0).expect("SolanaChainReference contains valid ASCII")
+    }
+}
+
+impl Debug for SolanaChainReference {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SolanaChainReference(")?;
+        f.write_str(&self.as_str())?;
+        f.write_str(")")
     }
 }
 
@@ -103,5 +113,30 @@ impl TryFrom<ChainId> for SolanaChainReference {
             )
         })?;
         Ok(solana_chain_reference)
+    }
+}
+
+#[derive(Debug)]
+pub struct SolanaChainProvider {
+    chain: SolanaChainReference,
+}
+impl SolanaChainProvider {
+    pub async fn from_config(
+        config: &SolanaChainConfig,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self {
+            chain: config.chain_reference(),
+        })
+    }
+}
+
+impl ChainProviderOps for SolanaChainProvider {
+    fn signer_addresses(&self) -> Vec<Box<str>> {
+        // FIXME TODO
+        vec![]
+    }
+
+    fn chain_id(&self) -> ChainId {
+        self.chain.into()
     }
 }

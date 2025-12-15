@@ -27,7 +27,7 @@ use crate::config::SolanaChainConfig;
 use crate::facilitator::Facilitator;
 use crate::network::Network;
 use crate::p1::chain::ChainId;
-use crate::p1::chain::solana::{SolanaChainReference, SOLANA_NAMESPACE};
+use crate::p1::chain::solana::{SOLANA_NAMESPACE, SolanaChainReference};
 use crate::proto;
 use crate::types::{
     Base64Bytes, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, PaymentRequirements,

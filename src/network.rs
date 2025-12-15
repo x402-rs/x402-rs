@@ -116,8 +116,8 @@ impl Network {
             Network::Polygon => ChainId::new("eip155", "137"),
             Network::Sei => ChainId::new("eip155", "1329"),
             Network::SeiTestnet => ChainId::new("eip155", "1328"),
-            Network::Solana => ChainId::new("solana","5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"),
-            Network::SolanaDevnet => ChainId::new("solana","EtWTRABZaYq6iMfeYKouRu166VU2xqa1"),
+            Network::Solana => ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"),
+            Network::SolanaDevnet => ChainId::new("solana", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1"),
         }
     }
 }

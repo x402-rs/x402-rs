@@ -14,8 +14,7 @@ use crate::facilitator::Facilitator;
 use crate::network::ChainIdToNetworkError;
 use crate::p1::chain::ChainId;
 use crate::types::{
-    MixedAddress, SettleRequest, SettleResponse, SupportedResponse, VerifyRequest,
-    VerifyResponse,
+    MixedAddress, SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse,
 };
 
 pub enum NetworkProvider {

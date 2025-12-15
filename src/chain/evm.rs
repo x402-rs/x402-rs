@@ -61,9 +61,9 @@ use crate::types::{
     TokenAmount, TransactionHash, TransferWithAuthorization, VerifyRequest, VerifyResponse,
 };
 
-pub use alloy_primitives::Address;
-use crate::p1::chain::{ChainId, ChainIdError};
 use crate::p1::chain::eip155::Eip155ChainReference;
+use crate::p1::chain::{ChainId, ChainIdError};
+pub use alloy_primitives::Address;
 
 sol!(
     #[allow(missing_docs)]
@@ -129,7 +129,11 @@ impl TryFrom<ChainId> for EvmChainReference {
             ));
         }
         let chain_id: u64 = value.reference.parse().map_err(|e| {
-            ChainIdError::InvalidReference(value.reference, "eip155".into(), format!("{e:?}").into())
+            ChainIdError::InvalidReference(
+                value.reference,
+                "eip155".into(),
+                format!("{e:?}").into(),
+            )
         })?;
         Ok(EvmChainReference(chain_id))
     }
