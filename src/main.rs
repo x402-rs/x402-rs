@@ -32,7 +32,7 @@ use std::sync::Arc;
 use tower_http::cors;
 
 use crate::config::Config;
-use crate::p1::chain::ChainProviders;
+use crate::p1::chain::ChainRegistry;
 use crate::telemetry::Telemetry;
 
 /// Initializes the x402 facilitator server.
@@ -58,9 +58,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     });
 
-    let chain_providers = ChainProviders::from_config(&config.chains()).await?;
+    let chain_registry = ChainRegistry::from_config(&config.chains()).await?;
 
-    println!("{:?}", chain_providers);
+    println!("{:?}", chain_registry);
 
     // let provider_cache = ProviderCache::from_config(config.chains()).await;
     // // Abort if we can't initialise Ethereum providers early

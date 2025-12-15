@@ -52,9 +52,9 @@ impl ChainProviderOps for ChainProvider {
 }
 
 #[derive(Debug)]
-pub struct ChainProviders(HashMap<ChainId, ChainProvider>);
+pub struct ChainRegistry(HashMap<ChainId, ChainProvider>);
 
-impl ChainProviders {
+impl ChainRegistry {
     pub async fn from_config(
         chains: &Vec<ChainConfig>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
