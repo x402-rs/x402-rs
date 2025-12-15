@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     });
 
-    let chain_providers = ChainProviders::from_config(&config.chains()).await;
+    let chain_providers = ChainProviders::from_config(&config.chains()).await?;
 
     println!("{:?}", chain_providers);
 
