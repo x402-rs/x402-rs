@@ -14,7 +14,7 @@ use std::str::FromStr;
 use crate::chain::Namespace;
 use crate::chain::chain_id::ChainId;
 use crate::chain::solana;
-use crate::types::{TokenAsset, TokenDeployment, TokenDeploymentEip712};
+use crate::types::{MixedAddress, TokenAsset, TokenDeployment, TokenDeploymentEip712};
 
 /// Supported Ethereum-compatible networks.
 ///

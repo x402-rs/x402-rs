@@ -537,7 +537,9 @@ macro_rules! address_evm {
 #[macro_export]
 macro_rules! address_sol {
     ($s:literal) => {
-        $crate::types::MixedAddress::Solana($crate::chain::solana::Address::new($crate::__reexports::solana_pubkey::pubkey!($s)))
+        $crate::types::MixedAddress::Solana($crate::chain::solana::Address::new(
+            $crate::__reexports::solana_pubkey::pubkey!($s),
+        ))
     };
 }
 

@@ -191,7 +191,7 @@ impl TryFrom<MixedAddress> for Address {
 impl Serialize for Address {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer
+        S: Serializer,
     {
         let base58_string = self.0.to_string();
         serializer.serialize_str(&base58_string)
@@ -201,10 +201,11 @@ impl Serialize for Address {
 impl<'de> Deserialize<'de> for Address {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let pubkey = Pubkey::from_str(&s).map_err(|_| serde::de::Error::custom("Failed to decode Solana address"))?;
+        let pubkey = Pubkey::from_str(&s)
+            .map_err(|_| serde::de::Error::custom("Failed to decode Solana address"))?;
         Ok(Self(pubkey))
     }
 }
@@ -219,7 +220,8 @@ impl FromStr for Address {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let pubkey = Pubkey::from_str(s).map_err(|_| format!("Failed to decode Solana address: {s}"))?;
+        let pubkey =
+            Pubkey::from_str(s).map_err(|_| format!("Failed to decode Solana address: {s}"))?;
         Ok(Self(pubkey))
     }
 }
