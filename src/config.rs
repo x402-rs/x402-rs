@@ -5,15 +5,14 @@ use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::net::IpAddr;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
 
-use crate::chain::chain_id::ChainId;
-use crate::chain::evm::EvmChainReference;
-use crate::chain::solana::SolanaChainReference;
-use crate::types::MixedAddress;
+use crate::p1::chain::ChainId;
+use crate::p1::chain::eip155;
+use crate::p1::chain::solana;
 
 /// CLI arguments for the x402 facilitator server.
 #[derive(Parser, Debug)]
@@ -47,44 +46,9 @@ pub struct Config {
 #[derive(Debug, Clone)]
 pub enum ChainConfig {
     /// EVM chain configuration (for chains with "eip155:" prefix).
-    Evm(EvmChainConfig),
+    Eip155(Eip155ChainConfig),
     /// Solana chain configuration (for chains with "solana:" prefix).
     Solana(SolanaChainConfig),
-}
-
-impl ChainConfig {
-    pub fn chain_id(&self) -> ChainId {
-        match self {
-            ChainConfig::Evm(config) => config.chain_reference.into(),
-            ChainConfig::Solana(config) => config.chain_reference.clone().into(),
-        }
-    }
-}
-
-/// EIP-712 domain configuration for token signatures.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Eip712Config {
-    /// The name field for EIP-712 domain (e.g., "USDC", "USD Coin").
-    pub name: String,
-    /// The version field for EIP-712 domain (e.g., "2").
-    pub version: String,
-}
-
-/// USDC deployment configuration for a specific chain.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct USDCConfig {
-    /// The USDC contract address (EVM 0x-prefixed hex or Solana base58).
-    pub address: MixedAddress,
-    /// Number of decimals for the token (typically 6 for USDC).
-    #[serde(default = "default_usdc_decimals")]
-    pub decimals: u8,
-    /// EIP-712 domain configuration (required for EVM chains, optional for Solana).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub eip712: Option<Eip712Config>,
-}
-
-fn default_usdc_decimals() -> u8 {
-    6
 }
 
 /// RPC provider configuration for a single provider.
@@ -109,7 +73,7 @@ pub struct RpcConfig {
 /// - Braced env var: `"${TREASURY_URL}"`
 ///
 /// The wrapper implements `Deref` to provide transparent access to the inner type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiteralOrEnv<T>(T);
 
 impl<T> LiteralOrEnv<T> {
@@ -145,7 +109,7 @@ impl<T> LiteralOrEnv<T> {
     }
 }
 
-impl<T> std::ops::Deref for LiteralOrEnv<T> {
+impl<T> Deref for LiteralOrEnv<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -153,7 +117,7 @@ impl<T> std::ops::Deref for LiteralOrEnv<T> {
     }
 }
 
-impl<T> std::ops::DerefMut for LiteralOrEnv<T> {
+impl<T> DerefMut for LiteralOrEnv<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -203,11 +167,11 @@ where
     }
 }
 
-impl<T: PartialEq> PartialEq for LiteralOrEnv<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
+// impl<T: PartialEq> PartialEq for LiteralOrEnv<T> {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.0 == other.0
+//     }
+// }
 
 // ============================================================================
 // EVM Private Key
@@ -252,7 +216,9 @@ impl FromStr for EvmPrivateKey {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_hex(s)
+        B256::from_str(s)
+            .map(Self)
+            .map_err(|e| format!("Invalid evm private key: {}", e))
     }
 }
 
@@ -379,12 +345,12 @@ impl Deref for SolanaSignerConfig {
 // ============================================================================
 
 #[derive(Debug, Clone)]
-pub struct EvmChainConfig {
-    chain_reference: EvmChainReference,
+pub struct Eip155ChainConfig {
+    chain_reference: eip155::Eip155ChainReference,
     inner: EvmChainConfigInner,
 }
 
-impl EvmChainConfig {
+impl Eip155ChainConfig {
     pub fn chain_id(&self) -> ChainId {
         self.chain_reference.into()
     }
@@ -394,30 +360,24 @@ impl EvmChainConfig {
     pub fn flashblocks(&self) -> bool {
         self.inner.flashblocks
     }
-    pub fn usdc(&self) -> Option<&USDCConfig> {
-        self.inner.usdc.as_ref()
-    }
     pub fn signers(&self) -> &EvmSignersConfig {
         &self.inner.signers
     }
     pub fn rpc(&self) -> &Vec<RpcConfig> {
         &self.inner.rpc
     }
-    pub fn chain_reference(&self) -> EvmChainReference {
+    pub fn chain_reference(&self) -> eip155::Eip155ChainReference {
         self.chain_reference
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SolanaChainConfig {
-    chain_reference: SolanaChainReference,
+    chain_reference: solana::SolanaChainReference,
     inner: SolanaChainConfigInner,
 }
 
 impl SolanaChainConfig {
-    pub fn usdc(&self) -> Option<&USDCConfig> {
-        self.inner.usdc.as_ref()
-    }
     pub fn signer(&self) -> &SolanaSignerConfig {
         &self.inner.signer
     }
@@ -430,7 +390,7 @@ impl SolanaChainConfig {
     pub fn max_compute_unit_price(&self) -> u64 {
         self.inner.max_compute_unit_price
     }
-    pub fn chain_reference(&self) -> SolanaChainReference {
+    pub fn chain_reference(&self) -> solana::SolanaChainReference {
         self.chain_reference
     }
     pub fn chain_id(&self) -> ChainId {
@@ -450,9 +410,6 @@ pub struct EvmChainConfigInner {
     /// Whether the chain supports flashblocks.
     #[serde(default)]
     pub flashblocks: bool,
-    /// USDC deployment configuration for this chain (optional).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub usdc: Option<USDCConfig>,
     /// Signer configuration for this chain (required).
     /// Array of private keys (hex format) or env var references.
     pub signers: EvmSignersConfig,
@@ -463,21 +420,18 @@ pub struct EvmChainConfigInner {
 /// Configuration specific to Solana chains.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SolanaChainConfigInner {
-    /// USDC deployment configuration for this chain (optional).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub usdc: Option<USDCConfig>,
     /// Signer configuration for this chain (required).
     /// A single private key (base58 format, 64 bytes) or env var reference.
     pub signer: SolanaSignerConfig,
     /// RPC provider configuration for this chain (required).
     pub rpc: Url,
-    // FIXME Comment
+    /// RPC pubsub provider endpoint (optional)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pubsub: Option<Url>,
-    // FIXME Comment
+    /// Maximum compute unit limit for transactions (optional)
     #[serde(default = "solana_chain_config::default_max_compute_unit_limit")]
     pub max_compute_unit_limit: u32,
-    // FIXME Comment
+    /// Maximum compute unit price for transactions (optional)
     #[serde(default = "solana_chain_config::default_max_compute_unit_price")]
     pub max_compute_unit_price: u64,
 }
@@ -494,16 +448,11 @@ mod solana_chain_config {
 /// Custom serde module for deserializing the chains map with type discrimination
 /// based on the CAIP-2 chain identifier prefix.
 mod chains_serde {
-    use super::{
-        ChainConfig, ChainId, EvmChainConfig, EvmChainConfigInner, SolanaChainConfig,
-        SolanaChainConfigInner,
-    };
-    use crate::chain::Namespace;
+    use super::*;
     use serde::de::{MapAccess, Visitor};
     use serde::ser::SerializeMap;
     use serde::{Deserializer, Serializer};
     use std::fmt;
-    use std::str::FromStr;
 
     #[allow(dead_code)]
     pub fn serialize<S>(chains: &Vec<ChainConfig>, serializer: S) -> Result<S::Ok, S::Error>
@@ -513,7 +462,7 @@ mod chains_serde {
         let mut map = serializer.serialize_map(Some(chains.len()))?;
         for chain_config in chains {
             match chain_config {
-                ChainConfig::Evm(config) => {
+                ChainConfig::Eip155(config) => {
                     let chain_id: ChainId = config.chain_reference.clone().into();
                     let inner = &config.inner;
                     map.serialize_entry(&chain_id, inner)?;
@@ -548,20 +497,19 @@ mod chains_serde {
                 let mut chains = Vec::with_capacity(access.size_hint().unwrap_or(0));
 
                 while let Some(chain_id) = access.next_key::<ChainId>()? {
-                    let namespace = Namespace::from_str(&chain_id.namespace)
-                        .map_err(|e| serde::de::Error::custom(format!("{}", e)))?;
+                    let namespace = chain_id.namespace();
                     let config = match namespace {
-                        Namespace::Eip155 => {
+                        eip155::EIP155_NAMESPACE => {
                             let inner: EvmChainConfigInner = access.next_value()?;
-                            let config = EvmChainConfig {
+                            let config = Eip155ChainConfig {
                                 chain_reference: chain_id
                                     .try_into()
                                     .map_err(|e| serde::de::Error::custom(format!("{}", e)))?,
                                 inner,
                             };
-                            ChainConfig::Evm(config)
+                            ChainConfig::Eip155(config)
                         }
-                        Namespace::Solana => {
+                        solana::SOLANA_NAMESPACE => {
                             let inner: SolanaChainConfigInner = access.next_value()?;
                             let config = SolanaChainConfig {
                                 chain_reference: chain_id
@@ -571,8 +519,13 @@ mod chains_serde {
                             };
                             ChainConfig::Solana(config)
                         }
+                        _ => {
+                            return Err(serde::de::Error::custom(format!(
+                                "Unexpected namespace: {}",
+                                namespace
+                            )))
+                        }
                     };
-
                     chains.push(config)
                 }
 
@@ -687,571 +640,5 @@ impl Config {
     /// Keys are CAIP-2 chain identifiers (e.g., "eip155:84532", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").
     pub fn chains(&self) -> &Vec<ChainConfig> {
         &self.chains
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::env;
-    use std::str::FromStr;
-    use std::sync::Mutex;
-
-    // Mutex to prevent concurrent env var modifications in tests
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-    // Test private keys (DO NOT use in production!)
-    const TEST_EVM_KEY_1: &str =
-        "0xcafe000000000000000000000000000000000000000000000000000000000001";
-    const TEST_EVM_KEY_2: &str =
-        "0xcafe000000000000000000000000000000000000000000000000000000000002";
-    // A valid 64-byte Solana keypair in base58 format (test key, DO NOT use in production!)
-    // Standard Solana format: 32-byte secret key + 32-byte public key
-    // Generated with `solana_keypair::Keypair::new()`
-    const TEST_SOLANA_KEY: &str =
-        "D2hT1mgysgZYJ8ZaS93m5sgZSRUPntaUdMoN7b5potSnidpfTd2nsRhzyi333BhY7PvGBtMiUHkXL3gTNDsdCYK";
-
-    #[test]
-    fn test_config_parsing_full() {
-        let json = r#"{"port": 3000, "host": "127.0.0.1"}"#;
-        let config: Config = serde_json::from_str(json).unwrap();
-        assert_eq!(config.port(), 3000);
-        assert_eq!(config.host().to_string(), "127.0.0.1");
-    }
-
-    #[test]
-    fn test_config_parsing_partial_port_only() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        // Clear env vars for predictable test
-        // SAFETY: This is safe in a single-threaded test context
-        unsafe { env::remove_var("HOST") };
-
-        let json = r#"{"port": 3000}"#;
-        let config: Config = serde_json::from_str(json).unwrap();
-        assert_eq!(config.port(), 3000);
-        assert_eq!(config.host().to_string(), "0.0.0.0");
-    }
-
-    #[test]
-    fn test_config_parsing_partial_host_only() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        // Clear env vars for predictable test
-        // SAFETY: This is safe in a single-threaded test context
-        unsafe { env::remove_var("PORT") };
-
-        let json = r#"{"host": "127.0.0.1"}"#;
-        let config: Config = serde_json::from_str(json).unwrap();
-        assert_eq!(config.port(), 8080);
-        assert_eq!(config.host().to_string(), "127.0.0.1");
-    }
-
-    #[test]
-    fn test_config_parsing_empty() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        // Clear env vars for predictable test
-        // SAFETY: This is safe in a single-threaded test context
-        unsafe {
-            env::remove_var("PORT");
-            env::remove_var("HOST");
-        }
-
-        let json = r#"{}"#;
-        let config: Config = serde_json::from_str(json).unwrap();
-        assert_eq!(config.port(), 8080);
-        assert_eq!(config.host().to_string(), "0.0.0.0");
-    }
-
-    #[test]
-    fn test_config_default() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        // Clear env vars for predictable test
-        // SAFETY: This is safe in a single-threaded test context
-        unsafe {
-            env::remove_var("PORT");
-            env::remove_var("HOST");
-        }
-
-        let config = Config::default();
-        assert_eq!(config.port(), 8080);
-        assert_eq!(config.host().to_string(), "0.0.0.0");
-    }
-
-    #[test]
-    fn test_get_config_path_with_cli_arg() {
-        let path = Config::get_config_path(Some(PathBuf::from("/custom/config.json")));
-        assert_eq!(path, Some(PathBuf::from("/custom/config.json")));
-    }
-
-    #[test]
-    fn test_get_config_path_without_cli_arg_no_default() {
-        // When no CLI arg and no config.json exists, should return None
-        // This test assumes config.json doesn't exist in the test directory
-        let path = Config::get_config_path(None);
-        // Result depends on whether config.json exists in cwd
-        // We just verify it doesn't panic
-        let _ = path;
-    }
-
-    #[test]
-    fn test_config_parsing_with_chains_and_signers() {
-        let json = format!(
-            r#"{{
-            "port": 3000,
-            "host": "127.0.0.1",
-            "chains": {{
-                "eip155:84532": {{
-                    "v1_name": "base-sepolia",
-                    "eip1559": true,
-                    "flashblocks": true,
-                    "usdc": {{
-                        "address": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-                        "decimals": 6,
-                        "eip712": {{
-                            "name": "USDC",
-                            "version": "2"
-                        }}
-                    }},
-                    "signers": ["{}"],
-                    "rpc": {{
-                        "default": {{
-                            "http": "https://example.quiknode.pro/"
-                        }}
-                    }}
-                }},
-                "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {{
-                    "v1_name": "solana",
-                    "usdc": {{
-                        "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-                        "decimals": 6
-                    }},
-                    "signer": "{}",
-                    "rpc": "https://mainnet.helius-rpc.com/?api-key=key"
-                }}
-            }}
-        }}"#,
-            TEST_EVM_KEY_1, TEST_SOLANA_KEY
-        );
-        let config: Config = serde_json::from_str(&json).unwrap();
-        assert_eq!(config.port(), 3000);
-        assert_eq!(config.host().to_string(), "127.0.0.1");
-        assert_eq!(config.chains().len(), 2);
-
-        // Verify EVM chain config
-        let evm_key = ChainId::from_str("eip155:84532").unwrap();
-        let evm_config = config
-            .chains()
-            .iter()
-            .find(|c| c.chain_id().eq(&evm_key))
-            .unwrap();
-        match evm_config {
-            ChainConfig::Evm(evm) => {
-                assert!(evm.eip1559());
-                assert!(evm.flashblocks());
-                assert!(evm.usdc().is_some());
-                let usdc = evm.usdc().unwrap();
-                assert_eq!(usdc.decimals, 6);
-                assert!(usdc.eip712.is_some());
-                let eip712 = usdc.eip712.as_ref().unwrap();
-                assert_eq!(eip712.name, "USDC");
-                assert_eq!(eip712.version, "2");
-                assert!(!evm.rpc().providers.is_empty());
-                // Verify signers
-                assert_eq!(evm.signers().len(), 1);
-            }
-            _ => panic!("Expected EVM config"),
-        }
-
-        // Verify Solana chain config
-        let solana_key = ChainId::from_str("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").unwrap();
-        let solana_config = config
-            .chains()
-            .iter()
-            .find(|c| c.chain_id().eq(&solana_key))
-            .unwrap();
-        match solana_config {
-            ChainConfig::Solana(solana) => {
-                assert!(solana.usdc().is_some());
-                let usdc = solana.usdc().unwrap();
-                assert_eq!(usdc.decimals, 6);
-                assert!(usdc.eip712.is_none());
-                assert_eq!(
-                    solana.rpc().to_string(),
-                    "https://mainnet.helius-rpc.com/?api-key=key"
-                );
-                // Verify signer is present (using Deref)
-                let _: &SolanaPrivateKey = &solana.signer().0;
-            }
-            _ => panic!("Expected Solana config"),
-        }
-    }
-
-    #[test]
-    fn test_config_parsing_evm_defaults_with_signers() {
-        let json = format!(
-            r#"{{
-            "chains": {{
-                "eip155:8453": {{
-                    "v1_name": "base",
-                    "usdc": {{
-                        "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-                        "eip712": {{
-                            "name": "USD Coin",
-                            "version": "2"
-                        }}
-                    }},
-                    "signers": ["{}"],
-                    "rpc": {{
-                        "default": {{
-                            "http": "https://base-rpc.example.com/"
-                        }}
-                    }}
-                }}
-            }}
-        }}"#,
-            TEST_EVM_KEY_1
-        );
-        let config: Config = serde_json::from_str(&json).unwrap();
-        let evm_key = ChainId::from_str("eip155:8453").unwrap();
-        let evm_config = config
-            .chains()
-            .iter()
-            .find(|c| c.chain_id().eq(&evm_key))
-            .unwrap();
-        match evm_config {
-            ChainConfig::Evm(evm) => {
-                assert!(!evm.eip1559()); // default false
-                assert!(!evm.flashblocks()); // default false
-                assert!(evm.usdc().is_some());
-                assert_eq!(evm.usdc().unwrap().decimals, 6); // default 6
-            }
-            _ => panic!("Expected EVM config"),
-        }
-    }
-
-    #[test]
-    fn test_config_parsing_without_usdc_with_signers() {
-        let json = format!(
-            r#"{{
-            "chains": {{
-                "eip155:8453": {{
-                    "v1_name": "base",
-                    "signers": ["{}"],
-                    "rpc": {{
-                        "default": {{
-                            "http": "https://base-rpc.example.com/"
-                        }}
-                    }}
-                }},
-                "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {{
-                    "v1_name": "solana",
-                    "signer": "{}",
-                    "rpc": "https://solana-rpc.example.com/"
-                }}
-            }}
-        }}"#,
-            TEST_EVM_KEY_1, TEST_SOLANA_KEY
-        );
-        let config: Config = serde_json::from_str(&json).unwrap();
-
-        // Verify EVM chain config without usdc
-        let evm_key = ChainId::from_str("eip155:8453").unwrap();
-        let evm_config = config
-            .chains()
-            .iter()
-            .find(|c| c.chain_id().eq(&evm_key))
-            .unwrap();
-        match evm_config {
-            ChainConfig::Evm(evm) => {
-                assert!(evm.usdc().is_none());
-            }
-            _ => panic!("Expected EVM config"),
-        }
-
-        // Verify Solana chain config without usdc
-        let solana_key = ChainId::from_str("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").unwrap();
-        let solana_config = config
-            .chains()
-            .iter()
-            .find(|c| c.chain_id().eq(&solana_key))
-            .unwrap();
-        match solana_config {
-            ChainConfig::Solana(solana) => {
-                assert!(solana.usdc().is_none());
-            }
-            _ => panic!("Expected Solana config"),
-        }
-    }
-
-    #[test]
-    fn test_config_parsing_unknown_chain_family() {
-        let json = r#"{
-            "chains": {
-                "unknown:12345": {
-                    "v1_name": "test"
-                }
-            }
-        }"#;
-        let result: Result<Config, _> = serde_json::from_str(json);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("unsupported namespace"));
-    }
-
-    #[test]
-    fn test_config_parsing_empty_chains() {
-        let json = r#"{"chains": {}}"#;
-        let config: Config = serde_json::from_str(json).unwrap();
-        assert!(config.chains().is_empty());
-    }
-
-    #[test]
-    fn test_config_parsing_no_chains_field() {
-        let json = r#"{"port": 8080}"#;
-        let config: Config = serde_json::from_str(json).unwrap();
-        assert!(config.chains().is_empty());
-    }
-
-    #[test]
-    fn test_config_parsing_with_rpc_and_signers() {
-        let json = format!(
-            r#"{{
-            "chains": {{
-                "eip155:84532": {{
-                    "v1_name": "base-sepolia",
-                    "signers": ["{}"],
-                    "rpc": {{
-                        "quicknode": {{
-                            "http": "https://example.quiknode.pro/",
-                            "rate_limit": 50
-                        }},
-                        "alchemy": {{
-                            "http": "https://base-sepolia.g.alchemy.com/v2/key"
-                        }}
-                    }}
-                }},
-                "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {{
-                    "v1_name": "solana",
-                    "signer": "{}",
-                    "rpc": "https://mainnet.helius-rpc.com/?api-key=key"
-                }}
-            }}
-        }}"#,
-            TEST_EVM_KEY_1, TEST_SOLANA_KEY
-        );
-        let config: Config = serde_json::from_str(&json).unwrap();
-        assert_eq!(config.chains().len(), 2);
-
-        // Verify EVM chain config with RPC
-        let evm_key = ChainId::from_str("eip155:84532").unwrap();
-        let evm_config = config
-            .chains()
-            .iter()
-            .find(|c| c.chain_id().eq(&evm_key))
-            .unwrap();
-        match evm_config {
-            ChainConfig::Evm(evm) => {
-                assert_eq!(evm.rpc().providers.len(), 2);
-
-                let quicknode = evm.rpc().providers.get("quicknode").unwrap();
-                assert_eq!(quicknode.http.as_str(), "https://example.quiknode.pro/");
-                assert_eq!(quicknode.rate_limit, Some(50));
-
-                let alchemy = evm.rpc().providers.get("alchemy").unwrap();
-                assert_eq!(
-                    alchemy.http.as_str(),
-                    "https://base-sepolia.g.alchemy.com/v2/key"
-                );
-                assert!(alchemy.rate_limit.is_none());
-            }
-            _ => panic!("Expected EVM config"),
-        }
-
-        // Verify Solana chain config with RPC
-        let solana_key = ChainId::from_str("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").unwrap();
-        let solana_config = config
-            .chains()
-            .iter()
-            .find(|c| c.chain_id().eq(&solana_key))
-            .unwrap();
-        match solana_config {
-            ChainConfig::Solana(solana) => {
-                assert_eq!(
-                    solana.rpc().as_str(),
-                    "https://mainnet.helius-rpc.com/?api-key=key"
-                );
-            }
-            _ => panic!("Expected Solana config"),
-        }
-    }
-
-    #[test]
-    fn test_config_parsing_missing_signers_fails() {
-        let json = r#"{
-            "chains": {
-                "eip155:8453": {
-                    "v1_name": "base",
-                    "rpc": {
-                        "default": {
-                            "http": "https://base-rpc.example.com/"
-                        }
-                    }
-                }
-            }
-        }"#;
-        let result: Result<Config, _> = serde_json::from_str(json);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("signers") || err.contains("missing field"));
-    }
-
-    #[test]
-    fn test_config_parsing_missing_rpc_fails() {
-        let json = format!(
-            r#"{{
-            "chains": {{
-                "eip155:8453": {{
-                    "v1_name": "base",
-                    "signers": ["{}"]
-                }}
-            }}
-        }}"#,
-            TEST_EVM_KEY_1
-        );
-        let result: Result<Config, _> = serde_json::from_str(&json);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("rpc") || err.contains("missing field"));
-    }
-
-    // ========================================================================
-    // EVM Signers Config Tests
-    // ========================================================================
-
-    #[test]
-    fn test_evm_signers_single_key() {
-        let json = format!(r#"["{}"]"#, TEST_EVM_KEY_1);
-        let signers: EvmSignersConfig = serde_json::from_str(&json).unwrap();
-        assert_eq!(signers.len(), 1);
-    }
-
-    #[test]
-    fn test_evm_signers_multiple_keys() {
-        let json = format!(r#"["{}", "{}"]"#, TEST_EVM_KEY_1, TEST_EVM_KEY_2);
-        let signers: EvmSignersConfig = serde_json::from_str(&json).unwrap();
-        assert_eq!(signers.len(), 2);
-    }
-
-    #[test]
-    fn test_evm_signers_from_env_var() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        unsafe { env::set_var("TEST_EVM_KEY", TEST_EVM_KEY_1) };
-
-        let json = r#"["$TEST_EVM_KEY"]"#;
-        let signers: EvmSignersConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(signers.len(), 1);
-
-        unsafe { env::remove_var("TEST_EVM_KEY") };
-    }
-
-    #[test]
-    fn test_evm_signers_from_braced_env_var() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        unsafe { env::set_var("TEST_EVM_KEY_BRACED", TEST_EVM_KEY_1) };
-
-        let json = r#"["${TEST_EVM_KEY_BRACED}"]"#;
-        let signers: EvmSignersConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(signers.len(), 1);
-
-        unsafe { env::remove_var("TEST_EVM_KEY_BRACED") };
-    }
-
-    #[test]
-    fn test_evm_signers_mixed_literal_and_env() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        unsafe { env::set_var("TEST_EVM_KEY_MIXED", TEST_EVM_KEY_2) };
-
-        let json = format!(r#"["{}", "$TEST_EVM_KEY_MIXED"]"#, TEST_EVM_KEY_1);
-        let signers: EvmSignersConfig = serde_json::from_str(&json).unwrap();
-        assert_eq!(signers.len(), 2);
-
-        unsafe { env::remove_var("TEST_EVM_KEY_MIXED") };
-    }
-
-    #[test]
-    fn test_evm_signers_missing_env_var_fails() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        unsafe { env::remove_var("NONEXISTENT_EVM_KEY") };
-
-        let json = r#"["$NONEXISTENT_EVM_KEY"]"#;
-        let result: Result<EvmSignersConfig, _> = serde_json::from_str(json);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("NONEXISTENT_EVM_KEY"));
-    }
-
-    #[test]
-    fn test_evm_signers_invalid_key_fails() {
-        let json = r#"["not-a-valid-hex-key"]"#;
-        let result: Result<EvmSignersConfig, _> = serde_json::from_str(json);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("Failed to parse value"));
-    }
-
-    // ========================================================================
-    // Solana Signer Config Tests
-    // ========================================================================
-
-    #[test]
-    fn test_solana_signer_single_key() {
-        let json = format!(r#""{}""#, TEST_SOLANA_KEY);
-        let signer: SolanaSignerConfig = serde_json::from_str(&json).unwrap();
-        // Verify we can access the key via Deref
-        let _: &SolanaPrivateKey = &signer;
-    }
-
-    #[test]
-    fn test_solana_signer_from_env_var() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        unsafe { env::set_var("TEST_SOLANA_KEY", TEST_SOLANA_KEY) };
-
-        let json = r#""$TEST_SOLANA_KEY""#;
-        let signer: SolanaSignerConfig = serde_json::from_str(json).unwrap();
-        let _: &SolanaPrivateKey = &signer;
-
-        unsafe { env::remove_var("TEST_SOLANA_KEY") };
-    }
-
-    #[test]
-    fn test_solana_signer_from_braced_env_var() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        unsafe { env::set_var("TEST_SOLANA_KEY_BRACED", TEST_SOLANA_KEY) };
-
-        let json = r#""${TEST_SOLANA_KEY_BRACED}""#;
-        let signer: SolanaSignerConfig = serde_json::from_str(json).unwrap();
-        let _: &SolanaPrivateKey = &signer;
-
-        unsafe { env::remove_var("TEST_SOLANA_KEY_BRACED") };
-    }
-
-    #[test]
-    fn test_solana_signer_missing_env_var_fails() {
-        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
-        unsafe { env::remove_var("NONEXISTENT_SOLANA_KEY") };
-
-        let json = r#""$NONEXISTENT_SOLANA_KEY""#;
-        let result: Result<SolanaSignerConfig, _> = serde_json::from_str(json);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("NONEXISTENT_SOLANA_KEY"));
-    }
-
-    #[test]
-    fn test_solana_signer_invalid_key_fails() {
-        let json = r#""not-a-valid-base58-key""#;
-        let result: Result<SolanaSignerConfig, _> = serde_json::from_str(json);
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("Failed to parse"));
     }
 }

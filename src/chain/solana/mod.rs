@@ -22,11 +22,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing_core::Level;
 
-use crate::chain::chain_id::{ChainId, ChainIdError};
-use crate::chain::{FacilitatorLocalError, Namespace, NetworkProviderOps};
+use crate::chain::{FacilitatorLocalError, NetworkProviderOps};
 use crate::config::SolanaChainConfig;
 use crate::facilitator::Facilitator;
 use crate::network::Network;
+use crate::p1::chain::ChainId;
+use crate::p1::chain::solana::{SolanaChainReference, SOLANA_NAMESPACE};
 use crate::proto;
 use crate::types::{
     Base64Bytes, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, PaymentRequirements,
@@ -35,124 +36,6 @@ use crate::types::{
 };
 
 const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-
-/// A Solana chain reference consisting of 32 ASCII characters.
-/// The genesis hash is the first 32 characters of the base58-encoded genesis block hash.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SolanaChainReference([u8; 32]);
-
-impl SolanaChainReference {
-    /// Creates a new SolanaChainReference from a 32-byte array.
-    /// Returns None if any byte is not a valid ASCII character.
-    pub fn new(bytes: [u8; 32]) -> Self {
-        Self(bytes)
-    }
-
-    /// Returns the underlying bytes.
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        &self.0
-    }
-
-    /// Returns the chain reference as a string.
-    pub fn as_str(&self) -> &str {
-        // Safe because we validate ASCII on construction
-        std::str::from_utf8(&self.0).expect("SolanaChainReference contains valid ASCII")
-    }
-}
-
-/// Error type for parsing a SolanaChainReference from a string.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum SolanaChainReferenceParseError {
-    #[error("invalid length: expected 32 characters, got {0}")]
-    InvalidLength(usize),
-    #[error("string contains non-ASCII characters")]
-    NonAscii,
-}
-
-impl FromStr for SolanaChainReference {
-    type Err = SolanaChainReferenceParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() != 32 {
-            return Err(SolanaChainReferenceParseError::InvalidLength(s.len()));
-        }
-        if !s.is_ascii() {
-            return Err(SolanaChainReferenceParseError::NonAscii);
-        }
-        let mut bytes = [0u8; 32];
-        bytes.copy_from_slice(s.as_bytes());
-        Ok(Self(bytes))
-    }
-}
-
-impl Display for SolanaChainReference {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl Serialize for SolanaChainReference {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(self.as_str())
-    }
-}
-
-impl<'de> Deserialize<'de> for SolanaChainReference {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        s.parse().map_err(serde::de::Error::custom)
-    }
-}
-
-impl TryFrom<Network> for SolanaChainReference {
-    type Error = FacilitatorLocalError;
-
-    fn try_from(value: Network) -> Result<Self, Self::Error> {
-        match value {
-            Network::Solana => Ok(Self(*b"5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")),
-            Network::SolanaDevnet => Ok(Self(*b"EtWTRABZaYq6iMfeYKouRu166VU2xqa1")),
-            Network::BaseSepolia => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
-            Network::Base => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
-            Network::XdcMainnet => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
-            Network::AvalancheFuji => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
-            Network::Avalanche => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
-            Network::XrplEvm => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
-            Network::PolygonAmoy => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
-            Network::Polygon => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
-            Network::Sei => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
-            Network::SeiTestnet => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
-        }
-    }
-}
-
-impl Into<ChainId> for SolanaChainReference {
-    fn into(self) -> ChainId {
-        ChainId::solana(self.as_str())
-    }
-}
-
-impl TryFrom<ChainId> for SolanaChainReference {
-    type Error = ChainIdError;
-
-    fn try_from(value: ChainId) -> Result<Self, Self::Error> {
-        if value.namespace != Namespace::Solana.to_string() {
-            return Err(ChainIdError::UnexpectedNamespace(
-                value.namespace,
-                Namespace::Solana,
-            ));
-        }
-        let solana_chain_reference = Self::from_str(&value.reference).map_err(|e| {
-            ChainIdError::InvalidReference(value.reference, Namespace::Solana, format!("{e:?}"))
-        })?;
-        Ok(solana_chain_reference)
-    }
-}
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Address(Pubkey);
@@ -603,22 +486,22 @@ impl SolanaProvider {
         if payload.network.as_chain_id() != self.chain_id() {
             return Err(FacilitatorLocalError::NetworkMismatch(
                 None,
-                self.chain_id(),
-                payload.network.as_chain_id(),
+                self.chain_id().to_string().into(),
+                payload.network.as_chain_id().to_string().into(),
             ));
         }
         if requirements.network.as_chain_id() != self.chain_id() {
             return Err(FacilitatorLocalError::NetworkMismatch(
                 None,
-                self.chain_id(),
-                requirements.network.as_chain_id(),
+                self.chain_id().to_string().into(),
+                requirements.network.as_chain_id().to_string().into(),
             ));
         }
         if payload.scheme != requirements.scheme {
             return Err(FacilitatorLocalError::SchemeMismatch(
                 None,
-                requirements.scheme,
-                payload.scheme,
+                requirements.scheme.to_string().into(),
+                payload.scheme.to_string().into(),
             ));
         }
         let transaction_b64_string = payment_payload.transaction.clone();
@@ -729,7 +612,7 @@ impl NetworkProviderOps for SolanaProvider {
     }
 
     fn chain_id(&self) -> ChainId {
-        ChainId::solana(self.chain.as_str())
+        ChainId::new(SOLANA_NAMESPACE, self.chain.as_str())
     }
 }
 

@@ -26,8 +26,9 @@ use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::str::FromStr;
 use url::Url;
 
-use crate::chain::{ChainId, evm, solana};
+use crate::chain::{evm, solana};
 use crate::network::Network;
+use crate::p1::chain::ChainId;
 use crate::proto;
 use crate::timestamp::UnixTimestamp;
 

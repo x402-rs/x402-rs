@@ -5,7 +5,6 @@ pub mod evm;
 pub mod namespace;
 pub mod solana;
 
-pub use chain_id::*;
 pub use namespace::*;
 
 use crate::chain::evm::EvmProvider;
@@ -13,8 +12,9 @@ use crate::chain::solana::SolanaProvider;
 use crate::config::ChainConfig;
 use crate::facilitator::Facilitator;
 use crate::network::ChainIdToNetworkError;
+use crate::p1::chain::ChainId;
 use crate::types::{
-    MixedAddress, Scheme, SettleRequest, SettleResponse, SupportedResponse, VerifyRequest,
+    MixedAddress, SettleRequest, SettleResponse, SupportedResponse, VerifyRequest,
     VerifyResponse,
 };
 
@@ -26,7 +26,7 @@ pub enum NetworkProvider {
 impl NetworkProvider {
     pub async fn from_config(config: &ChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let provider = match config {
-            ChainConfig::Evm(config) => {
+            ChainConfig::Eip155(config) => {
                 let provider = EvmProvider::from_config(config).await?;
                 NetworkProvider::Evm(provider)
             }
@@ -36,6 +36,13 @@ impl NetworkProvider {
             }
         };
         Ok(provider)
+    }
+
+    pub fn chain_id(&self) -> ChainId {
+        match self {
+            NetworkProvider::Evm(provider) => provider.chain_id(),
+            NetworkProvider::Solana(provider) => provider.chain_id(),
+        }
     }
 }
 
@@ -92,10 +99,10 @@ pub enum FacilitatorLocalError {
     UnsupportedNetwork(Option<MixedAddress>),
     /// The network is not supported by this facilitator.
     #[error("Network mismatch: expected {1}, actual {2}")]
-    NetworkMismatch(Option<MixedAddress>, ChainId, ChainId),
+    NetworkMismatch(Option<MixedAddress>, Box<str>, Box<str>),
     /// Scheme mismatch.
     #[error("Scheme mismatch: expected {1}, actual {2}")]
-    SchemeMismatch(Option<MixedAddress>, Scheme, Scheme),
+    SchemeMismatch(Option<MixedAddress>, Box<str>, Box<str>),
     /// Invalid address.
     #[error("Invalid address: {0}")]
     InvalidAddress(String),

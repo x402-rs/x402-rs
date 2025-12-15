@@ -49,9 +49,8 @@ use tower::ServiceBuilder;
 use tracing::{Instrument, instrument};
 use tracing_core::Level;
 
-use crate::chain::chain_id::{ChainId, ChainIdError};
-use crate::chain::{FacilitatorLocalError, Namespace, NetworkProviderOps};
-use crate::config::EvmChainConfig;
+use crate::chain::{FacilitatorLocalError, NetworkProviderOps};
+use crate::config::Eip155ChainConfig;
 use crate::facilitator::Facilitator;
 use crate::network::{Network, USDCDeployment};
 use crate::proto;
@@ -63,6 +62,8 @@ use crate::types::{
 };
 
 pub use alloy_primitives::Address;
+use crate::p1::chain::{ChainId, ChainIdError};
+use crate::p1::chain::eip155::Eip155ChainReference;
 
 sol!(
     #[allow(missing_docs)]
@@ -107,13 +108,13 @@ pub struct EvmChainReference(u64);
 
 impl Into<ChainId> for EvmChainReference {
     fn into(self) -> ChainId {
-        ChainId::eip155(self.0)
+        ChainId::new("eip155", self.0.to_string())
     }
 }
 
 impl Into<ChainId> for &EvmChainReference {
     fn into(self) -> ChainId {
-        ChainId::eip155(self.0)
+        ChainId::new("eip155", self.0.to_string())
     }
 }
 
@@ -121,14 +122,14 @@ impl TryFrom<ChainId> for EvmChainReference {
     type Error = ChainIdError;
 
     fn try_from(value: ChainId) -> Result<Self, Self::Error> {
-        if value.namespace != Namespace::Eip155.to_string() {
+        if value.namespace.as_ref() != "eip155" {
             return Err(ChainIdError::UnexpectedNamespace(
                 value.namespace,
-                Namespace::Eip155,
+                "eip155".into(),
             ));
         }
         let chain_id: u64 = value.reference.parse().map_err(|e| {
-            ChainIdError::InvalidReference(value.reference, Namespace::Eip155, format!("{e:?}"))
+            ChainIdError::InvalidReference(value.reference, "eip155".into(), format!("{e:?}").into())
         })?;
         Ok(EvmChainReference(chain_id))
     }
@@ -177,7 +178,7 @@ impl TryFrom<Network> for EvmChainReference {
 /// A fully specified ERC-3009 authorization payload for EVM settlement.
 pub struct ExactEvmPayment {
     /// Target chain for settlement.
-    pub chain: EvmChainReference,
+    pub chain: Eip155ChainReference,
     /// Authorized sender (`from`) — EOA or smart wallet.
     pub from: Address,
     /// Authorized recipient (`to`).
@@ -204,7 +205,7 @@ pub struct EvmProvider {
     inner: InnerProvider,
     props: ChainProps,
     /// Chain descriptor (network + chain ID).
-    chain: EvmChainReference,
+    chain: Eip155ChainReference,
     /// Available signer addresses for round-robin selection.
     signer_addresses: Arc<Vec<Address>>,
     /// Current position in round-robin signer rotation.
@@ -221,7 +222,9 @@ pub struct ChainProps {
 }
 
 impl EvmProvider {
-    pub async fn from_config(config: &EvmChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn from_config(
+        config: &Eip155ChainConfig,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         // 1. Signers
         let signers = config
             .signers()
@@ -310,7 +313,7 @@ impl EvmProvider {
         Ok(Self {
             inner,
             props,
-            chain: config.chain_reference().clone(),
+            chain: config.chain_reference(),
             signer_addresses,
             signer_cursor,
             nonce_manager,
@@ -340,7 +343,7 @@ pub trait MetaEvmProvider {
     /// Returns reference to underlying provider.
     fn inner(&self) -> &Self::Inner;
     /// Returns reference to chain descriptor.
-    fn chain(&self) -> &EvmChainReference;
+    fn chain(&self) -> &Eip155ChainReference;
 
     /// Sends a meta-transaction to the network.
     fn send_transaction(
@@ -367,7 +370,7 @@ impl MetaEvmProvider for EvmProvider {
         &self.inner
     }
 
-    fn chain(&self) -> &EvmChainReference {
+    fn chain(&self) -> &Eip155ChainReference {
         &self.chain
     }
 
@@ -485,7 +488,7 @@ impl NetworkProviderOps for EvmProvider {
     }
 
     fn chain_id(&self) -> ChainId {
-        ChainId::eip155(self.chain.0)
+        self.chain.into()
     }
 }
 
@@ -920,7 +923,7 @@ async fn is_contract_deployed<P: Provider>(
     asset = %asset_address
 ))]
 async fn assert_domain<P: Provider>(
-    chain: &EvmChainReference,
+    chain: &Eip155ChainReference,
     token_contract: &USDC::USDCInstance<P>,
     payload: &PaymentPayload,
     asset_address: &Address,
@@ -975,7 +978,7 @@ async fn assert_domain<P: Provider>(
     let domain = eip712_domain! {
         name: name,
         version: version,
-        chain_id: chain.0,
+        chain_id: chain.inner(),
         verifying_contract: *asset_address,
     };
     Ok(domain)
@@ -990,7 +993,7 @@ async fn assert_domain<P: Provider>(
 #[instrument(skip_all, err)]
 async fn assert_valid_payment<P: Provider>(
     provider: P,
-    chain: &EvmChainReference,
+    chain: &Eip155ChainReference,
     payload: &PaymentPayload,
     requirements: &PaymentRequirements,
 ) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), FacilitatorLocalError> {
@@ -1005,22 +1008,22 @@ async fn assert_valid_payment<P: Provider>(
     if payload.network.as_chain_id() != chain_id {
         return Err(FacilitatorLocalError::NetworkMismatch(
             Some(payer.into()),
-            chain_id,
-            payload.network.as_chain_id(),
+            chain_id.to_string().into(),
+            payload.network.as_chain_id().to_string().into(),
         ));
     }
     if requirements.network.as_chain_id() != chain_id {
         return Err(FacilitatorLocalError::NetworkMismatch(
             Some(payer.into()),
-            chain_id,
-            requirements.network.as_chain_id(),
+            chain_id.to_string().into(),
+            requirements.network.as_chain_id().to_string().into(),
         ));
     }
     if payload.scheme != requirements.scheme {
         return Err(FacilitatorLocalError::SchemeMismatch(
             Some(payer.into()),
-            requirements.scheme,
-            payload.scheme,
+            requirements.scheme.to_string().into(),
+            payload.scheme.to_string().into(),
         ));
     }
     let payload_to = payment_payload.authorization.to;

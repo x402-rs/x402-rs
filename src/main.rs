@@ -20,6 +20,10 @@
 //! - `HOST`, `PORT` control binding address
 //! - `OTEL_*` variables enable tracing to systems like Honeycomb
 
+mod config;
+mod p1;
+mod telemetry;
+
 use axum::Router;
 use axum::http::Method;
 use dotenvy::dotenv;
@@ -28,23 +32,7 @@ use std::sync::Arc;
 use tower_http::cors;
 
 use crate::config::Config;
-use crate::facilitator_local::FacilitatorLocal;
-use crate::provider_cache::ProviderCache;
-use crate::sig_down::SigDown;
 use crate::telemetry::Telemetry;
-
-mod chain;
-mod config;
-mod facilitator;
-mod facilitator_local;
-mod handlers;
-mod network;
-mod proto;
-mod provider_cache;
-mod sig_down;
-mod telemetry;
-mod timestamp;
-mod types;
 
 /// Initializes the x402 facilitator server.
 ///
@@ -69,44 +57,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     });
 
-    let provider_cache = ProviderCache::from_config(config.chains()).await;
-    // Abort if we can't initialise Ethereum providers early
-    let provider_cache = match provider_cache {
-        Ok(provider_cache) => provider_cache,
-        Err(e) => {
-            tracing::error!("Failed to create Ethereum providers: {}", e);
-            std::process::exit(1);
-        }
-    };
-    let facilitator = FacilitatorLocal::new(provider_cache);
-    let axum_state = Arc::new(facilitator);
-
-    let http_endpoints = Router::new()
-        .merge(handlers::routes().with_state(axum_state))
-        .layer(telemetry.http_tracing())
-        .layer(
-            cors::CorsLayer::new()
-                .allow_origin(cors::Any)
-                .allow_methods([Method::GET, Method::POST])
-                .allow_headers(cors::Any),
-        );
-
-    let addr = SocketAddr::new(config.host(), config.port());
-    tracing::info!("Starting server at http://{}", addr);
-
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .unwrap_or_else(|e| {
-            tracing::error!("Failed to bind to {}: {}", addr, e);
-            std::process::exit(1);
-        });
-
-    let sig_down = SigDown::try_new()?;
-    let axum_cancellation_token = sig_down.cancellation_token();
-    let axum_graceful_shutdown = async move { axum_cancellation_token.cancelled().await };
-    axum::serve(listener, http_endpoints)
-        .with_graceful_shutdown(axum_graceful_shutdown)
-        .await?;
+    // let provider_cache = ProviderCache::from_config(config.chains()).await;
+    // // Abort if we can't initialise Ethereum providers early
+    // let provider_cache = match provider_cache {
+    //     Ok(provider_cache) => provider_cache,
+    //     Err(e) => {
+    //         tracing::error!("Failed to create Ethereum providers: {}", e);
+    //         std::process::exit(1);
+    //     }
+    // };
+    // let facilitator = FacilitatorLocal::new(provider_cache);
+    // let axum_state = Arc::new(facilitator);
+    //
+    // let http_endpoints = Router::new()
+    //     .merge(handlers::routes().with_state(axum_state))
+    //     .layer(telemetry.http_tracing())
+    //     .layer(
+    //         cors::CorsLayer::new()
+    //             .allow_origin(cors::Any)
+    //             .allow_methods([Method::GET, Method::POST])
+    //             .allow_headers(cors::Any),
+    //     );
+    //
+    // let addr = SocketAddr::new(config.host(), config.port());
+    // tracing::info!("Starting server at http://{}", addr);
+    //
+    // let listener = tokio::net::TcpListener::bind(addr)
+    //     .await
+    //     .unwrap_or_else(|e| {
+    //         tracing::error!("Failed to bind to {}: {}", addr, e);
+    //         std::process::exit(1);
+    //     });
+    //
+    // let sig_down = SigDown::try_new()?;
+    // let axum_cancellation_token = sig_down.cancellation_token();
+    // let axum_graceful_shutdown = async move { axum_cancellation_token.cancelled().await };
+    // axum::serve(listener, http_endpoints)
+    //     .with_graceful_shutdown(axum_graceful_shutdown)
+    //     .await?;
 
     Ok(())
 }

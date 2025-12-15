@@ -21,9 +21,9 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
-use crate::chain::ChainId;
 use crate::chain::NetworkProvider;
 use crate::config::ChainConfig;
+use crate::p1::chain::ChainId;
 
 /// A cache of pre-initialized [`EthereumProvider`] instances keyed by network.
 ///
@@ -65,7 +65,7 @@ impl ProviderCache {
         let mut providers = HashMap::new();
         for chain in chains {
             let network_provider = NetworkProvider::from_config(chain).await?;
-            providers.insert(chain.chain_id(), network_provider);
+            providers.insert(network_provider.chain_id(), network_provider);
         }
         Ok(Self { providers })
     }

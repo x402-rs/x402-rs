@@ -12,8 +12,8 @@ use std::ops::Deref;
 use std::str::FromStr;
 
 use crate::chain::Namespace;
-use crate::chain::chain_id::ChainId;
 use crate::chain::solana;
+use crate::p1::chain::ChainId;
 use crate::types::{MixedAddress, TokenAsset, TokenDeployment, TokenDeploymentEip712};
 
 /// Supported Ethereum-compatible networks.
@@ -106,18 +106,18 @@ impl Network {
 
     pub fn as_chain_id(&self) -> ChainId {
         match self {
-            Network::BaseSepolia => ChainId::eip155(84532),
-            Network::Base => ChainId::eip155(8453),
-            Network::XdcMainnet => ChainId::eip155(50),
-            Network::AvalancheFuji => ChainId::eip155(4313),
-            Network::Avalanche => ChainId::eip155(43114),
-            Network::XrplEvm => ChainId::eip155(1440000),
-            Network::PolygonAmoy => ChainId::eip155(80002),
-            Network::Polygon => ChainId::eip155(137),
-            Network::Sei => ChainId::eip155(1329),
-            Network::SeiTestnet => ChainId::eip155(1328),
-            Network::Solana => ChainId::solana("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"),
-            Network::SolanaDevnet => ChainId::solana("EtWTRABZaYq6iMfeYKouRu166VU2xqa1"),
+            Network::BaseSepolia => ChainId::new("eip155", "84532"),
+            Network::Base => ChainId::new("eip155", "8453"),
+            Network::XdcMainnet => ChainId::new("eip155", "50"),
+            Network::AvalancheFuji => ChainId::new("eip155", "4313"),
+            Network::Avalanche => ChainId::new("eip155", "43114"),
+            Network::XrplEvm => ChainId::new("eip155", "1440000"),
+            Network::PolygonAmoy => ChainId::new("eip155", "80002"),
+            Network::Polygon => ChainId::new("eip155", "137"),
+            Network::Sei => ChainId::new("eip155", "1329"),
+            Network::SeiTestnet => ChainId::new("eip155", "1328"),
+            Network::Solana => ChainId::new("solana","5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"),
+            Network::SolanaDevnet => ChainId::new("solana","EtWTRABZaYq6iMfeYKouRu166VU2xqa1"),
         }
     }
 }
@@ -134,9 +134,9 @@ impl TryInto<Network> for ChainId {
             .map_err(|e| ChainIdToNetworkError(e.to_string()))?;
         match namespace {
             Namespace::Solana => {
-                if self.reference == "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" {
+                if self.reference.as_ref() == "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" {
                     Ok(Network::Solana)
-                } else if self.reference == "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" {
+                } else if self.reference.as_ref() == "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" {
                     Ok(Network::SolanaDevnet)
                 } else {
                     Err(ChainIdToNetworkError(format!(
@@ -146,25 +146,25 @@ impl TryInto<Network> for ChainId {
                 }
             }
             Namespace::Eip155 => {
-                if self.reference == "84532" {
+                if self.reference.as_ref() == "84532" {
                     Ok(Network::BaseSepolia)
-                } else if self.reference == "8453" {
+                } else if self.reference.as_ref() == "8453" {
                     Ok(Network::Base)
-                } else if self.reference == "50" {
+                } else if self.reference.as_ref() == "50" {
                     Ok(Network::XdcMainnet)
-                } else if self.reference == "4313" {
+                } else if self.reference.as_ref() == "4313" {
                     Ok(Network::AvalancheFuji)
-                } else if self.reference == "43114" {
+                } else if self.reference.as_ref() == "43114" {
                     Ok(Network::Avalanche)
-                } else if self.reference == "1440000" {
+                } else if self.reference.as_ref() == "1440000" {
                     Ok(Network::XrplEvm)
-                } else if self.reference == "80002" {
+                } else if self.reference.as_ref() == "80002" {
                     Ok(Network::PolygonAmoy)
-                } else if self.reference == "137" {
+                } else if self.reference.as_ref() == "137" {
                     Ok(Network::Polygon)
-                } else if self.reference == "1329" {
+                } else if self.reference.as_ref() == "1329" {
                     Ok(Network::Sei)
-                } else if self.reference == "1328" {
+                } else if self.reference.as_ref() == "1328" {
                     Ok(Network::SeiTestnet)
                 } else {
                     Err(ChainIdToNetworkError(format!(
