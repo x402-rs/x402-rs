@@ -254,8 +254,7 @@ impl EvmProvider {
         // 2. Transports
         let transports = config
             .rpc()
-            .providers
-            .values()
+            .iter()
             .filter_map(|provider_config| {
                 let scheme = provider_config.http.scheme();
                 let is_http = scheme == "http" || scheme == "https";

@@ -3,7 +3,6 @@
 use alloy_primitives::B256;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::fs;
 use std::net::IpAddr;
 use std::ops::Deref;
@@ -90,28 +89,12 @@ fn default_usdc_decimals() -> u8 {
 
 /// RPC provider configuration for a single provider.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct RpcProviderConfig {
+pub struct RpcConfig {
     /// HTTP URL for the RPC endpoint.
     pub http: Url,
     /// Rate limit for requests per second (optional).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rate_limit: Option<u32>,
-}
-
-/// RPC configuration containing multiple named providers.
-///
-/// Uses serde flatten to allow a map of provider names to their configurations:
-/// ```json
-/// {
-///   "quicknode": { "http": "https://...", "rate_limit": 50 },
-///   "alchemy": { "http": "https://...", "rate_limit": 100 }
-/// }
-/// ```
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct RpcConfig {
-    /// Map of provider name to provider configuration.
-    #[serde(flatten)]
-    pub providers: BTreeMap<String, RpcProviderConfig>,
 }
 
 // ============================================================================
@@ -417,7 +400,7 @@ impl EvmChainConfig {
     pub fn signers(&self) -> &EvmSignersConfig {
         &self.inner.signers
     }
-    pub fn rpc(&self) -> &RpcConfig {
+    pub fn rpc(&self) -> &Vec<RpcConfig> {
         &self.inner.rpc
     }
     pub fn chain_reference(&self) -> EvmChainReference {
@@ -474,7 +457,7 @@ pub struct EvmChainConfigInner {
     /// Array of private keys (hex format) or env var references.
     pub signers: EvmSignersConfig,
     /// RPC provider configuration for this chain (required).
-    pub rpc: RpcConfig,
+    pub rpc: Vec<RpcConfig>,
 }
 
 /// Configuration specific to Solana chains.
