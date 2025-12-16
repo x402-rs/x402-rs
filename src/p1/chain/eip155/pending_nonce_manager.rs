@@ -1,10 +1,10 @@
-use std::sync::Arc;
 use alloy_primitives::Address;
-use alloy_provider::fillers::NonceManager;
 use alloy_provider::Provider;
+use alloy_provider::fillers::NonceManager;
 use alloy_transport::TransportResult;
 use async_trait::async_trait;
 use dashmap::DashMap;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// A nonce manager that caches nonces locally and checks pending transactions on initialization.

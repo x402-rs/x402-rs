@@ -4,7 +4,7 @@
 //! and provides statically known USDC deployments per network.
 
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display};
+use std::fmt::Display;
 use std::str::FromStr;
 
 /// Supported Ethereum-compatible networks.

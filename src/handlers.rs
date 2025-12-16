@@ -21,7 +21,7 @@ use crate::facilitator::Facilitator;
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::p1::proto;
 use crate::types::{
-    ErrorResponse, FacilitatorErrorReason, MixedAddress, SettleRequest, VerifyRequest,
+     FacilitatorErrorReason, MixedAddress, SettleRequest, VerifyRequest,
     VerifyResponse,
 };
 
@@ -172,9 +172,9 @@ impl IntoResponse for FacilitatorLocalError {
 
         let bad_request = (
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "Invalid request".to_string(),
-            }),
+            Json(json!({
+                "error": "Invalid request",
+            })),
         )
             .into_response();
 

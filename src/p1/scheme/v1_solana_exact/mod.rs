@@ -1,5 +1,6 @@
 mod types;
 
+use crate::facilitator_local::FacilitatorLocalError;
 use crate::p1::chain::solana::{Address, SolanaChainProvider};
 use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::p1::proto;
@@ -17,7 +18,6 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use tracing_core::Level;
-use crate::facilitator_local::FacilitatorLocalError;
 
 const SCHEME_NAME: &str = "exact";
 

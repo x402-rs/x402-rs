@@ -4,9 +4,6 @@
 //! against specified requirements [`Facilitator::verify`] and executing on-chain transfers [`Facilitator::settle`].
 
 use crate::p1::proto;
-use crate::types::{
-    SettleRequest, SettleResponse, VerifyRequest, VerifyResponse,
-};
 use std::fmt::{Debug, Display};
 use std::sync::Arc;
 

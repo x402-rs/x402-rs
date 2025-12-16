@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::facilitator_local::FacilitatorLocalError;
 use alloy_contract::SolCallBuilder;
 use alloy_primitives::{Address, B256, Bytes, U256, address, hex};
 use alloy_provider::bindings::IMulticall3;
@@ -11,11 +12,12 @@ use tracing::Instrument;
 use tracing::instrument;
 use tracing_core::Level;
 use url::Url;
-use crate::facilitator_local::FacilitatorLocalError;
 
 mod types;
 
-use crate::p1::chain::eip155::{MetaEip155Provider, Eip155ChainProvider, Eip155ChainReference, MetaTransaction};
+use crate::p1::chain::eip155::{
+    Eip155ChainProvider, Eip155ChainReference, MetaEip155Provider, MetaTransaction,
+};
 use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::p1::proto;
 use crate::p1::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};

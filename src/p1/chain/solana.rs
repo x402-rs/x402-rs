@@ -1,4 +1,5 @@
 use crate::config::SolanaChainConfig;
+use crate::facilitator_local::FacilitatorLocalError;
 use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 use alloy_rpc_types_eth::AccountInfo;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -21,7 +22,6 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use crate::facilitator_local::FacilitatorLocalError;
 
 pub const SOLANA_NAMESPACE: &str = "solana";
 

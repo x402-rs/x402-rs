@@ -4,6 +4,7 @@ pub mod v1_solana_exact;
 pub use v1_eip155_exact::V1Eip155Exact;
 
 use crate::config::SchemeConfig;
+use crate::facilitator_local::FacilitatorLocalError;
 use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
 use crate::p1::proto;
 use crate::p1::scheme::v1_solana_exact::V1SolanaExact;
@@ -12,7 +13,6 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 use std::str::FromStr;
-use crate::facilitator_local::FacilitatorLocalError;
 
 #[async_trait::async_trait]
 pub trait X402SchemeHandler: Send + Sync {

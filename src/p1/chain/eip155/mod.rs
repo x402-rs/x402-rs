@@ -3,8 +3,10 @@ pub mod pending_nonce_manager;
 use crate::config::Eip155ChainConfig;
 use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
-use alloy_primitives::{Address, Bytes, B256};
-use alloy_provider::fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller};
+use alloy_primitives::{Address, B256, Bytes};
+use alloy_provider::fillers::{
+    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
+};
 use alloy_provider::{Identity, Provider, ProviderBuilder, RootProvider, WalletProvider};
 use alloy_rpc_client::RpcClient;
 use alloy_rpc_types_eth::{BlockId, TransactionReceipt, TransactionRequest};
@@ -19,8 +21,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
 use tracing::Instrument;
 
-use pending_nonce_manager::PendingNonceManager;
 use crate::facilitator_local::FacilitatorLocalError;
+use pending_nonce_manager::PendingNonceManager;
 
 /// Combined filler type for gas, blob gas, nonce, and chain ID.
 pub type InnerFiller = JoinFill<
