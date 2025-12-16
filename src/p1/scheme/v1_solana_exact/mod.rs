@@ -1,23 +1,23 @@
 mod types;
 
-use std::collections::HashMap;
-use std::error::Error;
-use std::sync::Arc;
-use serde::{Deserialize, Serialize};
-use solana_client::rpc_config::RpcSimulateTransactionConfig;
-use solana_commitment_config::CommitmentConfig;
-use solana_message::compiled_instruction::CompiledInstruction;
-use solana_pubkey::{pubkey, Pubkey};
-use solana_signature::Signature;
-use solana_transaction::versioned::VersionedTransaction;
-use solana_compute_budget_interface::ID as ComputeBudgetInstructionId;
-
 use crate::chain::FacilitatorLocalError;
-use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::p1::chain::solana::{Address, SolanaChainProvider};
+use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::p1::proto;
 use crate::p1::scheme::{X402SchemeBlueprint, X402SchemeHandler};
 use crate::types::Base64Bytes;
+use serde::{Deserialize, Serialize};
+use solana_client::rpc_config::RpcSimulateTransactionConfig;
+use solana_commitment_config::CommitmentConfig;
+use solana_compute_budget_interface::ID as ComputeBudgetInstructionId;
+use solana_message::compiled_instruction::CompiledInstruction;
+use solana_pubkey::{Pubkey, pubkey};
+use solana_signature::Signature;
+use solana_transaction::versioned::VersionedTransaction;
+use std::collections::HashMap;
+use std::error::Error;
+use std::sync::Arc;
+use tracing_core::Level;
 
 const SCHEME_NAME: &str = "exact";
 
@@ -145,8 +145,7 @@ impl V1SolanaExactHandler {
             inner_instructions: false,
             min_context_slot: None,
         };
-        self
-            .provider
+        self.provider
             .simulate_transaction_with_config(&tx.inner, cfg)
             .await?;
         let payer: Address = transfer_instruction.authority.into();
@@ -312,7 +311,33 @@ impl X402SchemeHandler for V1SolanaExactHandler {
         &self,
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
-        todo!("V1SolanaExactHandler::settle")
+        let request = types::SettleRequest::from_proto(request.clone()).ok_or(
+            FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
+        )?;
+        let verification = self.verify_transfer(request).await?;
+        let tx = TransactionInt::new(verification.transaction).sign(&self.provider)?;
+        // Verify if fully signed
+        if !tx.is_fully_signed() {
+            tracing::event!(Level::WARN, status = "failed", "undersigned transaction");
+            return Ok(proto::SettleResponse {
+                success: false,
+                error_reason: Some("unexpected_settle_error".to_string()),
+                payer: verification.payer.to_string(),
+                transaction: None,
+                network: self.provider.chain_id().to_string(),
+            });
+        }
+        let tx_sig = tx
+            .send_and_confirm(&self.provider, CommitmentConfig::confirmed())
+            .await?;
+        let settle_response = proto::SettleResponse {
+            success: true,
+            error_reason: None,
+            payer: verification.payer.to_string(),
+            transaction: Some(tx_sig.to_string()),
+            network: self.provider.chain_id().to_string(),
+        };
+        Ok(settle_response)
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
@@ -455,7 +480,10 @@ impl TransactionInt {
         Ok(Self { inner: tx })
     }
 
-    pub async fn send(&self, provider: &SolanaChainProvider) -> Result<Signature, FacilitatorLocalError> {
+    pub async fn send(
+        &self,
+        provider: &SolanaChainProvider,
+    ) -> Result<Signature, FacilitatorLocalError> {
         provider.send(&self.inner).await
     }
 
@@ -464,7 +492,9 @@ impl TransactionInt {
         provider: &SolanaChainProvider,
         commitment_config: CommitmentConfig,
     ) -> Result<Signature, FacilitatorLocalError> {
-        provider.send_and_confirm(&self.inner, commitment_config).await
+        provider
+            .send_and_confirm(&self.inner, commitment_config)
+            .await
     }
 
     #[allow(dead_code)] // Public for consumption by downstream crates.
@@ -496,131 +526,130 @@ pub struct TransferCheckedInstruction {
 }
 
 pub fn verify_compute_limit_instruction(
-        transaction: &VersionedTransaction,
-        instruction_index: usize,
-    ) -> Result<u32, FacilitatorLocalError> {
-        let instructions = transaction.message.instructions();
-        let instruction =
-            instructions
-                .get(instruction_index)
-                .ok_or(FacilitatorLocalError::DecodingError(
-                    "invalid_exact_svm_payload_transaction_instructions_length".to_string(),
-                ))?;
-        let account = instruction.program_id(transaction.message.static_account_keys());
-        let data = instruction.data.as_slice();
+    transaction: &VersionedTransaction,
+    instruction_index: usize,
+) -> Result<u32, FacilitatorLocalError> {
+    let instructions = transaction.message.instructions();
+    let instruction =
+        instructions
+            .get(instruction_index)
+            .ok_or(FacilitatorLocalError::DecodingError(
+                "invalid_exact_svm_payload_transaction_instructions_length".to_string(),
+            ))?;
+    let account = instruction.program_id(transaction.message.static_account_keys());
+    let data = instruction.data.as_slice();
 
-        // Verify program ID, discriminator, and data length (1 byte discriminator + 4 bytes u32)
-        if ComputeBudgetInstructionId.ne(account)
-            || data.first().cloned().unwrap_or(0) != 2
-            || data.len() != 5
-        {
-            return Err(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_compute_limit_instruction".to_string(),
-            ));
-        }
-
-        // Parse compute unit limit (u32 in little-endian)
-        let mut buf = [0u8; 4];
-        buf.copy_from_slice(&data[1..5]);
-        let compute_units = u32::from_le_bytes(buf);
-
-        Ok(compute_units)
+    // Verify program ID, discriminator, and data length (1 byte discriminator + 4 bytes u32)
+    if ComputeBudgetInstructionId.ne(account)
+        || data.first().cloned().unwrap_or(0) != 2
+        || data.len() != 5
+    {
+        return Err(FacilitatorLocalError::DecodingError(
+            "invalid_exact_svm_payload_transaction_compute_limit_instruction".to_string(),
+        ));
     }
+
+    // Parse compute unit limit (u32 in little-endian)
+    let mut buf = [0u8; 4];
+    buf.copy_from_slice(&data[1..5]);
+    let compute_units = u32::from_le_bytes(buf);
+
+    Ok(compute_units)
+}
 
 pub fn verify_compute_price_instruction(
     max_compute_unit_price: u64,
-        transaction: &VersionedTransaction,
-        instruction_index: usize,
-    ) -> Result<(), FacilitatorLocalError> {
-        let instructions = transaction.message.instructions();
-        let instruction =
-            instructions
-                .get(instruction_index)
-                .ok_or(FacilitatorLocalError::DecodingError(
-                    "invalid_exact_svm_payload_transaction_instructions_compute_price_instruction"
-                        .to_string(),
-                ))?;
-        let account = instruction.program_id(transaction.message.static_account_keys());
-        let compute_budget = solana_compute_budget_interface::ID;
-        let data = instruction.data.as_slice();
-        if compute_budget.ne(account) || data.first().cloned().unwrap_or(0) != 3 || data.len() != 9
-        {
-            return Err(FacilitatorLocalError::DecodingError(
+    transaction: &VersionedTransaction,
+    instruction_index: usize,
+) -> Result<(), FacilitatorLocalError> {
+    let instructions = transaction.message.instructions();
+    let instruction =
+        instructions
+            .get(instruction_index)
+            .ok_or(FacilitatorLocalError::DecodingError(
                 "invalid_exact_svm_payload_transaction_instructions_compute_price_instruction"
                     .to_string(),
-            ));
-        }
-        // It is ComputeBudgetInstruction definitely by now!
-        let mut buf = [0u8; 8];
-        buf.copy_from_slice(&data[1..]);
-        let microlamports = u64::from_le_bytes(buf);
-        if microlamports > max_compute_unit_price {
-            return Err(FacilitatorLocalError::DecodingError(
-                "compute unit price exceeds facilitator maximum".to_string(),
-            ));
-        }
-        Ok(())
+            ))?;
+    let account = instruction.program_id(transaction.message.static_account_keys());
+    let compute_budget = solana_compute_budget_interface::ID;
+    let data = instruction.data.as_slice();
+    if compute_budget.ne(account) || data.first().cloned().unwrap_or(0) != 3 || data.len() != 9 {
+        return Err(FacilitatorLocalError::DecodingError(
+            "invalid_exact_svm_payload_transaction_instructions_compute_price_instruction"
+                .to_string(),
+        ));
     }
+    // It is ComputeBudgetInstruction definitely by now!
+    let mut buf = [0u8; 8];
+    buf.copy_from_slice(&data[1..]);
+    let microlamports = u64::from_le_bytes(buf);
+    if microlamports > max_compute_unit_price {
+        return Err(FacilitatorLocalError::DecodingError(
+            "compute unit price exceeds facilitator maximum".to_string(),
+        ));
+    }
+    Ok(())
+}
 
 pub fn verify_create_ata_instruction(
-        transaction: &VersionedTransaction,
-        index: usize,
-        requirements: &types::PaymentRequirements,
-    ) -> Result<(), FacilitatorLocalError> {
-        let tx = TransactionInt::new(transaction.clone());
-        let instruction = tx.instruction(index)?;
-        instruction.assert_not_empty()?;
+    transaction: &VersionedTransaction,
+    index: usize,
+    requirements: &types::PaymentRequirements,
+) -> Result<(), FacilitatorLocalError> {
+    let tx = TransactionInt::new(transaction.clone());
+    let instruction = tx.instruction(index)?;
+    instruction.assert_not_empty()?;
 
-        // Verify program ID is the Associated Token Account Program
-        let program_id = instruction.program_id();
-        if program_id != ATA_PROGRAM_PUBKEY {
-            return Err(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_create_ata_instruction".to_string(),
-            ));
-        }
-
-        // Verify instruction discriminator
-        // The ATA program's Create instruction has discriminator 0 (Create) or 1 (CreateIdempotent)
-        let data = instruction.data_slice();
-        if data.is_empty() || (data[0] != 0 && data[0] != 1) {
-            return Err(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_create_ata_instruction".to_string(),
-            ));
-        }
-
-        // Verify account count (must have at least 6 accounts)
-        if instruction.instruction.accounts.len() < 6 {
-            return Err(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_create_ata_instruction".to_string(),
-            ));
-        }
-
-        // Payer = 0
-        instruction.account(0)?;
-        // ATA = 1
-        instruction.account(1)?;
-        // Owner = 2
-        let owner = instruction.account(2)?;
-        // Mint = 3
-        let mint = instruction.account(3)?;
-        // SystemProgram = 4
-        instruction.account(4)?;
-        // TokenProgram = 5
-        instruction.account(5)?;
-
-        // verify that the ATA is created for the expected payee
-        if &Address::new(owner) != &requirements.pay_to {
-            return Err(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_payee"
-                    .to_string(),
-            ));
-        }
-        if &Address::new(mint) != &requirements.asset {
-            return Err(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_asset"
-                    .to_string(),
-            ));
-        }
-
-        Ok(())
+    // Verify program ID is the Associated Token Account Program
+    let program_id = instruction.program_id();
+    if program_id != ATA_PROGRAM_PUBKEY {
+        return Err(FacilitatorLocalError::DecodingError(
+            "invalid_exact_svm_payload_transaction_create_ata_instruction".to_string(),
+        ));
     }
+
+    // Verify instruction discriminator
+    // The ATA program's Create instruction has discriminator 0 (Create) or 1 (CreateIdempotent)
+    let data = instruction.data_slice();
+    if data.is_empty() || (data[0] != 0 && data[0] != 1) {
+        return Err(FacilitatorLocalError::DecodingError(
+            "invalid_exact_svm_payload_transaction_create_ata_instruction".to_string(),
+        ));
+    }
+
+    // Verify account count (must have at least 6 accounts)
+    if instruction.instruction.accounts.len() < 6 {
+        return Err(FacilitatorLocalError::DecodingError(
+            "invalid_exact_svm_payload_transaction_create_ata_instruction".to_string(),
+        ));
+    }
+
+    // Payer = 0
+    instruction.account(0)?;
+    // ATA = 1
+    instruction.account(1)?;
+    // Owner = 2
+    let owner = instruction.account(2)?;
+    // Mint = 3
+    let mint = instruction.account(3)?;
+    // SystemProgram = 4
+    instruction.account(4)?;
+    // TokenProgram = 5
+    instruction.account(5)?;
+
+    // verify that the ATA is created for the expected payee
+    if &Address::new(owner) != &requirements.pay_to {
+        return Err(FacilitatorLocalError::DecodingError(
+            "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_payee"
+                .to_string(),
+        ));
+    }
+    if &Address::new(mint) != &requirements.asset {
+        return Err(FacilitatorLocalError::DecodingError(
+            "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_asset"
+                .to_string(),
+        ));
+    }
+
+    Ok(())
+}

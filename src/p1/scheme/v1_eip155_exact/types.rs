@@ -1,6 +1,6 @@
-use std::fmt::{Display, Formatter};
 use alloy_primitives::{Address, B256, Bytes, U256};
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use url::Url;
 
 use crate::p1::proto;

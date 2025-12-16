@@ -1,15 +1,16 @@
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt::{Debug, Display, Formatter};
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
+use crate::chain::FacilitatorLocalError;
+use crate::config::SolanaChainConfig;
+use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 use alloy_rpc_types_eth::AccountInfo;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_account::Account;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::pubsub_client::PubsubClientError;
 use solana_client::rpc_client::SerializableTransaction;
-use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSignatureSubscribeConfig, RpcSimulateTransactionConfig};
+use solana_client::rpc_config::{
+    RpcSendTransactionConfig, RpcSignatureSubscribeConfig, RpcSimulateTransactionConfig,
+};
 use solana_client::rpc_response::RpcSignatureResult;
 use solana_commitment_config::CommitmentConfig;
 use solana_keypair::Keypair;
@@ -17,9 +18,10 @@ use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 use solana_signer::Signer;
 use solana_transaction::versioned::VersionedTransaction;
-use crate::chain::FacilitatorLocalError;
-use crate::config::SolanaChainConfig;
-use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
+use std::fmt::{Debug, Display, Formatter};
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 
 pub const SOLANA_NAMESPACE: &str = "solana";
 
@@ -227,10 +229,14 @@ impl SolanaChainProvider {
         self.keypair.pubkey()
     }
 
-    pub fn sign(&self, tx: VersionedTransaction) -> Result<VersionedTransaction, FacilitatorLocalError> {
+    pub fn sign(
+        &self,
+        tx: VersionedTransaction,
+    ) -> Result<VersionedTransaction, FacilitatorLocalError> {
         let mut tx = tx.clone();
         let msg_bytes = tx.message.serialize();
-        let signature = self.keypair
+        let signature = self
+            .keypair
             .try_sign_message(msg_bytes.as_slice())
             .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
         // Required signatures are the first N account keys
@@ -252,7 +258,11 @@ impl SolanaChainProvider {
         Ok(tx)
     }
 
-    pub async fn simulate_transaction_with_config(&self, tx: &VersionedTransaction, cfg: RpcSimulateTransactionConfig) -> Result<(), FacilitatorLocalError> {
+    pub async fn simulate_transaction_with_config(
+        &self,
+        tx: &VersionedTransaction,
+        cfg: RpcSimulateTransactionConfig,
+    ) -> Result<(), FacilitatorLocalError> {
         let sim = self
             .rpc_client
             .simulate_transaction_with_config(tx, cfg)
@@ -267,12 +277,20 @@ impl SolanaChainProvider {
         }
     }
 
-    pub async fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>, FacilitatorLocalError> {
-        self.rpc_client.get_multiple_accounts(pubkeys).await
+    pub async fn get_multiple_accounts(
+        &self,
+        pubkeys: &[Pubkey],
+    ) -> Result<Vec<Option<Account>>, FacilitatorLocalError> {
+        self.rpc_client
+            .get_multiple_accounts(pubkeys)
+            .await
             .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))
     }
 
-    pub async fn send(&self, tx: &VersionedTransaction) -> Result<Signature, FacilitatorLocalError> {
+    pub async fn send(
+        &self,
+        tx: &VersionedTransaction,
+    ) -> Result<Signature, FacilitatorLocalError> {
         self.rpc_client
             .send_transaction_with_config(
                 tx,
@@ -325,7 +343,8 @@ impl SolanaChainProvider {
         } else {
             self.send(tx).await?;
             loop {
-                let confirmed = self.rpc_client
+                let confirmed = self
+                    .rpc_client
                     .confirm_transaction_with_commitment(tx_sig, commitment_config)
                     .await
                     .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;

@@ -79,8 +79,8 @@ impl ChainId {
                 } else {
                     None
                 }
-            },
-            _ => None
+            }
+            _ => None,
         }
     }
 }

@@ -1,6 +1,6 @@
-use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 use solana_transaction::versioned::VersionedTransaction;
+use std::fmt::{Display, Formatter};
 
 use crate::p1::chain::solana::Address;
 use crate::p1::proto;
@@ -30,9 +30,13 @@ pub struct VerifyRequest {
 
 impl VerifyRequest {
     pub fn from_proto(request: proto::VerifyRequest) -> Option<Self> {
-        serde_json::from_value(request.into_json()).inspect_err(|e| tracing::error!("{:?}", e)).ok()
+        serde_json::from_value(request.into_json())
+            .inspect_err(|e| tracing::error!("{:?}", e))
+            .ok()
     }
 }
+
+pub type SettleRequest = VerifyRequest;
 
 /// Describes a signed request to transfer a specific amount of funds on-chain.
 /// Includes the scheme, network, and signed payload contents.
@@ -77,8 +81,8 @@ pub struct VerifyTransferResult {
 }
 
 mod u64_string {
-    use serde::{Deserialize, Deserializer, Serializer};
     use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
     where
