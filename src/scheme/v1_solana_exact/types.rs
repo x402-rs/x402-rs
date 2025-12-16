@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
-use crate::p1::chain::solana::Address;
-use crate::p1::proto;
-use crate::p1::proto::v1::X402Version1;
+use crate::chain::solana::Address;
+use crate::proto;
+use crate::proto::v1::X402Version1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ExactScheme {

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use url::Url;
 
-use crate::p1::proto;
+use crate::proto;
 use crate::timestamp::UnixTimestamp;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]

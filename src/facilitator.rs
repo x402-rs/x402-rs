@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 use std::sync::Arc;
 
-use crate::p1::proto;
+use crate::proto;
 
 /// Trait defining the asynchronous interface for x402 payment facilitators.
 ///

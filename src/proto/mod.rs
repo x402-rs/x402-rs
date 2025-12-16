@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
 
-use crate::p1::chain::ChainId;
-use crate::p1::scheme::SchemeHandlerSlug;
+use crate::chain::ChainId;
+use crate::scheme::SchemeHandlerSlug;
 
 pub mod v1;
 pub mod v2;

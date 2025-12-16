@@ -1,11 +1,5 @@
 mod types;
 
-use crate::facilitator_local::FacilitatorLocalError;
-use crate::p1::chain::solana::{Address, SolanaChainProvider};
-use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps};
-use crate::p1::proto;
-use crate::p1::scheme::{X402SchemeBlueprint, X402SchemeHandler};
-use crate::util::Base64Bytes;
 use serde::{Deserialize, Serialize};
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
 use solana_commitment_config::CommitmentConfig;
@@ -19,6 +13,13 @@ use std::error::Error;
 use std::sync::Arc;
 use tracing_core::Level;
 
+use crate::facilitator_local::FacilitatorLocalError;
+use crate::chain::solana::{Address, SolanaChainProvider};
+use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
+use crate::proto;
+use crate::scheme::{X402SchemeBlueprint, X402SchemeHandler};
+use crate::util::Base64Bytes;
+
 const SCHEME_NAME: &str = "exact";
 
 const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -26,8 +27,8 @@ const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTN
 pub struct V1SolanaExact;
 
 impl X402SchemeBlueprint for V1SolanaExact {
-    fn slug(&self) -> crate::p1::scheme::SchemeSlug {
-        crate::p1::scheme::SchemeSlug::new(1, "solana", SCHEME_NAME)
+    fn slug(&self) -> crate::scheme::SchemeSlug {
+        crate::scheme::SchemeSlug::new(1, "solana", SCHEME_NAME)
     }
 
     fn build(&self, provider: ChainProvider) -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>> {

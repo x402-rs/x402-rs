@@ -24,9 +24,11 @@ mod config;
 mod facilitator;
 mod facilitator_local;
 mod handlers;
-mod p1;
 mod timestamp;
 mod util;
+mod chain;
+mod proto;
+mod scheme;
 
 use axum::Router;
 use axum::http::Method;
@@ -37,8 +39,8 @@ use tower_http::cors;
 
 use crate::config::Config;
 use crate::facilitator_local::FacilitatorLocal;
-use crate::p1::chain::ChainRegistry;
-use crate::p1::scheme::{SchemeBlueprints, SchemeRegistry};
+use crate::chain::ChainRegistry;
+use crate::scheme::{SchemeBlueprints, SchemeRegistry};
 use crate::util::{SigDown, Telemetry};
 
 /// Initializes the x402 facilitator server.

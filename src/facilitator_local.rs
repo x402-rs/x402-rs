@@ -13,8 +13,8 @@ use std::collections::HashMap;
 use std::time::SystemTimeError;
 
 use crate::facilitator::Facilitator;
-use crate::p1::proto;
-use crate::p1::scheme::SchemeRegistry;
+use crate::proto;
+use crate::scheme::SchemeRegistry;
 
 /// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
 /// using a network-aware provider cache.

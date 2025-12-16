@@ -20,9 +20,11 @@ pub mod config;
 pub mod facilitator;
 pub mod facilitator_local;
 pub mod handlers;
-pub mod p1;
 pub mod timestamp;
 pub mod util;
+pub mod chain;
+pub mod proto;
+pub mod scheme;
 
 // Hidden re-exports just for macro expansion.
 #[doc(hidden)]

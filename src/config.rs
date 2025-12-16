@@ -10,10 +10,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
 
-use crate::p1::chain::eip155;
-use crate::p1::chain::solana;
-use crate::p1::chain::{ChainId, ChainIdPattern};
-use crate::p1::scheme::SchemeSlug;
+use crate::chain::eip155;
+use crate::chain::solana;
+use crate::chain::{ChainId, ChainIdPattern};
+use crate::scheme::SchemeSlug;
 
 /// CLI arguments for the x402 facilitator server.
 #[derive(Parser, Debug)]

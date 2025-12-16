@@ -1,7 +1,5 @@
 pub mod pending_nonce_manager;
 
-use crate::config::Eip155ChainConfig;
-use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
 use alloy_primitives::{Address, B256, Bytes};
 use alloy_provider::fillers::{
@@ -22,6 +20,8 @@ use tower::ServiceBuilder;
 use tracing::Instrument;
 
 use crate::facilitator_local::FacilitatorLocalError;
+use crate::config::Eip155ChainConfig;
+use crate::chain::{ChainId, ChainIdError, ChainProviderOps};
 use pending_nonce_manager::PendingNonceManager;
 
 /// Combined filler type for gas, blob gas, nonce, and chain ID.
