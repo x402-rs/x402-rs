@@ -5,26 +5,25 @@ use crate::p1::proto;
 use crate::p1::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 use std::collections::HashMap;
 
+use crate::chain::evm::MetaEip155Provider;
 use crate::network::Network;
+use crate::p1::chain::eip155::Eip155ChainReference;
 use crate::timestamp::UnixTimestamp;
-use alloy_primitives::{Address, B256, Bytes, U256, hex, address};
+use alloy_contract::SolCallBuilder;
+use alloy_primitives::{Address, B256, Bytes, U256, address, hex};
+use alloy_provider::Provider;
+use alloy_sol_types::{Eip712Domain, SolStruct, SolType, eip712_domain, sol};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use alloy_contract::SolCallBuilder;
-use alloy_provider::Provider;
-use alloy_sol_types::{eip712_domain, sol, Eip712Domain, SolStruct, SolType};
+use tracing::Instrument;
 use tracing::instrument;
 use url::Url;
-use tracing::Instrument;
-use crate::chain::evm::MetaEip155Provider;
-use crate::p1::chain::eip155::Eip155ChainReference;
 
 const SCHEME_NAME: &str = "exact";
 
 /// Signature verifier for EIP-6492, EIP-1271, EOA, universally deployed on the supported EVM chains
 /// If absent on a target chain, verification will fail; you should deploy the validator there.
-const VALIDATOR_ADDRESS: Address =
-    address!("0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B");
+const VALIDATOR_ADDRESS: Address = address!("0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B");
 
 pub struct V1Eip155Exact;
 
@@ -62,11 +61,18 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, FacilitatorLocalError> {
-        let request = VerifyRequest::from_proto(request.clone()).ok_or(FacilitatorLocalError::DecodingError("Can not decode payload".to_string()))?;
+        let request = VerifyRequest::from_proto(request.clone()).ok_or(
+            FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
+        )?;
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
-        let (contract, payment, eip712_domain) =
-            assert_valid_payment(self.provider.inner(), self.provider.chain(), payload, requirements).await?;
+        let (contract, payment, eip712_domain) = assert_valid_payment(
+            self.provider.inner(),
+            self.provider.chain(),
+            payload,
+            requirements,
+        )
+        .await?;
 
         let signed_message = SignedMessage::extract(&payment, &eip712_domain)?;
 
@@ -87,7 +93,8 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
                 let transfer_call = transferWithAuthorization_0(&contract, &payment, inner).await?;
                 // Execute both calls in a single transaction simulation to accommodate for possible smart wallet creation
                 let (is_valid_signature_result, transfer_result) = self
-                    .provider.inner()
+                    .provider
+                    .inner()
                     .multicall()
                     .add(is_valid_signature_call)
                     .add(transfer_call.tx)
@@ -303,7 +310,8 @@ async fn assert_valid_payment<P: Provider>(
 ) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), FacilitatorLocalError> {
     let payer = payload.payload.authorization.from;
     let chain_id: ChainId = chain.into();
-    let payload_chain_id = ChainId::from_network_name(&payload.network).ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+    let payload_chain_id = ChainId::from_network_name(&payload.network)
+        .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
     if payload_chain_id != chain_id {
         return Err(FacilitatorLocalError::NetworkMismatch(
             Some(payer.into()),
@@ -311,7 +319,8 @@ async fn assert_valid_payment<P: Provider>(
             payload_chain_id.to_string(),
         ));
     }
-    let requirements_chain_id = ChainId::from_network_name(&requirements.network).ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+    let requirements_chain_id = ChainId::from_network_name(&requirements.network)
+        .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
     if requirements_chain_id != chain_id {
         return Err(FacilitatorLocalError::NetworkMismatch(
             Some(payer.into()),
@@ -343,12 +352,7 @@ async fn assert_valid_payment<P: Provider>(
     let domain = assert_domain(chain, &contract, payload, &asset_address, requirements).await?;
 
     let amount_required = requirements.max_amount_required;
-    assert_enough_balance(
-        &contract,
-        &authorization.from,
-        amount_required,
-    )
-    .await?;
+    assert_enough_balance(&contract, &authorization.from, amount_required).await?;
     assert_enough_value(&payer, &authorization.value, &amount_required)?;
 
     let payment = ExactEvmPayment {
@@ -426,7 +430,8 @@ async fn assert_domain<P: Provider>(
             .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?
     };
     let version = requirements
-        .extra.as_ref()
+        .extra
+        .as_ref()
         .map(|extra| extra.version.clone());
     let version = if let Some(version) = version {
         version
@@ -541,7 +546,6 @@ sol!(
         bytes32 nonce;
     }
 );
-
 
 impl SignedMessage {
     /// Construct a [`SignedMessage`] from an [`ExactEvmPayment`] and its
@@ -681,7 +685,7 @@ async fn transferWithAuthorization_0<'a, P: Provider>(
     signature: Bytes,
 ) -> Result<TransferWithAuthorization0Call<&'a P>, FacilitatorLocalError> {
     let from = payment.from;
-    let to = payment.to;;
+    let to = payment.to;
     let value = payment.value;
     let valid_after: U256 = payment.valid_after.into();
     let valid_before: U256 = payment.valid_before.into();

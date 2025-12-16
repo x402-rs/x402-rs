@@ -1,9 +1,9 @@
+use crate::p1::chain::ChainId;
+use crate::p1::scheme::SchemeHandlerSlug;
+use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::str::FromStr;
-use serde::ser::SerializeStruct;
-use crate::p1::chain::ChainId;
-use crate::p1::scheme::SchemeHandlerSlug;
 
 pub mod v1;
 
@@ -37,7 +37,7 @@ pub type X402Version = crate::proto::X402Version;
 /// Wrapper for a payment payload and requirements sent by the client to a facilitator
 /// to be verified.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct  VerifyRequest(serde_json::Value);
+pub struct VerifyRequest(serde_json::Value);
 
 impl VerifyRequest {
     pub fn into_json(self) -> serde_json::Value {
@@ -55,14 +55,10 @@ impl VerifyRequest {
                 let slug = SchemeHandlerSlug::new(chain_id, 1, scheme.into());
                 Some(slug)
             }
-            X402Version::V2(_) => {
-                None
-            }
+            X402Version::V2(_) => None,
         }
     }
 }
-
-
 
 /// Result returned by a facilitator after verifying a [`PaymentPayload`] against the provided [`PaymentRequirements`].
 ///

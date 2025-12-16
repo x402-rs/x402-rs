@@ -1,8 +1,13 @@
+use crate::chain::FacilitatorLocalError;
+use crate::chain::evm::{InnerProvider, MetaEip155Provider, MetaTransaction, PendingNonceManager};
+use crate::config::Eip155ChainConfig;
+use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
 use alloy_primitives::{Address, B256};
 use alloy_provider::fillers::{BlobGasFiller, ChainIdFiller, GasFiller, JoinFill, NonceFiller};
 use alloy_provider::{Provider, ProviderBuilder, WalletProvider};
 use alloy_rpc_client::RpcClient;
+use alloy_rpc_types_eth::{BlockId, TransactionReceipt, TransactionRequest};
 use alloy_signer::Signer;
 use alloy_signer_local::PrivateKeySigner;
 use alloy_transport::layers::{FallbackLayer, ThrottleLayer};
@@ -11,13 +16,8 @@ use std::fmt::{Display, Formatter};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use alloy_rpc_types_eth::{BlockId, TransactionReceipt, TransactionRequest};
 use tower::ServiceBuilder;
 use tracing::Instrument;
-use crate::chain::evm::{InnerProvider, MetaEip155Provider, MetaTransaction, PendingNonceManager};
-use crate::chain::FacilitatorLocalError;
-use crate::config::Eip155ChainConfig;
-use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 
 pub const EIP155_NAMESPACE: &str = "eip155";
 

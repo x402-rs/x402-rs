@@ -70,7 +70,10 @@ impl NetworkProviderOps for NetworkProvider {
 impl Facilitator for NetworkProvider {
     type Error = FacilitatorLocalError;
 
-    async fn verify(&self, request: &proto::VerifyRequest) -> Result<proto::VerifyResponse, Self::Error> {
+    async fn verify(
+        &self,
+        request: &proto::VerifyRequest,
+    ) -> Result<proto::VerifyResponse, Self::Error> {
         match self {
             NetworkProvider::Evm(provider) => provider.verify(request).await,
             NetworkProvider::Solana(provider) => provider.verify(request).await,

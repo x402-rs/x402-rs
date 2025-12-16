@@ -518,7 +518,10 @@ where
     /// - [`FacilitatorLocalError::InvalidTiming`] if outside `validAfter/validBefore`.
     /// - [`FacilitatorLocalError::InsufficientFunds`] / `FacilitatorLocalError::InsufficientValue` on balance/value checks.
     /// - [`FacilitatorLocalError::ContractCall`] if on-chain calls revert.
-    async fn verify(&self, request: &proto::VerifyRequest) -> Result<proto::VerifyResponse, Self::Error> {
+    async fn verify(
+        &self,
+        request: &proto::VerifyRequest,
+    ) -> Result<proto::VerifyResponse, Self::Error> {
         todo!("EvmProvider::verify")
         // let payload = &request.payment_payload;
         // let requirements = &request.payment_requirements;

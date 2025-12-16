@@ -619,7 +619,10 @@ impl NetworkProviderOps for SolanaProvider {
 impl Facilitator for SolanaProvider {
     type Error = FacilitatorLocalError;
 
-    async fn verify(&self, request: &proto::VerifyRequest) -> Result<proto::VerifyResponse, Self::Error> {
+    async fn verify(
+        &self,
+        request: &proto::VerifyRequest,
+    ) -> Result<proto::VerifyResponse, Self::Error> {
         todo!("SolanaProvider::verify not yet implemented")
         // let verification = self.verify_transfer(request).await?;
         // Ok(VerifyResponse::valid(verification.payer.into()))
