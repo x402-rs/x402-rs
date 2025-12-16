@@ -29,6 +29,7 @@ mod sig_down;
 mod telemetry;
 mod timestamp;
 mod b64;
+mod util;
 
 use axum::Router;
 use axum::http::Method;
