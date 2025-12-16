@@ -25,7 +25,6 @@ mod facilitator;
 mod facilitator_local;
 mod handlers;
 mod p1;
-mod sig_down;
 mod telemetry;
 mod timestamp;
 mod b64;
@@ -42,8 +41,8 @@ use crate::config::Config;
 use crate::facilitator_local::FacilitatorLocal;
 use crate::p1::chain::ChainRegistry;
 use crate::p1::scheme::{SchemeBlueprints, SchemeRegistry};
-use crate::sig_down::SigDown;
 use crate::telemetry::Telemetry;
+use crate::util::SigDown;
 
 /// Initializes the x402 facilitator server.
 ///

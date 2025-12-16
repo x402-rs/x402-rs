@@ -21,7 +21,6 @@ pub mod facilitator;
 pub mod facilitator_local;
 pub mod handlers;
 pub mod p1;
-pub mod sig_down;
 pub mod telemetry;
 pub mod timestamp;
 pub mod b64;
