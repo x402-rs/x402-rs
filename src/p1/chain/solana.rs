@@ -2,12 +2,22 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
+use alloy_rpc_types_eth::AccountInfo;
+use solana_account::Account;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::pubsub_client::PubsubClientError;
+use solana_client::rpc_client::SerializableTransaction;
+use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSignatureSubscribeConfig, RpcSimulateTransactionConfig};
+use solana_client::rpc_response::RpcSignatureResult;
+use solana_commitment_config::CommitmentConfig;
 use solana_keypair::Keypair;
 use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 use solana_signer::Signer;
+use solana_transaction::versioned::VersionedTransaction;
+use crate::chain::FacilitatorLocalError;
 use crate::config::SolanaChainConfig;
 use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 
@@ -204,6 +214,128 @@ impl SolanaChainProvider {
     pub fn fee_payer(&self) -> Address {
         Address(self.keypair.pubkey())
     }
+
+    pub fn max_compute_unit_limit(&self) -> u32 {
+        self.max_compute_unit_limit
+    }
+
+    pub fn max_compute_unit_price(&self) -> u64 {
+        self.max_compute_unit_price
+    }
+
+    pub fn pubkey(&self) -> Pubkey {
+        self.keypair.pubkey()
+    }
+
+    pub fn sign(&self, tx: VersionedTransaction) -> Result<VersionedTransaction, FacilitatorLocalError> {
+        let mut tx = tx.clone();
+        let msg_bytes = tx.message.serialize();
+        let signature = self.keypair
+            .try_sign_message(msg_bytes.as_slice())
+            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
+        // Required signatures are the first N account keys
+        let num_required = tx.message.header().num_required_signatures as usize;
+        let static_keys = tx.message.static_account_keys();
+        // Find signer’s position
+        let pos = static_keys[..num_required]
+            .iter()
+            .position(|k| *k == self.pubkey())
+            .ok_or(FacilitatorLocalError::DecodingError(
+                "invalid_exact_svm_payload_transaction_simulation_failed".to_string(),
+            ))?;
+        // Ensure signature vector is large enough, then place the signature
+        if tx.signatures.len() < num_required {
+            tx.signatures.resize(num_required, Signature::default());
+        }
+        // tx.signatures.push(signature);
+        tx.signatures[pos] = signature;
+        Ok(tx)
+    }
+
+    pub async fn simulate_transaction_with_config(&self, tx: &VersionedTransaction, cfg: RpcSimulateTransactionConfig) -> Result<(), FacilitatorLocalError> {
+        let sim = self
+            .rpc_client
+            .simulate_transaction_with_config(tx, cfg)
+            .await
+            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
+        if sim.value.err.is_some() {
+            Err(FacilitatorLocalError::DecodingError(
+                "invalid_exact_svm_payload_transaction_simulation_failed".to_string(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub async fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>, FacilitatorLocalError> {
+        self.rpc_client.get_multiple_accounts(pubkeys).await
+            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))
+    }
+
+    pub async fn send(&self, tx: &VersionedTransaction) -> Result<Signature, FacilitatorLocalError> {
+        self.rpc_client
+            .send_transaction_with_config(
+                tx,
+                RpcSendTransactionConfig {
+                    skip_preflight: true,
+                    ..RpcSendTransactionConfig::default()
+                },
+            )
+            .await
+            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))
+    }
+
+    pub async fn send_and_confirm(
+        &self,
+        tx: &VersionedTransaction,
+        commitment_config: CommitmentConfig,
+    ) -> Result<Signature, FacilitatorLocalError> {
+        let tx_sig = tx.get_signature();
+
+        use futures_util::stream::StreamExt;
+
+        if let Some(pubsub_client) = self.pubsub_client.as_ref() {
+            let config = RpcSignatureSubscribeConfig {
+                commitment: Some(commitment_config),
+                enable_received_notification: None,
+            };
+            let (mut stream, unsubscribe) = pubsub_client
+                .signature_subscribe(tx_sig, Some(config))
+                .await
+                .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
+            if let Err(e) = self.send(tx).await {
+                tracing::error!(error = %e, "Failed to send transaction");
+                unsubscribe().await;
+                return Err(e);
+            }
+            while let Some(response) = stream.next().await {
+                let error = if let RpcSignatureResult::ProcessedSignature(r) = response.value {
+                    r.err
+                } else {
+                    None
+                };
+                return match error {
+                    None => Ok(tx_sig.clone()),
+                    Some(error) => Err(FacilitatorLocalError::ContractCall(format!("{error}"))),
+                };
+            }
+            Err(FacilitatorLocalError::DecodingError(
+                "signature_subscribe error".to_string(),
+            ))
+        } else {
+            self.send(tx).await?;
+            loop {
+                let confirmed = self.rpc_client
+                    .confirm_transaction_with_commitment(tx_sig, commitment_config)
+                    .await
+                    .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
+                if confirmed.value {
+                    return Ok(tx_sig.clone());
+                }
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
+        }
+    }
 }
 
 impl ChainProviderOps for SolanaChainProvider {
@@ -234,6 +366,12 @@ impl From<Pubkey> for Address {
 impl From<Address> for Pubkey {
     fn from(address: Address) -> Self {
         address.0
+    }
+}
+
+impl AsRef<[u8]> for Address {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
     }
 }
 

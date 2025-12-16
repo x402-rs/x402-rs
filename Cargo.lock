@@ -9232,6 +9232,7 @@ dependencies = [
  "rust_decimal",
  "serde",
  "serde_json",
+ "solana-account 3.2.0",
  "solana-client",
  "solana-commitment-config 3.1.0",
  "solana-compute-budget-interface",
