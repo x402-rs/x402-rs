@@ -50,7 +50,22 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
     }
 
     async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
-        todo!()
+        let mut kinds = vec![];
+        let mut signers = HashMap::new();
+        for provider in self.handlers.values() {
+            let supported = provider.supported().await.ok();
+            if let Some(mut supported) = supported {
+                kinds.append(&mut supported.kinds);
+                for (chain_id, signer_addresses) in supported.signers {
+                    signers.entry(chain_id).or_insert(signer_addresses);
+                }
+            }
+        }
+        Ok(SupportedResponse {
+            kinds,
+            extensions: Vec::new(),
+            signers,
+        })
     }
 }
 

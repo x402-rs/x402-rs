@@ -2,8 +2,10 @@ pub mod v1_eip155_exact;
 
 pub use v1_eip155_exact::V1Eip155Exact;
 
+use crate::chain::FacilitatorLocalError;
 use crate::config::SchemeConfig;
 use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
+use crate::types::SupportedResponse;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
@@ -11,7 +13,10 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
 
-pub trait X402SchemeHandler {}
+#[async_trait::async_trait]
+pub trait X402SchemeHandler: Send + Sync {
+    async fn supported(&self) -> Result<SupportedResponse, FacilitatorLocalError>;
+}
 
 pub trait X402SchemeBlueprint {
     fn slug(&self) -> SchemeSlug;
@@ -221,5 +226,9 @@ impl SchemeRegistry {
     pub fn by_slug(&self, slug: &SchemeHandlerSlug) -> Option<&dyn X402SchemeHandler> {
         let handler = self.0.get(slug)?.deref();
         Some(handler)
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &dyn X402SchemeHandler> {
+        self.0.values().map(|v| v.deref())
     }
 }

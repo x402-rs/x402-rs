@@ -20,9 +20,19 @@
 //! - `HOST`, `PORT` control binding address
 //! - `OTEL_*` variables enable tracing to systems like Honeycomb
 
+mod chain;
 mod config;
+mod facilitator;
+mod facilitator_local;
+mod handlers;
+mod network;
 mod p1;
+mod proto;
+mod provider_cache;
+mod sig_down;
 mod telemetry;
+mod timestamp;
+mod types;
 
 use axum::Router;
 use axum::http::Method;
@@ -30,11 +40,12 @@ use dotenvy::dotenv;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::cors;
-use x402_rs::facilitator_local::FacilitatorLocal;
-use x402_rs::handlers;
+
 use crate::config::Config;
+use crate::facilitator_local::FacilitatorLocal;
 use crate::p1::chain::ChainRegistry;
 use crate::p1::scheme::{SchemeBlueprints, SchemeRegistry};
+use crate::sig_down::SigDown;
 use crate::telemetry::Telemetry;
 
 /// Initializes the x402 facilitator server.
@@ -75,22 +86,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .allow_headers(cors::Any),
         );
 
-    // let addr = SocketAddr::new(config.host(), config.port());
-    // tracing::info!("Starting server at http://{}", addr);
-    //
-    // let listener = tokio::net::TcpListener::bind(addr)
-    //     .await
-    //     .unwrap_or_else(|e| {
-    //         tracing::error!("Failed to bind to {}: {}", addr, e);
-    //         std::process::exit(1);
-    //     });
-    //
-    // let sig_down = SigDown::try_new()?;
-    // let axum_cancellation_token = sig_down.cancellation_token();
-    // let axum_graceful_shutdown = async move { axum_cancellation_token.cancelled().await };
-    // axum::serve(listener, http_endpoints)
-    //     .with_graceful_shutdown(axum_graceful_shutdown)
-    //     .await?;
+    let addr = SocketAddr::new(config.host(), config.port());
+    tracing::info!("Starting server at http://{}", addr);
+
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::error!("Failed to bind to {}: {}", addr, e);
+            std::process::exit(1);
+        });
+
+    let sig_down = SigDown::try_new()?;
+    let axum_cancellation_token = sig_down.cancellation_token();
+    let axum_graceful_shutdown = async move { axum_cancellation_token.cancelled().await };
+    axum::serve(listener, http_endpoints)
+        .with_graceful_shutdown(axum_graceful_shutdown)
+        .await?;
 
     Ok(())
 }

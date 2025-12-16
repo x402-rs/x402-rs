@@ -1,3 +1,3 @@
 pub mod chain;
-pub mod scheme;
 pub mod proto;
+pub mod scheme;
