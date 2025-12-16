@@ -19,6 +19,7 @@ use tracing::instrument;
 
 use crate::chain::FacilitatorLocalError;
 use crate::facilitator::Facilitator;
+use crate::p1::proto;
 use crate::types::{
     ErrorResponse, FacilitatorErrorReason, MixedAddress, SettleRequest, VerifyRequest,
     VerifyResponse,
@@ -114,7 +115,7 @@ where
 #[instrument(skip_all)]
 pub async fn post_verify<A>(
     State(facilitator): State<A>,
-    Json(body): Json<VerifyRequest>,
+    Json(body): Json<proto::VerifyRequest>,
 ) -> impl IntoResponse
 where
     A: Facilitator,

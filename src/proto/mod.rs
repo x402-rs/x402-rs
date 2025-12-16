@@ -33,6 +33,18 @@ impl Into<u8> for X402Version {
     }
 }
 
+impl TryFrom<u64> for X402Version {
+    type Error = X402VersionError;
+
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(X402Version::V1(v1::X402Version1)),
+            2 => Ok(X402Version::V2(v2::X402Version2)),
+            _ => Err(X402VersionError(value)),
+        }
+    }
+}
+
 impl Serialize for X402Version {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
@@ -53,7 +65,7 @@ impl Display for X402Version {
 
 #[derive(Debug, thiserror::Error)]
 #[error("Unsupported x402 version: {0}")]
-pub struct X402VersionError(pub u8);
+pub struct X402VersionError(pub u64);
 
 impl TryFrom<u8> for X402Version {
     type Error = X402VersionError;
@@ -62,7 +74,7 @@ impl TryFrom<u8> for X402Version {
         match value {
             v1::X402Version1::VALUE => Ok(X402Version::v1()),
             v2::X402Version2::VALUE => Ok(X402Version::v2()),
-            _ => Err(X402VersionError(value)),
+            _ => Err(X402VersionError(value.into())),
         }
     }
 }

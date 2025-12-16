@@ -24,6 +24,24 @@ impl ChainId {
     pub fn reference(&self) -> &str {
         &self.reference
     }
+
+    pub fn from_network_name(network_name: &str) -> Option<Self> {
+        match network_name {
+            "base-sepolia" => Some(Self::new("eip155", "84532")),
+            "base" => Some(Self::new("eip155", "8453")),
+            "xdc" => Some(Self::new("eip155", "50")),
+            "avalanche-fuji" => Some(Self::new("eip155", "4313")),
+            "avalanche" => Some(Self::new("eip155", "43114")),
+            "xrpl-evm" => Some(Self::new("eip155", "1440000")),
+            "polygon-amoy" => Some(Self::new("eip155", "80002")),
+            "polygon" => Some(Self::new("eip155", "137")),
+            "sei" => Some(Self::new("eip155", "1329")),
+            "sei-testnet" => Some(Self::new("eip155", "1328")),
+            "solana" => Some(Self::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")),
+            "solana-devnet" => Some(Self::new("solana", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1")),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for ChainId {

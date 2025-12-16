@@ -1,19 +1,21 @@
-use std::fmt::{Display, Formatter};
-use std::num::NonZeroUsize;
-use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
 use alloy_primitives::{Address, B256};
 use alloy_provider::fillers::{BlobGasFiller, ChainIdFiller, GasFiller, JoinFill, NonceFiller};
-use alloy_provider::{ProviderBuilder, WalletProvider};
+use alloy_provider::{Provider, ProviderBuilder, WalletProvider};
 use alloy_rpc_client::RpcClient;
 use alloy_signer::Signer;
 use alloy_signer_local::PrivateKeySigner;
 use alloy_transport::layers::{FallbackLayer, ThrottleLayer};
 use alloy_transport_http::Http;
+use std::fmt::{Display, Formatter};
+use std::num::NonZeroUsize;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use alloy_rpc_types_eth::{BlockId, TransactionReceipt, TransactionRequest};
 use tower::ServiceBuilder;
-
-use crate::chain::evm::{InnerProvider, PendingNonceManager};
+use tracing::Instrument;
+use crate::chain::evm::{InnerProvider, MetaEip155Provider, MetaTransaction, PendingNonceManager};
+use crate::chain::FacilitatorLocalError;
 use crate::config::Eip155ChainConfig;
 use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 
@@ -178,11 +180,145 @@ impl Eip155ChainProvider {
             nonce_manager,
         })
     }
+
+    /// Round-robin selection of next signer from wallet.
+    fn next_signer_address(&self) -> Address {
+        debug_assert!(!self.signer_addresses.is_empty());
+        if self.signer_addresses.len() == 1 {
+            self.signer_addresses[0]
+        } else {
+            let next =
+                self.signer_cursor.fetch_add(1, Ordering::Relaxed) % self.signer_addresses.len();
+            self.signer_addresses[next]
+        }
+    }
+}
+
+impl MetaEip155Provider for Eip155ChainProvider {
+    type Error = FacilitatorLocalError;
+    type Inner = InnerProvider;
+
+    fn inner(&self) -> &Self::Inner {
+        &self.inner
+    }
+
+    fn chain(&self) -> &Eip155ChainReference {
+        &self.chain
+    }
+
+    /// Send a meta-transaction with provided `to`, `calldata`, and automatically selected signer.
+    ///
+    /// This method constructs a transaction from the provided [`MetaTransaction`], automatically
+    /// selects the next available signer using round-robin selection, and handles gas pricing
+    /// based on whether the network supports EIP-1559.
+    ///
+    /// If the transaction fails at any point (during submission or receipt fetching), the nonce
+    /// for the sending address is reset to force a fresh query on the next transaction. This
+    /// ensures correctness even when transactions partially succeed (e.g., submitted but receipt
+    /// fetch times out).
+    ///
+    /// # Gas Pricing Strategy
+    ///
+    /// - **EIP-1559 networks**: Uses automatic gas pricing via the provider's fillers.
+    /// - **Legacy networks**: Fetches the current gas price using `get_gas_price()` and sets it explicitly.
+    ///
+    /// # Timeout Configuration
+    ///
+    /// Receipt fetching is subject to a configurable timeout:
+    /// - Default: 30 seconds
+    /// - Override via `TX_RECEIPT_TIMEOUT_SECS` environment variable
+    /// - If the timeout expires, the nonce is reset and an error is returned
+    ///
+    /// # Parameters
+    ///
+    /// - `tx`: A [`MetaTransaction`] containing the target address and calldata.
+    ///
+    /// # Returns
+    ///
+    /// A [`TransactionReceipt`] once the transaction has been mined and confirmed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FacilitatorLocalError::ContractCall`] if:
+    /// - Gas price fetching fails (on legacy networks)
+    /// - Transaction sending fails
+    /// - Receipt retrieval fails or times out
+    async fn send_transaction(
+        &self,
+        tx: MetaTransaction,
+    ) -> Result<TransactionReceipt, Self::Error> {
+        let from_address = self.next_signer_address();
+        let mut txr = TransactionRequest::default()
+            .with_to(tx.to)
+            .with_from(from_address)
+            .with_input(tx.calldata);
+
+        if !self.eip1559 {
+            let provider = &self.inner;
+            let gas: u128 = provider
+                .get_gas_price()
+                .instrument(tracing::info_span!("get_gas_price"))
+                .await
+                .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+            txr.set_gas_price(gas);
+        }
+
+        // Estimate gas if not provided
+        if txr.gas.is_none() {
+            let block_id = if self.flashblocks {
+                BlockId::latest()
+            } else {
+                BlockId::pending()
+            };
+            let gas_limit = self
+                .inner
+                .estimate_gas(txr.clone())
+                .block(block_id)
+                .await
+                .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+            txr.set_gas_limit(gas_limit)
+        }
+
+        // Send transaction with error handling for nonce reset
+        let pending_tx = match self.inner.send_transaction(txr).await {
+            Ok(pending) => pending,
+            Err(e) => {
+                // Transaction submission failed - reset nonce to force requery
+                self.nonce_manager.reset_nonce(from_address).await;
+                return Err(FacilitatorLocalError::ContractCall(format!("{e:?}")));
+            }
+        };
+
+        // Get receipt with timeout and error handling for nonce reset
+        // Default timeout of 30 seconds is reasonable for most EVM chains
+        let timeout = std::time::Duration::from_secs(
+            std::env::var("TX_RECEIPT_TIMEOUT_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(30),
+        );
+
+        let watcher = pending_tx
+            .with_required_confirmations(tx.confirmations)
+            .with_timeout(Some(timeout));
+
+        match watcher.get_receipt().await {
+            Ok(receipt) => Ok(receipt),
+            Err(e) => {
+                // Receipt fetch failed (timeout or other error) - reset nonce to force requery
+                self.nonce_manager.reset_nonce(from_address).await;
+                Err(FacilitatorLocalError::ContractCall(format!("{e:?}")))
+            }
+        }
+    }
 }
 
 impl ChainProviderOps for Eip155ChainProvider {
     fn signer_addresses(&self) -> Vec<String> {
-        self.inner.signer_addresses().map(|a| a.to_string()).collect()
+        self.inner
+            .signer_addresses()
+            .map(|a| a.to_string())
+            .collect()
     }
 
     fn chain_id(&self) -> ChainId {

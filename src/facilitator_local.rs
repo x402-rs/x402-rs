@@ -42,12 +42,16 @@ impl<A> FacilitatorLocal<A> {
 impl Facilitator for FacilitatorLocal<SchemeRegistry> {
     type Error = FacilitatorLocalError;
 
-    async fn verify(&self, request: &VerifyRequest) -> Result<VerifyResponse, Self::Error> {
-        todo!()
+    async fn verify(&self, request: &proto::VerifyRequest) -> Result<proto::VerifyResponse, Self::Error> {
+        let handler = request
+            .scheme_handler_slug()
+            .and_then(|slug| self.handlers.by_slug(&slug))
+            .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+        handler.verify(request).await
     }
 
     async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
-        todo!()
+        todo!("FacilitatorLocal<SchemeRegistry>::settle")
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
@@ -95,15 +99,16 @@ where
     /// - expired or future-dated timing,
     /// - insufficient funds,
     /// - unsupported network.
-    #[instrument(skip_all, err, fields(network = %request.payment_payload.network))]
-    async fn verify(&self, request: &VerifyRequest) -> Result<VerifyResponse, Self::Error> {
-        let chain_id = request.network().as_chain_id();
-        let provider = self
-            .handlers
-            .by_chain_id(&chain_id)
-            .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
-        let verify_response = provider.verify(request).await?;
-        Ok(verify_response)
+    // #[instrument(skip_all, err, fields(network = %request.payment_payload.network))] FIXME
+    async fn verify(&self, request: &proto::VerifyRequest) -> Result<proto::VerifyResponse, Self::Error> {
+        todo!("FacilitatorLocal::verify")
+        // let chain_id = request.network().as_chain_id();
+        // let provider = self
+        //     .handlers
+        //     .by_chain_id(&chain_id)
+        //     .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+        // let verify_response = provider.verify(request).await?;
+        // Ok(verify_response)
     }
 
     /// Executes an x402 payment on-chain using ERC-3009 `transferWithAuthorization`.

@@ -338,7 +338,7 @@ impl EvmProvider {
 }
 
 /// Trait for sending meta-transactions with custom target and calldata.
-pub trait MetaEvmProvider {
+pub trait MetaEip155Provider {
     /// Error type for operations.
     type Error;
     /// Underlying provider type.
@@ -366,7 +366,7 @@ pub struct MetaTransaction {
     pub confirmations: u64,
 }
 
-impl MetaEvmProvider for EvmProvider {
+impl MetaEip155Provider for EvmProvider {
     type Error = FacilitatorLocalError;
     type Inner = InnerProvider;
 
@@ -488,7 +488,10 @@ impl MetaEvmProvider for EvmProvider {
 impl NetworkProviderOps for EvmProvider {
     /// Address of the default signer used by this provider (for tx sending).
     fn signer_addresses(&self) -> Vec<String> {
-        self.inner.signer_addresses().map(|a| a.to_string()).collect()
+        self.inner
+            .signer_addresses()
+            .map(|a| a.to_string())
+            .collect()
     }
 
     fn chain_id(&self) -> ChainId {
@@ -498,7 +501,7 @@ impl NetworkProviderOps for EvmProvider {
 
 impl<P> Facilitator for P
 where
-    P: MetaEvmProvider + NetworkProviderOps + Sync,
+    P: MetaEip155Provider + NetworkProviderOps + Sync,
     FacilitatorLocalError: From<P::Error>,
 {
     type Error = FacilitatorLocalError;
@@ -515,83 +518,84 @@ where
     /// - [`FacilitatorLocalError::InvalidTiming`] if outside `validAfter/validBefore`.
     /// - [`FacilitatorLocalError::InsufficientFunds`] / `FacilitatorLocalError::InsufficientValue` on balance/value checks.
     /// - [`FacilitatorLocalError::ContractCall`] if on-chain calls revert.
-    async fn verify(&self, request: &VerifyRequest) -> Result<VerifyResponse, Self::Error> {
-        let payload = &request.payment_payload;
-        let requirements = &request.payment_requirements;
-        let (contract, payment, eip712_domain) =
-            assert_valid_payment(self.inner(), self.chain(), payload, requirements).await?;
-
-        let signed_message = SignedMessage::extract(&payment, &eip712_domain)?;
-        let payer = signed_message.address;
-        let hash = signed_message.hash;
-        match signed_message.signature {
-            StructuredSignature::EIP6492 {
-                factory: _,
-                factory_calldata: _,
-                inner,
-                original,
-            } => {
-                // Prepare the call to validate EIP-6492 signature
-                let validator6492 = Validator6492::new(VALIDATOR_ADDRESS, self.inner());
-                let is_valid_signature_call =
-                    validator6492.isValidSigWithSideEffects(payer, hash, original);
-                // Prepare the call to simulate transfer the funds
-                let transfer_call = transferWithAuthorization_0(&contract, &payment, inner).await?;
-                // Execute both calls in a single transaction simulation to accommodate for possible smart wallet creation
-                let (is_valid_signature_result, transfer_result) = self
-                    .inner()
-                    .multicall()
-                    .add(is_valid_signature_call)
-                    .add(transfer_call.tx)
-                    .aggregate3()
-                    .instrument(tracing::info_span!("call_transferWithAuthorization_0",
-                            from = %transfer_call.from,
-                            to = %transfer_call.to,
-                            value = %transfer_call.value,
-                            valid_after = %transfer_call.valid_after,
-                            valid_before = %transfer_call.valid_before,
-                            nonce = %transfer_call.nonce,
-                            signature = %transfer_call.signature,
-                            token_contract = %transfer_call.contract_address,
-                            otel.kind = "client",
-                    ))
-                    .await
-                    .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
-                let is_valid_signature_result = is_valid_signature_result
-                    .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
-                if !is_valid_signature_result {
-                    return Err(FacilitatorLocalError::InvalidSignature(
-                        payer.into(),
-                        "Incorrect signature".to_string(),
-                    ));
-                }
-                transfer_result.map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
-            }
-            StructuredSignature::EIP1271(signature) => {
-                // It is EOA or EIP-1271 signature, which we can pass to the transfer simulation
-                let transfer_call =
-                    transferWithAuthorization_0(&contract, &payment, signature).await?;
-                transfer_call
-                    .tx
-                    .call()
-                    .into_future()
-                    .instrument(tracing::info_span!("call_transferWithAuthorization_0",
-                            from = %transfer_call.from,
-                            to = %transfer_call.to,
-                            value = %transfer_call.value,
-                            valid_after = %transfer_call.valid_after,
-                            valid_before = %transfer_call.valid_before,
-                            nonce = %transfer_call.nonce,
-                            signature = %transfer_call.signature,
-                            token_contract = %transfer_call.contract_address,
-                            otel.kind = "client",
-                    ))
-                    .await
-                    .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
-            }
-        }
-
-        Ok(VerifyResponse::valid(payer.into()))
+    async fn verify(&self, request: &proto::VerifyRequest) -> Result<proto::VerifyResponse, Self::Error> {
+        todo!("EvmProvider::verify")
+        // let payload = &request.payment_payload;
+        // let requirements = &request.payment_requirements;
+        // let (contract, payment, eip712_domain) =
+        //     assert_valid_payment(self.inner(), self.chain(), payload, requirements).await?;
+        //
+        // let signed_message = SignedMessage::extract(&payment, &eip712_domain)?;
+        // let payer = signed_message.address;
+        // let hash = signed_message.hash;
+        // match signed_message.signature {
+        //     StructuredSignature::EIP6492 {
+        //         factory: _,
+        //         factory_calldata: _,
+        //         inner,
+        //         original,
+        //     } => {
+        //         // Prepare the call to validate EIP-6492 signature
+        //         let validator6492 = Validator6492::new(VALIDATOR_ADDRESS, self.inner());
+        //         let is_valid_signature_call =
+        //             validator6492.isValidSigWithSideEffects(payer, hash, original);
+        //         // Prepare the call to simulate transfer the funds
+        //         let transfer_call = transferWithAuthorization_0(&contract, &payment, inner).await?;
+        //         // Execute both calls in a single transaction simulation to accommodate for possible smart wallet creation
+        //         let (is_valid_signature_result, transfer_result) = self
+        //             .inner()
+        //             .multicall()
+        //             .add(is_valid_signature_call)
+        //             .add(transfer_call.tx)
+        //             .aggregate3()
+        //             .instrument(tracing::info_span!("call_transferWithAuthorization_0",
+        //                     from = %transfer_call.from,
+        //                     to = %transfer_call.to,
+        //                     value = %transfer_call.value,
+        //                     valid_after = %transfer_call.valid_after,
+        //                     valid_before = %transfer_call.valid_before,
+        //                     nonce = %transfer_call.nonce,
+        //                     signature = %transfer_call.signature,
+        //                     token_contract = %transfer_call.contract_address,
+        //                     otel.kind = "client",
+        //             ))
+        //             .await
+        //             .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+        //         let is_valid_signature_result = is_valid_signature_result
+        //             .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+        //         if !is_valid_signature_result {
+        //             return Err(FacilitatorLocalError::InvalidSignature(
+        //                 payer.into(),
+        //                 "Incorrect signature".to_string(),
+        //             ));
+        //         }
+        //         transfer_result.map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
+        //     }
+        //     StructuredSignature::EIP1271(signature) => {
+        //         // It is EOA or EIP-1271 signature, which we can pass to the transfer simulation
+        //         let transfer_call =
+        //             transferWithAuthorization_0(&contract, &payment, signature).await?;
+        //         transfer_call
+        //             .tx
+        //             .call()
+        //             .into_future()
+        //             .instrument(tracing::info_span!("call_transferWithAuthorization_0",
+        //                     from = %transfer_call.from,
+        //                     to = %transfer_call.to,
+        //                     value = %transfer_call.value,
+        //                     valid_after = %transfer_call.valid_after,
+        //                     valid_before = %transfer_call.valid_before,
+        //                     nonce = %transfer_call.nonce,
+        //                     signature = %transfer_call.signature,
+        //                     token_contract = %transfer_call.contract_address,
+        //                     otel.kind = "client",
+        //             ))
+        //             .await
+        //             .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+        //     }
+        // }
+        //
+        // Ok(VerifyResponse::valid(payer.into()))
     }
 
     /// Settle a verified payment on-chain.

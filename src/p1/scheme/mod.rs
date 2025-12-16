@@ -5,16 +5,20 @@ pub use v1_eip155_exact::V1Eip155Exact;
 use crate::chain::FacilitatorLocalError;
 use crate::config::SchemeConfig;
 use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
+use crate::p1::proto;
 use crate::types::SupportedResponse;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 use std::str::FromStr;
-use crate::p1::proto;
 
 #[async_trait::async_trait]
 pub trait X402SchemeHandler: Send + Sync {
+    async fn verify(
+        &self,
+        request: &proto::VerifyRequest,
+    ) -> Result<proto::VerifyResponse, FacilitatorLocalError>;
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError>;
 }
 
