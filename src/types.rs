@@ -830,11 +830,11 @@ impl TryInto<Base64Bytes<'static>> for SettleResponse {
 #[derive(Debug)]
 pub enum VerifyResponse {
     /// The payload matches the requirements and passes all checks.
-    Valid { payer: MixedAddress },
+    Valid { payer: String },
     /// The payload was well-formed but failed verification due to the specified [`FacilitatorErrorReason`]
     Invalid {
         reason: FacilitatorErrorReason,
-        payer: Option<MixedAddress>,
+        payer: Option<String>,
     },
 }
 
@@ -842,7 +842,7 @@ impl VerifyResponse {
     /// Constructs a successful verification response with the given `payer` address.
     ///
     /// Indicates that the provided payment payload has been validated against the payment requirements.
-    pub fn valid(payer: MixedAddress) -> Self {
+    pub fn valid(payer: String) -> Self {
         VerifyResponse::Valid { payer }
     }
 
@@ -850,7 +850,7 @@ impl VerifyResponse {
     ///
     /// Indicates that the payment was recognized but rejected due to reasons such as
     /// insufficient funds, invalid network, or scheme mismatch.
-    pub fn invalid(payer: Option<MixedAddress>, reason: FacilitatorErrorReason) -> Self {
+    pub fn invalid(payer: Option<String>, reason: FacilitatorErrorReason) -> Self {
         VerifyResponse::Invalid { reason, payer }
     }
 }
@@ -893,7 +893,7 @@ impl<'de> Deserialize<'de> for VerifyResponse {
         struct Raw {
             is_valid: bool,
             #[serde(skip_serializing_if = "Option::is_none")]
-            payer: Option<MixedAddress>,
+            payer: Option<String>,
             #[serde(default)]
             invalid_reason: Option<FacilitatorErrorReason>,
         }

@@ -119,7 +119,7 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
                     .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
                 if !is_valid_signature_result {
                     return Err(FacilitatorLocalError::InvalidSignature(
-                        payer.into(),
+                        payer.to_string(),
                         "Incorrect signature".to_string(),
                     ));
                 }
@@ -385,7 +385,7 @@ async fn assert_valid_payment<P: Provider>(
         .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
     if payload_chain_id != chain_id {
         return Err(FacilitatorLocalError::NetworkMismatch(
-            Some(payer.into()),
+            Some(payer.to_string()),
             chain_id.to_string(),
             payload_chain_id.to_string(),
         ));
@@ -394,14 +394,14 @@ async fn assert_valid_payment<P: Provider>(
         .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
     if requirements_chain_id != chain_id {
         return Err(FacilitatorLocalError::NetworkMismatch(
-            Some(payer.into()),
+            Some(payer.to_string()),
             chain_id.to_string(),
             requirements_chain_id.to_string(),
         ));
     }
     if payload.scheme != requirements.scheme {
         return Err(FacilitatorLocalError::SchemeMismatch(
-            Some(payer.into()),
+            Some(payer.to_string()),
             requirements.scheme.to_string(),
             payload.scheme.to_string(),
         ));
@@ -409,7 +409,7 @@ async fn assert_valid_payment<P: Provider>(
     let authorization = &payload.payload.authorization;
     if authorization.to != requirements.pay_to {
         return Err(FacilitatorLocalError::ReceiverMismatch(
-            payer.into(),
+            payer.to_string(),
             authorization.to.to_string(),
             requirements.pay_to.to_string(),
         ));
@@ -456,13 +456,13 @@ fn assert_time(
     let now = UnixTimestamp::try_now().map_err(FacilitatorLocalError::ClockError)?;
     if valid_before < now + 6 {
         return Err(FacilitatorLocalError::InvalidTiming(
-            payer.into(),
+            payer.to_string(),
             format!("Expired: now {} > valid_before {}", now + 6, valid_before),
         ));
     }
     if valid_after > now {
         return Err(FacilitatorLocalError::InvalidTiming(
-            payer.into(),
+            payer.to_string(),
             format!("Not active yet: valid_after {valid_after} > now {now}",),
         ));
     }
@@ -557,7 +557,7 @@ async fn assert_enough_balance<P: Provider>(
         .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
 
     if balance < max_amount_required {
-        Err(FacilitatorLocalError::InsufficientFunds((*sender).into()))
+        Err(FacilitatorLocalError::InsufficientFunds(sender.to_string()))
     } else {
         Ok(())
     }
@@ -579,7 +579,7 @@ fn assert_enough_value(
     max_amount_required: &U256,
 ) -> Result<(), FacilitatorLocalError> {
     if sent < max_amount_required {
-        Err(FacilitatorLocalError::InsufficientValue((*payer).into()))
+        Err(FacilitatorLocalError::InsufficientValue(payer.to_string()))
     } else {
         Ok(())
     }

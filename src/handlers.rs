@@ -162,7 +162,7 @@ where
     }
 }
 
-fn invalid_schema(payer: Option<MixedAddress>) -> VerifyResponse {
+fn invalid_schema(payer: Option<String>) -> VerifyResponse {
     VerifyResponse::invalid(payer, FacilitatorErrorReason::InvalidScheme)
 }
 
