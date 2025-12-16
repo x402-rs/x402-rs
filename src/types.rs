@@ -803,13 +803,6 @@ pub enum VerifyResponse {
 }
 
 impl VerifyResponse {
-    /// Constructs a successful verification response with the given `payer` address.
-    ///
-    /// Indicates that the provided payment payload has been validated against the payment requirements.
-    pub fn valid(payer: String) -> Self {
-        VerifyResponse::Valid { payer }
-    }
-
     /// Constructs a failed verification response with the given `payer` address and error `reason`.
     ///
     /// Indicates that the payment was recognized but rejected due to reasons such as

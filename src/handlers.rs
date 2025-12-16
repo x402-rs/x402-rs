@@ -22,7 +22,6 @@ use crate::facilitator_local::FacilitatorLocalError;
 use crate::p1::proto;
 use crate::types::{
      FacilitatorErrorReason, MixedAddress, SettleRequest, VerifyRequest,
-    VerifyResponse,
 };
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.
@@ -162,8 +161,8 @@ where
     }
 }
 
-fn invalid_schema(payer: Option<String>) -> VerifyResponse {
-    VerifyResponse::invalid(payer, FacilitatorErrorReason::InvalidScheme)
+fn invalid_schema(payer: Option<String>) -> proto::VerifyResponse {
+    proto::VerifyResponse::invalid(payer, FacilitatorErrorReason::InvalidScheme.to_string())
 }
 
 impl IntoResponse for FacilitatorLocalError {
@@ -191,9 +190,9 @@ impl IntoResponse for FacilitatorLocalError {
             FacilitatorLocalError::NetworkMismatch(payer, ..)
             | FacilitatorLocalError::UnsupportedNetwork(payer) => (
                 StatusCode::OK,
-                Json(VerifyResponse::invalid(
+                Json(proto::VerifyResponse::invalid(
                     payer,
-                    FacilitatorErrorReason::InvalidNetwork,
+                    FacilitatorErrorReason::InvalidNetwork.to_string(),
                 )),
             )
                 .into_response(),
@@ -202,17 +201,17 @@ impl IntoResponse for FacilitatorLocalError {
             | FacilitatorLocalError::ClockError(_) => bad_request,
             FacilitatorLocalError::DecodingError(reason) => (
                 StatusCode::OK,
-                Json(VerifyResponse::invalid(
+                Json(proto::VerifyResponse::invalid(
                     None,
-                    FacilitatorErrorReason::FreeForm(reason),
+                    FacilitatorErrorReason::FreeForm(reason).to_string(),
                 )),
             )
                 .into_response(),
             FacilitatorLocalError::InsufficientFunds(payer) => (
                 StatusCode::OK,
-                Json(VerifyResponse::invalid(
+                Json(proto::VerifyResponse::invalid(
                     Some(payer),
-                    FacilitatorErrorReason::InsufficientFunds,
+                    FacilitatorErrorReason::InsufficientFunds.to_string(),
                 )),
             )
                 .into_response(),
