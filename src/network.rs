@@ -126,57 +126,6 @@ impl Network {
 #[error("Failed to convert chain ID to network: {0}")]
 pub struct ChainIdToNetworkError(String);
 
-impl TryInto<Network> for ChainId {
-    type Error = ChainIdToNetworkError;
-
-    fn try_into(self) -> Result<Network, Self::Error> {
-        let namespace = Namespace::from_str(&self.namespace)
-            .map_err(|e| ChainIdToNetworkError(e.to_string()))?;
-        match namespace {
-            Namespace::Solana => {
-                if self.reference == "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" {
-                    Ok(Network::Solana)
-                } else if self.reference == "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" {
-                    Ok(Network::SolanaDevnet)
-                } else {
-                    Err(ChainIdToNetworkError(format!(
-                        "Unknown Solana chain ID: {}",
-                        self.reference
-                    )))
-                }
-            }
-            Namespace::Eip155 => {
-                if self.reference == "84532" {
-                    Ok(Network::BaseSepolia)
-                } else if self.reference == "8453" {
-                    Ok(Network::Base)
-                } else if self.reference == "50" {
-                    Ok(Network::XdcMainnet)
-                } else if self.reference == "4313" {
-                    Ok(Network::AvalancheFuji)
-                } else if self.reference == "43114" {
-                    Ok(Network::Avalanche)
-                } else if self.reference == "1440000" {
-                    Ok(Network::XrplEvm)
-                } else if self.reference == "80002" {
-                    Ok(Network::PolygonAmoy)
-                } else if self.reference == "137" {
-                    Ok(Network::Polygon)
-                } else if self.reference == "1329" {
-                    Ok(Network::Sei)
-                } else if self.reference == "1328" {
-                    Ok(Network::SeiTestnet)
-                } else {
-                    Err(ChainIdToNetworkError(format!(
-                        "Unknown EIP-155 chain ID: {}",
-                        self.reference
-                    )))
-                }
-            }
-        }
-    }
-}
-
 /// Lazily initialized known USDC deployment on Base Sepolia as [`USDCDeployment`].
 static USDC_BASE_SEPOLIA: Lazy<USDCDeployment> = Lazy::new(|| {
     USDCDeployment(TokenDeployment {
