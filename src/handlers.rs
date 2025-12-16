@@ -17,8 +17,8 @@ use axum::{Json, Router, response::IntoResponse};
 use serde_json::json;
 use tracing::instrument;
 
-use crate::chain::FacilitatorLocalError;
 use crate::facilitator::Facilitator;
+use crate::facilitator_local::FacilitatorLocalError;
 use crate::p1::proto;
 use crate::types::{
     ErrorResponse, FacilitatorErrorReason, MixedAddress, SettleRequest, VerifyRequest,

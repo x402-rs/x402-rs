@@ -11,10 +11,10 @@ use tracing::Instrument;
 use tracing::instrument;
 use tracing_core::Level;
 use url::Url;
+use crate::facilitator_local::FacilitatorLocalError;
 
 mod types;
 
-use crate::chain::FacilitatorLocalError;
 use crate::network::Network;
 use crate::p1::chain::eip155::{MetaEip155Provider, Eip155ChainProvider, Eip155ChainReference, MetaTransaction};
 use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps};

@@ -20,7 +20,6 @@
 //! - `HOST`, `PORT` control binding address
 //! - `OTEL_*` variables enable tracing to systems like Honeycomb
 
-mod chain;
 mod config;
 mod facilitator;
 mod facilitator_local;
