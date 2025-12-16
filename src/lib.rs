@@ -16,15 +16,15 @@
 //! - [`telemetry`] — OpenTelemetry instrumentation setup for tracing and observability.
 //! - [`types`] — all shared x402 protocol structures and payload formats.
 
+pub mod chain;
 pub mod config;
 pub mod facilitator;
 pub mod facilitator_local;
 pub mod handlers;
-pub mod timestamp;
-pub mod util;
-pub mod chain;
 pub mod proto;
 pub mod scheme;
+pub mod timestamp;
+pub mod util;
 
 // Hidden re-exports just for macro expansion.
 #[doc(hidden)]

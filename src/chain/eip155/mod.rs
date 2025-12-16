@@ -19,9 +19,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
 use tracing::Instrument;
 
-use crate::facilitator_local::FacilitatorLocalError;
-use crate::config::Eip155ChainConfig;
 use crate::chain::{ChainId, ChainIdError, ChainProviderOps};
+use crate::config::Eip155ChainConfig;
+use crate::facilitator_local::FacilitatorLocalError;
 use pending_nonce_manager::PendingNonceManager;
 
 /// Combined filler type for gas, blob gas, nonce, and chain ID.

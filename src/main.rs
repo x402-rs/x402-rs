@@ -20,15 +20,15 @@
 //! - `HOST`, `PORT` control binding address
 //! - `OTEL_*` variables enable tracing to systems like Honeycomb
 
+mod chain;
 mod config;
 mod facilitator;
 mod facilitator_local;
 mod handlers;
-mod timestamp;
-mod util;
-mod chain;
 mod proto;
 mod scheme;
+mod timestamp;
+mod util;
 
 use axum::Router;
 use axum::http::Method;
@@ -37,9 +37,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::cors;
 
+use crate::chain::ChainRegistry;
 use crate::config::Config;
 use crate::facilitator_local::FacilitatorLocal;
-use crate::chain::ChainRegistry;
 use crate::scheme::{SchemeBlueprints, SchemeRegistry};
 use crate::util::{SigDown, Telemetry};
 

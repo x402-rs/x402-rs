@@ -9,9 +9,9 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 use std::str::FromStr;
 
+use crate::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
 use crate::config::SchemeConfig;
 use crate::facilitator_local::FacilitatorLocalError;
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
 use crate::proto;
 use crate::scheme::v1_solana_exact::V1SolanaExact;
 

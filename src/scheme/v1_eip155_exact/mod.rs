@@ -17,10 +17,11 @@ use crate::chain::eip155::{
     Eip155ChainProvider, Eip155ChainReference, MetaEip155Provider, MetaTransaction,
 };
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
+use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
+use crate::proto::v1;
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 use crate::timestamp::UnixTimestamp;
-use crate::facilitator_local::FacilitatorLocalError;
 
 const SCHEME_NAME: &str = "exact";
 
@@ -269,13 +270,12 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
                 tx = %receipt.transaction_hash,
                 "transferWithAuthorization_0 succeeded"
             );
-            Ok(proto::SettleResponse {
-                success: true,
-                error_reason: None,
+            Ok(v1::SettleResponse::Success {
                 payer: payment.from.to_string(),
-                transaction: Some(receipt.transaction_hash.to_string()),
-                network: payload.network.clone().to_string(),
-            })
+                transaction: receipt.transaction_hash.to_string(),
+                network: payload.network.clone(),
+            }
+            .into())
         } else {
             tracing::event!(
                 Level::WARN,
@@ -283,13 +283,11 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
                 tx = %receipt.transaction_hash,
                 "transferWithAuthorization_0 failed"
             );
-            Ok(proto::SettleResponse {
-                success: false,
-                error_reason: Some("invalid_scheme".to_string()),
-                payer: payment.from.to_string(),
-                transaction: Some(receipt.transaction_hash.to_string()),
-                network: payload.network.clone().to_string(),
-            })
+            Ok(v1::SettleResponse::Error {
+                reason: "invalid_scheme".to_string(),
+                network: payload.network.clone(),
+            }
+            .into())
         }
     }
 

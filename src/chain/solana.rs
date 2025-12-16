@@ -19,9 +19,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::chain::{ChainId, ChainIdError, ChainProviderOps};
 use crate::config::SolanaChainConfig;
 use crate::facilitator_local::FacilitatorLocalError;
-use crate::chain::{ChainId, ChainIdError, ChainProviderOps};
 
 pub const SOLANA_NAMESPACE: &str = "solana";
 

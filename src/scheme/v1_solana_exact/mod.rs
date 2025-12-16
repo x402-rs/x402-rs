@@ -13,9 +13,9 @@ use std::error::Error;
 use std::sync::Arc;
 use tracing_core::Level;
 
-use crate::facilitator_local::FacilitatorLocalError;
 use crate::chain::solana::{Address, SolanaChainProvider};
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
+use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
 use crate::scheme::{X402SchemeBlueprint, X402SchemeHandler};
 use crate::util::Base64Bytes;
@@ -315,25 +315,21 @@ impl X402SchemeHandler for V1SolanaExactHandler {
         // Verify if fully signed
         if !tx.is_fully_signed() {
             tracing::event!(Level::WARN, status = "failed", "undersigned transaction");
-            return Ok(proto::SettleResponse {
-                success: false,
-                error_reason: Some("unexpected_settle_error".to_string()),
-                payer: verification.payer.to_string(),
-                transaction: None,
+            return Ok(proto::v1::SettleResponse::Error {
+                reason: "unexpected_settle_error".to_string(),
                 network: self.provider.chain_id().to_string(),
-            });
+            }
+            .into());
         }
         let tx_sig = tx
             .send_and_confirm(&self.provider, CommitmentConfig::confirmed())
             .await?;
-        let settle_response = proto::SettleResponse {
-            success: true,
-            error_reason: None,
+        Ok(proto::v1::SettleResponse::Success {
             payer: verification.payer.to_string(),
-            transaction: Some(tx_sig.to_string()),
+            transaction: tx_sig.to_string(),
             network: self.provider.chain_id().to_string(),
-        };
-        Ok(settle_response)
+        }
+        .into())
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {

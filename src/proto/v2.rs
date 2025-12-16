@@ -1,3 +1,4 @@
+use crate::proto::v1;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -45,3 +46,5 @@ impl Display for X402Version2 {
         write!(f, "{}", Self::VALUE)
     }
 }
+
+pub type SettleResponse = v1::SettleResponse;
