@@ -1,4 +1,3 @@
-use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
@@ -142,103 +141,8 @@ impl VerifyRequest {
     }
 }
 
-/// Result returned by a facilitator after verifying a [`PaymentPayload`] against the provided [`PaymentRequirements`].
-///
-/// This response indicates whether the payment authorization is valid and identifies the payer. If invalid,
-/// it includes a reason describing why verification failed (e.g., wrong network, an invalid scheme, insufficient funds).
-#[derive(Debug)]
-pub enum VerifyResponse {
-    /// The payload matches the requirements and passes all checks.
-    Valid { payer: String },
-    /// The payload was well-formed but failed verification due to the specified [`FacilitatorErrorReason`]
-    Invalid {
-        reason: String,
-        payer: Option<String>,
-    },
-}
-
-impl VerifyResponse {
-    /// Constructs a successful verification response with the given `payer` address.
-    ///
-    /// Indicates that the provided payment payload has been validated against the payment requirements.
-    pub fn valid(payer: String) -> Self {
-        VerifyResponse::Valid { payer }
-    }
-
-    /// Constructs a failed verification response with the given `payer` address and error `reason`.
-    ///
-    /// Indicates that the payment was recognized but rejected due to reasons such as
-    /// insufficient funds, invalid network, or scheme mismatch.
-    pub fn invalid(payer: Option<String>, reason: String) -> Self {
-        VerifyResponse::Invalid { reason, payer }
-    }
-}
-
-impl Serialize for VerifyResponse {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut s = match self {
-            VerifyResponse::Valid { .. } => serializer.serialize_struct("VerifyResponse", 2)?,
-            VerifyResponse::Invalid { .. } => serializer.serialize_struct("VerifyResponse", 3)?,
-        };
-
-        match self {
-            VerifyResponse::Valid { payer } => {
-                s.serialize_field("isValid", &true)?;
-                s.serialize_field("payer", payer)?;
-            }
-            VerifyResponse::Invalid { reason, payer } => {
-                s.serialize_field("isValid", &false)?;
-                s.serialize_field("invalidReason", reason)?;
-                if let Some(payer) = payer {
-                    s.serialize_field("payer", payer)?
-                }
-            }
-        }
-
-        s.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for VerifyResponse {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Raw {
-            is_valid: bool,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            payer: Option<String>,
-            #[serde(default)]
-            invalid_reason: Option<String>,
-        }
-
-        let raw = Raw::deserialize(deserializer)?;
-
-        match (raw.is_valid, raw.invalid_reason) {
-            (true, None) => match raw.payer {
-                None => Err(serde::de::Error::custom(
-                    "`payer` must be present when `isValid` is true",
-                )),
-                Some(payer) => Ok(VerifyResponse::Valid { payer }),
-            },
-            (false, Some(reason)) => Ok(VerifyResponse::Invalid {
-                payer: raw.payer,
-                reason,
-            }),
-            (true, Some(_)) => Err(serde::de::Error::custom(
-                "`invalidReason` must be absent when `isValid` is true",
-            )),
-            (false, None) => Err(serde::de::Error::custom(
-                "`invalidReason` must be present when `isValid` is false",
-            )),
-        }
-    }
-}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerifyResponse(serde_json::Value);
 
 /// Wrapper for a payment payload and requirements sent by the client to a facilitator
 /// to be verified.

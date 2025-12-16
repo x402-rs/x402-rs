@@ -139,3 +139,99 @@ impl<'de> Deserialize<'de> for SettleResponse {
         }
     }
 }
+
+/// Result returned by a facilitator after verifying a [`PaymentPayload`] against the provided [`PaymentRequirements`].
+///
+/// This response indicates whether the payment authorization is valid and identifies the payer. If invalid,
+/// it includes a reason describing why verification failed (e.g., wrong network, an invalid scheme, insufficient funds).
+#[derive(Debug)]
+pub enum VerifyResponse {
+    /// The payload matches the requirements and passes all checks.
+    Valid { payer: String },
+    /// The payload was well-formed but failed verification due to the specified [`FacilitatorErrorReason`]
+    Invalid {
+        reason: String,
+        payer: Option<String>,
+    },
+}
+
+impl Into<crate::proto::VerifyResponse> for VerifyResponse {
+    fn into(self) -> crate::proto::VerifyResponse {
+        crate::proto::VerifyResponse(
+            serde_json::to_value(self).expect("VerifyResponse serialization failed"),
+        )
+    }
+}
+
+impl VerifyResponse {
+    /// Constructs a successful verification response with the given `payer` address.
+    ///
+    /// Indicates that the provided payment payload has been validated against the payment requirements.
+    pub fn valid(payer: String) -> Self {
+        VerifyResponse::Valid { payer }
+    }
+
+    /// Constructs a failed verification response with the given `payer` address and error `reason`.
+    ///
+    /// Indicates that the payment was recognized but rejected due to reasons such as
+    /// insufficient funds, invalid network, or scheme mismatch.
+    #[allow(dead_code)]
+    pub fn invalid(payer: Option<String>, reason: String) -> Self {
+        VerifyResponse::Invalid { reason, payer }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VerifyResponseWire {
+    is_valid: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    payer: Option<String>,
+    #[serde(default)]
+    invalid_reason: Option<String>,
+}
+
+impl Serialize for VerifyResponse {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let wire = match self {
+            VerifyResponse::Valid { payer } => VerifyResponseWire {
+                is_valid: true,
+                payer: Some(payer.clone()),
+                invalid_reason: None,
+            },
+            VerifyResponse::Invalid { reason, payer } => VerifyResponseWire {
+                is_valid: false,
+                payer: payer.clone(),
+                invalid_reason: Some(reason.clone()),
+            },
+        };
+        wire.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for VerifyResponse {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let wire = VerifyResponseWire::deserialize(deserializer)?;
+        match wire.is_valid {
+            true => {
+                let payer = wire
+                    .payer
+                    .ok_or_else(|| serde::de::Error::missing_field("payer"))?;
+                Ok(VerifyResponse::Valid { payer })
+            }
+            false => {
+                let reason = wire
+                    .invalid_reason
+                    .ok_or_else(|| serde::de::Error::missing_field("invalid_reason"))?;
+                let payer = wire.payer;
+                Ok(VerifyResponse::Invalid { reason, payer })
+            }
+        }
+    }
+}

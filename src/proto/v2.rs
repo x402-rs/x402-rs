@@ -48,3 +48,4 @@ impl Display for X402Version2 {
 }
 
 pub type SettleResponse = v1::SettleResponse;
+pub type VerifyResponse = v1::VerifyResponse;

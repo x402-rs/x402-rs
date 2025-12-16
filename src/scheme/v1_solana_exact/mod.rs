@@ -300,7 +300,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
             FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
         )?;
         let verification = self.verify_transfer(request).await?;
-        Ok(proto::VerifyResponse::valid(verification.payer.to_string()))
+        Ok(proto::v1::VerifyResponse::valid(verification.payer.to_string()).into())
     }
 
     async fn settle(

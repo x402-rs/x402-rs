@@ -158,10 +158,6 @@ where
     }
 }
 
-fn invalid_schema(payer: Option<String>) -> proto::VerifyResponse {
-    proto::VerifyResponse::invalid(payer, FacilitatorErrorReason::InvalidScheme.to_string())
-}
-
 impl IntoResponse for FacilitatorLocalError {
     fn into_response(self) -> Response {
         let error = self;
@@ -175,22 +171,32 @@ impl IntoResponse for FacilitatorLocalError {
             .into_response();
 
         match error {
-            FacilitatorLocalError::SchemeMismatch(payer, ..) => {
-                (StatusCode::OK, Json(invalid_schema(payer))).into_response()
-            }
+            FacilitatorLocalError::SchemeMismatch(payer, ..) => (
+                StatusCode::OK,
+                Json(json!({
+                    "payer": payer,
+                    "error": FacilitatorErrorReason::InvalidScheme.to_string(),
+                })),
+            )
+                .into_response(),
             FacilitatorLocalError::ReceiverMismatch(payer, ..)
             | FacilitatorLocalError::InvalidSignature(payer, ..)
             | FacilitatorLocalError::InvalidTiming(payer, ..)
-            | FacilitatorLocalError::InsufficientValue(payer) => {
-                (StatusCode::OK, Json(invalid_schema(Some(payer)))).into_response()
-            }
+            | FacilitatorLocalError::InsufficientValue(payer) => (
+                StatusCode::OK,
+                Json(json!({
+                    "payer": payer,
+                    "error": FacilitatorErrorReason::InvalidScheme.to_string(),
+                })),
+            )
+                .into_response(),
             FacilitatorLocalError::NetworkMismatch(payer, ..)
             | FacilitatorLocalError::UnsupportedNetwork(payer) => (
                 StatusCode::OK,
-                Json(proto::VerifyResponse::invalid(
-                    payer,
-                    FacilitatorErrorReason::InvalidNetwork.to_string(),
-                )),
+                Json(json!({
+                    "payer": payer,
+                    "error": FacilitatorErrorReason::InvalidNetwork.to_string(),
+                })),
             )
                 .into_response(),
             FacilitatorLocalError::ContractCall(..) | FacilitatorLocalError::ClockError(_) => {
@@ -198,18 +204,17 @@ impl IntoResponse for FacilitatorLocalError {
             }
             FacilitatorLocalError::DecodingError(reason) => (
                 StatusCode::OK,
-                Json(proto::VerifyResponse::invalid(
-                    None,
-                    FacilitatorErrorReason::FreeForm(reason).to_string(),
-                )),
+                Json(json!({
+                    "error": reason,
+                })),
             )
                 .into_response(),
             FacilitatorLocalError::InsufficientFunds(payer) => (
                 StatusCode::OK,
-                Json(proto::VerifyResponse::invalid(
-                    Some(payer),
-                    FacilitatorErrorReason::InsufficientFunds.to_string(),
-                )),
+                Json(json!({
+                    "payer": payer,
+                    "error": FacilitatorErrorReason::InsufficientFunds.to_string(),
+                })),
             )
                 .into_response(),
         }

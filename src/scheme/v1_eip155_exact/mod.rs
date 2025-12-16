@@ -150,7 +150,7 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
             }
         }
 
-        Ok(proto::VerifyResponse::valid(payer.to_string()))
+        Ok(v1::VerifyResponse::valid(payer.to_string()).into())
     }
 
     async fn settle(
