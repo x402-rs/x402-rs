@@ -11,18 +11,18 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 use std::str::FromStr;
-use std::sync::Arc;
+use crate::p1::proto;
 
 #[async_trait::async_trait]
 pub trait X402SchemeHandler: Send + Sync {
-    async fn supported(&self) -> Result<SupportedResponse, FacilitatorLocalError>;
+    async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError>;
 }
 
 pub trait X402SchemeBlueprint {
     fn slug(&self) -> SchemeSlug;
     fn build(
         &self,
-        provider: Arc<ChainProvider>,
+        provider: ChainProvider,
     ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn std::error::Error>>;
 }
 

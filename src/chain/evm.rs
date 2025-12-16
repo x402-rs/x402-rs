@@ -53,7 +53,7 @@ use crate::chain::{FacilitatorLocalError, NetworkProviderOps};
 use crate::config::Eip155ChainConfig;
 use crate::facilitator::Facilitator;
 use crate::network::{Network, USDCDeployment};
-use crate::proto;
+use crate::p1::proto;
 use crate::timestamp::UnixTimestamp;
 use crate::types::{
     EvmSignature, ExactPaymentPayload, FacilitatorErrorReason, HexEncodedNonce, MixedAddress,
@@ -487,8 +487,8 @@ impl MetaEvmProvider for EvmProvider {
 
 impl NetworkProviderOps for EvmProvider {
     /// Address of the default signer used by this provider (for tx sending).
-    fn signer_addresses(&self) -> Vec<MixedAddress> {
-        self.inner.signer_addresses().map(|a| a.into()).collect()
+    fn signer_addresses(&self) -> Vec<String> {
+        self.inner.signer_addresses().map(|a| a.to_string()).collect()
     }
 
     fn chain_id(&self) -> ChainId {
@@ -744,7 +744,7 @@ where
     }
 
     /// Report payment kinds supported by this provider on its current network.
-    async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
         let chain_id: ChainId = self.chain().into();
         let kinds = {
             let mut kinds = Vec::with_capacity(2);
@@ -770,7 +770,7 @@ where
             signers.insert(self.chain_id(), self.signer_addresses());
             signers
         };
-        Ok(SupportedResponse {
+        Ok(proto::SupportedResponse {
             kinds,
             extensions: Vec::new(),
             signers,

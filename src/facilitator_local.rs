@@ -14,6 +14,7 @@ use tracing::instrument;
 
 use crate::chain::FacilitatorLocalError;
 use crate::facilitator::Facilitator;
+use crate::p1::proto;
 use crate::p1::scheme::SchemeRegistry;
 use crate::provider_cache::ProviderMap;
 use crate::types::{
@@ -49,7 +50,7 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
         todo!()
     }
 
-    async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
         let mut kinds = vec![];
         let mut signers = HashMap::new();
         for provider in self.handlers.values() {
@@ -61,7 +62,7 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
                 }
             }
         }
-        Ok(SupportedResponse {
+        Ok(proto::SupportedResponse {
             kinds,
             extensions: Vec::new(),
             signers,
@@ -127,7 +128,7 @@ where
         Ok(settle_response)
     }
 
-    async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
         let mut kinds = vec![];
         let mut signers = HashMap::new();
         for provider in self.handlers.values() {
@@ -139,7 +140,7 @@ where
                 }
             }
         }
-        Ok(SupportedResponse {
+        Ok(proto::SupportedResponse {
             kinds,
             extensions: Vec::new(),
             signers,

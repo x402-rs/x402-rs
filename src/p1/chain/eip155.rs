@@ -72,7 +72,7 @@ impl Eip155ChainProvider {
 }
 
 impl ChainProviderOps for Eip155ChainProvider {
-    fn signer_addresses(&self) -> Vec<&str> {
+    fn signer_addresses(&self) -> Vec<String> {
         // FIXME TODO
         vec![]
     }

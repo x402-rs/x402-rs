@@ -13,6 +13,7 @@ use crate::config::ChainConfig;
 use crate::facilitator::Facilitator;
 use crate::network::ChainIdToNetworkError;
 use crate::p1::chain::ChainId;
+use crate::p1::proto;
 use crate::types::{
     MixedAddress, SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse,
 };
@@ -46,12 +47,12 @@ impl NetworkProvider {
 }
 
 pub trait NetworkProviderOps {
-    fn signer_addresses(&self) -> Vec<MixedAddress>;
+    fn signer_addresses(&self) -> Vec<String>;
     fn chain_id(&self) -> ChainId;
 }
 
 impl NetworkProviderOps for NetworkProvider {
-    fn signer_addresses(&self) -> Vec<MixedAddress> {
+    fn signer_addresses(&self) -> Vec<String> {
         match self {
             NetworkProvider::Evm(provider) => provider.signer_addresses(),
             NetworkProvider::Solana(provider) => provider.signer_addresses(),
@@ -83,7 +84,7 @@ impl Facilitator for NetworkProvider {
         }
     }
 
-    async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
         match self {
             NetworkProvider::Evm(provider) => provider.supported().await,
             NetworkProvider::Solana(provider) => provider.supported().await,

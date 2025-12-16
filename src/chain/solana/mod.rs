@@ -28,7 +28,7 @@ use crate::facilitator::Facilitator;
 use crate::network::Network;
 use crate::p1::chain::ChainId;
 use crate::p1::chain::solana::{SOLANA_NAMESPACE, SolanaChainReference};
-use crate::proto;
+use crate::p1::proto;
 use crate::types::{
     Base64Bytes, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, PaymentRequirements,
     Scheme, SettleRequest, SettleResponse, SupportedResponse, TokenAmount, TransactionHash,
@@ -607,8 +607,8 @@ pub struct TransferCheckedInstruction {
 }
 
 impl NetworkProviderOps for SolanaProvider {
-    fn signer_addresses(&self) -> Vec<MixedAddress> {
-        vec![self.fee_payer().into()]
+    fn signer_addresses(&self) -> Vec<String> {
+        vec![self.fee_payer().to_string()]
     }
 
     fn chain_id(&self) -> ChainId {
@@ -661,7 +661,7 @@ impl Facilitator for SolanaProvider {
         Ok(settle_response)
     }
 
-    async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
         let kinds: Vec<proto::SupportedPaymentKind> = {
             let mut kinds = Vec::with_capacity(2);
             let fee_payer = self.fee_payer();
@@ -689,7 +689,7 @@ impl Facilitator for SolanaProvider {
             signers.insert(self.chain_id(), self.signer_addresses());
             signers
         };
-        Ok(SupportedResponse {
+        Ok(proto::SupportedResponse {
             kinds,
             extensions: Vec::new(),
             signers,

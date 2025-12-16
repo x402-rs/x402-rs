@@ -8,6 +8,7 @@ use crate::types::{
 };
 use std::fmt::{Debug, Display};
 use std::sync::Arc;
+use crate::p1::proto;
 
 /// Trait defining the asynchronous interface for x402 payment facilitators.
 ///
@@ -53,7 +54,7 @@ pub trait Facilitator {
     ) -> impl Future<Output = Result<SettleResponse, Self::Error>> + Send;
 
     #[allow(dead_code)] // For some reason clippy believes it is not used.
-    fn supported(&self) -> impl Future<Output = Result<SupportedResponse, Self::Error>> + Send;
+    fn supported(&self) -> impl Future<Output = Result<proto::SupportedResponse, Self::Error>> + Send;
 }
 
 impl<T: Facilitator> Facilitator for Arc<T> {
@@ -73,7 +74,7 @@ impl<T: Facilitator> Facilitator for Arc<T> {
         self.as_ref().settle(request)
     }
 
-    fn supported(&self) -> impl Future<Output = Result<SupportedResponse, Self::Error>> + Send {
+    fn supported(&self) -> impl Future<Output = Result<proto::SupportedResponse, Self::Error>> + Send {
         self.as_ref().supported()
     }
 }

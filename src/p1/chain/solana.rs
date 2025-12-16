@@ -131,7 +131,7 @@ impl SolanaChainProvider {
 }
 
 impl ChainProviderOps for SolanaChainProvider {
-    fn signer_addresses(&self) -> Vec<&str> {
+    fn signer_addresses(&self) -> Vec<String> {
         // FIXME TODO
         vec![]
     }
