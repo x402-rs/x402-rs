@@ -116,6 +116,34 @@ impl ChainIdPattern {
             references,
         }
     }
+
+    /// Check if a `ChainId` matches this pattern.
+    ///
+    /// - `Wildcard` matches any chain with the same namespace
+    /// - `Exact` matches only if both namespace and reference are equal
+    /// - `Set` matches if the namespace is equal and the reference is in the set
+    pub fn matches(&self, chain_id: &ChainId) -> bool {
+        match self {
+            ChainIdPattern::Wildcard { namespace } => chain_id.namespace == *namespace,
+            ChainIdPattern::Exact {
+                namespace,
+                reference,
+            } => chain_id.namespace == *namespace && chain_id.reference == *reference,
+            ChainIdPattern::Set {
+                namespace,
+                references,
+            } => chain_id.namespace == *namespace && references.contains(&chain_id.reference),
+        }
+    }
+
+    /// Returns the namespace of this pattern.
+    pub fn namespace(&self) -> &str {
+        match self {
+            ChainIdPattern::Wildcard { namespace } => namespace,
+            ChainIdPattern::Exact { namespace, .. } => namespace,
+            ChainIdPattern::Set { namespace, .. } => namespace,
+        }
+    }
 }
 
 impl fmt::Display for ChainIdPattern {
@@ -230,19 +258,16 @@ mod tests {
     #[test]
     fn test_chain_id_deserialize_eip155() {
         let chain_id: ChainId = serde_json::from_str("\"eip155:1\"").unwrap();
-        assert_eq!(chain_id.namespace.as_ref(), "eip155");
-        assert_eq!(chain_id.reference.as_ref(), "1");
+        assert_eq!(chain_id.namespace, "eip155");
+        assert_eq!(chain_id.reference, "1");
     }
 
     #[test]
     fn test_chain_id_deserialize_solana() {
         let chain_id: ChainId =
             serde_json::from_str("\"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp\"").unwrap();
-        assert_eq!(chain_id.namespace.as_ref(), "solana");
-        assert_eq!(
-            chain_id.reference.as_ref(),
-            "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
-        );
+        assert_eq!(chain_id.namespace, "solana");
+        assert_eq!(chain_id.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
     }
 
     #[test]
@@ -272,5 +297,49 @@ mod tests {
     fn test_chain_id_deserialize_unknown_namespace() {
         let result: Result<ChainId, _> = serde_json::from_str("\"unknown:1\"");
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_pattern_wildcard_matches() {
+        let pattern = ChainIdPattern::wildcard("eip155".into());
+        assert!(pattern.matches(&ChainId::new("eip155", "1")));
+        assert!(pattern.matches(&ChainId::new("eip155", "8453")));
+        assert!(pattern.matches(&ChainId::new("eip155", "137")));
+        assert!(!pattern.matches(&ChainId::new("solana", "mainnet")));
+    }
+
+    #[test]
+    fn test_pattern_exact_matches() {
+        let pattern = ChainIdPattern::exact("eip155".into(), "1".into());
+        assert!(pattern.matches(&ChainId::new("eip155", "1")));
+        assert!(!pattern.matches(&ChainId::new("eip155", "8453")));
+        assert!(!pattern.matches(&ChainId::new("solana", "1")));
+    }
+
+    #[test]
+    fn test_pattern_set_matches() {
+        let references: HashSet<String> = vec!["1", "8453", "137"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        let pattern = ChainIdPattern::set("eip155".into(), references);
+        assert!(pattern.matches(&ChainId::new("eip155", "1")));
+        assert!(pattern.matches(&ChainId::new("eip155", "8453")));
+        assert!(pattern.matches(&ChainId::new("eip155", "137")));
+        assert!(!pattern.matches(&ChainId::new("eip155", "42")));
+        assert!(!pattern.matches(&ChainId::new("solana", "1")));
+    }
+
+    #[test]
+    fn test_pattern_namespace() {
+        let wildcard = ChainIdPattern::wildcard("eip155".into());
+        assert_eq!(wildcard.namespace(), "eip155");
+
+        let exact = ChainIdPattern::exact("solana".into(), "mainnet".into());
+        assert_eq!(exact.namespace(), "solana");
+
+        let references: HashSet<String> = vec!["1"].into_iter().map(String::from).collect();
+        let set = ChainIdPattern::set("eip155".into(), references);
+        assert_eq!(set.namespace(), "eip155");
     }
 }
