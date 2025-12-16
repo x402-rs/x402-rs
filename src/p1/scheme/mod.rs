@@ -3,10 +3,10 @@ pub mod v1_eip155_exact;
 pub use v1_eip155_exact::V1Eip155Exact;
 
 use crate::config::SchemeConfig;
-use crate::p1::chain::{ChainProvider, ChainRegistry};
+use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -128,8 +128,26 @@ impl<'de> Deserialize<'de> for SchemeSlug {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct SchemeHandlerSlug {
+    pub chain_id: ChainId,
+    pub slug: SchemeSlug,
+}
+
+impl SchemeHandlerSlug {
+    pub fn new(chain_id: ChainId, slug: SchemeSlug) -> Self {
+        Self { chain_id, slug }
+    }
+}
+
+impl Display for SchemeHandlerSlug {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}:v{}:{}", self.chain_id.namespace, self.chain_id.reference, self.slug.x402_version, self.slug.name)
+    }
+}
+
 #[derive(Default)]
-pub struct SchemeRegistry(HashMap<SchemeSlug, Box<dyn X402SchemeHandler>>);
+pub struct SchemeRegistry(HashMap<SchemeHandlerSlug, Box<dyn X402SchemeHandler>>);
 
 impl Debug for SchemeRegistry {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -170,6 +188,7 @@ impl SchemeRegistry {
                     continue;
                 }
             };
+            let chain_id = chain_provider.chain_id();
             let handler = match blueprint.build(chain_provider) {
                 Ok(handler) => handler,
                 Err(err) => {
@@ -177,7 +196,8 @@ impl SchemeRegistry {
                     continue;
                 }
             };
-            handlers.insert(config.slug.clone(), handler);
+            let slug = SchemeHandlerSlug::new(chain_id, config.slug.clone());
+            handlers.insert(slug, handler);
         }
         Self(handlers)
     }
