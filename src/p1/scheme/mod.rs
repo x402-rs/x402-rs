@@ -1,18 +1,20 @@
 pub mod v1_eip155_exact;
 
+pub use v1_eip155_exact::V1Eip155Exact;
+
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 
 use crate::p1::chain::ChainProvider;
 
-pub trait X402Scheme {}
+pub trait X402SchemeHandler {}
 
 pub trait X402SchemeBlueprint {
     fn slug(&self) -> SchemeSlug;
     fn build(
         &self,
         provider: ChainProvider,
-    ) -> Result<Box<dyn X402Scheme>, Box<dyn std::error::Error>>;
+    ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn std::error::Error>>;
 }
 
 #[derive(Default)]
@@ -28,6 +30,15 @@ impl Debug for SchemeRegistry {
 }
 
 impl SchemeRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn and_register<B: X402SchemeBlueprint + 'static>(&mut self, blueprint: B) -> &mut Self {
+        self.register(blueprint);
+        self
+    }
+
     pub fn register<B: X402SchemeBlueprint + 'static>(&mut self, blueprint: B) {
         self.0.insert(blueprint.slug(), Box::new(blueprint));
     }
