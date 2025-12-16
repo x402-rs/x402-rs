@@ -1,5 +1,6 @@
+pub mod pending_nonce_manager;
+
 use crate::chain::FacilitatorLocalError;
-use crate::chain::evm::{InnerProvider, PendingNonceManager};
 use crate::config::Eip155ChainConfig;
 use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
@@ -18,6 +19,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
 use tracing::Instrument;
+use crate::chain::evm::InnerProvider;
+
+use pending_nonce_manager::PendingNonceManager;
 
 pub const EIP155_NAMESPACE: &str = "eip155";
 
