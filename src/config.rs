@@ -50,7 +50,7 @@ pub struct SchemeConfig {
     #[serde(default = "scheme_config_defaults::default_enabled")]
     pub enabled: bool,
     /// The scheme slug (e.g., "v1:eip155:exact").
-    pub name: SchemeSlug,
+    pub slug: SchemeSlug,
     /// The chain pattern this scheme applies to (e.g., "eip155:84532", "eip155:*", "eip155:{1,8453}").
     pub chains: ChainIdPattern,
 }

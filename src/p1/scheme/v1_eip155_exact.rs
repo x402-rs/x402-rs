@@ -14,7 +14,7 @@ impl X402SchemeBlueprint for V1Eip155Exact {
         &self,
         provider: Arc<ChainProvider>,
     ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn std::error::Error>> {
-        todo!()
+        Ok(Box::new(V1Eip155ExactHandler{}))
     }
 }
 

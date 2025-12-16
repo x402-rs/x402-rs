@@ -2,7 +2,8 @@ pub mod v1_eip155_exact;
 
 pub use v1_eip155_exact::V1Eip155Exact;
 
-use crate::p1::chain::ChainProvider;
+use crate::config::SchemeConfig;
+use crate::p1::chain::{ChainProvider, ChainRegistry};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
@@ -25,7 +26,7 @@ pub struct SchemeBlueprints(HashMap<SchemeSlug, Box<dyn X402SchemeBlueprint>>);
 impl Debug for SchemeBlueprints {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let slugs: Vec<String> = self.0.keys().map(|s| s.to_string()).collect();
-        f.debug_struct("SchemeRegistry")
+        f.debug_struct("SchemeBlueprints")
             .field("schemes", &slugs)
             .finish()
     }
@@ -36,13 +37,17 @@ impl SchemeBlueprints {
         Self::default()
     }
 
-    pub fn and_register<B: X402SchemeBlueprint + 'static>(&mut self, blueprint: B) -> &mut Self {
+    pub fn and_register<B: X402SchemeBlueprint + 'static>(mut self, blueprint: B) -> Self {
         self.register(blueprint);
         self
     }
 
     pub fn register<B: X402SchemeBlueprint + 'static>(&mut self, blueprint: B) {
         self.0.insert(blueprint.slug(), Box::new(blueprint));
+    }
+
+    pub fn by_slug(&self, slug: &SchemeSlug) -> Option<&Box<dyn X402SchemeBlueprint>> {
+        self.0.get(slug)
     }
 }
 
@@ -120,5 +125,60 @@ impl<'de> Deserialize<'de> for SchemeSlug {
     {
         let s = String::deserialize(deserializer)?;
         SchemeSlug::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Default)]
+pub struct SchemeRegistry(HashMap<SchemeSlug, Box<dyn X402SchemeHandler>>);
+
+impl Debug for SchemeRegistry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let slugs: Vec<String> = self.0.keys().map(|s| s.to_string()).collect();
+        f.debug_struct("SchemeRegistry")
+            .field("schemes", &slugs)
+            .finish()
+    }
+}
+
+impl SchemeRegistry {
+    pub fn build(
+        chains: ChainRegistry,
+        blueprints: SchemeBlueprints,
+        config: &Vec<SchemeConfig>,
+    ) -> Self {
+        let mut handlers = HashMap::with_capacity(config.len());
+        for config in config {
+            if !config.enabled {
+                tracing::info!(
+                    "Skipping disabled scheme {} for chains {}",
+                    config.slug,
+                    config.chains
+                );
+                continue;
+            }
+            let blueprint = match blueprints.by_slug(&config.slug) {
+                Some(blueprint) => blueprint,
+                None => {
+                    tracing::warn!("No scheme registered: {}", config.slug);
+                    continue;
+                }
+            };
+            let chain_provider = match chains.by_chain_id_pattern(&config.chains) {
+                Some(chain_provider) => chain_provider,
+                None => {
+                    tracing::warn!("No chain provider found for {}", config.chains);
+                    continue;
+                }
+            };
+            let handler = match blueprint.build(chain_provider) {
+                Ok(handler) => handler,
+                Err(err) => {
+                    tracing::error!("Error building scheme handler for {}: {}", config.slug, err);
+                    continue;
+                }
+            };
+            handlers.insert(config.slug.clone(), handler);
+        }
+        Self(handlers)
     }
 }

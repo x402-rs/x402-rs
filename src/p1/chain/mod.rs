@@ -69,4 +69,14 @@ impl ChainRegistry {
     pub fn by_chain_id(&self, chain_id: ChainId) -> Option<Arc<ChainProvider>> {
         self.0.get(&chain_id).cloned()
     }
+
+    pub fn by_chain_id_pattern(&self, pattern: &ChainIdPattern) -> Option<Arc<ChainProvider>> {
+        self.0.iter().find_map(|(chain_id, provider)| {
+            if pattern.matches(chain_id) {
+                Some(Arc::clone(provider))
+            } else {
+                None
+            }
+        })
+    }
 }
