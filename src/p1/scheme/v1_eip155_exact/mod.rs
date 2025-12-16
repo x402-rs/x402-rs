@@ -650,8 +650,8 @@ impl SignedMessage {
             from: payment.from,
             to: payment.to,
             value: payment.value.into(),
-            validAfter: payment.valid_after.into(),
-            validBefore: payment.valid_before.into(),
+            validAfter: U256::from(payment.valid_after.as_secs()),
+            validBefore: U256::from(payment.valid_before.as_secs()),
             nonce: payment.nonce,
         };
         let eip712_hash = transfer_with_authorization.eip712_signing_hash(domain);
@@ -758,8 +758,8 @@ async fn transferWithAuthorization_0<'a, P: Provider>(
     let from = payment.from;
     let to = payment.to;
     let value = payment.value;
-    let valid_after: U256 = payment.valid_after.into();
-    let valid_before: U256 = payment.valid_before.into();
+    let valid_after = U256::from(payment.valid_after.as_secs());
+    let valid_before = U256::from(payment.valid_before.as_secs());
     let nonce = payment.nonce;
     let tx = contract.transferWithAuthorization_0(
         from,

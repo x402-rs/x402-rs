@@ -2,7 +2,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::Display;
 
-pub mod scheme;
 pub mod v1;
 pub mod v2;
 

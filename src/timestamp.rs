@@ -1,4 +1,3 @@
-use alloy_primitives::U256;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
@@ -13,7 +12,7 @@ use std::time::{SystemTime, SystemTimeError};
 /// Serialized as a stringified integer to avoid loss of precision in JSON.
 /// For example, `1699999999` becomes `"1699999999"` in the wire format.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq)]
-pub struct UnixTimestamp(pub u64);
+pub struct UnixTimestamp(u64);
 
 impl Serialize for UnixTimestamp {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -31,12 +30,6 @@ impl<'de> Deserialize<'de> for UnixTimestamp {
             .parse::<u64>()
             .map_err(|_| serde::de::Error::custom("timestamp must be a non-negative integer"))?;
         Ok(UnixTimestamp(ts))
-    }
-}
-
-impl From<UnixTimestamp> for U256 {
-    fn from(value: UnixTimestamp) -> Self {
-        U256::from(value.0)
     }
 }
 
@@ -62,7 +55,7 @@ impl UnixTimestamp {
         Ok(Self(now))
     }
 
-    pub fn seconds_since_epoch(&self) -> u64 {
+    pub fn as_secs(&self) -> u64 {
         self.0
     }
 }

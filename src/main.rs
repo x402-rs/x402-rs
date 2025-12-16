@@ -30,7 +30,6 @@ mod proto;
 mod sig_down;
 mod telemetry;
 mod timestamp;
-mod types;
 mod b64;
 
 use axum::Router;
