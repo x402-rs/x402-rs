@@ -30,7 +30,8 @@ use dotenvy::dotenv;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::cors;
-
+use x402_rs::facilitator_local::FacilitatorLocal;
+use x402_rs::handlers;
 use crate::config::Config;
 use crate::p1::chain::ChainRegistry;
 use crate::p1::scheme::{SchemeBlueprints, SchemeRegistry};
@@ -61,30 +62,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let scheme_registry =
         SchemeRegistry::build(chain_registry, scheme_blueprints, config.schemes());
 
-    println!("{:?}", scheme_registry);
+    let facilitator = FacilitatorLocal::new(scheme_registry);
+    let axum_state = Arc::new(facilitator);
 
-    // let provider_cache = ProviderCache::from_config(config.chains()).await;
-    // // Abort if we can't initialise Ethereum providers early
-    // let provider_cache = match provider_cache {
-    //     Ok(provider_cache) => provider_cache,
-    //     Err(e) => {
-    //         tracing::error!("Failed to create Ethereum providers: {}", e);
-    //         std::process::exit(1);
-    //     }
-    // };
-    // let facilitator = FacilitatorLocal::new(provider_cache);
-    // let axum_state = Arc::new(facilitator);
-    //
-    // let http_endpoints = Router::new()
-    //     .merge(handlers::routes().with_state(axum_state))
-    //     .layer(telemetry.http_tracing())
-    //     .layer(
-    //         cors::CorsLayer::new()
-    //             .allow_origin(cors::Any)
-    //             .allow_methods([Method::GET, Method::POST])
-    //             .allow_headers(cors::Any),
-    //     );
-    //
+    let http_endpoints = Router::new()
+        .merge(handlers::routes().with_state(axum_state))
+        .layer(telemetry.http_tracing())
+        .layer(
+            cors::CorsLayer::new()
+                .allow_origin(cors::Any)
+                .allow_methods([Method::GET, Method::POST])
+                .allow_headers(cors::Any),
+        );
+
     // let addr = SocketAddr::new(config.host(), config.port());
     // tracing::info!("Starting server at http://{}", addr);
     //

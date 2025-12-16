@@ -7,6 +7,7 @@ use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
+use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -215,5 +216,10 @@ impl SchemeRegistry {
             handlers.insert(slug, handler);
         }
         Self(handlers)
+    }
+
+    pub fn by_slug(&self, slug: &SchemeHandlerSlug) -> Option<&dyn X402SchemeHandler> {
+        let handler = self.0.get(slug)?.deref();
+        Some(handler)
     }
 }

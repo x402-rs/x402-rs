@@ -14,6 +14,7 @@ use tracing::instrument;
 
 use crate::chain::FacilitatorLocalError;
 use crate::facilitator::Facilitator;
+use crate::p1::scheme::SchemeRegistry;
 use crate::provider_cache::ProviderMap;
 use crate::types::{
     SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse,
@@ -25,15 +26,31 @@ use crate::types::{
 /// This type is generic over the [`ProviderMap`] implementation used to access EVM providers,
 /// which enables testing or customization beyond the default [`ProviderCache`].
 pub struct FacilitatorLocal<A> {
-    provider_map: A,
+    handlers: A,
 }
 
 impl<A> FacilitatorLocal<A> {
     /// Creates a new [`FacilitatorLocal`] with the given provider cache.
     ///
     /// The provider cache is used to resolve the appropriate EVM provider for each payment's target network.
-    pub fn new(provider_map: A) -> Self {
-        FacilitatorLocal { provider_map }
+    pub fn new(handlers: A) -> Self {
+        FacilitatorLocal { handlers }
+    }
+}
+
+impl Facilitator for FacilitatorLocal<SchemeRegistry> {
+    type Error = FacilitatorLocalError;
+
+    async fn verify(&self, request: &VerifyRequest) -> Result<VerifyResponse, Self::Error> {
+        todo!()
+    }
+
+    async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
+        todo!()
+    }
+
+    async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
+        todo!()
     }
 }
 
@@ -66,7 +83,7 @@ where
     async fn verify(&self, request: &VerifyRequest) -> Result<VerifyResponse, Self::Error> {
         let chain_id = request.network().as_chain_id();
         let provider = self
-            .provider_map
+            .handlers
             .by_chain_id(&chain_id)
             .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
         let verify_response = provider.verify(request).await?;
@@ -88,7 +105,7 @@ where
     async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
         let chain_id = request.network().as_chain_id();
         let provider = self
-            .provider_map
+            .handlers
             .by_chain_id(&chain_id)
             .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
         let settle_response = provider.settle(request).await?;
@@ -98,7 +115,7 @@ where
     async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
         let mut kinds = vec![];
         let mut signers = HashMap::new();
-        for provider in self.provider_map.values() {
+        for provider in self.handlers.values() {
             let supported = provider.supported().await.ok();
             if let Some(mut supported) = supported {
                 kinds.append(&mut supported.kinds);
