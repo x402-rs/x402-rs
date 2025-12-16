@@ -20,7 +20,6 @@ pub mod config;
 pub mod facilitator;
 pub mod facilitator_local;
 pub mod handlers;
-pub mod network;
 pub mod p1;
 pub mod sig_down;
 pub mod telemetry;

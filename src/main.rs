@@ -24,7 +24,6 @@ mod config;
 mod facilitator;
 mod facilitator_local;
 mod handlers;
-mod network;
 mod p1;
 mod sig_down;
 mod telemetry;
