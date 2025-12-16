@@ -1,4 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+use std::collections::HashSet;
 use std::fmt;
 use std::str::FromStr;
 
@@ -79,6 +80,93 @@ impl<'de> Deserialize<'de> for ChainId {
     {
         let s = String::deserialize(deserializer)?;
         ChainId::from_str(&s).map_err(de::Error::custom)
+    }
+}
+
+pub enum ChainIdPattern {
+    Wildcard {
+        namespace: Box<str>,
+    },
+    Exact {
+        namespace: Box<str>,
+        reference: Box<str>,
+    },
+    Set {
+        namespace: Box<str>,
+        references: HashSet<Box<str>>,
+    },
+}
+
+impl ChainIdPattern {
+    pub fn wildcard(namespace: Box<str>) -> Self {
+        Self::Wildcard { namespace }
+    }
+
+    pub fn exact(namespace: Box<str>, reference: Box<str>) -> Self {
+        Self::Exact {
+            namespace,
+            reference,
+        }
+    }
+
+    pub fn set(namespace: Box<str>, references: HashSet<Box<str>>) -> Self {
+        Self::Set {
+            namespace,
+            references,
+        }
+    }
+}
+
+impl FromStr for ChainIdPattern {
+    type Err = ChainIdError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (namespace, rest) = s
+            .split_once(':')
+            .ok_or(ChainIdError::InvalidFormat(s.into()))?;
+
+        if namespace.is_empty() {
+            return Err(ChainIdError::InvalidFormat(s.into()));
+        }
+
+        let namespace: Box<str> = namespace.into();
+
+        // Wildcard: eip155:*
+        if rest == "*" {
+            return Ok(ChainIdPattern::Wildcard { namespace });
+        }
+
+        // Set: eip155:{1,2,3}
+        if let Some(inner) = rest.strip_prefix('{').and_then(|r| r.strip_suffix('}')) {
+            let mut references = HashSet::new();
+
+            for item in inner.split(',') {
+                let item = item.trim();
+                if item.is_empty() {
+                    return Err(ChainIdError::InvalidFormat(s.into()));
+                }
+                references.insert(item.into());
+            }
+
+            if references.is_empty() {
+                return Err(ChainIdError::InvalidFormat(s.into()));
+            }
+
+            return Ok(ChainIdPattern::Set {
+                namespace,
+                references,
+            });
+        }
+
+        // Exact: eip155:1
+        if rest.is_empty() {
+            return Err(ChainIdError::InvalidFormat(s.into()));
+        }
+
+        Ok(ChainIdPattern::Exact {
+            namespace,
+            reference: rest.into(),
+        })
     }
 }
 
