@@ -5,7 +5,7 @@
 
 use crate::p1::proto;
 use crate::types::{
-    SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse,
+    SettleRequest, SettleResponse, VerifyRequest, VerifyResponse,
 };
 use std::fmt::{Debug, Display};
 use std::sync::Arc;

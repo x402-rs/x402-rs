@@ -13,7 +13,6 @@ use std::collections::HashMap;
 use std::time::SystemTimeError;
 
 use crate::facilitator::Facilitator;
-use crate::network::ChainIdToNetworkError;
 use crate::p1::proto;
 use crate::p1::scheme::SchemeRegistry;
 
@@ -118,6 +117,4 @@ pub enum FacilitatorLocalError {
     /// The payload decoding failed.
     #[error("Decoding error: {0}")]
     DecodingError(String),
-    #[error("Can not convert chain ID to network")]
-    NetworkConversionError(#[source] ChainIdToNetworkError),
 }

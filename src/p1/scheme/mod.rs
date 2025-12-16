@@ -7,7 +7,6 @@ use crate::config::SchemeConfig;
 use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
 use crate::p1::proto;
 use crate::p1::scheme::v1_solana_exact::V1SolanaExact;
-use crate::types::SupportedResponse;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
