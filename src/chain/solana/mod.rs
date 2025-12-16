@@ -117,8 +117,8 @@ impl From<Address> for MixedAddress {
 
 #[derive(Clone)]
 pub struct SolanaProvider {
-    keypair: Arc<Keypair>,
     chain: SolanaChainReference,
+    keypair: Arc<Keypair>,
     rpc_client: Arc<RpcClient>,
     pubsub_client: Arc<Option<PubsubClient>>,
     max_compute_unit_limit: u32,

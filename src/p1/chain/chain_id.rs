@@ -42,6 +42,47 @@ impl ChainId {
             _ => None,
         }
     }
+
+    pub fn as_network_name(&self) -> Option<&str> {
+        let namespace = self.namespace.as_str();
+        match namespace {
+            "solana" => {
+                if self.reference == "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" {
+                    Some("solana")
+                } else if self.reference == "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" {
+                    Some("solana-devnet")
+                } else {
+                    None
+                }
+            }
+            "eip155" => {
+                if self.reference == "84532" {
+                    Some("base-sepolia")
+                } else if self.reference == "8453" {
+                    Some("base")
+                } else if self.reference == "50" {
+                    Some("xdc")
+                } else if self.reference == "4313" {
+                    Some("avalanche-fuji")
+                } else if self.reference == "43114" {
+                    Some("avalanche")
+                } else if self.reference == "1440000" {
+                    Some("xrpl-evm")
+                } else if self.reference == "80002" {
+                    Some("polygon-amoy")
+                } else if self.reference == "137" {
+                    Some("polygon")
+                } else if self.reference == "1329" {
+                    Some("sei")
+                } else if self.reference == "1328" {
+                    Some("sei-testnet")
+                } else {
+                    None
+                }
+            },
+            _ => None
+        }
+    }
 }
 
 impl fmt::Display for ChainId {

@@ -1,4 +1,5 @@
 pub mod v1_eip155_exact;
+pub mod v1_solana_exact;
 
 pub use v1_eip155_exact::V1Eip155Exact;
 
@@ -6,6 +7,7 @@ use crate::chain::FacilitatorLocalError;
 use crate::config::SchemeConfig;
 use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
 use crate::p1::proto;
+use crate::p1::scheme::v1_solana_exact::V1SolanaExact;
 use crate::types::SupportedResponse;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -50,9 +52,9 @@ impl SchemeBlueprints {
     }
 
     pub fn full() -> Self {
-        let mut blueprints = Self::new();
-        blueprints.register(V1Eip155Exact);
-        blueprints
+        Self::new()
+            .and_register(V1Eip155Exact)
+            .and_register(V1SolanaExact)
     }
 
     pub fn and_register<B: X402SchemeBlueprint + 'static>(mut self, blueprint: B) -> Self {
