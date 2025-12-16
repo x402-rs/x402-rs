@@ -98,10 +98,10 @@ pub enum FacilitatorLocalError {
     UnsupportedNetwork(Option<MixedAddress>),
     /// The network is not supported by this facilitator.
     #[error("Network mismatch: expected {1}, actual {2}")]
-    NetworkMismatch(Option<MixedAddress>, Box<str>, Box<str>),
+    NetworkMismatch(Option<MixedAddress>, String, String),
     /// Scheme mismatch.
     #[error("Scheme mismatch: expected {1}, actual {2}")]
-    SchemeMismatch(Option<MixedAddress>, Box<str>, Box<str>),
+    SchemeMismatch(Option<MixedAddress>, String, String),
     /// Invalid address.
     #[error("Invalid address: {0}")]
     InvalidAddress(String),

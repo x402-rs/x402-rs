@@ -31,12 +31,12 @@ impl ChainProvider {
 }
 
 pub trait ChainProviderOps {
-    fn signer_addresses(&self) -> Vec<Box<str>>;
+    fn signer_addresses(&self) -> Vec<&str>;
     fn chain_id(&self) -> ChainId;
 }
 
 impl ChainProviderOps for ChainProvider {
-    fn signer_addresses(&self) -> Vec<Box<str>> {
+    fn signer_addresses(&self) -> Vec<&str> {
         match self {
             ChainProvider::Eip155(provider) => provider.signer_addresses(),
             ChainProvider::Solana(provider) => provider.signer_addresses(),
