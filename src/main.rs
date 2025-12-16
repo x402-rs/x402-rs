@@ -26,7 +26,7 @@ mod telemetry;
 
 use crate::config::Config;
 use crate::p1::chain::ChainRegistry;
-use crate::p1::scheme::SchemeRegistry;
+use crate::p1::scheme::SchemeBlueprints;
 use crate::telemetry::Telemetry;
 use axum::Router;
 use axum::http::Method;
@@ -59,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let chain_registry = ChainRegistry::from_config(&config.chains()).await?;
-    let scheme_registry = SchemeRegistry::new().and_register(p1::scheme::V1Eip155Exact);
+    let scheme_blueprints = SchemeBlueprints::new().and_register(p1::scheme::V1Eip155Exact);
 
     println!("{:?}", chain_registry);
 

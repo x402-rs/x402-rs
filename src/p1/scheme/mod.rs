@@ -20,9 +20,9 @@ pub trait X402SchemeBlueprint {
 }
 
 #[derive(Default)]
-pub struct SchemeRegistry(HashMap<SchemeSlug, Box<dyn X402SchemeBlueprint>>);
+pub struct SchemeBlueprints(HashMap<SchemeSlug, Box<dyn X402SchemeBlueprint>>);
 
-impl Debug for SchemeRegistry {
+impl Debug for SchemeBlueprints {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let slugs: Vec<String> = self.0.keys().map(|s| s.to_string()).collect();
         f.debug_struct("SchemeRegistry")
@@ -31,7 +31,7 @@ impl Debug for SchemeRegistry {
     }
 }
 
-impl SchemeRegistry {
+impl SchemeBlueprints {
     pub fn new() -> Self {
         Self::default()
     }
