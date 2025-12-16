@@ -15,9 +15,8 @@ use url::Url;
 mod types;
 
 use crate::chain::FacilitatorLocalError;
-use crate::chain::evm::{MetaEip155Provider, MetaTransaction};
 use crate::network::Network;
-use crate::p1::chain::eip155::{Eip155ChainProvider, Eip155ChainReference};
+use crate::p1::chain::eip155::{MetaEip155Provider, Eip155ChainProvider, Eip155ChainReference, MetaTransaction};
 use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::p1::proto;
 use crate::p1::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};

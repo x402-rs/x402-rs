@@ -1,9 +1,9 @@
 use crate::chain::FacilitatorLocalError;
-use crate::chain::evm::{InnerProvider, MetaEip155Provider, MetaTransaction, PendingNonceManager};
+use crate::chain::evm::{InnerProvider, PendingNonceManager};
 use crate::config::Eip155ChainConfig;
 use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
-use alloy_primitives::{Address, B256};
+use alloy_primitives::{Address, Bytes, B256};
 use alloy_provider::fillers::{BlobGasFiller, ChainIdFiller, GasFiller, JoinFill, NonceFiller};
 use alloy_provider::{Provider, ProviderBuilder, WalletProvider};
 use alloy_rpc_client::RpcClient;
@@ -324,4 +324,33 @@ impl ChainProviderOps for Eip155ChainProvider {
     fn chain_id(&self) -> ChainId {
         self.chain.into()
     }
+}
+
+/// Meta-transaction parameters: target address, calldata, and required confirmations.
+pub struct MetaTransaction {
+    /// Target contract address.
+    pub to: Address,
+    /// Transaction calldata (encoded function call).
+    pub calldata: Bytes,
+    /// Number of block confirmations to wait for.
+    pub confirmations: u64,
+}
+
+/// Trait for sending meta-transactions with custom target and calldata.
+pub trait MetaEip155Provider {
+    /// Error type for operations.
+    type Error;
+    /// Underlying provider type.
+    type Inner: Provider;
+
+    /// Returns reference to underlying provider.
+    fn inner(&self) -> &Self::Inner;
+    /// Returns reference to chain descriptor.
+    fn chain(&self) -> &Eip155ChainReference;
+
+    /// Sends a meta-transaction to the network.
+    fn send_transaction(
+        &self,
+        tx: MetaTransaction,
+    ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send;
 }

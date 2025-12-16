@@ -57,28 +57,3 @@ impl<'a> IntoIterator for &'a ProviderCache {
         self.providers.iter()
     }
 }
-
-impl ProviderCache {
-    pub async fn from_config(
-        chains: &Vec<ChainConfig>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut providers = HashMap::new();
-        for chain in chains {
-            let network_provider = NetworkProvider::from_config(chain).await?;
-            providers.insert(network_provider.chain_id(), network_provider);
-        }
-        Ok(Self { providers })
-    }
-}
-
-impl ProviderMap for ProviderCache {
-    type Value = NetworkProvider;
-
-    fn by_chain_id<N: Borrow<ChainId>>(&self, chain_id: N) -> Option<&Self::Value> {
-        self.providers.get(chain_id.borrow())
-    }
-
-    fn values(&self) -> impl Iterator<Item = &Self::Value> {
-        self.providers.values()
-    }
-}

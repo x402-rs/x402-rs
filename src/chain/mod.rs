@@ -23,79 +23,9 @@ pub enum NetworkProvider {
     Solana(SolanaProvider),
 }
 
-impl NetworkProvider {
-    pub async fn from_config(config: &ChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
-        let provider = match config {
-            ChainConfig::Eip155(config) => {
-                let provider = EvmProvider::from_config(config).await?;
-                NetworkProvider::Evm(provider)
-            }
-            ChainConfig::Solana(config) => {
-                let provider = SolanaProvider::from_config(config).await?;
-                NetworkProvider::Solana(provider)
-            }
-        };
-        Ok(provider)
-    }
-
-    pub fn chain_id(&self) -> ChainId {
-        match self {
-            NetworkProvider::Evm(provider) => provider.chain_id(),
-            NetworkProvider::Solana(provider) => provider.chain_id(),
-        }
-    }
-}
-
 pub trait NetworkProviderOps {
     fn signer_addresses(&self) -> Vec<String>;
     fn chain_id(&self) -> ChainId;
-}
-
-impl NetworkProviderOps for NetworkProvider {
-    fn signer_addresses(&self) -> Vec<String> {
-        match self {
-            NetworkProvider::Evm(provider) => provider.signer_addresses(),
-            NetworkProvider::Solana(provider) => provider.signer_addresses(),
-        }
-    }
-
-    fn chain_id(&self) -> ChainId {
-        match self {
-            NetworkProvider::Evm(provider) => provider.chain_id(),
-            NetworkProvider::Solana(provider) => provider.chain_id(),
-        }
-    }
-}
-
-impl Facilitator for NetworkProvider {
-    type Error = FacilitatorLocalError;
-
-    async fn verify(
-        &self,
-        request: &proto::VerifyRequest,
-    ) -> Result<proto::VerifyResponse, Self::Error> {
-        match self {
-            NetworkProvider::Evm(provider) => provider.verify(request).await,
-            NetworkProvider::Solana(provider) => provider.verify(request).await,
-        }
-    }
-
-    async fn settle(
-        &self,
-        request: &proto::SettleRequest,
-    ) -> Result<proto::SettleResponse, Self::Error> {
-        match self {
-            NetworkProvider::Evm(provider) => provider.settle(request).await,
-            NetworkProvider::Solana(provider) => provider.settle(request).await,
-        }
-    }
-
-    async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
-        match self {
-            NetworkProvider::Evm(provider) => provider.supported().await,
-            NetworkProvider::Solana(provider) => provider.supported().await,
-        }
-    }
 }
 
 #[derive(Debug, thiserror::Error)]
