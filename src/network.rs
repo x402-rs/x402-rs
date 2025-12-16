@@ -11,7 +11,6 @@ use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::str::FromStr;
 
-use crate::chain::Namespace;
 use crate::p1::chain::ChainId;
 use crate::p1::chain::solana;
 use crate::types::{MixedAddress, TokenAsset, TokenDeployment, TokenDeploymentEip712};

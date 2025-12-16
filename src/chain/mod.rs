@@ -1,9 +1,5 @@
 use std::time::SystemTimeError;
 
-pub mod namespace;
-
-pub use namespace::*;
-
 use crate::facilitator::Facilitator;
 use crate::network::ChainIdToNetworkError;
 use crate::types::{
