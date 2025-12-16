@@ -5,7 +5,6 @@ use crate::p1::chain::solana::{Address, SolanaChainProvider};
 use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::p1::proto;
 use crate::p1::scheme::{X402SchemeBlueprint, X402SchemeHandler};
-use crate::types::Base64Bytes;
 use serde::{Deserialize, Serialize};
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
 use solana_commitment_config::CommitmentConfig;
@@ -18,6 +17,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use tracing_core::Level;
+use crate::b64::Base64Bytes;
 
 const SCHEME_NAME: &str = "exact";
 

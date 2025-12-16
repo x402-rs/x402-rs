@@ -25,7 +25,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::str::FromStr;
 use url::Url;
-
+use crate::b64::Base64Bytes;
 use crate::network::Network;
 use crate::p1::chain::ChainId;
 use crate::p1::chain::solana;
@@ -197,15 +197,6 @@ pub enum PaymentPayloadB64DecodingError {
     /// The JSON structure was invalid or did not conform to [`PaymentPayload`].
     #[error("json parse error: {0}")]
     Json(#[from] serde_json::Error),
-}
-
-impl TryFrom<Base64Bytes<'_>> for PaymentPayload {
-    type Error = PaymentPayloadB64DecodingError;
-
-    fn try_from(value: Base64Bytes) -> Result<Self, Self::Error> {
-        let decoded = value.decode()?;
-        serde_json::from_slice(&decoded).map_err(PaymentPayloadB64DecodingError::from)
-    }
 }
 
 /// A precise on-chain token amount in base units (e.g., USDC with 6 decimals).
@@ -768,141 +759,4 @@ pub struct SettleResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction: Option<TransactionHash>,
     pub network: Network,
-}
-
-/// Error returned when encoding a [`SettleResponse`] into base64 fails.
-///
-/// This typically occurs if the response cannot be serialized to JSON,
-/// which is a prerequisite for base64 encoding in the x402 protocol.
-#[derive(Debug)]
-pub struct SettleResponseB64EncodingError(pub serde_json::Error);
-
-impl Display for SettleResponseB64EncodingError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Failed to encode settle response as base64 string {}",
-            self.0
-        )
-    }
-}
-
-/// Result returned by a facilitator after verifying a [`PaymentPayload`] against the provided [`PaymentRequirements`].
-///
-/// This response indicates whether the payment authorization is valid and identifies the payer. If invalid,
-/// it includes a reason describing why verification failed (e.g., wrong network, an invalid scheme, insufficient funds).
-#[derive(Debug)]
-pub enum VerifyResponse {
-    /// The payload matches the requirements and passes all checks.
-    Valid { payer: String },
-    /// The payload was well-formed but failed verification due to the specified [`FacilitatorErrorReason`]
-    Invalid {
-        reason: FacilitatorErrorReason,
-        payer: Option<String>,
-    },
-}
-
-impl VerifyResponse {
-    /// Constructs a failed verification response with the given `payer` address and error `reason`.
-    ///
-    /// Indicates that the payment was recognized but rejected due to reasons such as
-    /// insufficient funds, invalid network, or scheme mismatch.
-    pub fn invalid(payer: Option<String>, reason: FacilitatorErrorReason) -> Self {
-        VerifyResponse::Invalid { reason, payer }
-    }
-}
-
-impl Serialize for VerifyResponse {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut s = match self {
-            VerifyResponse::Valid { .. } => serializer.serialize_struct("VerifyResponse", 2)?,
-            VerifyResponse::Invalid { .. } => serializer.serialize_struct("VerifyResponse", 3)?,
-        };
-
-        match self {
-            VerifyResponse::Valid { payer } => {
-                s.serialize_field("isValid", &true)?;
-                s.serialize_field("payer", payer)?;
-            }
-            VerifyResponse::Invalid { reason, payer } => {
-                s.serialize_field("isValid", &false)?;
-                s.serialize_field("invalidReason", reason)?;
-                if let Some(payer) = payer {
-                    s.serialize_field("payer", payer)?
-                }
-            }
-        }
-
-        s.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for VerifyResponse {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Raw {
-            is_valid: bool,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            payer: Option<String>,
-            #[serde(default)]
-            invalid_reason: Option<FacilitatorErrorReason>,
-        }
-
-        let raw = Raw::deserialize(deserializer)?;
-
-        match (raw.is_valid, raw.invalid_reason) {
-            (true, None) => match raw.payer {
-                None => Err(serde::de::Error::custom(
-                    "`payer` must be present when `isValid` is true",
-                )),
-                Some(payer) => Ok(VerifyResponse::Valid { payer }),
-            },
-            (false, Some(reason)) => Ok(VerifyResponse::Invalid {
-                payer: raw.payer,
-                reason,
-            }),
-            (true, Some(_)) => Err(serde::de::Error::custom(
-                "`invalidReason` must be absent when `isValid` is true",
-            )),
-            (false, None) => Err(serde::de::Error::custom(
-                "`invalidReason` must be present when `isValid` is false",
-            )),
-        }
-    }
-}
-
-/// Contains bytes of base64 encoded some other bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Base64Bytes<'a>(pub Cow<'a, [u8]>);
-
-impl Base64Bytes<'_> {
-    /// Decode base64 string bytes to raw binary payload.
-    pub fn decode(&self) -> Result<Vec<u8>, base64::DecodeError> {
-        b64.decode(&self.0)
-    }
-
-    /// Encode raw binary input into base64 string bytes
-    pub fn encode<T: AsRef<[u8]>>(input: T) -> Base64Bytes<'static> {
-        let encoded = b64.encode(input.as_ref());
-        Base64Bytes(Cow::Owned(encoded.into_bytes()))
-    }
-}
-
-impl AsRef<[u8]> for Base64Bytes<'_> {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl<'a> From<&'a [u8]> for Base64Bytes<'a> {
-    fn from(slice: &'a [u8]) -> Self {
-        Base64Bytes(Cow::Borrowed(slice))
-    }
 }
