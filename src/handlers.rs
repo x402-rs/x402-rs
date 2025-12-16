@@ -17,12 +17,9 @@ use axum::{Json, Router, response::IntoResponse};
 use serde_json::json;
 use tracing::instrument;
 
-use crate::facilitator::Facilitator;
+use crate::facilitator::{Facilitator, FacilitatorErrorReason};
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::p1::proto;
-use crate::types::{
-     FacilitatorErrorReason, MixedAddress, SettleRequest, VerifyRequest,
-};
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.
 ///

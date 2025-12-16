@@ -3,9 +3,11 @@
 //! Implementors of this trait are responsible for validating incoming payment payloads
 //! against specified requirements [`Facilitator::verify`] and executing on-chain transfers [`Facilitator::settle`].
 
-use crate::p1::proto;
 use std::fmt::{Debug, Display};
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
+
+use crate::p1::proto;
 
 /// Trait defining the asynchronous interface for x402 payment facilitators.
 ///
@@ -78,4 +80,27 @@ impl<T: Facilitator> Facilitator for Arc<T> {
     ) -> impl Future<Output = Result<proto::SupportedResponse, Self::Error>> + Send {
         self.as_ref().supported()
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, thiserror::Error)]
+#[serde(untagged, rename_all = "camelCase")]
+pub enum FacilitatorErrorReason {
+    /// Payer doesn't have sufficient funds.
+    #[error("insufficient_funds")]
+    #[serde(rename = "insufficient_funds")]
+    InsufficientFunds,
+    /// The scheme in PaymentPayload didn't match expected (e.g., not 'exact'), or settlement failed.
+    #[error("invalid_scheme")]
+    #[serde(rename = "invalid_scheme")]
+    InvalidScheme,
+    /// Network in PaymentPayload didn't match a facilitator's expected network.
+    #[error("invalid_network")]
+    #[serde(rename = "invalid_network")]
+    InvalidNetwork,
+    /// Unexpected settle error
+    #[error("unexpected_settle_error")]
+    #[serde(rename = "unexpected_settle_error")]
+    UnexpectedSettleError,
+    #[error("{0}")]
+    FreeForm(String),
 }
