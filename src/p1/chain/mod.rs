@@ -5,7 +5,7 @@ pub mod solana;
 pub use chain_id::*;
 
 use std::collections::HashMap;
-
+use std::sync::Arc;
 use crate::config::ChainConfig;
 
 #[derive(Debug)]
@@ -52,7 +52,7 @@ impl ChainProviderOps for ChainProvider {
 }
 
 #[derive(Debug)]
-pub struct ChainRegistry(HashMap<ChainId, ChainProvider>);
+pub struct ChainRegistry(HashMap<ChainId, Arc<ChainProvider>>);
 
 impl ChainRegistry {
     pub async fn from_config(
@@ -61,8 +61,12 @@ impl ChainRegistry {
         let mut providers = HashMap::new();
         for chain in chains {
             let chain_provider = ChainProvider::from_config(chain).await?;
-            providers.insert(chain_provider.chain_id(), chain_provider);
+            providers.insert(chain_provider.chain_id(), Arc::new(chain_provider));
         }
         Ok(Self(providers))
+    }
+
+    pub fn by_chain_id(&self, chain_id: ChainId) -> Option<Arc<ChainProvider>> {
+        self.0.get(&chain_id).cloned()
     }
 }

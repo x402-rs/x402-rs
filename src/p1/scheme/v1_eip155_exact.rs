@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::p1::chain::ChainProvider;
 use crate::p1::scheme::{SchemeSlug, X402SchemeHandler, X402SchemeBlueprint};
 
@@ -10,7 +12,7 @@ impl X402SchemeBlueprint for V1Eip155Exact {
 
     fn build(
         &self,
-        provider: ChainProvider,
+        provider: Arc<ChainProvider>,
     ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn std::error::Error>> {
         todo!()
     }

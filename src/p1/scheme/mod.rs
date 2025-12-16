@@ -4,7 +4,7 @@ pub use v1_eip155_exact::V1Eip155Exact;
 
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
-
+use std::sync::Arc;
 use crate::p1::chain::ChainProvider;
 
 pub trait X402SchemeHandler {}
@@ -13,7 +13,7 @@ pub trait X402SchemeBlueprint {
     fn slug(&self) -> SchemeSlug;
     fn build(
         &self,
-        provider: ChainProvider,
+        provider: Arc<ChainProvider>,
     ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn std::error::Error>>;
 }
 
