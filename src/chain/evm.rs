@@ -89,7 +89,7 @@ const VALIDATOR_ADDRESS: alloy_primitives::Address =
     address!("0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B");
 
 /// Combined filler type for gas, blob gas, nonce, and chain ID.
-type InnerFiller = JoinFill<
+pub type InnerFiller = JoinFill<
     GasFiller,
     JoinFill<BlobGasFiller, JoinFill<NonceFiller<PendingNonceManager>, ChainIdFiller>>,
 >;
