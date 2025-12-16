@@ -787,15 +787,6 @@ impl Display for SettleResponseB64EncodingError {
     }
 }
 
-impl TryInto<Base64Bytes<'static>> for SettleResponse {
-    type Error = SettleResponseB64EncodingError;
-
-    fn try_into(self) -> Result<Base64Bytes<'static>, Self::Error> {
-        let json = serde_json::to_vec(&self).map_err(SettleResponseB64EncodingError)?;
-        Ok(Base64Bytes::encode(json))
-    }
-}
-
 /// Result returned by a facilitator after verifying a [`PaymentPayload`] against the provided [`PaymentRequirements`].
 ///
 /// This response indicates whether the payment authorization is valid and identifies the payer. If invalid,
