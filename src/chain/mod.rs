@@ -1,29 +1,14 @@
 use std::time::SystemTimeError;
 
-pub mod chain_id;
 pub mod namespace;
-pub mod solana;
 
 pub use namespace::*;
 
-use crate::chain::solana::SolanaProvider;
-use crate::config::ChainConfig;
 use crate::facilitator::Facilitator;
 use crate::network::ChainIdToNetworkError;
-use crate::p1::chain::ChainId;
-use crate::p1::proto;
 use crate::types::{
-    MixedAddress, SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse,
+    MixedAddress,
 };
-
-pub enum NetworkProvider {
-    Solana(SolanaProvider),
-}
-
-pub trait NetworkProviderOps {
-    fn signer_addresses(&self) -> Vec<String>;
-    fn chain_id(&self) -> ChainId;
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum FacilitatorLocalError {

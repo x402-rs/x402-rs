@@ -28,7 +28,6 @@ mod handlers;
 mod network;
 mod p1;
 mod proto;
-mod provider_cache;
 mod sig_down;
 mod telemetry;
 mod timestamp;
