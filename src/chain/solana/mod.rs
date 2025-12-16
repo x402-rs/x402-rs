@@ -628,41 +628,45 @@ impl Facilitator for SolanaProvider {
         // Ok(VerifyResponse::valid(verification.payer.into()))
     }
 
-    async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
-        let verification = self.verify_transfer(request).await?;
-        let tx = TransactionInt::new(verification.transaction).sign(&self.keypair)?;
-        // Verify if fully signed
-        if !tx.is_fully_signed() {
-            tracing::event!(Level::WARN, status = "failed", "undersigned transaction");
-            return Ok(SettleResponse {
-                success: false,
-                error_reason: Some(FacilitatorErrorReason::UnexpectedSettleError),
-                payer: verification.payer.into(),
-                transaction: None,
-                network: self
-                    .chain_id()
-                    .try_into()
-                    .map_err(FacilitatorLocalError::NetworkConversionError)?,
-            });
-        }
-        let tx_sig = tx
-            .send_and_confirm(
-                &self.rpc_client,
-                &self.pubsub_client,
-                CommitmentConfig::confirmed(),
-            )
-            .await?;
-        let settle_response = SettleResponse {
-            success: true,
-            error_reason: None,
-            payer: verification.payer.into(),
-            transaction: Some(TransactionHash::Solana(*tx_sig.as_array())),
-            network: self
-                .chain_id()
-                .try_into()
-                .map_err(FacilitatorLocalError::NetworkConversionError)?,
-        };
-        Ok(settle_response)
+    async fn settle(
+        &self,
+        request: &proto::SettleRequest,
+    ) -> Result<proto::SettleResponse, Self::Error> {
+        todo!("SolanaProvider::settle not yet implemented")
+        // let verification = self.verify_transfer(request).await?;
+        // let tx = TransactionInt::new(verification.transaction).sign(&self.keypair)?;
+        // // Verify if fully signed
+        // if !tx.is_fully_signed() {
+        //     tracing::event!(Level::WARN, status = "failed", "undersigned transaction");
+        //     return Ok(SettleResponse {
+        //         success: false,
+        //         error_reason: Some(FacilitatorErrorReason::UnexpectedSettleError),
+        //         payer: verification.payer.into(),
+        //         transaction: None,
+        //         network: self
+        //             .chain_id()
+        //             .try_into()
+        //             .map_err(FacilitatorLocalError::NetworkConversionError)?,
+        //     });
+        // }
+        // let tx_sig = tx
+        //     .send_and_confirm(
+        //         &self.rpc_client,
+        //         &self.pubsub_client,
+        //         CommitmentConfig::confirmed(),
+        //     )
+        //     .await?;
+        // let settle_response = SettleResponse {
+        //     success: true,
+        //     error_reason: None,
+        //     payer: verification.payer.into(),
+        //     transaction: Some(TransactionHash::Solana(*tx_sig.as_array())),
+        //     network: self
+        //         .chain_id()
+        //         .try_into()
+        //         .map_err(FacilitatorLocalError::NetworkConversionError)?,
+        // };
+        // Ok(settle_response)
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {

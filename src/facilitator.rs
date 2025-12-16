@@ -50,8 +50,8 @@ pub trait Facilitator {
     /// Returns [`Self::Error`] if verification or settlement fails.
     fn settle(
         &self,
-        request: &SettleRequest,
-    ) -> impl Future<Output = Result<SettleResponse, Self::Error>> + Send;
+        request: &proto::SettleRequest,
+    ) -> impl Future<Output = Result<proto::SettleResponse, Self::Error>> + Send;
 
     #[allow(dead_code)] // For some reason clippy believes it is not used.
     fn supported(
@@ -71,8 +71,8 @@ impl<T: Facilitator> Facilitator for Arc<T> {
 
     fn settle(
         &self,
-        request: &SettleRequest,
-    ) -> impl Future<Output = Result<SettleResponse, Self::Error>> + Send {
+        request: &proto::SettleRequest,
+    ) -> impl Future<Output = Result<proto::SettleResponse, Self::Error>> + Send {
         self.as_ref().settle(request)
     }
 

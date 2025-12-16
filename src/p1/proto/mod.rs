@@ -9,8 +9,6 @@ pub mod v1;
 
 pub type SettleRequest = VerifyRequest;
 
-pub struct SettleResponse {}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SupportedPaymentKind {
@@ -156,4 +154,18 @@ impl<'de> Deserialize<'de> for VerifyResponse {
             )),
         }
     }
+}
+
+/// Returned from a facilitator after attempting to settle a payment on-chain.
+/// Indicates success/failure, transaction hash, and payer identity.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettleResponse {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_reason: Option<String>,
+    pub payer: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<String>,
+    pub network: String,
 }

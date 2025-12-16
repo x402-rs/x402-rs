@@ -143,7 +143,7 @@ where
 #[instrument(skip_all)]
 pub async fn post_settle<A>(
     State(facilitator): State<A>,
-    Json(body): Json<SettleRequest>,
+    Json(body): Json<proto::SettleRequest>,
 ) -> impl IntoResponse
 where
     A: Facilitator,

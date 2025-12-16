@@ -19,6 +19,10 @@ pub trait X402SchemeHandler: Send + Sync {
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, FacilitatorLocalError>;
+    async fn settle(
+        &self,
+        request: &proto::SettleRequest,
+    ) -> Result<proto::SettleResponse, FacilitatorLocalError>;
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError>;
 }
 

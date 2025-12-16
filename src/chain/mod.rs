@@ -80,7 +80,10 @@ impl Facilitator for NetworkProvider {
         }
     }
 
-    async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
+    async fn settle(
+        &self,
+        request: &proto::SettleRequest,
+    ) -> Result<proto::SettleResponse, Self::Error> {
         match self {
             NetworkProvider::Evm(provider) => provider.settle(request).await,
             NetworkProvider::Solana(provider) => provider.settle(request).await,

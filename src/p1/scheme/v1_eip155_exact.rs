@@ -5,18 +5,20 @@ use crate::p1::proto;
 use crate::p1::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 use std::collections::HashMap;
 
-use crate::chain::evm::MetaEip155Provider;
+use crate::chain::evm::{MetaEip155Provider, MetaTransaction};
 use crate::network::Network;
 use crate::p1::chain::eip155::Eip155ChainReference;
 use crate::timestamp::UnixTimestamp;
 use alloy_contract::SolCallBuilder;
 use alloy_primitives::{Address, B256, Bytes, U256, address, hex};
-use alloy_provider::Provider;
-use alloy_sol_types::{Eip712Domain, SolStruct, SolType, eip712_domain, sol};
+use alloy_provider::bindings::IMulticall3;
+use alloy_provider::{MULTICALL3_ADDRESS, MulticallItem, Provider};
+use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, sol};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::Instrument;
 use tracing::instrument;
+use tracing_core::Level;
 use url::Url;
 
 const SCHEME_NAME: &str = "exact";
@@ -149,6 +151,147 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
         Ok(proto::VerifyResponse::valid(payer.to_string()))
     }
 
+    async fn settle(
+        &self,
+        request: &proto::SettleRequest,
+    ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
+        let request = SettleRequest::from_proto(request.clone()).ok_or(
+            FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
+        )?;
+
+        let payload = &request.payment_payload;
+        let requirements = &request.payment_requirements;
+        let (contract, payment, eip712_domain) = assert_valid_payment(
+            self.provider.inner(),
+            self.provider.chain(),
+            payload,
+            requirements,
+        )
+        .await?;
+
+        let signed_message = SignedMessage::extract(&payment, &eip712_domain)?;
+        let payer = signed_message.address;
+        let transaction_receipt_fut = match signed_message.signature {
+            StructuredSignature::EIP6492 {
+                factory,
+                factory_calldata,
+                inner,
+                original: _,
+            } => {
+                let is_contract_deployed =
+                    is_contract_deployed(self.provider.inner(), &payer).await?;
+                let transfer_call = transferWithAuthorization_0(&contract, &payment, inner).await?;
+                if is_contract_deployed {
+                    // transferWithAuthorization with inner signature
+                    self.provider
+                        .send_transaction(MetaTransaction {
+                            to: transfer_call.tx.target(),
+                            calldata: transfer_call.tx.calldata().clone(),
+                            confirmations: 1,
+                        })
+                        .instrument(tracing::info_span!("call_transferWithAuthorization_0",
+                            from = %transfer_call.from,
+                            to = %transfer_call.to,
+                            value = %transfer_call.value,
+                            valid_after = %transfer_call.valid_after,
+                            valid_before = %transfer_call.valid_before,
+                            nonce = %transfer_call.nonce,
+                            signature = %transfer_call.signature,
+                            token_contract = %transfer_call.contract_address,
+                            sig_kind="EIP6492.deployed",
+                            otel.kind = "client",
+                        ))
+                } else {
+                    // deploy the smart wallet, and transferWithAuthorization with inner signature
+                    let deployment_call = IMulticall3::Call3 {
+                        allowFailure: true,
+                        target: factory,
+                        callData: factory_calldata,
+                    };
+                    let transfer_with_authorization_call = IMulticall3::Call3 {
+                        allowFailure: false,
+                        target: transfer_call.tx.target(),
+                        callData: transfer_call.tx.calldata().clone(),
+                    };
+                    let aggregate_call = IMulticall3::aggregate3Call {
+                        calls: vec![deployment_call, transfer_with_authorization_call],
+                    };
+                    self.provider
+                        .send_transaction(MetaTransaction {
+                            to: MULTICALL3_ADDRESS,
+                            calldata: aggregate_call.abi_encode().into(),
+                            confirmations: 1,
+                        })
+                        .instrument(tracing::info_span!("call_transferWithAuthorization_0",
+                            from = %transfer_call.from,
+                            to = %transfer_call.to,
+                            value = %transfer_call.value,
+                            valid_after = %transfer_call.valid_after,
+                            valid_before = %transfer_call.valid_before,
+                            nonce = %transfer_call.nonce,
+                            signature = %transfer_call.signature,
+                            token_contract = %transfer_call.contract_address,
+                            sig_kind="EIP6492.counterfactual",
+                            otel.kind = "client",
+                        ))
+                }
+            }
+            StructuredSignature::EIP1271(eip1271_signature) => {
+                let transfer_call =
+                    transferWithAuthorization_0(&contract, &payment, eip1271_signature).await?;
+                // transferWithAuthorization with eip1271 signature
+                self.provider
+                    .send_transaction(MetaTransaction {
+                        to: transfer_call.tx.target(),
+                        calldata: transfer_call.tx.calldata().clone(),
+                        confirmations: 1,
+                    })
+                    .instrument(tracing::info_span!("call_transferWithAuthorization_0",
+                        from = %transfer_call.from,
+                        to = %transfer_call.to,
+                        value = %transfer_call.value,
+                        valid_after = %transfer_call.valid_after,
+                        valid_before = %transfer_call.valid_before,
+                        nonce = %transfer_call.nonce,
+                        signature = %transfer_call.signature,
+                        token_contract = %transfer_call.contract_address,
+                        sig_kind="EIP1271",
+                        otel.kind = "client",
+                    ))
+            }
+        };
+        let receipt = transaction_receipt_fut.await?;
+        let success = receipt.status();
+        if success {
+            tracing::event!(Level::INFO,
+                status = "ok",
+                tx = %receipt.transaction_hash,
+                "transferWithAuthorization_0 succeeded"
+            );
+            Ok(proto::SettleResponse {
+                success: true,
+                error_reason: None,
+                payer: payment.from.to_string(),
+                transaction: Some(receipt.transaction_hash.to_string()),
+                network: payload.network.clone().to_string(),
+            })
+        } else {
+            tracing::event!(
+                Level::WARN,
+                status = "failed",
+                tx = %receipt.transaction_hash,
+                "transferWithAuthorization_0 failed"
+            );
+            Ok(proto::SettleResponse {
+                success: false,
+                error_reason: Some("invalid_scheme".to_string()),
+                payer: payment.from.to_string(),
+                transaction: Some(receipt.transaction_hash.to_string()),
+                network: payload.network.clone().to_string(),
+            })
+        }
+    }
+
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
         let kinds = {
             let mut kinds = Vec::with_capacity(2);
@@ -189,6 +332,8 @@ struct VerifyRequest {
     pub payment_payload: PaymentPayload,
     pub payment_requirements: PaymentRequirements,
 }
+
+type SettleRequest = VerifyRequest;
 
 impl VerifyRequest {
     pub fn from_proto(request: proto::VerifyRequest) -> Option<Self> {
@@ -737,4 +882,28 @@ pub struct TransferWithAuthorization0Call<P> {
     pub signature: Bytes,
     /// Address of the token contract used for this transfer.
     pub contract_address: Address,
+}
+
+/// Check whether contract code is present at `address`.
+///
+/// Uses `eth_getCode` against this provider. This is useful after a counterfactual
+/// deployment to confirm visibility on the sending RPC before submitting a
+/// follow-up transaction.
+///
+/// # Errors
+/// Return [`FacilitatorLocalError::ContractCall`] if the RPC call fails.
+async fn is_contract_deployed<P: Provider>(
+    provider: P,
+    address: &Address,
+) -> Result<bool, FacilitatorLocalError> {
+    let bytes = provider
+        .get_code_at(*address)
+        .into_future()
+        .instrument(tracing::info_span!("get_code_at",
+            address = %address,
+            otel.kind = "client",
+        ))
+        .await
+        .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+    Ok(!bytes.is_empty())
 }

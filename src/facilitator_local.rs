@@ -53,8 +53,15 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
         handler.verify(request).await
     }
 
-    async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
-        todo!("FacilitatorLocal<SchemeRegistry>::settle")
+    async fn settle(
+        &self,
+        request: &proto::SettleRequest,
+    ) -> Result<proto::SettleResponse, Self::Error> {
+        let handler = request
+            .scheme_handler_slug()
+            .and_then(|slug| self.handlers.by_slug(&slug))
+            .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+        handler.settle(request).await
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
@@ -128,15 +135,19 @@ where
     ///
     /// Returns [`FacilitatorLocalError`] if validation or contract call fails. Transaction receipt is included
     /// in the response on success or failure.
-    #[instrument(skip_all, err, fields(network = %request.payment_payload.network))]
-    async fn settle(&self, request: &SettleRequest) -> Result<SettleResponse, Self::Error> {
-        let chain_id = request.network().as_chain_id();
-        let provider = self
-            .handlers
-            .by_chain_id(&chain_id)
-            .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
-        let settle_response = provider.settle(request).await?;
-        Ok(settle_response)
+    // #[instrument(skip_all, err, fields(network = %request.payment_payload.network))]
+    async fn settle(
+        &self,
+        request: &proto::SettleRequest,
+    ) -> Result<proto::SettleResponse, Self::Error> {
+        todo!("FacilitatorLocal::settle")
+        // let chain_id = request.network().as_chain_id();
+        // let provider = self
+        //     .handlers
+        //     .by_chain_id(&chain_id)
+        //     .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+        // let settle_response = provider.settle(request).await?;
+        // Ok(settle_response)
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
