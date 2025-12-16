@@ -71,7 +71,7 @@ pub enum ChainConfig {
     /// EVM chain configuration (for chains with "eip155:" prefix).
     Eip155(Eip155ChainConfig),
     /// Solana chain configuration (for chains with "solana:" prefix).
-    Solana(SolanaChainConfig),
+    Solana(Box<SolanaChainConfig>),
 }
 
 /// RPC provider configuration for a single provider.
@@ -208,21 +208,6 @@ where
 pub struct EvmPrivateKey(B256);
 
 impl EvmPrivateKey {
-    /// Parse a hex string (with or without 0x prefix) into a private key.
-    pub fn from_hex(s: &str) -> Result<Self, String> {
-        let hex_str = s.strip_prefix("0x").unwrap_or(s);
-
-        if hex_str.len() != 64 {
-            return Err(format!(
-                "Private key must be 32 bytes (64 hex chars), got {} chars",
-                hex_str.len()
-            ));
-        }
-
-        let bytes = B256::from_str(s).map_err(|e| format!("Invalid hex: {}", e))?;
-        Ok(Self(bytes))
-    }
-
     /// Get the raw 32 bytes of the private key.
     pub fn as_bytes(&self) -> &[u8; 32] {
         self.0.as_ref()
@@ -306,11 +291,6 @@ impl SolanaPrivateKey {
         let mut arr = [0u8; 64];
         arr.copy_from_slice(&bytes);
         Ok(Self(arr))
-    }
-
-    /// Get the raw 64 bytes of the keypair.
-    pub fn as_bytes(&self) -> &[u8; 64] {
-        &self.0
     }
 
     /// Encode the keypair back to base58.
@@ -416,9 +396,6 @@ impl SolanaChainConfig {
     pub fn chain_reference(&self) -> solana::SolanaChainReference {
         self.chain_reference
     }
-    pub fn chain_id(&self) -> ChainId {
-        self.chain_reference.into()
-    }
     pub fn pubsub(&self) -> &Option<Url> {
         &self.inner.pubsub
     }
@@ -486,12 +463,12 @@ mod chains_serde {
         for chain_config in chains {
             match chain_config {
                 ChainConfig::Eip155(config) => {
-                    let chain_id: ChainId = config.chain_reference.clone().into();
+                    let chain_id: ChainId = config.chain_reference.into();
                     let inner = &config.inner;
                     map.serialize_entry(&chain_id, inner)?;
                 }
                 ChainConfig::Solana(config) => {
-                    let chain_id: ChainId = config.chain_reference.clone().into();
+                    let chain_id: ChainId = config.chain_reference.into();
                     let inner = &config.inner;
                     map.serialize_entry(&chain_id, inner)?;
                 }
@@ -540,7 +517,7 @@ mod chains_serde {
                                     .map_err(|e| serde::de::Error::custom(format!("{}", e)))?,
                                 inner,
                             };
-                            ChainConfig::Solana(config)
+                            ChainConfig::Solana(Box::new(config))
                         }
                         _ => {
                             return Err(serde::de::Error::custom(format!(

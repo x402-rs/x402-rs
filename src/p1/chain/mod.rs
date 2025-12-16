@@ -66,6 +66,7 @@ impl ChainRegistry {
         Ok(Self(providers))
     }
 
+    #[allow(dead_code)]
     pub fn by_chain_id(&self, chain_id: ChainId) -> Option<ChainProvider> {
         self.0.get(&chain_id).cloned()
     }

@@ -5,6 +5,7 @@ use crate::p1::chain::solana::{Address, SolanaChainProvider};
 use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::p1::proto;
 use crate::p1::scheme::{X402SchemeBlueprint, X402SchemeHandler};
+use crate::util::Base64Bytes;
 use serde::{Deserialize, Serialize};
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
 use solana_commitment_config::CommitmentConfig;
@@ -17,7 +18,6 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use tracing_core::Level;
-use crate::b64::Base64Bytes;
 
 const SCHEME_NAME: &str = "exact";
 
@@ -171,10 +171,11 @@ impl V1SolanaExactHandler {
                             "invalid_exact_svm_payload_transaction_instructions".to_string(),
                         )
                     })?;
-            let (amount, decimals) = match token_instruction {
-                spl_token::instruction::TokenInstruction::TransferChecked { amount, decimals } => {
-                    (amount, decimals)
-                }
+            let amount = match token_instruction {
+                spl_token::instruction::TokenInstruction::TransferChecked {
+                    amount,
+                    decimals: _,
+                } => amount,
                 _ => {
                     return Err(FacilitatorLocalError::DecodingError(
                         "invalid_exact_svm_payload_transaction_instructions".to_string(),
@@ -184,20 +185,17 @@ impl V1SolanaExactHandler {
             // Source = 0
             let source = instruction.account(0)?;
             // Mint = 1
-            let mint = instruction.account(1)?;
+            let _mint = instruction.account(1)?;
             // Destination = 2
             let destination = instruction.account(2)?;
             // Authority = 3
             let authority = instruction.account(3)?;
             TransferCheckedInstruction {
                 amount,
-                decimals,
                 source,
-                mint,
                 destination,
                 authority,
                 token_program: spl_token::ID,
-                data: instruction.data(),
             }
         } else if spl_token_2022::ID.eq(&program_id) {
             let token_instruction =
@@ -207,11 +205,11 @@ impl V1SolanaExactHandler {
                             "invalid_exact_svm_payload_transaction_instructions".to_string(),
                         )
                     })?;
-            let (amount, decimals) = match token_instruction {
+            let amount = match token_instruction {
                 spl_token_2022::instruction::TokenInstruction::TransferChecked {
                     amount,
-                    decimals,
-                } => (amount, decimals),
+                    decimals: _,
+                } => amount,
                 _ => {
                     return Err(FacilitatorLocalError::DecodingError(
                         "invalid_exact_svm_payload_transaction_instructions".to_string(),
@@ -221,20 +219,17 @@ impl V1SolanaExactHandler {
             // Source = 0
             let source = instruction.account(0)?;
             // Mint = 1
-            let mint = instruction.account(1)?;
+            let _mint = instruction.account(1)?;
             // Destination = 2
             let destination = instruction.account(2)?;
             // Authority = 3
             let authority = instruction.account(3)?;
             TransferCheckedInstruction {
                 amount,
-                decimals,
                 source,
-                mint,
                 destination,
                 authority,
                 token_program: spl_token_2022::ID,
-                data: instruction.data(),
             }
         } else {
             return Err(FacilitatorLocalError::DecodingError(
@@ -397,10 +392,6 @@ impl InstructionInt {
         !self.instruction.accounts.is_empty()
     }
 
-    pub fn data(&self) -> Vec<u8> {
-        self.instruction.data.clone()
-    }
-
     pub fn data_slice(&self) -> &[u8] {
         self.instruction.data.as_slice()
     }
@@ -480,13 +471,6 @@ impl TransactionInt {
         Ok(Self { inner: tx })
     }
 
-    pub async fn send(
-        &self,
-        provider: &SolanaChainProvider,
-    ) -> Result<Signature, FacilitatorLocalError> {
-        provider.send(&self.inner).await
-    }
-
     pub async fn send_and_confirm(
         &self,
         provider: &SolanaChainProvider,
@@ -516,13 +500,10 @@ pub struct VerifyTransferResult {
 #[derive(Debug)]
 pub struct TransferCheckedInstruction {
     pub amount: u64,
-    pub decimals: u8,
     pub source: Pubkey,
-    pub mint: Pubkey,
     pub destination: Pubkey,
     pub authority: Pubkey,
     pub token_program: Pubkey,
-    pub data: Vec<u8>,
 }
 
 pub fn verify_compute_limit_instruction(

@@ -3,8 +3,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
-use std::str::FromStr;
-use bincode::Options;
 
 use crate::p1::chain::ChainId;
 use crate::p1::scheme::SchemeHandlerSlug;

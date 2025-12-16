@@ -1,6 +1,6 @@
-use std::borrow::Cow;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as b64;
+use std::borrow::Cow;
 
 /// Contains bytes of base64 encoded some other bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]

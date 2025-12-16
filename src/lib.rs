@@ -21,9 +21,7 @@ pub mod facilitator;
 pub mod facilitator_local;
 pub mod handlers;
 pub mod p1;
-pub mod telemetry;
 pub mod timestamp;
-pub mod b64;
 pub mod util;
 
 // Hidden re-exports just for macro expansion.

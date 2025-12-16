@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use solana_transaction::versioned::VersionedTransaction;
 use std::fmt::{Display, Formatter};
 
 use crate::p1::chain::solana::Address;

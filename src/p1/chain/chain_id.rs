@@ -91,9 +91,9 @@ impl fmt::Display for ChainId {
     }
 }
 
-impl Into<String> for ChainId {
-    fn into(self) -> String {
-        self.to_string()
+impl From<ChainId> for String {
+    fn from(value: ChainId) -> Self {
+        value.to_string()
     }
 }
 
@@ -196,6 +196,7 @@ impl ChainIdPattern {
     }
 
     /// Returns the namespace of this pattern.
+    #[allow(dead_code)]
     pub fn namespace(&self) -> &str {
         match self {
             ChainIdPattern::Wildcard { namespace } => namespace,
@@ -238,9 +239,7 @@ impl FromStr for ChainIdPattern {
 
         // Wildcard: eip155:*
         if rest == "*" {
-            return Ok(ChainIdPattern::Wildcard {
-                namespace: namespace.into(),
-            });
+            return Ok(ChainIdPattern::wildcard(namespace.into()));
         }
 
         // Set: eip155:{1,2,3}
@@ -259,10 +258,7 @@ impl FromStr for ChainIdPattern {
                 return Err(ChainIdError::InvalidFormat(s.into()));
             }
 
-            return Ok(ChainIdPattern::Set {
-                namespace: namespace.into(),
-                references,
-            });
+            return Ok(ChainIdPattern::set(namespace.into(), references));
         }
 
         // Exact: eip155:1
@@ -270,10 +266,7 @@ impl FromStr for ChainIdPattern {
             return Err(ChainIdError::InvalidFormat(s.into()));
         }
 
-        Ok(ChainIdPattern::Exact {
-            namespace: namespace.into(),
-            reference: rest.into(),
-        })
+        Ok(ChainIdPattern::exact(namespace.into(), rest.into()))
     }
 }
 

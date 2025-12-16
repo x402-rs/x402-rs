@@ -3,9 +3,9 @@
 //! Implementors of this trait are responsible for validating incoming payment payloads
 //! against specified requirements [`Facilitator::verify`] and executing on-chain transfers [`Facilitator::settle`].
 
+use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
 
 use crate::p1::proto;
 

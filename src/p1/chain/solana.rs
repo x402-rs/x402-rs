@@ -1,7 +1,6 @@
 use crate::config::SolanaChainConfig;
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
-use alloy_rpc_types_eth::AccountInfo;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_account::Account;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
@@ -33,11 +32,13 @@ pub struct SolanaChainReference([u8; 32]);
 impl SolanaChainReference {
     /// Creates a new SolanaChainReference from a 32-byte array.
     /// Returns None if any byte is not a valid ASCII character.
+    #[allow(dead_code)]
     pub fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 
     /// Returns the underlying bytes.
+    #[allow(dead_code)]
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }

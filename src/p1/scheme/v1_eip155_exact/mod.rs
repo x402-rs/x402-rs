@@ -11,7 +11,6 @@ use std::sync::Arc;
 use tracing::Instrument;
 use tracing::instrument;
 use tracing_core::Level;
-use url::Url;
 
 mod types;
 
@@ -331,8 +330,6 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
 /// A fully specified ERC-3009 authorization payload for EVM settlement.
 #[derive(Debug)]
 pub struct ExactEvmPayment {
-    /// Target chain for settlement.
-    pub chain: Eip155ChainReference,
     /// Authorized sender (`from`) — EOA or smart wallet.
     pub from: Address,
     /// Authorized recipient (`to`).
@@ -428,7 +425,6 @@ async fn assert_valid_payment<P: Provider>(
     assert_enough_value(&payer, &authorization.value, &amount_required)?;
 
     let payment = ExactEvmPayment {
-        chain: chain.clone(),
         from: authorization.from,
         to: authorization.to,
         value: authorization.value,

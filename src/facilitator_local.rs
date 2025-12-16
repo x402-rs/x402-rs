@@ -90,9 +90,6 @@ pub enum FacilitatorLocalError {
     /// Scheme mismatch.
     #[error("Scheme mismatch: expected {1}, actual {2}")]
     SchemeMismatch(Option<String>, String, String),
-    /// Invalid address.
-    #[error("Invalid address: {0}")]
-    InvalidAddress(String),
     /// The `pay_to` recipient in the requirements doesn't match the `to` address in the payload.
     #[error("Incompatible payload receivers (payload: {1}, requirements: {2})")]
     ReceiverMismatch(String, String, String),

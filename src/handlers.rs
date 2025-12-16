@@ -193,9 +193,9 @@ impl IntoResponse for FacilitatorLocalError {
                 )),
             )
                 .into_response(),
-            FacilitatorLocalError::ContractCall(..)
-            | FacilitatorLocalError::InvalidAddress(..)
-            | FacilitatorLocalError::ClockError(_) => bad_request,
+            FacilitatorLocalError::ContractCall(..) | FacilitatorLocalError::ClockError(_) => {
+                bad_request
+            }
             FacilitatorLocalError::DecodingError(reason) => (
                 StatusCode::OK,
                 Json(proto::VerifyResponse::invalid(

@@ -25,9 +25,7 @@ mod facilitator;
 mod facilitator_local;
 mod handlers;
 mod p1;
-mod telemetry;
 mod timestamp;
-mod b64;
 mod util;
 
 use axum::Router;
@@ -41,8 +39,7 @@ use crate::config::Config;
 use crate::facilitator_local::FacilitatorLocal;
 use crate::p1::chain::ChainRegistry;
 use crate::p1::scheme::{SchemeBlueprints, SchemeRegistry};
-use crate::telemetry::Telemetry;
-use crate::util::SigDown;
+use crate::util::{SigDown, Telemetry};
 
 /// Initializes the x402 facilitator server.
 ///
