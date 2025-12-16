@@ -75,11 +75,6 @@ pub struct PaymentRequirements {
     pub extra: Option<serde_json::Value>,
 }
 
-pub struct VerifyTransferResult {
-    pub payer: Address,
-    pub transaction: VersionedTransaction,
-}
-
 mod u64_string {
     use serde::de::Error;
     use serde::{Deserialize, Deserializer, Serializer};

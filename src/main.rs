@@ -26,7 +26,6 @@ mod facilitator_local;
 mod handlers;
 mod network;
 mod p1;
-mod proto;
 mod sig_down;
 mod telemetry;
 mod timestamp;
