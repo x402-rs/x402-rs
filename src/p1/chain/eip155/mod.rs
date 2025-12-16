@@ -5,8 +5,8 @@ use crate::config::Eip155ChainConfig;
 use crate::p1::chain::{ChainId, ChainIdError, ChainProviderOps};
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
 use alloy_primitives::{Address, Bytes, B256};
-use alloy_provider::fillers::{BlobGasFiller, ChainIdFiller, GasFiller, JoinFill, NonceFiller};
-use alloy_provider::{Provider, ProviderBuilder, WalletProvider};
+use alloy_provider::fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller};
+use alloy_provider::{Identity, Provider, ProviderBuilder, RootProvider, WalletProvider};
 use alloy_rpc_client::RpcClient;
 use alloy_rpc_types_eth::{BlockId, TransactionReceipt, TransactionRequest};
 use alloy_signer::Signer;
@@ -19,9 +19,23 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
 use tracing::Instrument;
-use crate::chain::evm::InnerProvider;
 
 use pending_nonce_manager::PendingNonceManager;
+
+/// Combined filler type for gas, blob gas, nonce, and chain ID.
+pub type InnerFiller = JoinFill<
+    GasFiller,
+    JoinFill<BlobGasFiller, JoinFill<NonceFiller<PendingNonceManager>, ChainIdFiller>>,
+>;
+
+/// The fully composed Ethereum provider type used in this project.
+///
+/// Combines multiple filler layers for gas, nonce, chain ID, blob gas, and wallet signing,
+/// and wraps a [`RootProvider`] for actual JSON-RPC communication.
+pub type InnerProvider = FillProvider<
+    JoinFill<JoinFill<Identity, InnerFiller>, WalletFiller<EthereumWallet>>,
+    RootProvider,
+>;
 
 pub const EIP155_NAMESPACE: &str = "eip155";
 

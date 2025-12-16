@@ -26,7 +26,7 @@ use std::ops::{Add, Div, Mul, Rem, Sub};
 use std::str::FromStr;
 use url::Url;
 
-use crate::chain::{evm, solana};
+use crate::chain::{solana};
 use crate::network::Network;
 use crate::p1::chain::ChainId;
 use crate::proto;
@@ -139,8 +139,8 @@ impl Serialize for HexEncodedNonce {
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExactEvmPayloadAuthorization {
-    pub from: evm::Address,
-    pub to: evm::Address,
+    pub from: alloy_primitives::Address,
+    pub to: alloy_primitives::Address,
     pub value: TokenAmount,
     pub valid_after: UnixTimestamp,
     pub valid_before: UnixTimestamp,
@@ -521,7 +521,7 @@ impl From<u64> for TokenAmount {
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub enum MixedAddress {
     /// EVM address
-    Evm(evm::Address),
+    Evm(alloy_primitives::Address),
     /// Solana address
     Solana(solana::Address),
     /// Off-chain address in `^[A-Za-z0-9][A-Za-z0-9-]{0,34}[A-Za-z0-9]$` format.
@@ -544,13 +544,13 @@ macro_rules! address_sol {
     };
 }
 
-impl From<evm::Address> for MixedAddress {
-    fn from(value: evm::Address) -> Self {
+impl From<alloy_primitives::Address> for MixedAddress {
+    fn from(value: alloy_primitives::Address) -> Self {
         MixedAddress::Evm(value.into())
     }
 }
 
-impl TryFrom<MixedAddress> for evm::Address {
+impl TryFrom<MixedAddress> for alloy_primitives::Address {
     type Error = MixedAddressError;
 
     fn try_from(value: MixedAddress) -> Result<Self, Self::Error> {
@@ -592,7 +592,7 @@ impl<'de> Deserialize<'de> for MixedAddress {
 
         let s = String::deserialize(deserializer)?;
         // 1) EVM address (e.g., 0x... 20 bytes, hex)
-        if let Ok(addr) = evm::Address::from_str(&s) {
+        if let Ok(addr) = alloy_primitives::Address::from_str(&s) {
             return Ok(MixedAddress::Evm(addr));
         }
         // 2) Solana Pubkey (base58, 32 bytes)

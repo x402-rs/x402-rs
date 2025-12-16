@@ -1,13 +1,11 @@
 use std::time::SystemTimeError;
 
 pub mod chain_id;
-pub mod evm;
 pub mod namespace;
 pub mod solana;
 
 pub use namespace::*;
 
-use crate::chain::evm::EvmProvider;
 use crate::chain::solana::SolanaProvider;
 use crate::config::ChainConfig;
 use crate::facilitator::Facilitator;
@@ -19,7 +17,6 @@ use crate::types::{
 };
 
 pub enum NetworkProvider {
-    Evm(EvmProvider),
     Solana(SolanaProvider),
 }
 
