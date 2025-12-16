@@ -26,15 +26,19 @@ pub struct SchemeBlueprints(HashMap<SchemeSlug, Box<dyn X402SchemeBlueprint>>);
 impl Debug for SchemeBlueprints {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let slugs: Vec<String> = self.0.keys().map(|s| s.to_string()).collect();
-        f.debug_struct("SchemeBlueprints")
-            .field("schemes", &slugs)
-            .finish()
+        f.debug_tuple("SchemeBlueprints").field(&slugs).finish()
     }
 }
 
 impl SchemeBlueprints {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn full() -> Self {
+        let mut blueprints = Self::new();
+        blueprints.register(V1Eip155Exact);
+        blueprints
     }
 
     pub fn and_register<B: X402SchemeBlueprint + 'static>(mut self, blueprint: B) -> Self {
@@ -131,18 +135,27 @@ impl<'de> Deserialize<'de> for SchemeSlug {
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct SchemeHandlerSlug {
     pub chain_id: ChainId,
-    pub slug: SchemeSlug,
+    pub x402_version: u8,
+    pub name: String,
 }
 
 impl SchemeHandlerSlug {
-    pub fn new(chain_id: ChainId, slug: SchemeSlug) -> Self {
-        Self { chain_id, slug }
+    pub fn new(chain_id: ChainId, x402_version: u8, name: String) -> Self {
+        Self {
+            chain_id,
+            x402_version,
+            name,
+        }
     }
 }
 
 impl Display for SchemeHandlerSlug {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}:v{}:{}", self.chain_id.namespace, self.chain_id.reference, self.slug.x402_version, self.slug.name)
+        write!(
+            f,
+            "{}:{}:v{}:{}",
+            self.chain_id.namespace, self.chain_id.reference, self.x402_version, self.name
+        )
     }
 }
 
@@ -152,9 +165,7 @@ pub struct SchemeRegistry(HashMap<SchemeHandlerSlug, Box<dyn X402SchemeHandler>>
 impl Debug for SchemeRegistry {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let slugs: Vec<String> = self.0.keys().map(|s| s.to_string()).collect();
-        f.debug_struct("SchemeRegistry")
-            .field("schemes", &slugs)
-            .finish()
+        f.debug_tuple("SchemeRegistry").field(&slugs).finish()
     }
 }
 
@@ -196,7 +207,11 @@ impl SchemeRegistry {
                     continue;
                 }
             };
-            let slug = SchemeHandlerSlug::new(chain_id, config.slug.clone());
+            let slug = SchemeHandlerSlug::new(
+                chain_id,
+                config.slug.x402_version,
+                config.slug.name.clone(),
+            );
             handlers.insert(slug, handler);
         }
         Self(handlers)

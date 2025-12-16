@@ -24,16 +24,17 @@ mod config;
 mod p1;
 mod telemetry;
 
-use crate::config::Config;
-use crate::p1::chain::ChainRegistry;
-use crate::p1::scheme::{SchemeBlueprints, SchemeRegistry};
-use crate::telemetry::Telemetry;
 use axum::Router;
 use axum::http::Method;
 use dotenvy::dotenv;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::cors;
+
+use crate::config::Config;
+use crate::p1::chain::ChainRegistry;
+use crate::p1::scheme::{SchemeBlueprints, SchemeRegistry};
+use crate::telemetry::Telemetry;
 
 /// Initializes the x402 facilitator server.
 ///
@@ -53,14 +54,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_version(env!("CARGO_PKG_VERSION"))
         .register();
 
-    let config = Config::load().unwrap_or_else(|e| {
-        tracing::error!("Failed to load configuration: {}", e);
-        std::process::exit(1);
-    });
+    let config = Config::load()?;
 
     let chain_registry = ChainRegistry::from_config(&config.chains()).await?;
-    let scheme_blueprints = SchemeBlueprints::new().and_register(p1::scheme::V1Eip155Exact);
-    let scheme_registry = SchemeRegistry::build(chain_registry, scheme_blueprints, config.schemes());
+    let scheme_blueprints = SchemeBlueprints::full();
+    let scheme_registry =
+        SchemeRegistry::build(chain_registry, scheme_blueprints, config.schemes());
 
     println!("{:?}", scheme_registry);
 
