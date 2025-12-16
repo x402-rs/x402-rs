@@ -1,14 +1,5 @@
-use crate::chain::FacilitatorLocalError;
-use crate::p1::chain::eip155;
-use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps};
-use crate::p1::proto;
-use crate::p1::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 use std::collections::HashMap;
 
-use crate::chain::evm::{MetaEip155Provider, MetaTransaction};
-use crate::network::Network;
-use crate::p1::chain::eip155::Eip155ChainReference;
-use crate::timestamp::UnixTimestamp;
 use alloy_contract::SolCallBuilder;
 use alloy_primitives::{Address, B256, Bytes, U256, address, hex};
 use alloy_provider::bindings::IMulticall3;
@@ -20,6 +11,17 @@ use tracing::Instrument;
 use tracing::instrument;
 use tracing_core::Level;
 use url::Url;
+
+mod types;
+
+use crate::chain::evm::{MetaEip155Provider, MetaTransaction};
+use crate::network::Network;
+use crate::p1::chain::eip155::{Eip155ChainProvider, Eip155ChainReference};
+use crate::timestamp::UnixTimestamp;
+use crate::chain::FacilitatorLocalError;
+use crate::p1::chain::{ChainId, ChainProvider, ChainProviderOps};
+use crate::p1::proto;
+use crate::p1::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 
 const SCHEME_NAME: &str = "exact";
 
@@ -48,7 +50,7 @@ impl X402SchemeBlueprint for V1Eip155Exact {
 }
 
 pub struct V1Eip155ExactHandler {
-    provider: Arc<eip155::Eip155ChainProvider>,
+    provider: Arc<Eip155ChainProvider>,
 }
 
 impl V1Eip155ExactHandler {
@@ -63,7 +65,7 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, FacilitatorLocalError> {
-        let request = VerifyRequest::from_proto(request.clone()).ok_or(
+        let request = types::VerifyRequest::from_proto(request.clone()).ok_or(
             FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
         )?;
         let payload = &request.payment_payload;
@@ -155,7 +157,7 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
         &self,
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
-        let request = SettleRequest::from_proto(request.clone()).ok_or(
+        let request = types::SettleRequest::from_proto(request.clone()).ok_or(
             FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
         )?;
 
@@ -325,82 +327,6 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct VerifyRequest {
-    pub x402_version: proto::v1::X402Version1,
-    pub payment_payload: PaymentPayload,
-    pub payment_requirements: PaymentRequirements,
-}
-
-type SettleRequest = VerifyRequest;
-
-impl VerifyRequest {
-    pub fn from_proto(request: proto::VerifyRequest) -> Option<Self> {
-        serde_json::from_value(request.into_json()).ok()
-    }
-}
-
-/// Describes a signed request to transfer a specific amount of funds on-chain.
-/// Includes the scheme, network, and signed payload contents.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PaymentPayload {
-    pub x402_version: proto::v1::X402Version1,
-    pub scheme: String,
-    pub network: String,
-    pub payload: ExactEvmPayload,
-}
-
-/// Full payload required to authorize an ERC-3009 transfer:
-/// includes the signature and the EIP-712 struct.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ExactEvmPayload {
-    pub signature: Bytes,
-    pub authorization: ExactEvmPayloadAuthorization,
-}
-
-/// EIP-712 structured data for ERC-3009-based authorization.
-/// Defines who can transfer how much USDC and when.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ExactEvmPayloadAuthorization {
-    pub from: Address,
-    pub to: Address,
-    pub value: U256,
-    pub valid_after: UnixTimestamp,
-    pub valid_before: UnixTimestamp,
-    pub nonce: B256,
-}
-
-/// Requirements set by the payment-gated endpoint for an acceptable payment.
-/// This includes min/max amounts, recipient, asset, network, and metadata.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PaymentRequirements {
-    pub scheme: String,
-    pub network: String,
-    pub max_amount_required: U256,
-    pub resource: Url,
-    pub description: String,
-    pub mime_type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_schema: Option<serde_json::Value>,
-    pub pay_to: Address,
-    pub max_timeout_seconds: u64,
-    pub asset: Address,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra: Option<PaymentRequirementsExtra>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PaymentRequirementsExtra {
-    pub name: String,
-    pub version: String,
-}
-
 /// A fully specified ERC-3009 authorization payload for EVM settlement.
 #[derive(Debug)]
 pub struct ExactEvmPayment {
@@ -450,8 +376,8 @@ sol! {
 async fn assert_valid_payment<P: Provider>(
     provider: P,
     chain: &Eip155ChainReference,
-    payload: &PaymentPayload,
-    requirements: &PaymentRequirements,
+    payload: &types::PaymentPayload,
+    requirements: &types::PaymentRequirements,
 ) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), FacilitatorLocalError> {
     let payer = payload.payload.authorization.from;
     let chain_id: ChainId = chain.into();
@@ -494,7 +420,7 @@ async fn assert_valid_payment<P: Provider>(
     let asset_address = requirements.asset;
     let contract = USDC::new(asset_address, provider);
 
-    let domain = assert_domain(chain, &contract, payload, &asset_address, requirements).await?;
+    let domain = assert_domain(chain, &contract, &asset_address, requirements).await?;
 
     let amount_required = requirements.max_amount_required;
     assert_enough_balance(&contract, &authorization.from, amount_required).await?;
@@ -548,16 +474,15 @@ fn assert_time(
 /// Resolves the `name` and `version` based on:
 /// - Static metadata from [`USDCDeployment`] (if available),
 /// - Or by calling `version()` on the token contract if not matched statically.
-#[instrument(skip_all, err, fields(
-    network = %payload.network,
-    asset = %asset_address
-))]
+// #[instrument(skip_all, err, fields(
+//     network = %payload.network,
+//     asset = %asset_address
+// ))] FIXME
 async fn assert_domain<P: Provider>(
     chain: &Eip155ChainReference,
     token_contract: &USDC::USDCInstance<P>,
-    payload: &PaymentPayload,
     asset_address: &Address,
-    requirements: &PaymentRequirements,
+    requirements: &types::PaymentRequirements,
 ) -> Result<Eip712Domain, FacilitatorLocalError> {
     let name = requirements.extra.as_ref().map(|extra| extra.name.clone());
     let name = if let Some(name) = name {
