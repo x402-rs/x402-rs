@@ -134,9 +134,9 @@ impl TryInto<Network> for ChainId {
             .map_err(|e| ChainIdToNetworkError(e.to_string()))?;
         match namespace {
             Namespace::Solana => {
-                if self.reference.as_ref() == "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" {
+                if self.reference == "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" {
                     Ok(Network::Solana)
-                } else if self.reference.as_ref() == "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" {
+                } else if self.reference == "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" {
                     Ok(Network::SolanaDevnet)
                 } else {
                     Err(ChainIdToNetworkError(format!(
@@ -146,25 +146,25 @@ impl TryInto<Network> for ChainId {
                 }
             }
             Namespace::Eip155 => {
-                if self.reference.as_ref() == "84532" {
+                if self.reference == "84532" {
                     Ok(Network::BaseSepolia)
-                } else if self.reference.as_ref() == "8453" {
+                } else if self.reference == "8453" {
                     Ok(Network::Base)
-                } else if self.reference.as_ref() == "50" {
+                } else if self.reference == "50" {
                     Ok(Network::XdcMainnet)
-                } else if self.reference.as_ref() == "4313" {
+                } else if self.reference == "4313" {
                     Ok(Network::AvalancheFuji)
-                } else if self.reference.as_ref() == "43114" {
+                } else if self.reference == "43114" {
                     Ok(Network::Avalanche)
-                } else if self.reference.as_ref() == "1440000" {
+                } else if self.reference == "1440000" {
                     Ok(Network::XrplEvm)
-                } else if self.reference.as_ref() == "80002" {
+                } else if self.reference == "80002" {
                     Ok(Network::PolygonAmoy)
-                } else if self.reference.as_ref() == "137" {
+                } else if self.reference == "137" {
                     Ok(Network::Polygon)
-                } else if self.reference.as_ref() == "1329" {
+                } else if self.reference == "1329" {
                     Ok(Network::Sei)
-                } else if self.reference.as_ref() == "1328" {
+                } else if self.reference == "1328" {
                     Ok(Network::SeiTestnet)
                 } else {
                     Err(ChainIdToNetworkError(format!(

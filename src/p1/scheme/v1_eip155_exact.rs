@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::p1::chain::ChainProvider;
-use crate::p1::scheme::{SchemeSlug, X402SchemeHandler, X402SchemeBlueprint};
+use crate::p1::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 
 pub struct V1Eip155Exact;
 

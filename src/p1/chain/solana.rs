@@ -1,5 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt::{Debug, Display, Formatter, Write};
+use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
 use crate::config::SolanaChainConfig;
@@ -99,7 +99,7 @@ impl TryFrom<ChainId> for SolanaChainReference {
     type Error = ChainIdError;
 
     fn try_from(value: ChainId) -> Result<Self, Self::Error> {
-        if value.namespace.as_ref() != SOLANA_NAMESPACE {
+        if value.namespace != SOLANA_NAMESPACE {
             return Err(ChainIdError::UnexpectedNamespace(
                 value.namespace,
                 SOLANA_NAMESPACE.into(),

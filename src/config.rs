@@ -10,9 +10,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
 
-use crate::p1::chain::ChainId;
 use crate::p1::chain::eip155;
 use crate::p1::chain::solana;
+use crate::p1::chain::{ChainId, ChainIdPattern};
+use crate::p1::scheme::SchemeSlug;
 
 /// CLI arguments for the x402 facilitator server.
 #[derive(Parser, Debug)]
@@ -36,6 +37,28 @@ pub struct Config {
     host: IpAddr,
     #[serde(default, with = "chains_serde")]
     chains: Vec<ChainConfig>,
+    #[serde(default)]
+    schemes: Vec<SchemeConfig>,
+}
+
+/// Configuration for a specific scheme.
+///
+/// Each scheme entry specifies which scheme to use and which chains it applies to.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SchemeConfig {
+    /// Whether this scheme is enabled (defaults to true).
+    #[serde(default = "scheme_config_defaults::default_enabled")]
+    pub enabled: bool,
+    /// The scheme slug (e.g., "v1:eip155:exact").
+    pub name: SchemeSlug,
+    /// The chain pattern this scheme applies to (e.g., "eip155:84532", "eip155:*", "eip155:{1,8453}").
+    pub chains: ChainIdPattern,
+}
+
+mod scheme_config_defaults {
+    pub fn default_enabled() -> bool {
+        true
+    }
 }
 
 /// Configuration for a specific chain.
@@ -543,6 +566,7 @@ impl Default for Config {
             port: config_defaults::default_port(),
             host: config_defaults::default_host(),
             chains: Vec::new(),
+            schemes: Vec::new(),
         }
     }
 }
@@ -640,5 +664,12 @@ impl Config {
     /// Keys are CAIP-2 chain identifiers (e.g., "eip155:84532", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").
     pub fn chains(&self) -> &Vec<ChainConfig> {
         &self.chains
+    }
+
+    /// Get the schemes configuration list.
+    ///
+    /// Each entry specifies a scheme and the chains it applies to.
+    pub fn schemes(&self) -> &Vec<SchemeConfig> {
+        &self.schemes
     }
 }

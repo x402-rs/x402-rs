@@ -122,7 +122,7 @@ impl TryFrom<ChainId> for EvmChainReference {
     type Error = ChainIdError;
 
     fn try_from(value: ChainId) -> Result<Self, Self::Error> {
-        if value.namespace.as_ref() != "eip155" {
+        if value.namespace != "eip155" {
             return Err(ChainIdError::UnexpectedNamespace(
                 value.namespace,
                 "eip155".into(),

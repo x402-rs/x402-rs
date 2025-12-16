@@ -4,9 +4,9 @@ pub mod solana;
 
 pub use chain_id::*;
 
+use crate::config::ChainConfig;
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::config::ChainConfig;
 
 #[derive(Debug)]
 pub enum ChainProvider {

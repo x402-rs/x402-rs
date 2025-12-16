@@ -2,10 +2,12 @@ pub mod v1_eip155_exact;
 
 pub use v1_eip155_exact::V1Eip155Exact;
 
+use crate::p1::chain::ChainProvider;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
+use std::str::FromStr;
 use std::sync::Arc;
-use crate::p1::chain::ChainProvider;
 
 pub trait X402SchemeHandler {}
 
@@ -64,5 +66,59 @@ impl SchemeSlug {
 impl std::fmt::Display for SchemeSlug {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "v{}:{}:{}", self.x402_version, self.namespace, self.name)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SchemeSlugError {
+    #[error("invalid scheme slug format: {0}")]
+    InvalidFormat(String),
+    #[error("invalid version format: expected 'v<number>', got: {0}")]
+    InvalidVersion(String),
+}
+
+impl FromStr for SchemeSlug {
+    type Err = SchemeSlugError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Expected format: v{version}:{namespace}:{name}
+        let parts: Vec<&str> = s.splitn(3, ':').collect();
+        if parts.len() != 3 {
+            return Err(SchemeSlugError::InvalidFormat(s.to_string()));
+        }
+
+        let version_str = parts[0];
+        if !version_str.starts_with('v') {
+            return Err(SchemeSlugError::InvalidVersion(version_str.to_string()));
+        }
+
+        let x402_version: u8 = version_str[1..]
+            .parse()
+            .map_err(|_| SchemeSlugError::InvalidVersion(version_str.to_string()))?;
+
+        Ok(SchemeSlug {
+            x402_version,
+            namespace: parts[1].to_string(),
+            name: parts[2].to_string(),
+        })
+    }
+}
+
+impl Serialize for SchemeSlug {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for SchemeSlug {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        SchemeSlug::from_str(&s).map_err(serde::de::Error::custom)
     }
 }

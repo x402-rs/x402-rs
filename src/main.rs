@@ -26,6 +26,7 @@ mod telemetry;
 
 use crate::config::Config;
 use crate::p1::chain::ChainRegistry;
+use crate::p1::scheme::SchemeRegistry;
 use crate::telemetry::Telemetry;
 use axum::Router;
 use axum::http::Method;
@@ -33,7 +34,6 @@ use dotenvy::dotenv;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::cors;
-use crate::p1::scheme::SchemeRegistry;
 
 /// Initializes the x402 facilitator server.
 ///

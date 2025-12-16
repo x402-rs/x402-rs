@@ -24,7 +24,7 @@ impl TryFrom<ChainId> for Eip155ChainReference {
     type Error = ChainIdError;
 
     fn try_from(value: ChainId) -> Result<Self, Self::Error> {
-        if value.namespace.as_ref() != EIP155_NAMESPACE {
+        if value.namespace != EIP155_NAMESPACE {
             return Err(ChainIdError::UnexpectedNamespace(
                 value.namespace,
                 EIP155_NAMESPACE.into(),

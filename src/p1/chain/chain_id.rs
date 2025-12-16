@@ -5,12 +5,12 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ChainId {
-    pub namespace: Box<str>,
-    pub reference: Box<str>,
+    pub namespace: String,
+    pub reference: String,
 }
 
 impl ChainId {
-    pub fn new<N: Into<Box<str>>, R: Into<Box<str>>>(namespace: N, reference: R) -> Self {
+    pub fn new<N: Into<String>, R: Into<String>>(namespace: N, reference: R) -> Self {
         Self {
             namespace: namespace.into(),
             reference: reference.into(),
@@ -18,11 +18,11 @@ impl ChainId {
     }
 
     pub fn namespace(&self) -> &str {
-        self.namespace.as_ref()
+        &self.namespace
     }
 
     pub fn reference(&self) -> &str {
-        self.reference.as_ref()
+        &self.reference
     }
 }
 
@@ -42,11 +42,11 @@ impl Into<String> for ChainId {
 #[error("invalid chain id format {0}")]
 pub enum ChainIdError {
     #[error("invalid chain id format {0}")]
-    InvalidFormat(Box<str>),
+    InvalidFormat(String),
     #[error("unexpected namespace {0}, expected {1}")]
-    UnexpectedNamespace(Box<str>, Box<str>),
+    UnexpectedNamespace(String, String),
     #[error("invalid chain id reference {0} for namespace {1}: {2}")]
-    InvalidReference(Box<str>, Box<str>, Box<str>),
+    InvalidReference(String, String, String),
 }
 
 impl FromStr for ChainId {
@@ -83,36 +83,56 @@ impl<'de> Deserialize<'de> for ChainId {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum ChainIdPattern {
     Wildcard {
-        namespace: Box<str>,
+        namespace: String,
     },
     Exact {
-        namespace: Box<str>,
-        reference: Box<str>,
+        namespace: String,
+        reference: String,
     },
     Set {
-        namespace: Box<str>,
-        references: HashSet<Box<str>>,
+        namespace: String,
+        references: HashSet<String>,
     },
 }
 
 impl ChainIdPattern {
-    pub fn wildcard(namespace: Box<str>) -> Self {
+    pub fn wildcard(namespace: String) -> Self {
         Self::Wildcard { namespace }
     }
 
-    pub fn exact(namespace: Box<str>, reference: Box<str>) -> Self {
+    pub fn exact(namespace: String, reference: String) -> Self {
         Self::Exact {
             namespace,
             reference,
         }
     }
 
-    pub fn set(namespace: Box<str>, references: HashSet<Box<str>>) -> Self {
+    pub fn set(namespace: String, references: HashSet<String>) -> Self {
         Self::Set {
             namespace,
             references,
+        }
+    }
+}
+
+impl fmt::Display for ChainIdPattern {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ChainIdPattern::Wildcard { namespace } => write!(f, "{}:*", namespace),
+            ChainIdPattern::Exact {
+                namespace,
+                reference,
+            } => write!(f, "{}:{}", namespace, reference),
+            ChainIdPattern::Set {
+                namespace,
+                references,
+            } => {
+                let refs: Vec<&str> = references.iter().map(|s| s.as_ref()).collect();
+                write!(f, "{}:{{{}}}", namespace, refs.join(","))
+            }
         }
     }
 }
@@ -129,11 +149,11 @@ impl FromStr for ChainIdPattern {
             return Err(ChainIdError::InvalidFormat(s.into()));
         }
 
-        let namespace: Box<str> = namespace.into();
-
         // Wildcard: eip155:*
         if rest == "*" {
-            return Ok(ChainIdPattern::Wildcard { namespace });
+            return Ok(ChainIdPattern::Wildcard {
+                namespace: namespace.into(),
+            });
         }
 
         // Set: eip155:{1,2,3}
@@ -153,7 +173,7 @@ impl FromStr for ChainIdPattern {
             }
 
             return Ok(ChainIdPattern::Set {
-                namespace,
+                namespace: namespace.into(),
                 references,
             });
         }
@@ -164,9 +184,28 @@ impl FromStr for ChainIdPattern {
         }
 
         Ok(ChainIdPattern::Exact {
-            namespace,
+            namespace: namespace.into(),
             reference: rest.into(),
         })
+    }
+}
+
+impl Serialize for ChainIdPattern {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for ChainIdPattern {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        ChainIdPattern::from_str(&s).map_err(de::Error::custom)
     }
 }
 
