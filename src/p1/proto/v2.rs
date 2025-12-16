@@ -10,9 +10,9 @@ impl X402Version2 {
     pub const VALUE: u8 = 2;
 }
 
-impl Into<u8> for X402Version2 {
-    fn into(self) -> u8 {
-        Self::VALUE
+impl From<X402Version2> for u8 {
+    fn from(_: X402Version2) -> Self {
+        X402Version2::VALUE
     }
 }
 

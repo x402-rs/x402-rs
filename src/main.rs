@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::load()?;
 
-    let chain_registry = ChainRegistry::from_config(&config.chains()).await?;
+    let chain_registry = ChainRegistry::from_config(config.chains()).await?;
     let scheme_blueprints = SchemeBlueprints::full();
     let scheme_registry =
         SchemeRegistry::build(chain_registry, scheme_blueprints, config.schemes());

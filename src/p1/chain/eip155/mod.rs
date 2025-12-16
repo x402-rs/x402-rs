@@ -44,15 +44,15 @@ pub const EIP155_NAMESPACE: &str = "eip155";
 #[derive(Debug, Copy, Clone)]
 pub struct Eip155ChainReference(u64);
 
-impl Into<ChainId> for Eip155ChainReference {
-    fn into(self) -> ChainId {
-        ChainId::new(EIP155_NAMESPACE, self.0.to_string())
+impl From<Eip155ChainReference> for ChainId {
+    fn from(value: Eip155ChainReference) -> Self {
+        ChainId::new(EIP155_NAMESPACE, value.0.to_string())
     }
 }
 
-impl Into<ChainId> for &Eip155ChainReference {
-    fn into(self) -> ChainId {
-        ChainId::new(EIP155_NAMESPACE, self.0.to_string())
+impl From<&Eip155ChainReference> for ChainId {
+    fn from(value: &Eip155ChainReference) -> Self {
+        ChainId::new(EIP155_NAMESPACE, value.0.to_string())
     }
 }
 
@@ -70,7 +70,7 @@ impl TryFrom<ChainId> for Eip155ChainReference {
             ChainIdError::InvalidReference(
                 value.reference,
                 EIP155_NAMESPACE.into(),
-                format!("{e:?}").into(),
+                format!("{e:?}"),
             )
         })?;
         Ok(Eip155ChainReference(chain_id))

@@ -65,8 +65,8 @@ impl SchemeBlueprints {
         self.0.insert(blueprint.slug(), Box::new(blueprint));
     }
 
-    pub fn by_slug(&self, slug: &SchemeSlug) -> Option<&Box<dyn X402SchemeBlueprint>> {
-        self.0.get(slug)
+    pub fn by_slug(&self, slug: &SchemeSlug) -> Option<&dyn X402SchemeBlueprint> {
+        self.0.get(slug).map(|v| v.deref())
     }
 }
 

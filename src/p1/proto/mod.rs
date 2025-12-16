@@ -51,11 +51,11 @@ impl X402Version {
     }
 }
 
-impl Into<u8> for X402Version {
-    fn into(self) -> u8 {
-        match self {
+impl From<X402Version> for u8 {
+    fn from(version: X402Version) -> Self {
+        match version {
             X402Version::V1(v) => v.into(),
-            X402Version::V2(v) => v.into(),
+            X402Version::V2(v) => v.into()
         }
     }
 }

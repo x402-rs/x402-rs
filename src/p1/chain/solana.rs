@@ -53,7 +53,7 @@ impl SolanaChainReference {
 impl Debug for SolanaChainReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("SolanaChainReference(")?;
-        f.write_str(&self.as_str())?;
+        f.write_str(self.as_str())?;
         f.write_str(")")
     }
 }
@@ -108,9 +108,9 @@ impl<'de> Deserialize<'de> for SolanaChainReference {
     }
 }
 
-impl Into<ChainId> for SolanaChainReference {
-    fn into(self) -> ChainId {
-        ChainId::new(SOLANA_NAMESPACE, self.as_str())
+impl From<SolanaChainReference> for ChainId {
+    fn from(value: SolanaChainReference) -> Self {
+        ChainId::new(SOLANA_NAMESPACE, value.as_str())
     }
 }
 
@@ -128,7 +128,7 @@ impl TryFrom<ChainId> for SolanaChainReference {
             ChainIdError::InvalidReference(
                 value.reference,
                 SOLANA_NAMESPACE.into(),
-                format!("{e:?}").into(),
+                format!("{e:?}"),
             )
         })?;
         Ok(solana_chain_reference)
@@ -327,14 +327,14 @@ impl SolanaChainProvider {
                 unsubscribe().await;
                 return Err(e);
             }
-            while let Some(response) = stream.next().await {
+            if let Some(response) = stream.next().await {
                 let error = if let RpcSignatureResult::ProcessedSignature(r) = response.value {
                     r.err
                 } else {
                     None
                 };
                 return match error {
-                    None => Ok(tx_sig.clone()),
+                    None => Ok(*tx_sig),
                     Some(error) => Err(FacilitatorLocalError::ContractCall(format!("{error}"))),
                 };
             }
@@ -350,7 +350,7 @@ impl SolanaChainProvider {
                     .await
                     .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
                 if confirmed.value {
-                    return Ok(tx_sig.clone());
+                    return Ok(*tx_sig);
                 }
                 tokio::time::sleep(Duration::from_millis(200)).await;
             }
@@ -419,7 +419,7 @@ impl<'de> Deserialize<'de> for Address {
 
 impl Display for Address {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.to_string())
+        write!(f, "{}", self.0)
     }
 }
 

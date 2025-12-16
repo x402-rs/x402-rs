@@ -414,7 +414,7 @@ async fn assert_valid_payment<P: Provider>(
     }
     let valid_after = authorization.valid_after;
     let valid_before = authorization.valid_before;
-    assert_time(payer.into(), valid_after, valid_before)?;
+    assert_time(payer, valid_after, valid_before)?;
     let asset_address = requirements.asset;
     let contract = USDC::new(asset_address, provider);
 
@@ -645,16 +645,15 @@ impl SignedMessage {
         let transfer_with_authorization = TransferWithAuthorization {
             from: payment.from,
             to: payment.to,
-            value: payment.value.into(),
+            value: payment.value,
             validAfter: U256::from(payment.valid_after.as_secs()),
             validBefore: U256::from(payment.valid_before.as_secs()),
             nonce: payment.nonce,
         };
         let eip712_hash = transfer_with_authorization.eip712_signing_hash(domain);
-        let expected_address = payment.from;
         let structured_signature: StructuredSignature = payment.signature.clone().try_into()?;
         let signed_message = Self {
-            address: expected_address.into(),
+            address: payment.from,
             hash: eip712_hash,
             signature: structured_signature,
         };
@@ -729,10 +728,10 @@ impl TryFrom<Bytes> for StructuredSignature {
                 factory: sig6492.factory,
                 factory_calldata: sig6492.factoryCalldata,
                 inner: sig6492.innerSig,
-                original: bytes.into(),
+                original: bytes,
             }
         } else {
-            StructuredSignature::EIP1271(bytes.into())
+            StructuredSignature::EIP1271(bytes)
         };
         Ok(signature)
     }

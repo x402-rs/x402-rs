@@ -75,8 +75,8 @@ impl V1SolanaExactHandler {
         if payload.scheme != requirements.scheme {
             return Err(FacilitatorLocalError::SchemeMismatch(
                 None,
-                requirements.scheme.to_string().into(),
-                payload.scheme.to_string().into(),
+                requirements.scheme.to_string(),
+                payload.scheme.to_string(),
             ));
         }
         let transaction_b64_string = payload.payload.transaction.clone();
@@ -619,13 +619,13 @@ pub fn verify_create_ata_instruction(
     instruction.account(5)?;
 
     // verify that the ATA is created for the expected payee
-    if &Address::new(owner) != &requirements.pay_to {
+    if Address::new(owner) != requirements.pay_to {
         return Err(FacilitatorLocalError::DecodingError(
             "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_payee"
                 .to_string(),
         ));
     }
-    if &Address::new(mint) != &requirements.asset {
+    if Address::new(mint) != requirements.asset {
         return Err(FacilitatorLocalError::DecodingError(
             "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_asset"
                 .to_string(),
