@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
 use crate::proto;
-use crate::proto::v1::X402Version1;
+use crate::proto::v1;
 use crate::timestamp::UnixTimestamp;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -18,14 +18,7 @@ impl Display for ExactScheme {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VerifyRequest {
-    pub x402_version: X402Version1,
-    pub payment_payload: PaymentPayload,
-    pub payment_requirements: PaymentRequirements,
-}
-
+pub type VerifyRequest = v1::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;
 
 impl VerifyRequest {
@@ -39,7 +32,7 @@ impl VerifyRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentPayload {
-    pub x402_version: X402Version1,
+    pub x402_version: v1::X402Version1,
     pub scheme: ExactScheme,
     pub network: String,
     pub payload: ExactEvmPayload,

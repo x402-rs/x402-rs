@@ -1,6 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::Display;
+use crate::proto;
 
 /// Version 1 of the x402 protocol.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
@@ -234,4 +235,12 @@ impl<'de> Deserialize<'de> for VerifyResponse {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyRequest<TPayload, TRequirements> {
+    pub x402_version: X402Version1,
+    pub payment_payload: TPayload,
+    pub payment_requirements: TRequirements,
 }
