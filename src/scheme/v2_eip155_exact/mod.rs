@@ -12,7 +12,10 @@ use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
 use crate::proto::v2;
-use crate::scheme::v1_eip155_exact::{ExactEvmPayment, USDC, assert_domain, assert_enough_balance, assert_enough_value, assert_time, verify_payment};
+use crate::scheme::v1_eip155_exact::{
+    ExactEvmPayment, USDC, assert_domain, assert_enough_balance, assert_enough_value, assert_time,
+    settle_payment, verify_payment,
+};
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 
 const EXACT_SCHEME: types::ExactScheme = types::ExactScheme::Exact;
@@ -57,7 +60,8 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
         )
         .await?;
 
-        let payer = verify_payment(self.provider.inner(), &contract, &payment, &eip712_domain).await?;
+        let payer =
+            verify_payment(self.provider.inner(), &contract, &payment, &eip712_domain).await?;
         Ok(v2::VerifyResponse::valid(payer.to_string()).into())
     }
 
@@ -65,7 +69,29 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
         &self,
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
-        todo!("V2Eip155ExactHandler::settle: not implemented yet")
+        let request = types::SettleRequest::from_proto(request.clone()).ok_or(
+            FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
+        )?;
+
+        let payload = &request.payment_payload;
+        let requirements = &request.payment_requirements;
+        let (contract, payment, eip712_domain) = assert_valid_payment(
+            self.provider.inner(),
+            self.provider.chain(),
+            payload,
+            requirements,
+        )
+        .await?;
+
+        let tx_hash =
+            settle_payment(self.provider.as_ref(), &contract, &payment, &eip712_domain).await?;
+
+        Ok(v2::SettleResponse::Success {
+            payer: payment.from.to_string(),
+            transaction: tx_hash.to_string(),
+            network: payload.accepted.network.to_string(),
+        }
+        .into())
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {

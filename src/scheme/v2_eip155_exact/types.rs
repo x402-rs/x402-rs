@@ -22,6 +22,8 @@ impl VerifyRequest {
     }
 }
 
+pub type SettleRequest = VerifyRequest;
+
 // TODO Unify payment payload and shared struct through generics maybe
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

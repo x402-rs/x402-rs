@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use alloy_contract::SolCallBuilder;
-use alloy_primitives::{Address, B256, Bytes, U256, address, hex};
+use alloy_primitives::{Address, B256, Bytes, TxHash, U256, address, hex};
 use alloy_provider::bindings::IMulticall3;
 use alloy_provider::{MULTICALL3_ADDRESS, MulticallItem, Provider};
 use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, sol};
@@ -73,7 +73,8 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
         )
         .await?;
 
-        let payer = verify_payment(self.provider.inner(), &contract, &payment, &eip712_domain).await?;
+        let payer =
+            verify_payment(self.provider.inner(), &contract, &payment, &eip712_domain).await?;
 
         Ok(v1::VerifyResponse::valid(payer.to_string()).into())
     }
@@ -96,124 +97,14 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
         )
         .await?;
 
-        let signed_message = SignedMessage::extract(&payment, &eip712_domain)?;
-        let payer = signed_message.address;
-        let transaction_receipt_fut = match signed_message.signature {
-            StructuredSignature::EIP6492 {
-                factory,
-                factory_calldata,
-                inner,
-                original: _,
-            } => {
-                let is_contract_deployed =
-                    is_contract_deployed(self.provider.inner(), &payer).await?;
-                let transfer_call = transferWithAuthorization_0(&contract, &payment, inner).await?;
-                if is_contract_deployed {
-                    // transferWithAuthorization with inner signature
-                    self.provider
-                        .send_transaction(MetaTransaction {
-                            to: transfer_call.tx.target(),
-                            calldata: transfer_call.tx.calldata().clone(),
-                            confirmations: 1,
-                        })
-                        .instrument(tracing::info_span!("call_transferWithAuthorization_0",
-                            from = %transfer_call.from,
-                            to = %transfer_call.to,
-                            value = %transfer_call.value,
-                            valid_after = %transfer_call.valid_after,
-                            valid_before = %transfer_call.valid_before,
-                            nonce = %transfer_call.nonce,
-                            signature = %transfer_call.signature,
-                            token_contract = %transfer_call.contract_address,
-                            sig_kind="EIP6492.deployed",
-                            otel.kind = "client",
-                        ))
-                } else {
-                    // deploy the smart wallet, and transferWithAuthorization with inner signature
-                    let deployment_call = IMulticall3::Call3 {
-                        allowFailure: true,
-                        target: factory,
-                        callData: factory_calldata,
-                    };
-                    let transfer_with_authorization_call = IMulticall3::Call3 {
-                        allowFailure: false,
-                        target: transfer_call.tx.target(),
-                        callData: transfer_call.tx.calldata().clone(),
-                    };
-                    let aggregate_call = IMulticall3::aggregate3Call {
-                        calls: vec![deployment_call, transfer_with_authorization_call],
-                    };
-                    self.provider
-                        .send_transaction(MetaTransaction {
-                            to: MULTICALL3_ADDRESS,
-                            calldata: aggregate_call.abi_encode().into(),
-                            confirmations: 1,
-                        })
-                        .instrument(tracing::info_span!("call_transferWithAuthorization_0",
-                            from = %transfer_call.from,
-                            to = %transfer_call.to,
-                            value = %transfer_call.value,
-                            valid_after = %transfer_call.valid_after,
-                            valid_before = %transfer_call.valid_before,
-                            nonce = %transfer_call.nonce,
-                            signature = %transfer_call.signature,
-                            token_contract = %transfer_call.contract_address,
-                            sig_kind="EIP6492.counterfactual",
-                            otel.kind = "client",
-                        ))
-                }
-            }
-            StructuredSignature::EIP1271(eip1271_signature) => {
-                let transfer_call =
-                    transferWithAuthorization_0(&contract, &payment, eip1271_signature).await?;
-                // transferWithAuthorization with eip1271 signature
-                self.provider
-                    .send_transaction(MetaTransaction {
-                        to: transfer_call.tx.target(),
-                        calldata: transfer_call.tx.calldata().clone(),
-                        confirmations: 1,
-                    })
-                    .instrument(tracing::info_span!("call_transferWithAuthorization_0",
-                        from = %transfer_call.from,
-                        to = %transfer_call.to,
-                        value = %transfer_call.value,
-                        valid_after = %transfer_call.valid_after,
-                        valid_before = %transfer_call.valid_before,
-                        nonce = %transfer_call.nonce,
-                        signature = %transfer_call.signature,
-                        token_contract = %transfer_call.contract_address,
-                        sig_kind="EIP1271",
-                        otel.kind = "client",
-                    ))
-            }
-        };
-        let receipt = transaction_receipt_fut.await?;
-        let success = receipt.status();
-        if success {
-            tracing::event!(Level::INFO,
-                status = "ok",
-                tx = %receipt.transaction_hash,
-                "transferWithAuthorization_0 succeeded"
-            );
-            Ok(v1::SettleResponse::Success {
-                payer: payment.from.to_string(),
-                transaction: receipt.transaction_hash.to_string(),
-                network: payload.network.clone(),
-            }
-            .into())
-        } else {
-            tracing::event!(
-                Level::WARN,
-                status = "failed",
-                tx = %receipt.transaction_hash,
-                "transferWithAuthorization_0 failed"
-            );
-            Ok(v1::SettleResponse::Error {
-                reason: "invalid_scheme".to_string(),
-                network: payload.network.clone(),
-            }
-            .into())
+        let tx_hash =
+            settle_payment(self.provider.as_ref(), &contract, &payment, &eip712_domain).await?;
+        Ok(v1::SettleResponse::Success {
+            payer: payment.from.to_string(),
+            transaction: tx_hash.to_string(),
+            network: payload.network.clone(),
         }
+        .into())
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
@@ -767,8 +658,7 @@ pub async fn verify_payment<'a, P: Provider>(
             // Prepare the call to simulate transfer the funds
             let transfer_call = transferWithAuthorization_0(&contract, &payment, inner).await?;
             // Execute both calls in a single transaction simulation to accommodate for possible smart wallet creation
-            let (is_valid_signature_result, transfer_result) =
-                provider
+            let (is_valid_signature_result, transfer_result) = provider
                 .multicall()
                 .add(is_valid_signature_call)
                 .add(transfer_call.tx)
@@ -820,4 +710,137 @@ pub async fn verify_payment<'a, P: Provider>(
     }
 
     Ok(payer)
+}
+
+pub async fn settle_payment<'a, P, E>(
+    provider: P,
+    contract: &'a USDC::USDCInstance<&P::Inner>,
+    payment: &ExactEvmPayment,
+    eip712_domain: &Eip712Domain,
+) -> Result<TxHash, FacilitatorLocalError>
+where
+    P: MetaEip155Provider<Error = E>,
+    FacilitatorLocalError: From<E>,
+{
+    let signed_message = SignedMessage::extract(&payment, &eip712_domain)?;
+    let payer = payment.from;
+    let transaction_receipt_fut = match signed_message.signature {
+        StructuredSignature::EIP6492 {
+            factory,
+            factory_calldata,
+            inner,
+            original: _,
+        } => {
+            let is_contract_deployed = is_contract_deployed(provider.inner(), &payer).await?;
+            let transfer_call = transferWithAuthorization_0(&contract, &payment, inner).await?;
+            if is_contract_deployed {
+                // transferWithAuthorization with inner signature
+                MetaEip155Provider::send_transaction(
+                    &provider,
+                    MetaTransaction {
+                        to: transfer_call.tx.target(),
+                        calldata: transfer_call.tx.calldata().clone(),
+                        confirmations: 1,
+                    },
+                )
+                .instrument(
+                    tracing::info_span!("call_transferWithAuthorization_0",
+                        from = %transfer_call.from,
+                        to = %transfer_call.to,
+                        value = %transfer_call.value,
+                        valid_after = %transfer_call.valid_after,
+                        valid_before = %transfer_call.valid_before,
+                        nonce = %transfer_call.nonce,
+                        signature = %transfer_call.signature,
+                        token_contract = %transfer_call.contract_address,
+                        sig_kind="EIP6492.deployed",
+                        otel.kind = "client",
+                    ),
+                )
+            } else {
+                // deploy the smart wallet, and transferWithAuthorization with inner signature
+                let deployment_call = IMulticall3::Call3 {
+                    allowFailure: true,
+                    target: factory,
+                    callData: factory_calldata,
+                };
+                let transfer_with_authorization_call = IMulticall3::Call3 {
+                    allowFailure: false,
+                    target: transfer_call.tx.target(),
+                    callData: transfer_call.tx.calldata().clone(),
+                };
+                let aggregate_call = IMulticall3::aggregate3Call {
+                    calls: vec![deployment_call, transfer_with_authorization_call],
+                };
+                MetaEip155Provider::send_transaction(
+                    &provider,
+                    MetaTransaction {
+                        to: MULTICALL3_ADDRESS,
+                        calldata: aggregate_call.abi_encode().into(),
+                        confirmations: 1,
+                    },
+                )
+                .instrument(
+                    tracing::info_span!("call_transferWithAuthorization_0",
+                        from = %transfer_call.from,
+                        to = %transfer_call.to,
+                        value = %transfer_call.value,
+                        valid_after = %transfer_call.valid_after,
+                        valid_before = %transfer_call.valid_before,
+                        nonce = %transfer_call.nonce,
+                        signature = %transfer_call.signature,
+                        token_contract = %transfer_call.contract_address,
+                        sig_kind="EIP6492.counterfactual",
+                        otel.kind = "client",
+                    ),
+                )
+            }
+        }
+        StructuredSignature::EIP1271(eip1271_signature) => {
+            let transfer_call =
+                transferWithAuthorization_0(&contract, &payment, eip1271_signature).await?;
+            // transferWithAuthorization with eip1271 signature
+            MetaEip155Provider::send_transaction(
+                &provider,
+                MetaTransaction {
+                    to: transfer_call.tx.target(),
+                    calldata: transfer_call.tx.calldata().clone(),
+                    confirmations: 1,
+                },
+            )
+            .instrument(tracing::info_span!("call_transferWithAuthorization_0",
+                from = %transfer_call.from,
+                to = %transfer_call.to,
+                value = %transfer_call.value,
+                valid_after = %transfer_call.valid_after,
+                valid_before = %transfer_call.valid_before,
+                nonce = %transfer_call.nonce,
+                signature = %transfer_call.signature,
+                token_contract = %transfer_call.contract_address,
+                sig_kind="EIP1271",
+                otel.kind = "client",
+            ))
+        }
+    };
+    let receipt = transaction_receipt_fut.await?;
+    let success = receipt.status();
+    if success {
+        tracing::event!(Level::INFO,
+            status = "ok",
+            tx = %receipt.transaction_hash,
+            "transferWithAuthorization_0 succeeded"
+        );
+        Ok(receipt.transaction_hash)
+    } else {
+        tracing::event!(
+            Level::WARN,
+            status = "failed",
+            tx = %receipt.transaction_hash,
+            "transferWithAuthorization_0 failed"
+        );
+        Err(FacilitatorLocalError::ContractCall(format!(
+            "Transaction failed: {:?}",
+            receipt
+        )))
+    }
 }

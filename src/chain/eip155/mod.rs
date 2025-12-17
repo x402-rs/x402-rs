@@ -214,6 +214,23 @@ impl Eip155ChainProvider {
     }
 }
 
+impl MetaEip155Provider for &Eip155ChainProvider {
+    type Error = FacilitatorLocalError;
+    type Inner = InnerProvider;
+    fn inner(&self) -> &Self::Inner {
+        (*self).inner()
+    }
+    fn chain(&self) -> &Eip155ChainReference {
+        (*self).chain()
+    }
+    fn send_transaction(
+        &self,
+        tx: MetaTransaction,
+    ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send {
+        (*self).send_transaction(tx)
+    }
+}
+
 impl MetaEip155Provider for Eip155ChainProvider {
     type Error = FacilitatorLocalError;
     type Inner = InnerProvider;
