@@ -3,38 +3,42 @@
   "host": "0.0.0.0",
   "chains": {
     "eip155:84532": {
-        "eip1559": true,
-        "flashblocks": true,
-        "usdc": {
-            "address": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-            "decimals": 6,
-            "eip712": {
-                "name": "USDC",
-                "version": "2"
-            }
-        },
-        "signers": [
-            "$BASE_SEPOLIA_PRIVATE_KEY"
-        ],
-        "rpc": {
-            "quicknode": {
-                "http": "https://example.base-sepolia.quiknode.pro/your-api-key/",
-                "rate_limit": 50
-            }
+      "_comment": "Base Sepolia"
+      "eip1559": true,
+      "flashblocks": true,
+      "signers": [
+          "0xWALLET"
+      ],
+      "rpc": [
+        {
+          "http": "https://rpc.com/eip155/84532",
+          "rate_limit": 50
         }
+      ]
     },
     "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
-        "usdc": {
-            "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-            "decimals": 6
-        },
-        "_comment": "Solana signer must be a 64-byte keypair in base58 encoding (32-byte secret + 32-byte public)",
-        "signer": "$SOLANA_PRIVATE_KEY",
-        "rpc": {
-            "helius": {
-                "http": "https://mainnet.helius-rpc.com/?api-key=your-api-key"
-            }
-        }
+      "_comment": "Solana Mainnet"
+      "signer": "SOLANA_PRIVATE_KEY",
+      "rpc": "https://rpc.com/solana/5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+      "pubsub": "wss://rpc.com/solana/5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
     }
-  }
+  },
+  "schemes": [
+    {
+      "slug": "v1:eip155:exact",
+      "chains": "eip155:*"
+    },
+    {
+      "slug": "v2:eip155:exact",
+      "chains": "eip155:*"
+    },
+    {
+      "slug": "v1:solana:exact",
+      "chains": "solana:*"
+    },
+    {
+      "slug": "v2:solana:exact",
+      "chains": "solana:*"
+    }
+  ]
 }
