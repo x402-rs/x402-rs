@@ -634,13 +634,13 @@ async fn is_contract_deployed<P: Provider>(
     Ok(!bytes.is_empty())
 }
 
-pub async fn verify_payment<'a, P: Provider>(
+pub async fn verify_payment<P: Provider>(
     provider: P,
-    contract: &'a USDC::USDCInstance<P>,
+    contract: &USDC::USDCInstance<P>,
     payment: &ExactEvmPayment,
     eip712_domain: &Eip712Domain,
 ) -> Result<Address, FacilitatorLocalError> {
-    let signed_message = SignedMessage::extract(&payment, &eip712_domain)?;
+    let signed_message = SignedMessage::extract(payment, eip712_domain)?;
 
     let payer = signed_message.address;
     let hash = signed_message.hash;
@@ -656,7 +656,7 @@ pub async fn verify_payment<'a, P: Provider>(
             let is_valid_signature_call =
                 validator6492.isValidSigWithSideEffects(payer, hash, original);
             // Prepare the call to simulate transfer the funds
-            let transfer_call = transferWithAuthorization_0(&contract, &payment, inner).await?;
+            let transfer_call = transferWithAuthorization_0(contract, payment, inner).await?;
             // Execute both calls in a single transaction simulation to accommodate for possible smart wallet creation
             let (is_valid_signature_result, transfer_result) = provider
                 .multicall()
@@ -688,7 +688,7 @@ pub async fn verify_payment<'a, P: Provider>(
         }
         StructuredSignature::EIP1271(signature) => {
             // It is EOA or EIP-1271 signature, which we can pass to the transfer simulation
-            let transfer_call = transferWithAuthorization_0(&contract, &payment, signature).await?;
+            let transfer_call = transferWithAuthorization_0(contract, payment, signature).await?;
             transfer_call
                 .tx
                 .call()
@@ -712,9 +712,9 @@ pub async fn verify_payment<'a, P: Provider>(
     Ok(payer)
 }
 
-pub async fn settle_payment<'a, P, E>(
+pub async fn settle_payment<P, E>(
     provider: P,
-    contract: &'a USDC::USDCInstance<&P::Inner>,
+    contract: &USDC::USDCInstance<&P::Inner>,
     payment: &ExactEvmPayment,
     eip712_domain: &Eip712Domain,
 ) -> Result<TxHash, FacilitatorLocalError>
@@ -722,7 +722,7 @@ where
     P: MetaEip155Provider<Error = E>,
     FacilitatorLocalError: From<E>,
 {
-    let signed_message = SignedMessage::extract(&payment, &eip712_domain)?;
+    let signed_message = SignedMessage::extract(payment, eip712_domain)?;
     let payer = payment.from;
     let transaction_receipt_fut = match signed_message.signature {
         StructuredSignature::EIP6492 {
@@ -732,7 +732,7 @@ where
             original: _,
         } => {
             let is_contract_deployed = is_contract_deployed(provider.inner(), &payer).await?;
-            let transfer_call = transferWithAuthorization_0(&contract, &payment, inner).await?;
+            let transfer_call = transferWithAuthorization_0(contract, payment, inner).await?;
             if is_contract_deployed {
                 // transferWithAuthorization with inner signature
                 MetaEip155Provider::send_transaction(
@@ -798,7 +798,7 @@ where
         }
         StructuredSignature::EIP1271(eip1271_signature) => {
             let transfer_call =
-                transferWithAuthorization_0(&contract, &payment, eip1271_signature).await?;
+                transferWithAuthorization_0(contract, payment, eip1271_signature).await?;
             // transferWithAuthorization with eip1271 signature
             MetaEip155Provider::send_transaction(
                 &provider,

@@ -96,16 +96,12 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
 
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
         let chain_id = self.provider.chain_id();
-        let kinds = {
-            let mut kinds = Vec::with_capacity(1);
-            kinds.push(proto::SupportedPaymentKind {
-                x402_version: proto::X402Version::v2().into(),
-                scheme: EXACT_SCHEME.to_string(),
-                network: chain_id.clone().into(),
-                extra: None,
-            });
-            kinds
-        };
+        let kinds = vec![proto::SupportedPaymentKind {
+            x402_version: proto::X402Version::v2().into(),
+            scheme: EXACT_SCHEME.to_string(),
+            network: chain_id.clone().into(),
+            extra: None,
+        }];
         let signers = {
             let mut signers = HashMap::with_capacity(1);
             signers.insert(chain_id, self.provider.signer_addresses());

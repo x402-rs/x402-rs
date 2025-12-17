@@ -58,10 +58,10 @@ pub enum SettleResponse {
     },
 }
 
-impl Into<crate::proto::SettleResponse> for SettleResponse {
-    fn into(self) -> crate::proto::SettleResponse {
+impl From<SettleResponse> for crate::proto::SettleResponse {
+    fn from(val: SettleResponse) -> Self {
         crate::proto::SettleResponse(
-            serde_json::to_value(self).expect("SettleResponse serialization failed"),
+            serde_json::to_value(val).expect("SettleResponse serialization failed"),
         )
     }
 }
@@ -155,10 +155,10 @@ pub enum VerifyResponse {
     },
 }
 
-impl Into<crate::proto::VerifyResponse> for VerifyResponse {
-    fn into(self) -> crate::proto::VerifyResponse {
+impl From<VerifyResponse> for crate::proto::VerifyResponse {
+    fn from(val: VerifyResponse) -> Self {
         crate::proto::VerifyResponse(
-            serde_json::to_value(self).expect("VerifyResponse serialization failed"),
+            serde_json::to_value(val).expect("VerifyResponse serialization failed"),
         )
     }
 }
