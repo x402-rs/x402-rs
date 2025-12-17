@@ -32,5 +32,3 @@ pub mod __reexports {
     pub use alloy_primitives;
     pub use solana_pubkey;
 }
-
-// Fixme use String instead of Box<str> for json structures

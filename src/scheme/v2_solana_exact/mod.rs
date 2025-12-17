@@ -1,5 +1,9 @@
 mod types;
 
+use std::collections::HashMap;
+use std::error::Error;
+use std::sync::Arc;
+
 use crate::chain::solana::SolanaChainProvider;
 use crate::chain::{ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
@@ -10,9 +14,6 @@ use crate::scheme::v1_solana_exact::{
     TransferRequirement, VerifyTransferResult, settle_transaction, verify_transaction,
 };
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
-use std::collections::HashMap;
-use std::error::Error;
-use std::sync::Arc;
 
 // FIXME How to create a scheme
 // 1. start with declaring a possibly empty struct for your scheme
