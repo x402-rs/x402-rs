@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter};
 use url::Url;
 
 use crate::proto;
+use crate::proto::v1::X402Version1;
 use crate::timestamp::UnixTimestamp;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -21,7 +22,7 @@ impl Display for ExactScheme {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifyRequest {
-    pub x402_version: proto::v1::X402Version1,
+    pub x402_version: X402Version1,
     pub payment_payload: PaymentPayload,
     pub payment_requirements: PaymentRequirements,
 }
@@ -39,7 +40,7 @@ impl VerifyRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentPayload {
-    pub x402_version: proto::v1::X402Version1,
+    pub x402_version: X402Version1,
     pub scheme: ExactScheme,
     pub network: String,
     pub payload: ExactEvmPayload,
@@ -75,7 +76,7 @@ pub struct PaymentRequirements {
     pub scheme: ExactScheme,
     pub network: String,
     pub max_amount_required: U256,
-    pub resource: Url,
+    pub resource: String,
     pub description: String,
     pub mime_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -71,6 +71,7 @@ pub struct PaymentRequirements {
     pub pay_to: Address,
     pub max_timeout_seconds: u64,
     pub asset: Address,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub extra: Option<serde_json::Value>,
 }
 
