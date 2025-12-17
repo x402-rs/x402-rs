@@ -1,5 +1,4 @@
-use serde::de::Error;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
 use crate::chain::solana::Address;
@@ -76,7 +75,7 @@ pub struct PaymentRequirements {
     pub extra: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SupportedPaymentKindExtra {
     pub fee_payer: Address,

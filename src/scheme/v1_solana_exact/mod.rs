@@ -1,6 +1,5 @@
 pub mod types;
 
-use serde::{Deserialize, Serialize};
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
 use solana_commitment_config::CommitmentConfig;
 use solana_compute_budget_interface::ID as ComputeBudgetInstructionId;
@@ -55,7 +54,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
         let request = types::VerifyRequest::from_proto(request.clone()).ok_or(
             FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
         )?;
-        let verification = verify_transfer(&self.provider, request).await?;
+        let verification = verify_transfer(&self.provider, &request).await?;
         Ok(proto::v1::VerifyResponse::valid(verification.payer.to_string()).into())
     }
 
@@ -66,7 +65,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
         let request = types::SettleRequest::from_proto(request.clone()).ok_or(
             FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
         )?;
-        let verification = verify_transfer(&self.provider, request).await?;
+        let verification = verify_transfer(&self.provider, &request).await?;
         let tx = TransactionInt::new(verification.transaction).sign(&self.provider)?;
         // Verify if fully signed
         if !tx.is_fully_signed() {
@@ -378,7 +377,7 @@ pub fn verify_create_ata_instruction(
 
 pub async fn verify_transfer(
     provider: &SolanaChainProvider,
-    request: types::VerifyRequest,
+    request: &types::VerifyRequest,
 ) -> Result<VerifyTransferResult, FacilitatorLocalError> {
     let payload = &request.payment_payload;
     let requirements = &request.payment_requirements;

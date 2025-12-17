@@ -32,7 +32,7 @@ pub struct PaymentPayload {
     pub x402_version: X402Version2,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentRequirements {
     pub scheme: ExactScheme,
