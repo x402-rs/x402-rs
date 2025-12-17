@@ -11,7 +11,7 @@ use tracing::Instrument;
 use tracing::instrument;
 use tracing_core::Level;
 
-mod types;
+pub mod types;
 
 use crate::chain::eip155::{
     Eip155ChainProvider, Eip155ChainReference, MetaEip155Provider, MetaTransaction,
@@ -20,14 +20,15 @@ use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
 use crate::proto::v1;
+use crate::scheme::v1_eip155_exact::types::PaymentRequirementsExtra;
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 use crate::timestamp::UnixTimestamp;
 
-const EXACT_SCHEME: types::ExactScheme = types::ExactScheme::Exact;
+pub const EXACT_SCHEME: types::ExactScheme = types::ExactScheme::Exact;
 
 /// Signature verifier for EIP-6492, EIP-1271, EOA, universally deployed on the supported EVM chains
 /// If absent on a target chain, verification will fail; you should deploy the validator there.
-const VALIDATOR_ADDRESS: Address = address!("0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B");
+pub const VALIDATOR_ADDRESS: Address = address!("0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B");
 
 pub struct V1Eip155Exact;
 
@@ -416,7 +417,7 @@ async fn assert_valid_payment<P: Provider>(
     let asset_address = requirements.asset;
     let contract = USDC::new(asset_address, provider);
 
-    let domain = assert_domain(chain, &contract, &asset_address, requirements).await?;
+    let domain = assert_domain(chain, &contract, &asset_address, &requirements.extra).await?;
 
     let amount_required = requirements.max_amount_required;
     assert_enough_balance(&contract, &authorization.from, amount_required).await?;
@@ -443,7 +444,7 @@ async fn assert_valid_payment<P: Provider>(
 /// Returns [`FacilitatorLocalError::InvalidTiming`] if the authorization is not yet active or already expired.
 /// Returns [`FacilitatorLocalError::ClockError`] if the system clock cannot be read.
 #[instrument(skip_all, err)]
-fn assert_time(
+pub fn assert_time(
     payer: Address,
     valid_after: UnixTimestamp,
     valid_before: UnixTimestamp,
@@ -473,13 +474,13 @@ fn assert_time(
 //     network = %payload.network,
 //     asset = %asset_address
 // ))] FIXME
-async fn assert_domain<P: Provider>(
+pub async fn assert_domain<P: Provider>(
     chain: &Eip155ChainReference,
     token_contract: &USDC::USDCInstance<P>,
     asset_address: &Address,
-    requirements: &types::PaymentRequirements,
+    extra: &Option<PaymentRequirementsExtra>,
 ) -> Result<Eip712Domain, FacilitatorLocalError> {
-    let name = requirements.extra.as_ref().map(|extra| extra.name.clone());
+    let name = extra.as_ref().map(|extra| extra.name.clone());
     let name = if let Some(name) = name {
         name
     } else {
@@ -494,10 +495,7 @@ async fn assert_domain<P: Provider>(
             .await
             .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?
     };
-    let version = requirements
-        .extra
-        .as_ref()
-        .map(|extra| extra.version.clone());
+    let version = extra.as_ref().map(|extra| extra.version.clone());
     let version = if let Some(version) = version {
         version
     } else {
