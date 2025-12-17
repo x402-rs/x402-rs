@@ -6,6 +6,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
 
+pub mod util;
 pub mod v1;
 pub mod v2;
 

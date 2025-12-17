@@ -1,9 +1,11 @@
+mod types;
+
 use crate::chain::solana::SolanaChainProvider;
 use crate::chain::{ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
 use crate::scheme::v1_eip155_exact::EXACT_SCHEME;
-use crate::scheme::v1_solana_exact::SupportedPaymentKindExtra;
+use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 use std::collections::HashMap;
 use std::error::Error;
@@ -42,14 +44,23 @@ impl X402SchemeHandler for V2SolanaExactHandler {
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, FacilitatorLocalError> {
-        todo!()
+        let request = types::VerifyRequest::from_proto(request.clone()).ok_or(
+            FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
+        )?;
+        todo!(
+            "V2SolanaExactHandler::verify: not implemented yet. request: {:?}",
+            request
+        )
     }
 
     async fn settle(
         &self,
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
-        todo!()
+        todo!(
+            "V2SolanaExactHandler::settle: not implemented yet. request: {:?}",
+            request
+        )
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {

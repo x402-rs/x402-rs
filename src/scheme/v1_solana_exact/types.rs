@@ -1,9 +1,11 @@
-use crate::chain::solana::Address;
-use crate::proto;
-use crate::proto::v1::X402Version1;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
+
+use crate::chain::solana::Address;
+use crate::proto;
+use crate::proto::util::U64String;
+use crate::proto::v1::X402Version1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ExactScheme {
@@ -74,42 +76,8 @@ pub struct PaymentRequirements {
     pub extra: Option<serde_json::Value>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct U64String(u64);
-
-impl U64String {
-    pub fn inner(&self) -> u64 {
-        self.0
-    }
-}
-
-impl From<u64> for U64String {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
-}
-
-impl From<U64String> for u64 {
-    fn from(value: U64String) -> Self {
-        value.0
-    }
-}
-
-impl Serialize for U64String {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&self.0.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for U64String {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        s.parse::<u64>().map(Self).map_err(D::Error::custom)
-    }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportedPaymentKindExtra {
+    pub fee_payer: Address,
 }
