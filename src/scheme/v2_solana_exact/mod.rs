@@ -7,7 +7,7 @@ use crate::proto;
 use crate::scheme::v1_eip155_exact::EXACT_SCHEME;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::v1_solana_exact::{
-    TransferRequirement, VerifyTransferResult, verify_transaction,
+    TransferRequirement, VerifyTransferResult, settle_transaction, verify_transaction,
 };
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 use std::collections::HashMap;
@@ -58,10 +58,18 @@ impl X402SchemeHandler for V2SolanaExactHandler {
         &self,
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
-        todo!(
-            "V2SolanaExactHandler::settle: not implemented yet. request: {:?}",
-            request
-        )
+        let request = types::SettleRequest::from_proto(request.clone()).ok_or(
+            FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
+        )?;
+        let verification = verify_transfer(&self.provider, &request).await?;
+        let payer = verification.payer.to_string();
+        let tx_sig = settle_transaction(&self.provider, verification).await?;
+        Ok(proto::v2::SettleResponse::Success {
+            payer,
+            transaction: tx_sig.to_string(),
+            network: self.provider.chain_id().to_string(),
+        }
+        .into())
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
@@ -104,7 +112,6 @@ pub async fn verify_transfer(
         ));
     }
 
-    // Assert valid payment START
     let chain_id = provider.chain_id();
     let payload_chain_id = &accepted.network;
     if payload_chain_id != &chain_id {
@@ -120,5 +127,5 @@ pub async fn verify_transfer(
         asset: &requirements.asset,
         amount: requirements.amount.inner(),
     };
-    verify_transaction(&provider, transaction_b64_string, &transfer_requirement).await
+    verify_transaction(provider, transaction_b64_string, &transfer_requirement).await
 }

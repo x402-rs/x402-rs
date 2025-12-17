@@ -115,3 +115,5 @@ pub enum FacilitatorLocalError {
     #[error("Decoding error: {0}")]
     DecodingError(String),
 }
+
+// FIXME ERRORS are fucked up

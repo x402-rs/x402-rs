@@ -66,21 +66,10 @@ impl X402SchemeHandler for V1SolanaExactHandler {
             FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
         )?;
         let verification = verify_transfer(&self.provider, &request).await?;
-        let tx = TransactionInt::new(verification.transaction).sign(&self.provider)?;
-        // Verify if fully signed
-        if !tx.is_fully_signed() {
-            tracing::event!(Level::WARN, status = "failed", "undersigned transaction");
-            return Ok(proto::v1::SettleResponse::Error {
-                reason: "unexpected_settle_error".to_string(),
-                network: self.provider.chain_id().to_string(),
-            }
-            .into());
-        }
-        let tx_sig = tx
-            .send_and_confirm(&self.provider, CommitmentConfig::confirmed())
-            .await?;
+        let payer = verification.payer.to_string();
+        let tx_sig = settle_transaction(&self.provider, verification).await?;
         Ok(proto::v1::SettleResponse::Success {
-            payer: verification.payer.to_string(),
+            payer,
             transaction: tx_sig.to_string(),
             network: self.provider.chain_id().to_string(),
         }
@@ -416,7 +405,7 @@ pub async fn verify_transfer(
         asset: &requirements.asset,
         amount: requirements.max_amount_required.inner(),
     };
-    verify_transaction(&provider, transaction_b64_string, &transfer_requirement).await
+    verify_transaction(provider, transaction_b64_string, &transfer_requirement).await
 }
 
 pub async fn verify_transaction(
@@ -631,4 +620,22 @@ pub async fn verify_transfer_instruction(
         ));
     }
     Ok(transfer_checked_instruction)
+}
+
+pub async fn settle_transaction(
+    provider: &SolanaChainProvider,
+    verification: VerifyTransferResult,
+) -> Result<Signature, FacilitatorLocalError> {
+    let tx = TransactionInt::new(verification.transaction).sign(provider)?;
+    // Verify if fully signed
+    if !tx.is_fully_signed() {
+        tracing::event!(Level::WARN, status = "failed", "undersigned transaction");
+        return Err(FacilitatorLocalError::DecodingError(
+            "unexpected_settle_error".to_string(),
+        ));
+    }
+    let tx_sig = tx
+        .send_and_confirm(provider, CommitmentConfig::confirmed())
+        .await?;
+    Ok(tx_sig)
 }
