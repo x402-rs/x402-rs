@@ -316,7 +316,7 @@ pub fn verify_compute_price_instruction(
 pub fn verify_create_ata_instruction(
     transaction: &VersionedTransaction,
     index: usize,
-    requirements: &types::PaymentRequirements,
+    transfer_requirement: &TransferRequirement,
 ) -> Result<(), FacilitatorLocalError> {
     let tx = TransactionInt::new(transaction.clone());
     let instruction = tx.instruction(index)?;
@@ -360,13 +360,13 @@ pub fn verify_create_ata_instruction(
     instruction.account(5)?;
 
     // verify that the ATA is created for the expected payee
-    if Address::new(owner) != requirements.pay_to {
+    if Address::new(owner) != transfer_requirement.pay_to {
         return Err(FacilitatorLocalError::DecodingError(
             "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_payee"
                 .to_string(),
         ));
     }
-    if Address::new(mint) != requirements.asset {
+    if Address::new(mint) != transfer_requirement.asset {
         return Err(FacilitatorLocalError::DecodingError(
             "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_asset"
                 .to_string(),
@@ -410,6 +410,7 @@ pub async fn verify_transfer(
             payload.scheme.to_string(),
         ));
     }
+
     let transaction_b64_string = payload.payload.transaction.clone();
     let bytes = Base64Bytes::from(transaction_b64_string.as_bytes())
         .decode()
@@ -427,15 +428,20 @@ pub async fn verify_transfer(
     }
     tracing::debug!(compute_units = compute_units, "Verified compute unit limit");
     verify_compute_price_instruction(provider.max_compute_unit_price(), &transaction, 1)?;
+    let transfer_requirement = TransferRequirement {
+        pay_to: requirements.pay_to.clone(),
+        asset: requirements.asset.clone(),
+        amount: requirements.max_amount_required.inner(),
+    };
     let transfer_instruction = if instructions.len() == 3 {
         // verify that the transfer instruction is valid
         // this expects the destination ATA to already exist
-        verify_transfer_instruction(provider, &transaction, 2, requirements, false).await?
+        verify_transfer_instruction(provider, &transaction, 2, &transfer_requirement, false).await?
     } else if instructions.len() == 4 {
         // verify that the transfer instruction is valid
         // this expects the destination ATA to be created in the same transaction
-        verify_create_ata_instruction(&transaction, 2, requirements)?;
-        verify_transfer_instruction(provider, &transaction, 3, requirements, true).await?
+        verify_create_ata_instruction(&transaction, 2, &transfer_requirement)?;
+        verify_transfer_instruction(provider, &transaction, 3, &transfer_requirement, true).await?
     } else {
         return Err(FacilitatorLocalError::DecodingError(
             "invalid_exact_svm_payload_transaction_instructions_count".to_string(),
@@ -481,11 +487,92 @@ pub async fn verify_transfer(
     Ok(VerifyTransferResult { payer, transaction })
 }
 
+pub async fn verify_transaction(
+    provider: &SolanaChainProvider,
+    transaction_b64_string: String,
+    transfer_requirement: &TransferRequirement,
+) -> Result<VerifyTransferResult, FacilitatorLocalError> {
+    let bytes = Base64Bytes::from(transaction_b64_string.as_bytes())
+        .decode()
+        .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
+    let transaction = bincode::deserialize::<VersionedTransaction>(bytes.as_slice())
+        .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
+
+    // perform transaction introspection to validate the transaction structure and details
+    let instructions = transaction.message.instructions();
+    let compute_units = verify_compute_limit_instruction(&transaction, 0)?;
+    if compute_units > provider.max_compute_unit_limit() {
+        return Err(FacilitatorLocalError::DecodingError(
+            "compute unit limit exceeds facilitator maximum".to_string(),
+        ));
+    }
+    tracing::debug!(compute_units = compute_units, "Verified compute unit limit");
+    verify_compute_price_instruction(provider.max_compute_unit_price(), &transaction, 1)?;
+    let transfer_instruction = if instructions.len() == 3 {
+        // verify that the transfer instruction is valid
+        // this expects the destination ATA to already exist
+        verify_transfer_instruction(provider, &transaction, 2, transfer_requirement, false).await?
+    } else if instructions.len() == 4 {
+        // verify that the transfer instruction is valid
+        // this expects the destination ATA to be created in the same transaction
+        verify_create_ata_instruction(&transaction, 2, transfer_requirement)?;
+        verify_transfer_instruction(provider, &transaction, 3, transfer_requirement, true).await?
+    } else {
+        return Err(FacilitatorLocalError::DecodingError(
+            "invalid_exact_svm_payload_transaction_instructions_count".to_string(),
+        ));
+    };
+
+    // Rule 2: Fee payer safety check
+    // Verify that the fee payer is not included in any instruction's accounts
+    // This single check covers all cases: authority, source, or any other role
+    let fee_payer_pubkey = provider.pubkey();
+    for instruction in transaction.message.instructions().iter() {
+        for account_idx in instruction.accounts.iter() {
+            let account = transaction
+                .message
+                .static_account_keys()
+                .get(*account_idx as usize)
+                .ok_or(FacilitatorLocalError::DecodingError(
+                    "invalid_account_index".to_string(),
+                ))?;
+
+            if *account == fee_payer_pubkey {
+                return Err(FacilitatorLocalError::DecodingError(
+                        "invalid_exact_svm_payload_transaction_fee_payer_included_in_instruction_accounts".to_string(),
+                    ));
+            }
+        }
+    }
+
+    let tx = TransactionInt::new(transaction.clone()).sign(provider)?;
+    let cfg = RpcSimulateTransactionConfig {
+        sig_verify: false,
+        replace_recent_blockhash: false,
+        commitment: Some(CommitmentConfig::confirmed()),
+        encoding: None, // optional; client handles encoding
+        accounts: None,
+        inner_instructions: false,
+        min_context_slot: None,
+    };
+    provider
+        .simulate_transaction_with_config(&tx.inner, cfg)
+        .await?;
+    let payer: Address = transfer_instruction.authority.into();
+    Ok(VerifyTransferResult { payer, transaction })
+}
+
+pub struct TransferRequirement {
+    pub asset: Address,
+    pub pay_to: Address,
+    pub amount: u64,
+}
+
 pub async fn verify_transfer_instruction(
     provider: &SolanaChainProvider,
     transaction: &VersionedTransaction,
     instruction_index: usize,
-    requirements: &types::PaymentRequirements,
+    transfer_requirement: &TransferRequirement,
     has_dest_ata: bool,
 ) -> Result<TransferCheckedInstruction, FacilitatorLocalError> {
     let tx = TransactionInt::new(transaction.clone());
@@ -575,15 +662,13 @@ pub async fn verify_transfer_instruction(
         ));
     }
 
-    let asset_address = &requirements.asset;
-    let pay_to_address = &requirements.pay_to;
     let token_program = transfer_checked_instruction.token_program;
     // findAssociatedTokenPda
     let (ata, _) = Pubkey::find_program_address(
         &[
-            pay_to_address.as_ref(),
+            transfer_requirement.pay_to.as_ref(),
             token_program.as_ref(),
-            asset_address.as_ref(),
+            transfer_requirement.asset.as_ref(),
         ],
         &ATA_PROGRAM_PUBKEY,
     );
@@ -608,8 +693,7 @@ pub async fn verify_transfer_instruction(
         ));
     }
     let instruction_amount = transfer_checked_instruction.amount;
-    let requirements_amount = requirements.max_amount_required.inner();
-    if instruction_amount != requirements_amount {
+    if instruction_amount != transfer_requirement.amount {
         return Err(FacilitatorLocalError::DecodingError(
             "invalid_exact_svm_payload_transaction_amount_mismatch".to_string(),
         ));
