@@ -280,7 +280,7 @@ impl V1SolanaExactHandler {
             ));
         }
         let instruction_amount = transfer_checked_instruction.amount;
-        let requirements_amount = requirements.max_amount_required;
+        let requirements_amount = requirements.max_amount_required.inner();
         if instruction_amount != requirements_amount {
             return Err(FacilitatorLocalError::DecodingError(
                 "invalid_exact_svm_payload_transaction_amount_mismatch".to_string(),

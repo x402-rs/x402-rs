@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
-
+use serde::de::Error;
 use crate::chain::solana::Address;
 use crate::proto;
 use crate::proto::v1::X402Version1;
@@ -61,8 +61,7 @@ pub struct ExactPaymentPayload {
 pub struct PaymentRequirements {
     pub scheme: ExactScheme,
     pub network: String,
-    #[serde(with = "u64_string")]
-    pub max_amount_required: u64,
+    pub max_amount_required: U64String,
     pub resource: String,
     pub description: String,
     pub mime_type: String,
@@ -75,22 +74,42 @@ pub struct PaymentRequirements {
     pub extra: Option<serde_json::Value>,
 }
 
-mod u64_string {
-    use serde::de::Error;
-    use serde::{Deserialize, Deserializer, Serializer};
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct U64String(u64);
 
-    pub fn serialize<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&value.to_string())
+impl U64String {
+    pub fn inner(&self) -> u64 {
+        self.0
     }
+}
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<u64, D::Error>
+impl From<u64> for U64String {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl From<U64String> for u64 {
+    fn from(value: U64String) -> Self {
+        value.0
+    }
+}
+
+impl Serialize for U64String {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for U64String {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        s.parse::<u64>().map_err(Error::custom)
+        s.parse::<u64>().map(Self).map_err(D::Error::custom)
     }
 }
