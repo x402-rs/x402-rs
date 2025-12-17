@@ -1,7 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
-use std::time::{SystemTime, SystemTimeError};
+use std::time::SystemTime;
 
 /// A Unix timestamp represented as a `u64`, used in payment authorization windows.
 ///
@@ -48,11 +48,12 @@ impl Add<u64> for UnixTimestamp {
 }
 
 impl UnixTimestamp {
-    pub fn try_now() -> Result<Self, SystemTimeError> {
+    pub fn now() -> Self {
         let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)?
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("SystemTime before UNIX epoch?!?")
             .as_secs();
-        Ok(Self(now))
+        Self(now)
     }
 
     pub fn as_secs(&self) -> u64 {

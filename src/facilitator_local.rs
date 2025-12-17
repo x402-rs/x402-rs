@@ -10,7 +10,6 @@
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
 use std::collections::HashMap;
-use std::time::SystemTimeError;
 
 use crate::facilitator::Facilitator;
 use crate::proto;
@@ -93,9 +92,6 @@ pub enum FacilitatorLocalError {
     /// The `pay_to` recipient in the requirements doesn't match the `to` address in the payload.
     #[error("Incompatible payload receivers (payload: {1}, requirements: {2})")]
     ReceiverMismatch(String, String, String),
-    /// Failed to read a system clock to check timing.
-    #[error("Can not get system clock")]
-    ClockError(#[source] SystemTimeError),
     /// The `validAfter`/`validBefore` fields on the authorization are not within bounds.
     #[error("Invalid timing: {1}")]
     InvalidTiming(String, String),

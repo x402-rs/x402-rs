@@ -259,7 +259,7 @@ pub fn assert_time(
     valid_after: UnixTimestamp,
     valid_before: UnixTimestamp,
 ) -> Result<(), FacilitatorLocalError> {
-    let now = UnixTimestamp::try_now().map_err(FacilitatorLocalError::ClockError)?;
+    let now = UnixTimestamp::now();
     if valid_before < now + 6 {
         return Err(FacilitatorLocalError::InvalidTiming(
             payer.to_string(),

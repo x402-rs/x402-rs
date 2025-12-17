@@ -199,9 +199,7 @@ impl IntoResponse for FacilitatorLocalError {
                 })),
             )
                 .into_response(),
-            FacilitatorLocalError::ContractCall(..) | FacilitatorLocalError::ClockError(_) => {
-                bad_request
-            }
+            FacilitatorLocalError::ContractCall(..) => bad_request,
             FacilitatorLocalError::DecodingError(reason) => (
                 StatusCode::OK,
                 Json(json!({
