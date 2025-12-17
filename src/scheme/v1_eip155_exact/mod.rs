@@ -40,6 +40,7 @@ impl X402SchemeBlueprint for V1Eip155Exact {
     fn build(
         &self,
         provider: ChainProvider,
+        _config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn std::error::Error>> {
         let provider = if let ChainProvider::Eip155(provider) = provider {
             provider

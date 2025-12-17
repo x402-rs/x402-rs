@@ -37,6 +37,7 @@ pub trait X402SchemeBlueprint {
     fn build(
         &self,
         provider: ChainProvider,
+        config: Option<serde_json::Value>, // FIXME Mention in the docs we could use special configuration per registered scheme
     ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn std::error::Error>>;
 }
 
@@ -222,7 +223,7 @@ impl SchemeRegistry {
                 }
             };
             let chain_id = chain_provider.chain_id();
-            let handler = match blueprint.build(chain_provider) {
+            let handler = match blueprint.build(chain_provider, config.config.clone()) {
                 Ok(handler) => handler,
                 Err(err) => {
                     tracing::error!("Error building scheme handler for {}: {}", config.slug, err);

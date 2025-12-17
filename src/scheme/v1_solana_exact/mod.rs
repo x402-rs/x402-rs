@@ -30,8 +30,11 @@ impl X402SchemeBlueprint for V1SolanaExact {
         SchemeSlug::new(1, "solana", EXACT_SCHEME.to_string())
     }
 
-    // FIXME Pass json config value
-    fn build(&self, provider: ChainProvider) -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>> {
+    fn build(
+        &self,
+        provider: ChainProvider,
+        _config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>> {
         let provider = if let ChainProvider::Solana(provider) = provider {
             provider
         } else {

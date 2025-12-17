@@ -53,6 +53,9 @@ pub struct SchemeConfig {
     pub slug: SchemeSlug,
     /// The chain pattern this scheme applies to (e.g., "eip155:84532", "eip155:*", "eip155:{1,8453}").
     pub chains: ChainIdPattern,
+    /// Scheme-specific configuration (optional).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<serde_json::Value>,
 }
 
 mod scheme_config_defaults {

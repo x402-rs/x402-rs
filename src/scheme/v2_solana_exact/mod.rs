@@ -27,7 +27,11 @@ impl X402SchemeBlueprint for V2SolanaExact {
         SchemeSlug::new(2, "solana", EXACT_SCHEME.to_string())
     }
 
-    fn build(&self, provider: ChainProvider) -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>> {
+    fn build(
+        &self,
+        provider: ChainProvider,
+        _config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>> {
         let provider = if let ChainProvider::Solana(provider) = provider {
             provider
         } else {

@@ -25,7 +25,11 @@ impl X402SchemeBlueprint for V2Eip155Exact {
         SchemeSlug::new(2, "eip155", EXACT_SCHEME.to_string())
     }
 
-    fn build(&self, provider: ChainProvider) -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>> {
+    fn build(
+        &self,
+        provider: ChainProvider,
+        _config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>> {
         let provider = if let ChainProvider::Eip155(provider) = provider {
             provider
         } else {
