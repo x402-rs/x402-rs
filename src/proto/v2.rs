@@ -1,7 +1,10 @@
-use crate::proto::v1;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use crate::chain::ChainId;
+use crate::proto;
+use crate::proto::v1;
 
 /// Version 2 of the x402 protocol.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
@@ -47,8 +50,8 @@ impl Display for X402Version2 {
     }
 }
 
-pub type SettleResponse = v1::SettleResponse;
 pub type VerifyResponse = v1::VerifyResponse;
+pub type SettleResponse = v1::SettleResponse;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,4 +59,43 @@ pub struct ResourceInfo {
     pub description: String,
     pub mime_type: String,
     pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyRequest<TPayload, TRequirements> {
+    pub x402_version: X402Version2,
+    pub payment_payload: TPayload,
+    pub payment_requirements: TRequirements,
+}
+
+impl<TPayload, TRequirements> VerifyRequest<TPayload, TRequirements>
+where
+    Self: DeserializeOwned,
+{
+    pub fn from_proto(request: proto::VerifyRequest) -> Option<Self> {
+        serde_json::from_value(request.into_json()).ok()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentPayload<TAccepted, TPayload> {
+    pub accepted: TAccepted,
+    pub payload: TPayload,
+    pub resource: ResourceInfo,
+    pub x402_version: X402Version2,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentRequirements<TScheme, TAmount, TAddress, TExtra> {
+    pub scheme: TScheme,
+    pub network: ChainId,
+    pub amount: TAmount,
+    pub pay_to: TAddress,
+    pub max_timeout_seconds: u64,
+    pub asset: TAddress,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra: Option<TExtra>,
 }

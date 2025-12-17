@@ -157,9 +157,9 @@ pub enum VerifyResponse {
     },
 }
 
-impl From<VerifyResponse> for crate::proto::VerifyResponse {
+impl From<VerifyResponse> for proto::VerifyResponse {
     fn from(val: VerifyResponse) -> Self {
-        crate::proto::VerifyResponse(
+        proto::VerifyResponse(
             serde_json::to_value(val).expect("VerifyResponse serialization failed"),
         )
     }
