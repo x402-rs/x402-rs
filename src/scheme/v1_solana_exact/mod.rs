@@ -360,13 +360,13 @@ pub fn verify_create_ata_instruction(
     instruction.account(5)?;
 
     // verify that the ATA is created for the expected payee
-    if Address::new(owner) != transfer_requirement.pay_to {
+    if Address::new(owner) != *transfer_requirement.pay_to {
         return Err(FacilitatorLocalError::DecodingError(
             "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_payee"
                 .to_string(),
         ));
     }
-    if Address::new(mint) != transfer_requirement.asset {
+    if Address::new(mint) != *transfer_requirement.asset {
         return Err(FacilitatorLocalError::DecodingError(
             "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_asset"
                 .to_string(),
@@ -413,8 +413,8 @@ pub async fn verify_transfer(
 
     let transaction_b64_string = payload.payload.transaction.clone();
     let transfer_requirement = TransferRequirement {
-        pay_to: requirements.pay_to.clone(),
-        asset: requirements.asset.clone(),
+        pay_to: &requirements.pay_to,
+        asset: &requirements.asset,
         amount: requirements.max_amount_required.inner(),
     };
     verify_transaction(&provider, transaction_b64_string, &transfer_requirement).await
@@ -423,7 +423,7 @@ pub async fn verify_transfer(
 pub async fn verify_transaction(
     provider: &SolanaChainProvider,
     transaction_b64_string: String,
-    transfer_requirement: &TransferRequirement,
+    transfer_requirement: &TransferRequirement<'_>,
 ) -> Result<VerifyTransferResult, FacilitatorLocalError> {
     let bytes = Base64Bytes::from(transaction_b64_string.as_bytes())
         .decode()
@@ -495,9 +495,9 @@ pub async fn verify_transaction(
     Ok(VerifyTransferResult { payer, transaction })
 }
 
-pub struct TransferRequirement {
-    pub asset: Address,
-    pub pay_to: Address,
+pub struct TransferRequirement<'a> {
+    pub asset: &'a Address,
+    pub pay_to: &'a Address,
     pub amount: u64,
 }
 
@@ -505,7 +505,7 @@ pub async fn verify_transfer_instruction(
     provider: &SolanaChainProvider,
     transaction: &VersionedTransaction,
     instruction_index: usize,
-    transfer_requirement: &TransferRequirement,
+    transfer_requirement: &TransferRequirement<'_>,
     has_dest_ata: bool,
 ) -> Result<TransferCheckedInstruction, FacilitatorLocalError> {
     let tx = TransactionInt::new(transaction.clone());
