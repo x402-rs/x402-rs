@@ -15,14 +15,8 @@ use crate::scheme::v1_solana_exact::{
 };
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 
-// FIXME How to create a scheme
-// 1. start with declaring a possibly empty struct for your scheme
 pub struct V2SolanaExact;
 
-// 2. Define impl X402SchemeBlueprint
-// 3. There: (a) - prepare correct slug
-// (b) Make the handler ib (build) fn
-// 4. Implement X402SchemeHandler for the handler - do not forget to mark the trait as async_trait
 impl X402SchemeBlueprint for V2SolanaExact {
     fn slug(&self) -> SchemeSlug {
         SchemeSlug::new(2, "solana", EXACT_SCHEME.to_string())

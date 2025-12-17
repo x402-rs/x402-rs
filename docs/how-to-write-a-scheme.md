@@ -78,7 +78,7 @@ pub trait X402SchemeBlueprint {
 ```
 
 - The `build` method receives a `ChainProvider` enum—match against the expected variant
-- The optional `config` allows scheme-specific configuration (parse however you wish)
+- The optional `config` allows scheme-specific configuration (parse however you wish, see "Configure in JSON" section)
 
 ### X402SchemeHandler
 

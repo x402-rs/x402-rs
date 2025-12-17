@@ -37,7 +37,7 @@ pub trait X402SchemeBlueprint {
     fn build(
         &self,
         provider: ChainProvider,
-        config: Option<serde_json::Value>, // FIXME Mention in the docs we could use special configuration per registered scheme
+        config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn std::error::Error>>;
 }
 
