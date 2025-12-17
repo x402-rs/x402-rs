@@ -11,9 +11,8 @@ use crate::chain::eip155::{Eip155ChainProvider, Eip155ChainReference, MetaEip155
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
-use crate::scheme::v1_eip155_exact::{
-    ExactEvmPayment, USDC, assert_domain, assert_enough_balance, assert_enough_value, assert_time,
-};
+use crate::proto::v2;
+use crate::scheme::v1_eip155_exact::{ExactEvmPayment, USDC, assert_domain, assert_enough_balance, assert_enough_value, assert_time, verify_payment};
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 
 const EXACT_SCHEME: types::ExactScheme = types::ExactScheme::Exact;
@@ -57,17 +56,16 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
             requirements,
         )
         .await?;
-        println!("V2Eip155ExactHandler::verify: payment: {:?}", payment);
-        println!("V2Eip155ExactHandler::verify: eip712_domain: {:?}", eip712_domain);
-        println!("V2Eip155ExactHandler::verify: contract: {:?}", contract);
-        todo!("V2Eip155ExactHandler::verify: not implemented yet")
+
+        let payer = verify_payment(self.provider.inner(), &contract, &payment, &eip712_domain).await?;
+        Ok(v2::VerifyResponse::valid(payer.to_string()).into())
     }
 
     async fn settle(
         &self,
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
-        todo!()
+        todo!("V2Eip155ExactHandler::settle: not implemented yet")
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {

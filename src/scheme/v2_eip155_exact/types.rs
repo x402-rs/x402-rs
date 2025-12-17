@@ -4,9 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::chain::ChainId;
 use crate::proto;
 use crate::proto::v2::X402Version2;
-use crate::scheme::v1_eip155_exact::types::{
-    ExactEvmPayload, PaymentRequirementsExtra,
-};
+use crate::scheme::v1_eip155_exact::types::{ExactEvmPayload, PaymentRequirementsExtra};
 
 pub use crate::scheme::v1_eip155_exact::types::ExactScheme;
 
