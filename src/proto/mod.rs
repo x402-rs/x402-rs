@@ -2,7 +2,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
-
+use std::str::FromStr;
 use crate::chain::ChainId;
 use crate::scheme::SchemeHandlerSlug;
 
@@ -136,7 +136,13 @@ impl VerifyRequest {
                 let slug = SchemeHandlerSlug::new(chain_id, 1, scheme.into());
                 Some(slug)
             }
-            X402Version::V2(_) => None,
+            X402Version::V2(_) => {
+                let chain_id_string = self.0.get("paymentPayload")?.get("accepted")?.get("network")?.as_str()?;
+                let chain_id = ChainId::from_str(chain_id_string).ok()?;
+                let scheme = self.0.get("paymentPayload")?.get("accepted")?.get("scheme")?.as_str()?;
+                let slug = SchemeHandlerSlug::new(chain_id, 2, scheme.into());
+                Some(slug)
+            }
         }
     }
 }

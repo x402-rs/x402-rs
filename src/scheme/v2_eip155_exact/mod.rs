@@ -38,7 +38,7 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, FacilitatorLocalError> {
-        todo!()
+        todo!("V2Eip155ExactHandler::verify: not implemented yet")
     }
 
     async fn settle(
