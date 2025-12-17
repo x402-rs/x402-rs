@@ -1,13 +1,12 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 
-use crate::chain::ChainProvider;
-use crate::facilitator_local::FacilitatorLocalError;
-use crate::proto::{
-    SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse,
-};
-use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, v1_eip155_exact};
 use crate::chain::eip155::Eip155ChainProvider;
+use crate::chain::{ChainProvider, ChainProviderOps};
+use crate::facilitator_local::FacilitatorLocalError;
+use crate::proto;
+use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, v1_eip155_exact};
 
 const EXACT_SCHEME: v1_eip155_exact::types::ExactScheme =
     v1_eip155_exact::types::ExactScheme::Exact;
@@ -37,19 +36,39 @@ pub struct V2Eip155ExactHandler {
 impl X402SchemeHandler for V2Eip155ExactHandler {
     async fn verify(
         &self,
-        request: &VerifyRequest,
-    ) -> Result<VerifyResponse, FacilitatorLocalError> {
+        request: &proto::VerifyRequest,
+    ) -> Result<proto::VerifyResponse, FacilitatorLocalError> {
         todo!()
     }
 
     async fn settle(
         &self,
-        request: &SettleRequest,
-    ) -> Result<SettleResponse, FacilitatorLocalError> {
+        request: &proto::SettleRequest,
+    ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
         todo!()
     }
 
-    async fn supported(&self) -> Result<SupportedResponse, FacilitatorLocalError> {
-        todo!()
+    async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
+        let chain_id = self.provider.chain_id();
+        let kinds = {
+            let mut kinds = Vec::with_capacity(1);
+            kinds.push(proto::SupportedPaymentKind {
+                x402_version: proto::X402Version::v2().into(),
+                scheme: EXACT_SCHEME.to_string(),
+                network: chain_id.clone().into(),
+                extra: None,
+            });
+            kinds
+        };
+        let signers = {
+            let mut signers = HashMap::with_capacity(1);
+            signers.insert(chain_id, self.provider.signer_addresses());
+            signers
+        };
+        Ok(proto::SupportedResponse {
+            kinds,
+            extensions: Vec::new(),
+            signers,
+        })
     }
 }

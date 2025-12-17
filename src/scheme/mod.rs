@@ -15,6 +15,7 @@ use crate::config::SchemeConfig;
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
 use crate::scheme::v1_solana_exact::V1SolanaExact;
+use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 
 #[async_trait::async_trait]
 pub trait X402SchemeHandler: Send + Sync {
@@ -56,6 +57,7 @@ impl SchemeBlueprints {
         Self::new()
             .and_register(V1Eip155Exact)
             .and_register(V1SolanaExact)
+            .and_register(V2Eip155Exact)
     }
 
     pub fn and_register<B: X402SchemeBlueprint + 'static>(mut self, blueprint: B) -> Self {

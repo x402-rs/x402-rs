@@ -335,20 +335,14 @@ impl X402SchemeHandler for V1SolanaExactHandler {
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
         let chain_id = self.provider.chain_id();
         let kinds: Vec<proto::SupportedPaymentKind> = {
-            let mut kinds = Vec::with_capacity(2);
+            let mut kinds = Vec::with_capacity(1);
             let fee_payer = self.provider.fee_payer();
             let extra =
                 Some(serde_json::to_value(SupportedPaymentKindExtra { fee_payer }).unwrap());
-            kinds.push(proto::SupportedPaymentKind {
-                x402_version: proto::X402Version::v2().into(),
-                scheme: EXACT_SCHEME.to_string(),
-                network: chain_id.clone().to_string(),
-                extra: extra.clone(),
-            });
             let network = chain_id.as_network_name();
             if let Some(network) = network {
                 kinds.push(proto::SupportedPaymentKind {
-                    x402_version: proto::X402Version::v2().into(),
+                    x402_version: proto::v1::X402Version1.into(),
                     scheme: EXACT_SCHEME.to_string(),
                     network: network.to_string(),
                     extra,

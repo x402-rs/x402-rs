@@ -54,12 +54,6 @@ pub struct V1Eip155ExactHandler {
     provider: Arc<Eip155ChainProvider>,
 }
 
-impl V1Eip155ExactHandler {
-    pub fn chain_id(&self) -> ChainId {
-        self.provider.chain_id()
-    }
-}
-
 #[async_trait::async_trait]
 impl X402SchemeHandler for V1Eip155ExactHandler {
     async fn verify(
@@ -293,19 +287,13 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
-        let chain_id = self.chain_id();
+        let chain_id = self.provider.chain_id();
         let kinds = {
-            let mut kinds = Vec::with_capacity(2);
-            kinds.push(proto::SupportedPaymentKind {
-                x402_version: proto::X402Version::v2().into(),
-                scheme: EXACT_SCHEME.to_string(),
-                network: chain_id.clone().into(),
-                extra: None,
-            });
+            let mut kinds = Vec::with_capacity(1);
             let network = chain_id.as_network_name();
             if let Some(network) = network {
                 kinds.push(proto::SupportedPaymentKind {
-                    x402_version: proto::X402Version::v1().into(),
+                    x402_version: v1::X402Version1.into(),
                     scheme: EXACT_SCHEME.to_string(),
                     network: network.to_string(),
                     extra: None,
