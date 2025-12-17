@@ -1,10 +1,10 @@
+use crate::chain::ChainId;
+use crate::scheme::SchemeHandlerSlug;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
-use crate::chain::ChainId;
-use crate::scheme::SchemeHandlerSlug;
 
 pub mod v1;
 pub mod v2;
@@ -137,9 +137,19 @@ impl VerifyRequest {
                 Some(slug)
             }
             X402Version::V2(_) => {
-                let chain_id_string = self.0.get("paymentPayload")?.get("accepted")?.get("network")?.as_str()?;
+                let chain_id_string = self
+                    .0
+                    .get("paymentPayload")?
+                    .get("accepted")?
+                    .get("network")?
+                    .as_str()?;
                 let chain_id = ChainId::from_str(chain_id_string).ok()?;
-                let scheme = self.0.get("paymentPayload")?.get("accepted")?.get("scheme")?.as_str()?;
+                let scheme = self
+                    .0
+                    .get("paymentPayload")?
+                    .get("accepted")?
+                    .get("scheme")?
+                    .as_str()?;
                 let slug = SchemeHandlerSlug::new(chain_id, 2, scheme.into());
                 Some(slug)
             }

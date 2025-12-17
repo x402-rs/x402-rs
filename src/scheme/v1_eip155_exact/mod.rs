@@ -519,7 +519,7 @@ pub async fn assert_domain<P: Provider>(
     max_required = %max_amount_required,
     token_contract = %usdc_contract.address()
 ))]
-async fn assert_enough_balance<P: Provider>(
+pub async fn assert_enough_balance<P: Provider>(
     usdc_contract: &USDC::USDCInstance<P>,
     sender: &Address,
     max_amount_required: U256,
@@ -554,7 +554,7 @@ async fn assert_enough_balance<P: Provider>(
     sent = %sent,
     max_amount_required = %max_amount_required
 ))]
-fn assert_enough_value(
+pub fn assert_enough_value(
     payer: &Address,
     sent: &U256,
     max_amount_required: &U256,

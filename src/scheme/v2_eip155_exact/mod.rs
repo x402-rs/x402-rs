@@ -1,15 +1,22 @@
+pub mod types;
+
+use alloy_provider::Provider;
+use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
+use tracing::instrument;
 
-use crate::chain::eip155::Eip155ChainProvider;
-use crate::chain::{ChainProvider, ChainProviderOps};
+use crate::chain::eip155::{Eip155ChainProvider, Eip155ChainReference, MetaEip155Provider};
+use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
-use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, v1_eip155_exact};
+use crate::scheme::v1_eip155_exact::{
+    ExactEvmPayment, USDC, assert_domain, assert_enough_balance, assert_enough_value, assert_time,
+};
+use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 
-const EXACT_SCHEME: v1_eip155_exact::types::ExactScheme =
-    v1_eip155_exact::types::ExactScheme::Exact;
+const EXACT_SCHEME: types::ExactScheme = types::ExactScheme::Exact;
 
 pub struct V2Eip155Exact;
 
@@ -38,6 +45,21 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, FacilitatorLocalError> {
+        let request = types::VerifyRequest::from_proto(request.clone()).ok_or(
+            FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
+        )?;
+        let payload = &request.payment_payload;
+        let requirements = &request.payment_requirements;
+        let (contract, payment, eip712_domain) = assert_valid_payment(
+            self.provider.inner(),
+            self.provider.chain(),
+            payload,
+            requirements,
+        )
+        .await?;
+        println!("V2Eip155ExactHandler::verify: payment: {:?}", payment);
+        println!("V2Eip155ExactHandler::verify: eip712_domain: {:?}", eip712_domain);
+        println!("V2Eip155ExactHandler::verify: contract: {:?}", contract);
         todo!("V2Eip155ExactHandler::verify: not implemented yet")
     }
 
@@ -71,4 +93,68 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
             signers,
         })
     }
+}
+
+/// Runs all preconditions needed for a successful payment:
+/// - Valid scheme, network, and receiver.
+/// - Valid time window (validAfter/validBefore).
+/// - Correct EIP-712 domain construction.
+/// - Sufficient on-chain balance.
+/// - Sufficient value in payload.
+#[instrument(skip_all, err)]
+async fn assert_valid_payment<P: Provider>(
+    provider: P,
+    chain: &Eip155ChainReference,
+    payload: &types::PaymentPayload,
+    requirements: &types::PaymentRequirements,
+) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), FacilitatorLocalError> {
+    let accepted = &payload.accepted;
+    if accepted != requirements {
+        return Err(FacilitatorLocalError::DecodingError(
+            "Accepted requirements do not match payload requirements".to_string(),
+        ));
+    }
+    let payload = &payload.payload;
+
+    let payer = payload.authorization.from;
+    let chain_id: ChainId = chain.into();
+    let payload_chain_id = &accepted.network;
+    if payload_chain_id != &chain_id {
+        return Err(FacilitatorLocalError::NetworkMismatch(
+            Some(payer.to_string()),
+            chain_id.to_string(),
+            payload_chain_id.to_string(),
+        ));
+    }
+    let authorization = &payload.authorization;
+    if authorization.to != accepted.pay_to {
+        return Err(FacilitatorLocalError::ReceiverMismatch(
+            payer.to_string(),
+            authorization.to.to_string(),
+            accepted.pay_to.to_string(),
+        ));
+    }
+    let valid_after = authorization.valid_after;
+    let valid_before = authorization.valid_before;
+    assert_time(payer, valid_after, valid_before)?;
+    let asset_address = accepted.asset;
+    let contract = USDC::new(asset_address, provider);
+
+    let domain = assert_domain(chain, &contract, &asset_address, &accepted.extra).await?;
+
+    let amount_required = accepted.amount;
+    assert_enough_balance(&contract, &authorization.from, amount_required).await?;
+    assert_enough_value(&payer, &authorization.value, &amount_required)?;
+
+    let payment = ExactEvmPayment {
+        from: authorization.from,
+        to: authorization.to,
+        value: authorization.value,
+        valid_after: authorization.valid_after,
+        valid_before: authorization.valid_before,
+        nonce: authorization.nonce,
+        signature: payload.signature.clone(),
+    };
+
+    Ok((contract, payment, domain))
 }
