@@ -4,7 +4,6 @@ use std::fmt::{Display, Formatter};
 use crate::chain::solana::Address;
 use crate::proto;
 use crate::proto::util::U64String;
-use crate::proto::v1::X402Version1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ExactScheme {
@@ -18,36 +17,9 @@ impl Display for ExactScheme {
     }
 }
 
-/// Wrapper for a payment payload and requirements sent by the client to a facilitator
-/// to be verified.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VerifyRequest {
-    pub x402_version: X402Version1,
-    pub payment_payload: PaymentPayload,
-    pub payment_requirements: PaymentRequirements,
-}
-
-impl VerifyRequest {
-    pub fn from_proto(request: proto::VerifyRequest) -> Option<Self> {
-        serde_json::from_value(request.into_json())
-            .inspect_err(|e| tracing::error!("{:?}", e))
-            .ok()
-    }
-}
-
+pub type VerifyRequest = proto::v1::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;
-
-/// Describes a signed request to transfer a specific amount of funds on-chain.
-/// Includes the scheme, network, and signed payload contents.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PaymentPayload {
-    pub x402_version: X402Version1,
-    pub scheme: ExactScheme,
-    pub network: String,
-    pub payload: ExactPaymentPayload,
-}
+pub type PaymentPayload = proto::v1::PaymentPayload<ExactScheme, ExactPaymentPayload>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,7 +44,7 @@ pub struct PaymentRequirements {
     pub max_timeout_seconds: u64,
     pub asset: Address,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra: Option<serde_json::Value>,
+    pub extra: Option<SupportedPaymentKindExtra>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -1,7 +1,8 @@
+use crate::proto;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::Display;
-use crate::proto;
 
 /// Version 1 of the x402 protocol.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
@@ -243,4 +244,24 @@ pub struct VerifyRequest<TPayload, TRequirements> {
     pub x402_version: X402Version1,
     pub payment_payload: TPayload,
     pub payment_requirements: TRequirements,
+}
+
+impl<TPayload, TRequirements> VerifyRequest<TPayload, TRequirements>
+where
+    Self: DeserializeOwned,
+{
+    pub fn from_proto(request: proto::VerifyRequest) -> Option<Self> {
+        serde_json::from_value(request.into_json()).ok()
+    }
+}
+
+/// Describes a signed request to transfer a specific amount of funds on-chain.
+/// Includes the scheme, network, and signed payload contents.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentPayload<TScheme, TPayload> {
+    pub x402_version: X402Version1,
+    pub scheme: TScheme,
+    pub network: String,
+    pub payload: TPayload,
 }

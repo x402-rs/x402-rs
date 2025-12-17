@@ -2,7 +2,6 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
-use crate::proto;
 use crate::proto::v1;
 use crate::timestamp::UnixTimestamp;
 
@@ -20,23 +19,7 @@ impl Display for ExactScheme {
 
 pub type VerifyRequest = v1::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;
-
-impl VerifyRequest {
-    pub fn from_proto(request: proto::VerifyRequest) -> Option<Self> {
-        serde_json::from_value(request.into_json()).ok()
-    }
-}
-
-/// Describes a signed request to transfer a specific amount of funds on-chain.
-/// Includes the scheme, network, and signed payload contents.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PaymentPayload {
-    pub x402_version: v1::X402Version1,
-    pub scheme: ExactScheme,
-    pub network: String,
-    pub payload: ExactEvmPayload,
-}
+pub type PaymentPayload = v1::PaymentPayload<ExactScheme, ExactEvmPayload>;
 
 /// Full payload required to authorize an ERC-3009 transfer:
 /// includes the signature and the EIP-712 struct.
