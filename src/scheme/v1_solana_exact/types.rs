@@ -19,11 +19,11 @@ impl Display for ExactScheme {
 
 pub type VerifyRequest = proto::v1::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;
-pub type PaymentPayload = proto::v1::PaymentPayload<ExactScheme, ExactPaymentPayload>;
+pub type PaymentPayload = proto::v1::PaymentPayload<ExactScheme, ExactSolanaPayload>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExactPaymentPayload {
+pub struct ExactSolanaPayload {
     pub transaction: String,
 }
 
