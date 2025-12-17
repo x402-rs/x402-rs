@@ -412,79 +412,12 @@ pub async fn verify_transfer(
     }
 
     let transaction_b64_string = payload.payload.transaction.clone();
-    let bytes = Base64Bytes::from(transaction_b64_string.as_bytes())
-        .decode()
-        .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
-    let transaction = bincode::deserialize::<VersionedTransaction>(bytes.as_slice())
-        .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
-
-    // perform transaction introspection to validate the transaction structure and details
-    let instructions = transaction.message.instructions();
-    let compute_units = verify_compute_limit_instruction(&transaction, 0)?;
-    if compute_units > provider.max_compute_unit_limit() {
-        return Err(FacilitatorLocalError::DecodingError(
-            "compute unit limit exceeds facilitator maximum".to_string(),
-        ));
-    }
-    tracing::debug!(compute_units = compute_units, "Verified compute unit limit");
-    verify_compute_price_instruction(provider.max_compute_unit_price(), &transaction, 1)?;
     let transfer_requirement = TransferRequirement {
         pay_to: requirements.pay_to.clone(),
         asset: requirements.asset.clone(),
         amount: requirements.max_amount_required.inner(),
     };
-    let transfer_instruction = if instructions.len() == 3 {
-        // verify that the transfer instruction is valid
-        // this expects the destination ATA to already exist
-        verify_transfer_instruction(provider, &transaction, 2, &transfer_requirement, false).await?
-    } else if instructions.len() == 4 {
-        // verify that the transfer instruction is valid
-        // this expects the destination ATA to be created in the same transaction
-        verify_create_ata_instruction(&transaction, 2, &transfer_requirement)?;
-        verify_transfer_instruction(provider, &transaction, 3, &transfer_requirement, true).await?
-    } else {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_instructions_count".to_string(),
-        ));
-    };
-
-    // Rule 2: Fee payer safety check
-    // Verify that the fee payer is not included in any instruction's accounts
-    // This single check covers all cases: authority, source, or any other role
-    let fee_payer_pubkey = provider.pubkey();
-    for instruction in transaction.message.instructions().iter() {
-        for account_idx in instruction.accounts.iter() {
-            let account = transaction
-                .message
-                .static_account_keys()
-                .get(*account_idx as usize)
-                .ok_or(FacilitatorLocalError::DecodingError(
-                    "invalid_account_index".to_string(),
-                ))?;
-
-            if *account == fee_payer_pubkey {
-                return Err(FacilitatorLocalError::DecodingError(
-                        "invalid_exact_svm_payload_transaction_fee_payer_included_in_instruction_accounts".to_string(),
-                    ));
-            }
-        }
-    }
-
-    let tx = TransactionInt::new(transaction.clone()).sign(provider)?;
-    let cfg = RpcSimulateTransactionConfig {
-        sig_verify: false,
-        replace_recent_blockhash: false,
-        commitment: Some(CommitmentConfig::confirmed()),
-        encoding: None, // optional; client handles encoding
-        accounts: None,
-        inner_instructions: false,
-        min_context_slot: None,
-    };
-    provider
-        .simulate_transaction_with_config(&tx.inner, cfg)
-        .await?;
-    let payer: Address = transfer_instruction.authority.into();
-    Ok(VerifyTransferResult { payer, transaction })
+    verify_transaction(&provider, transaction_b64_string, &transfer_requirement).await
 }
 
 pub async fn verify_transaction(
