@@ -377,29 +377,17 @@ pub async fn verify_transfer(
     // Assert valid payment START
     let chain_id = provider.chain_id();
     let payload_chain_id = ChainId::from_network_name(&payload.network)
-        .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+        .ok_or(FacilitatorLocalError::UnsupportedNetwork)?;
     if payload_chain_id != chain_id {
-        return Err(FacilitatorLocalError::NetworkMismatch(
-            None,
-            chain_id.to_string(),
-            payload_chain_id.to_string(),
-        ));
+        return Err(FacilitatorLocalError::NetworkMismatch);
     }
     let requirements_chain_id = ChainId::from_network_name(&requirements.network)
-        .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+        .ok_or(FacilitatorLocalError::UnsupportedNetwork)?;
     if requirements_chain_id != chain_id {
-        return Err(FacilitatorLocalError::NetworkMismatch(
-            None,
-            chain_id.to_string(),
-            requirements_chain_id.to_string(),
-        ));
+        return Err(FacilitatorLocalError::NetworkMismatch);
     }
     if payload.scheme != requirements.scheme {
-        return Err(FacilitatorLocalError::SchemeMismatch(
-            None,
-            requirements.scheme.to_string(),
-            payload.scheme.to_string(),
-        ));
+        return Err(FacilitatorLocalError::SchemeMismatch);
     }
 
     let transaction_b64_string = payload.payload.transaction.clone();

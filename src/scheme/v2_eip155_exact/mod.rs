@@ -142,11 +142,7 @@ async fn assert_valid_payment<P: Provider>(
     let chain_id: ChainId = chain.into();
     let payload_chain_id = &accepted.network;
     if payload_chain_id != &chain_id {
-        return Err(FacilitatorLocalError::NetworkMismatch(
-            Some(payer.to_string()),
-            chain_id.to_string(),
-            payload_chain_id.to_string(),
-        ));
+        return Err(FacilitatorLocalError::NetworkMismatch);
     }
     let authorization = &payload.authorization;
     if authorization.to != accepted.pay_to {

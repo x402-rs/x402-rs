@@ -171,10 +171,9 @@ impl IntoResponse for FacilitatorLocalError {
             .into_response();
 
         match error {
-            FacilitatorLocalError::SchemeMismatch(payer, ..) => (
+            FacilitatorLocalError::SchemeMismatch => (
                 StatusCode::OK,
                 Json(json!({
-                    "payer": payer,
                     "error": ErrorReason::UnsupportedScheme.to_string(),
                 })),
             )
@@ -190,11 +189,16 @@ impl IntoResponse for FacilitatorLocalError {
                 })),
             )
                 .into_response(),
-            FacilitatorLocalError::NetworkMismatch(payer, ..)
-            | FacilitatorLocalError::UnsupportedNetwork(payer) => (
+            FacilitatorLocalError::NetworkMismatch => (
                 StatusCode::OK,
                 Json(json!({
-                    "payer": payer,
+                    "error": ErrorReason::UnsupportedScheme.to_string(),
+                })),
+            )
+                .into_response(),
+            FacilitatorLocalError::UnsupportedNetwork => (
+                StatusCode::OK,
+                Json(json!({
                     "error": ErrorReason::UnsupportedScheme.to_string(),
                 })),
             )

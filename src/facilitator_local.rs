@@ -9,12 +9,12 @@
 //! - Contract interaction using Alloy
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
-use std::collections::HashMap;
-use std::fmt::Display;
-use serde::{Deserialize, Serialize};
 use crate::facilitator::Facilitator;
 use crate::proto;
 use crate::scheme::SchemeRegistry;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fmt::Display;
 
 /// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
 /// using a network-aware provider cache.
@@ -44,7 +44,7 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
         let handler = request
             .scheme_handler_slug()
             .and_then(|slug| self.handlers.by_slug(&slug))
-            .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+            .ok_or(FacilitatorLocalError::UnsupportedNetwork)?;
         handler.verify(request).await
     }
 
@@ -55,7 +55,7 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
         let handler = request
             .scheme_handler_slug()
             .and_then(|slug| self.handlers.by_slug(&slug))
-            .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+            .ok_or(FacilitatorLocalError::UnsupportedNetwork)?;
         handler.settle(request).await
     }
 
@@ -83,13 +83,13 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
 pub enum FacilitatorLocalError {
     /// The network is not supported by this facilitator.
     #[error("Unsupported network")]
-    UnsupportedNetwork(Option<String>),
+    UnsupportedNetwork,
     /// The network is not supported by this facilitator.
-    #[error("Network mismatch: expected {1}, actual {2}")]
-    NetworkMismatch(Option<String>, String, String),
+    #[error("Network mismatch")]
+    NetworkMismatch,
     /// Scheme mismatch.
-    #[error("Scheme mismatch: expected {1}, actual {2}")]
-    SchemeMismatch(Option<String>, String, String),
+    #[error("Scheme mismatch")]
+    SchemeMismatch,
     /// The `pay_to` recipient in the requirements doesn't match the `to` address in the payload.
     #[error("Incompatible payload receivers (payload: {1}, requirements: {2})")]
     ReceiverMismatch(String, String, String),
@@ -121,7 +121,6 @@ pub enum ErrorReason {
     // ============================================
     // General Errors
     // ============================================
-
     /// Required parameters (paymentPayload or paymentRequirements) are missing from the request
     MissingParameters,
 
@@ -137,7 +136,6 @@ pub enum ErrorReason {
     // ============================================
     // Transaction State Errors
     // ============================================
-
     /// The transaction is in an invalid state (e.g., failed or reverted)
     InvalidTransactionState,
 
@@ -147,14 +145,12 @@ pub enum ErrorReason {
     // ============================================
     // Balance/Funds Errors
     // ============================================
-
     /// The payer has insufficient funds to complete the transaction
     InsufficientFunds,
 
     // ============================================
     // Signature Errors
     // ============================================
-
     /// The signature is invalid
     InvalidSignature,
 
@@ -164,7 +160,6 @@ pub enum ErrorReason {
     // ============================================
     // EVM-Specific Validation Errors
     // ============================================
-
     /// The EIP-712 domain is missing from the payload
     MissingEip712Domain,
 
@@ -188,7 +183,6 @@ pub enum ErrorReason {
     // ============================================
     // SVM (Solana) Specific Errors
     // ============================================
-
     /// The transaction amount in the payload doesn't match the expected amount
     InvalidExactSvmPayloadTransactionAmountMismatch,
 
@@ -237,7 +231,6 @@ pub enum ErrorReason {
     // ============================================
     // Settle Specific Errors
     // ============================================
-
     /// An unexpected error occurred during the settlement process
     UnexpectedSettleError,
 }

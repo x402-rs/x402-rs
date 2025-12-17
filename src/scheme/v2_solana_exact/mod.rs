@@ -114,11 +114,7 @@ pub async fn verify_transfer(
     let chain_id = provider.chain_id();
     let payload_chain_id = &accepted.network;
     if payload_chain_id != &chain_id {
-        return Err(FacilitatorLocalError::NetworkMismatch(
-            None,
-            chain_id.to_string(),
-            payload_chain_id.to_string(),
-        ));
+        return Err(FacilitatorLocalError::NetworkMismatch);
     }
     let transaction_b64_string = payload.payload.transaction.clone();
     let transfer_requirement = TransferRequirement {

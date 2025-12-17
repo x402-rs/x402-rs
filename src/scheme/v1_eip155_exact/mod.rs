@@ -189,29 +189,17 @@ async fn assert_valid_payment<P: Provider>(
     let payer = payload.payload.authorization.from;
     let chain_id: ChainId = chain.into();
     let payload_chain_id = ChainId::from_network_name(&payload.network)
-        .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+        .ok_or(FacilitatorLocalError::UnsupportedNetwork)?;
     if payload_chain_id != chain_id {
-        return Err(FacilitatorLocalError::NetworkMismatch(
-            Some(payer.to_string()),
-            chain_id.to_string(),
-            payload_chain_id.to_string(),
-        ));
+        return Err(FacilitatorLocalError::NetworkMismatch);
     }
     let requirements_chain_id = ChainId::from_network_name(&requirements.network)
-        .ok_or(FacilitatorLocalError::UnsupportedNetwork(None))?;
+        .ok_or(FacilitatorLocalError::UnsupportedNetwork)?;
     if requirements_chain_id != chain_id {
-        return Err(FacilitatorLocalError::NetworkMismatch(
-            Some(payer.to_string()),
-            chain_id.to_string(),
-            requirements_chain_id.to_string(),
-        ));
+        return Err(FacilitatorLocalError::NetworkMismatch);
     }
     if payload.scheme != requirements.scheme {
-        return Err(FacilitatorLocalError::SchemeMismatch(
-            Some(payer.to_string()),
-            requirements.scheme.to_string(),
-            payload.scheme.to_string(),
-        ));
+        return Err(FacilitatorLocalError::SchemeMismatch);
     }
     let authorization = &payload.payload.authorization;
     if authorization.to != requirements.pay_to {
