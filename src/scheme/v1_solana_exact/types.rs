@@ -1,9 +1,9 @@
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt::{Display, Formatter};
-use serde::de::Error;
 use crate::chain::solana::Address;
 use crate::proto;
 use crate::proto::v1::X402Version1;
+use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ExactScheme {
@@ -98,7 +98,7 @@ impl From<U64String> for u64 {
 impl Serialize for U64String {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer
+        S: Serializer,
     {
         serializer.serialize_str(&self.0.to_string())
     }

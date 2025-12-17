@@ -1,5 +1,6 @@
 pub mod v1_eip155_exact;
 pub mod v1_solana_exact;
+mod v2_eip155_exact;
 
 pub use v1_eip155_exact::V1Eip155Exact;
 

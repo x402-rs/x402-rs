@@ -20,7 +20,7 @@ use crate::proto;
 use crate::scheme::{X402SchemeBlueprint, X402SchemeHandler};
 use crate::util::Base64Bytes;
 
-const SCHEME_NAME: &str = "exact";
+const EXACT_SCHEME: types::ExactScheme = types::ExactScheme::Exact;
 
 const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
@@ -28,7 +28,7 @@ pub struct V1SolanaExact;
 
 impl X402SchemeBlueprint for V1SolanaExact {
     fn slug(&self) -> crate::scheme::SchemeSlug {
-        crate::scheme::SchemeSlug::new(1, "solana", SCHEME_NAME)
+        crate::scheme::SchemeSlug::new(1, "solana", EXACT_SCHEME.to_string())
     }
 
     fn build(&self, provider: ChainProvider) -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>> {
@@ -341,7 +341,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
                 Some(serde_json::to_value(SupportedPaymentKindExtra { fee_payer }).unwrap());
             kinds.push(proto::SupportedPaymentKind {
                 x402_version: proto::X402Version::v2().into(),
-                scheme: SCHEME_NAME.to_string(),
+                scheme: EXACT_SCHEME.to_string(),
                 network: chain_id.clone().to_string(),
                 extra: extra.clone(),
             });
@@ -349,7 +349,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
             if let Some(network) = network {
                 kinds.push(proto::SupportedPaymentKind {
                     x402_version: proto::X402Version::v2().into(),
-                    scheme: SCHEME_NAME.to_string(),
+                    scheme: EXACT_SCHEME.to_string(),
                     network: network.to_string(),
                     extra,
                 });

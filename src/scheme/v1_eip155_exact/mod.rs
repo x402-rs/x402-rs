@@ -23,7 +23,7 @@ use crate::proto::v1;
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 use crate::timestamp::UnixTimestamp;
 
-const SCHEME_NAME: &str = "exact";
+const EXACT_SCHEME: types::ExactScheme = types::ExactScheme::Exact;
 
 /// Signature verifier for EIP-6492, EIP-1271, EOA, universally deployed on the supported EVM chains
 /// If absent on a target chain, verification will fail; you should deploy the validator there.
@@ -33,7 +33,7 @@ pub struct V1Eip155Exact;
 
 impl X402SchemeBlueprint for V1Eip155Exact {
     fn slug(&self) -> SchemeSlug {
-        SchemeSlug::new(1, "eip155", SCHEME_NAME)
+        SchemeSlug::new(1, "eip155", EXACT_SCHEME.to_string())
     }
 
     fn build(
@@ -297,7 +297,7 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
             let mut kinds = Vec::with_capacity(2);
             kinds.push(proto::SupportedPaymentKind {
                 x402_version: proto::X402Version::v2().into(),
-                scheme: SCHEME_NAME.into(),
+                scheme: EXACT_SCHEME.to_string(),
                 network: chain_id.clone().into(),
                 extra: None,
             });
@@ -305,7 +305,7 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
             if let Some(network) = network {
                 kinds.push(proto::SupportedPaymentKind {
                     x402_version: proto::X402Version::v1().into(),
-                    scheme: SCHEME_NAME.into(),
+                    scheme: EXACT_SCHEME.to_string(),
                     network: network.to_string(),
                     extra: None,
                 });
