@@ -27,25 +27,8 @@ pub struct ExactPaymentPayload {
     pub transaction: String,
 }
 
-/// Requirements set by the payment-gated endpoint for an acceptable payment.
-/// This includes min/max amounts, recipient, asset, network, and metadata.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PaymentRequirements {
-    pub scheme: ExactScheme,
-    pub network: String,
-    pub max_amount_required: U64String,
-    pub resource: String,
-    pub description: String,
-    pub mime_type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_schema: Option<serde_json::Value>,
-    pub pay_to: Address,
-    pub max_timeout_seconds: u64,
-    pub asset: Address,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra: Option<SupportedPaymentKindExtra>,
-}
+pub type PaymentRequirements =
+    proto::v1::PaymentRequirements<ExactScheme, U64String, Address, SupportedPaymentKindExtra>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

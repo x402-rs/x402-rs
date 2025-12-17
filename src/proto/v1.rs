@@ -265,3 +265,23 @@ pub struct PaymentPayload<TScheme, TPayload> {
     pub network: String,
     pub payload: TPayload,
 }
+
+/// Requirements set by the payment-gated endpoint for an acceptable payment.
+/// This includes min/max amounts, recipient, asset, network, and metadata.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentRequirements<TScheme, TAmount, TAddress, TExtra> {
+    pub scheme: TScheme,
+    pub network: String,
+    pub max_amount_required: TAmount,
+    pub resource: String,
+    pub description: String,
+    pub mime_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<serde_json::Value>,
+    pub pay_to: TAddress,
+    pub max_timeout_seconds: u64,
+    pub asset: TAddress,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra: Option<TExtra>,
+}
