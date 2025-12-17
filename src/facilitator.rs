@@ -82,25 +82,138 @@ impl<T: Facilitator> Facilitator for Arc<T> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, thiserror::Error)]
-#[serde(untagged, rename_all = "camelCase")]
-pub enum FacilitatorErrorReason {
-    /// Payer doesn't have sufficient funds.
-    #[error("insufficient_funds")]
-    #[serde(rename = "insufficient_funds")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorReason {
+    // ============================================
+    // General Errors
+    // ============================================
+
+    /// Required parameters (paymentPayload or paymentRequirements) are missing from the request
+    MissingParameters,
+
+    /// An unexpected error occurred during processing
+    UnexpectedError,
+
+    /// The payment scheme specified is not valid or supported
+    UnsupportedScheme,
+
+    /// An unexpected error occurred during the verify process
+    UnexpectedVerifyError,
+
+    // ============================================
+    // Transaction State Errors
+    // ============================================
+
+    /// The transaction is in an invalid state (e.g., failed or reverted)
+    InvalidTransactionState,
+
+    /// The transaction failed before being put onchain
+    TransactionFailed,
+
+    // ============================================
+    // Balance/Funds Errors
+    // ============================================
+
+    /// The payer has insufficient funds to complete the transaction
     InsufficientFunds,
-    /// The scheme in PaymentPayload didn't match expected (e.g., not 'exact'), or settlement failed.
-    #[error("invalid_scheme")]
-    #[serde(rename = "invalid_scheme")]
-    InvalidScheme,
-    /// Network in PaymentPayload didn't match a facilitator's expected network.
-    #[error("invalid_network")]
-    #[serde(rename = "invalid_network")]
-    InvalidNetwork,
-    /// Unexpected settle error
-    #[error("unexpected_settle_error")]
-    #[serde(rename = "unexpected_settle_error")]
+
+    // ============================================
+    // Signature Errors
+    // ============================================
+
+    /// The signature is invalid
+    InvalidSignature,
+
+    /// The signature has expired
+    ExpiredSignature,
+
+    // ============================================
+    // EVM-Specific Validation Errors
+    // ============================================
+
+    /// The EIP-712 domain is missing from the payload
+    MissingEip712Domain,
+
+    /// The permit signature is invalid
+    InvalidExactEvmPayloadSignature,
+
+    /// The recipient address doesn't match the expected recipient
+    InvalidExactEvmPayloadRecipientMismatch,
+
+    /// The authorization validBefore timestamp is too soon
+    /// The deadline on the permit isn't far enough in the future
+    InvalidExactEvmPayloadAuthorizationValidBefore,
+
+    /// The authorization validAfter timestamp is in the future
+    /// The deadline on the permit is in the future
+    InvalidExactEvmPayloadAuthorizationValidAfter,
+
+    /// The authorization value is insufficient to cover the payment requirements
+    InvalidExactEvmPayloadAuthorizationValue,
+
+    // ============================================
+    // SVM (Solana) Specific Errors
+    // ============================================
+
+    /// The transaction amount in the payload doesn't match the expected amount
+    InvalidExactSvmPayloadTransactionAmountMismatch,
+
+    /// The SVM payload transaction is invalid or malformed
+    InvalidExactSvmPayloadTransaction,
+
+    /// The transaction simulation failed on Solana
+    /// This typically indicates the transaction would fail if submitted
+    InvalidExactSvmPayloadTransactionSimulationFailed,
+
+    /// The Solana block height has been exceeded
+    /// This means the transaction's blockhash is no longer valid
+    SettleExactSvmBlockHeightExceeded,
+
+    /// The transaction confirmation timed out on Solana
+    /// The transaction may or may not have been processed
+    SettleExactSvmTransactionConfirmationTimedOut,
+
+    /// The fee payer is missing from the transaction
+    InvalidExactSvmPayloadMissingFeePayer,
+
+    /// The fee payer is not managed by the facilitator
+    FeePayerNotManagedByFacilitator,
+
+    /// The transaction could not be decoded
+    InvalidExactSvmPayloadTransactionCouldNotBeDecoded,
+
+    /// The transaction has an invalid number of instructions
+    InvalidExactSvmPayloadTransactionInstructionsLength,
+
+    /// No transfer instruction was found in the transaction
+    InvalidExactSvmPayloadNoTransferInstruction,
+
+    /// The fee payer is attempting to transfer funds (not allowed)
+    InvalidExactSvmPayloadTransactionFeePayerTransferringFunds,
+
+    /// The token mint doesn't match the expected mint
+    InvalidExactSvmPayloadMintMismatch,
+
+    /// The recipient doesn't match the expected recipient
+    InvalidExactSvmPayloadRecipientMismatch,
+
+    /// The transfer amount is insufficient
+    InvalidExactSvmPayloadAmountInsufficient,
+
+    // ============================================
+    // Settle Specific Errors
+    // ============================================
+
+    /// An unexpected error occurred during the settlement process
     UnexpectedSettleError,
-    #[error("{0}")]
-    FreeForm(String),
+}
+
+impl Display for ErrorReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Leverage serde_json to get the snake_case variant name
+        let json = serde_json::to_string(self).map_err(|_| std::fmt::Error)?;
+        // Remove the surrounding quotes from the JSON string
+        write!(f, "{}", json.trim_matches('"'))
+    }
 }

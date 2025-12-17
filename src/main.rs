@@ -100,3 +100,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+// For EOA wallets, parse signature into v, r, s and use that overload
+// For smart wallets, use the bytes signature overload
+
+// Verify that the requested feePayer is managed by this facilitator

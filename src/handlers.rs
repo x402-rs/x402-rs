@@ -17,7 +17,7 @@ use axum::{Json, Router, response::IntoResponse};
 use serde_json::json;
 use tracing::instrument;
 
-use crate::facilitator::{Facilitator, FacilitatorErrorReason};
+use crate::facilitator::{Facilitator, ErrorReason};
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
 
@@ -175,7 +175,7 @@ impl IntoResponse for FacilitatorLocalError {
                 StatusCode::OK,
                 Json(json!({
                     "payer": payer,
-                    "error": FacilitatorErrorReason::InvalidScheme.to_string(),
+                    "error": ErrorReason::UnsupportedScheme.to_string(),
                 })),
             )
                 .into_response(),
@@ -186,7 +186,7 @@ impl IntoResponse for FacilitatorLocalError {
                 StatusCode::OK,
                 Json(json!({
                     "payer": payer,
-                    "error": FacilitatorErrorReason::InvalidScheme.to_string(),
+                    "error": ErrorReason::UnsupportedScheme.to_string(),
                 })),
             )
                 .into_response(),
@@ -195,7 +195,7 @@ impl IntoResponse for FacilitatorLocalError {
                 StatusCode::OK,
                 Json(json!({
                     "payer": payer,
-                    "error": FacilitatorErrorReason::InvalidNetwork.to_string(),
+                    "error": ErrorReason::UnsupportedScheme.to_string(),
                 })),
             )
                 .into_response(),
@@ -211,7 +211,7 @@ impl IntoResponse for FacilitatorLocalError {
                 StatusCode::OK,
                 Json(json!({
                     "payer": payer,
-                    "error": FacilitatorErrorReason::InsufficientFunds.to_string(),
+                    "error": ErrorReason::InsufficientFunds.to_string(),
                 })),
             )
                 .into_response(),

@@ -1,4 +1,5 @@
 use crate::proto;
+
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
@@ -60,9 +61,9 @@ pub enum SettleResponse {
     },
 }
 
-impl From<SettleResponse> for crate::proto::SettleResponse {
+impl From<SettleResponse> for proto::SettleResponse {
     fn from(val: SettleResponse) -> Self {
-        crate::proto::SettleResponse(
+        proto::SettleResponse(
             serde_json::to_value(val).expect("SettleResponse serialization failed"),
         )
     }
