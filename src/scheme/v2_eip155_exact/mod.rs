@@ -13,12 +13,10 @@ use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
 use crate::proto::v2;
 use crate::scheme::v1_eip155_exact::{
-    ExactEvmPayment, USDC, assert_domain, assert_enough_balance, assert_enough_value, assert_time,
-    settle_payment, verify_payment,
+    EXACT_SCHEME, ExactEvmPayment, USDC, assert_domain, assert_enough_balance, assert_enough_value,
+    assert_time, settle_payment, verify_payment,
 };
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
-
-const EXACT_SCHEME: types::ExactScheme = types::ExactScheme::Exact;
 
 pub struct V2Eip155Exact;
 

@@ -17,18 +17,17 @@ use crate::chain::solana::{Address, SolanaChainProvider};
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
-use crate::scheme::{X402SchemeBlueprint, X402SchemeHandler};
+use crate::scheme::v1_eip155_exact::EXACT_SCHEME;
+use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 use crate::util::Base64Bytes;
 
-const EXACT_SCHEME: types::ExactScheme = types::ExactScheme::Exact;
-
-const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 pub struct V1SolanaExact;
 
 impl X402SchemeBlueprint for V1SolanaExact {
-    fn slug(&self) -> crate::scheme::SchemeSlug {
-        crate::scheme::SchemeSlug::new(1, "solana", EXACT_SCHEME.to_string())
+    fn slug(&self) -> SchemeSlug {
+        SchemeSlug::new(1, "solana", EXACT_SCHEME.to_string())
     }
 
     // FIXME Pass json config value
@@ -367,7 +366,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SupportedPaymentKindExtra {
-    fee_payer: Address,
+    pub fee_payer: Address,
 }
 
 pub struct InstructionInt {
