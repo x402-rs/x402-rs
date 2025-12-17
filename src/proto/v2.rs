@@ -47,7 +47,6 @@ impl Display for X402Version2 {
     }
 }
 
-// FIXME These should go to proto as not really v1/v2 specific. Move it when generics unification is done
 pub type SettleResponse = v1::SettleResponse;
 pub type VerifyResponse = v1::VerifyResponse;
 

@@ -41,8 +41,14 @@ pub type InnerProvider = FillProvider<
 
 pub const EIP155_NAMESPACE: &str = "eip155";
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Eip155ChainReference(u64);
+
+impl Eip155ChainReference {
+    pub fn as_chain_id(&self) -> ChainId {
+        ChainId::new(EIP155_NAMESPACE, self.0.to_string())
+    }
+}
 
 impl From<Eip155ChainReference> for ChainId {
     fn from(value: Eip155ChainReference) -> Self {

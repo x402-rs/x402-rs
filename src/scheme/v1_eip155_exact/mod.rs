@@ -279,10 +279,10 @@ pub fn assert_time(
 /// Resolves the `name` and `version` based on:
 /// - Static metadata from [`USDCDeployment`] (if available),
 /// - Or by calling `version()` on the token contract if not matched statically.
-// #[instrument(skip_all, err, fields(
-//     network = %payload.network,
-//     asset = %asset_address
-// ))] FIXME
+#[instrument(skip_all, err, fields(
+    network = %chain.as_chain_id(),
+    asset = %asset_address
+))]
 pub async fn assert_domain<P: Provider>(
     chain: &Eip155ChainReference,
     token_contract: &USDC::USDCInstance<P>,
