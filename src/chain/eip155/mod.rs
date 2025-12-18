@@ -5,18 +5,20 @@ use alloy_primitives::{Address, B256, Bytes};
 use alloy_provider::fillers::{
     BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
 };
-use alloy_provider::{Identity, PendingTransactionError, Provider, ProviderBuilder, RootProvider, WalletProvider};
+use alloy_provider::{
+    Identity, PendingTransactionError, Provider, ProviderBuilder, RootProvider, WalletProvider,
+};
 use alloy_rpc_client::RpcClient;
 use alloy_rpc_types_eth::{BlockId, TransactionReceipt, TransactionRequest};
 use alloy_signer::Signer;
 use alloy_signer_local::PrivateKeySigner;
+use alloy_transport::TransportError;
 use alloy_transport::layers::{FallbackLayer, ThrottleLayer};
 use alloy_transport_http::Http;
 use std::fmt::{Display, Formatter};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use alloy_transport::TransportError;
 use tower::ServiceBuilder;
 use tracing::Instrument;
 
@@ -314,11 +316,7 @@ impl Eip155MetaTransactionProvider for Eip155ChainProvider {
             } else {
                 BlockId::pending()
             };
-            let gas_limit = self
-                .inner
-                .estimate_gas(txr.clone())
-                .block(block_id)
-                .await?;
+            let gas_limit = self.inner.estimate_gas(txr.clone()).block(block_id).await?;
             txr.set_gas_limit(gas_limit)
         }
 
@@ -328,7 +326,7 @@ impl Eip155MetaTransactionProvider for Eip155ChainProvider {
             Err(e) => {
                 // Transaction submission failed - reset nonce to force requery
                 self.nonce_manager.reset_nonce(from_address).await;
-                return Err(Eip155ChainProviderMetaTransactionError::Transport(e))
+                return Err(Eip155ChainProviderMetaTransactionError::Transport(e));
             }
         };
 
@@ -345,7 +343,9 @@ impl Eip155MetaTransactionProvider for Eip155ChainProvider {
             Err(e) => {
                 // Receipt fetch failed (timeout or other error) - reset nonce to force requery
                 self.nonce_manager.reset_nonce(from_address).await;
-                Err(Eip155ChainProviderMetaTransactionError::PendingTransaction(e))
+                Err(Eip155ChainProviderMetaTransactionError::PendingTransaction(
+                    e,
+                ))
             }
         }
     }
@@ -356,7 +356,7 @@ pub enum Eip155ChainProviderMetaTransactionError {
     #[error(transparent)]
     Transport(#[from] TransportError),
     #[error(transparent)]
-    PendingTransaction(#[from] PendingTransactionError)
+    PendingTransaction(#[from] PendingTransactionError),
 }
 
 impl ChainProviderOps for Eip155ChainProvider {

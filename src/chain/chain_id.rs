@@ -9,6 +9,14 @@ pub struct ChainId {
     pub reference: String,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ChainIdNetworkError {
+    #[error("Unable to convert network name to chain id {network_name}")]
+    ChainIdByNetwork { network_name: String },
+    #[error("Unable to convert chain id to network name {chain_id}")]
+    NetworkByChainId { chain_id: ChainId },
+}
+
 impl ChainId {
     pub fn new<N: Into<String>, R: Into<String>>(namespace: N, reference: R) -> Self {
         Self {
@@ -25,8 +33,8 @@ impl ChainId {
         &self.reference
     }
 
-    pub fn from_network_name(network_name: &str) -> Option<Self> {
-        match network_name {
+    pub fn from_network_name(network_name: &str) -> Result<Self, ChainIdNetworkError> {
+        let chain_id = match network_name {
             "base-sepolia" => Some(Self::new("eip155", "84532")),
             "base" => Some(Self::new("eip155", "8453")),
             "xdc" => Some(Self::new("eip155", "50")),
@@ -40,7 +48,10 @@ impl ChainId {
             "solana" => Some(Self::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")),
             "solana-devnet" => Some(Self::new("solana", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1")),
             _ => None,
-        }
+        };
+        chain_id.ok_or(ChainIdNetworkError::ChainIdByNetwork {
+            network_name: network_name.into(),
+        })
     }
 
     pub fn as_network_name(&self) -> Option<&str> {

@@ -188,13 +188,11 @@ async fn assert_valid_payment<P: Provider>(
 ) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), FacilitatorLocalError> {
     let payer = payload.payload.authorization.from;
     let chain_id: ChainId = chain.into();
-    let payload_chain_id = ChainId::from_network_name(&payload.network)
-        .ok_or(FacilitatorLocalError::UnsupportedNetwork)?;
+    let payload_chain_id = ChainId::from_network_name(&payload.network)?;
     if payload_chain_id != chain_id {
         return Err(FacilitatorLocalError::NetworkMismatch);
     }
-    let requirements_chain_id = ChainId::from_network_name(&requirements.network)
-        .ok_or(FacilitatorLocalError::UnsupportedNetwork)?;
+    let requirements_chain_id = ChainId::from_network_name(&requirements.network)?;
     if requirements_chain_id != chain_id {
         return Err(FacilitatorLocalError::NetworkMismatch);
     }

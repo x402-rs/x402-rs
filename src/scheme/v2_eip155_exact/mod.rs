@@ -7,7 +7,9 @@ use std::error::Error;
 use std::sync::Arc;
 use tracing::instrument;
 
-use crate::chain::eip155::{Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider};
+use crate::chain::eip155::{
+    Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
+};
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;

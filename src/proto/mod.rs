@@ -132,7 +132,7 @@ impl VerifyRequest {
         match x402_version {
             X402Version::V1(_) => {
                 let network_name = self.0.get("paymentPayload")?.get("network")?.as_str()?;
-                let chain_id = ChainId::from_network_name(network_name)?;
+                let chain_id = ChainId::from_network_name(network_name).ok()?; // FIXME ERRORS
                 let scheme = self.0.get("paymentPayload")?.get("scheme")?.as_str()?;
                 let slug = SchemeHandlerSlug::new(chain_id, 1, scheme.into());
                 Some(slug)

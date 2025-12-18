@@ -9,13 +9,14 @@
 //! - Contract interaction using Alloy
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
+use crate::chain::ChainIdNetworkError;
+use crate::chain::eip155::Eip155ChainProviderMetaTransactionError;
 use crate::facilitator::Facilitator;
 use crate::proto;
 use crate::scheme::SchemeRegistry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
-use crate::chain::eip155::Eip155ChainProviderMetaTransactionError;
 
 /// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
 /// using a network-aware provider cache.
@@ -116,7 +117,15 @@ pub enum FacilitatorLocalError {
 
 impl From<Eip155ChainProviderMetaTransactionError> for FacilitatorLocalError {
     fn from(value: Eip155ChainProviderMetaTransactionError) -> Self {
+        // TODO ERRORS
         FacilitatorLocalError::ContractCall(value.to_string())
+    }
+}
+
+impl From<ChainIdNetworkError> for FacilitatorLocalError {
+    fn from(_value: ChainIdNetworkError) -> Self {
+        // TODO ERRORS
+        FacilitatorLocalError::UnsupportedNetwork
     }
 }
 
