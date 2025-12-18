@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use alloy_contract::SolCallBuilder;
 use alloy_primitives::{Address, B256, Bytes, TxHash, U256, address, hex};
 use alloy_provider::bindings::IMulticall3;
-use alloy_provider::{MULTICALL3_ADDRESS, MulticallItem, PendingTransactionError, Provider};
+use alloy_provider::{
+    MULTICALL3_ADDRESS, MulticallError, MulticallItem, PendingTransactionError, Provider,
+};
 use alloy_rpc_types_eth::TransactionReceipt;
 use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, sol};
 use alloy_transport::TransportError;
@@ -626,7 +628,7 @@ pub async fn verify_payment<P: Provider>(
     contract: &USDC::USDCInstance<P>,
     payment: &ExactEvmPayment,
     eip712_domain: &Eip712Domain,
-) -> Result<Address, FacilitatorLocalError> {
+) -> Result<Address, Eip155ExactError> {
     let signed_message = SignedMessage::extract(payment, eip712_domain)?;
 
     let payer = signed_message.address;
@@ -661,17 +663,13 @@ pub async fn verify_payment<P: Provider>(
                         token_contract = %transfer_call.contract_address,
                         otel.kind = "client",
                 ))
-                .await
-                .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
-            let is_valid_signature_result = is_valid_signature_result
-                .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+                .await?;
+            let is_valid_signature_result =
+                is_valid_signature_result.map_err(|_| Eip155ExactError::InvalidSignature)?;
             if !is_valid_signature_result {
-                return Err(FacilitatorLocalError::InvalidSignature(
-                    payer.to_string(),
-                    "Incorrect signature".to_string(),
-                ));
+                return Err(Eip155ExactError::InvalidSignature);
             }
-            transfer_result.map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
+            transfer_result.map_err(|_| Eip155ExactError::TransferSimulation)?;
         }
         StructuredSignature::EIP1271(signature) => {
             // It is EOA or EIP-1271 signature, which we can pass to the transfer simulation
@@ -691,8 +689,7 @@ pub async fn verify_payment<P: Provider>(
                         token_contract = %transfer_call.contract_address,
                         otel.kind = "client",
                 ))
-                .await
-                .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+                .await?;
         }
     }
 
@@ -718,9 +715,7 @@ where
             inner,
             original: _,
         } => {
-            let is_contract_deployed = is_contract_deployed(provider.inner(), &payer)
-                .await
-                .unwrap();
+            let is_contract_deployed = is_contract_deployed(provider.inner(), &payer).await?;
             let transfer_call = transferWithAuthorization_0(contract, payment, inner).await;
             if is_contract_deployed {
                 // transferWithAuthorization with inner signature
@@ -836,11 +831,17 @@ pub enum Eip155ExactError {
     #[error(transparent)]
     StructuredSignatureFormat(#[from] StructuredSignatureFormatError),
     #[error(transparent)]
-    Transport(#[from] TransportError),
+    Transport(#[from] TransportError), // TODO This is weird - does it happen before or after tx got sent?
     #[error(transparent)]
-    PendingTransaction(#[from] PendingTransactionError),
+    PendingTransaction(#[from] PendingTransactionError), // TODO This is weird - does it happen before or after tx got sent?
     #[error("Transaction reverted: {0:?}")]
     TransactionReverted(Box<TransactionReceipt>),
+    #[error("Transfer simulation failed")]
+    TransferSimulation,
+    #[error("Invalid signature")]
+    InvalidSignature,
+    #[error("Contract call failed: {0}")]
+    ContractCall(String),
 }
 
 impl From<MetaTransactionSendError> for Eip155ExactError {
@@ -848,6 +849,33 @@ impl From<MetaTransactionSendError> for Eip155ExactError {
         match e {
             MetaTransactionSendError::Transport(e) => Self::Transport(e),
             MetaTransactionSendError::PendingTransaction(e) => Self::PendingTransaction(e),
+        }
+    }
+}
+
+impl From<MulticallError> for Eip155ExactError {
+    fn from(e: MulticallError) -> Self {
+        match e {
+            MulticallError::ValueTx => Self::TransferSimulation,
+            MulticallError::DecodeError(_) => Self::TransferSimulation,
+            MulticallError::NoReturnData => Self::TransferSimulation,
+            MulticallError::CallFailed(_) => Self::TransferSimulation,
+            MulticallError::TransportError(transport_error) => Self::Transport(transport_error),
+        }
+    }
+}
+
+impl From<alloy_contract::Error> for Eip155ExactError {
+    fn from(e: alloy_contract::Error) -> Self {
+        match e {
+            alloy_contract::Error::UnknownFunction(_) => Self::ContractCall(e.to_string()),
+            alloy_contract::Error::UnknownSelector(_) => Self::ContractCall(e.to_string()),
+            alloy_contract::Error::NotADeploymentTransaction => Self::ContractCall(e.to_string()),
+            alloy_contract::Error::ContractNotDeployed => Self::ContractCall(e.to_string()),
+            alloy_contract::Error::ZeroData(_, _) => Self::ContractCall(e.to_string()),
+            alloy_contract::Error::AbiError(_) => Self::ContractCall(e.to_string()),
+            alloy_contract::Error::TransportError(e) => Self::Transport(e),
+            alloy_contract::Error::PendingTransactionError(e) => Self::PendingTransaction(e),
         }
     }
 }
