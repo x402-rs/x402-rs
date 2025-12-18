@@ -14,6 +14,7 @@ use crate::chain::eip155::Eip155ChainProviderMetaTransactionError;
 use crate::chain::solana::SolanaChainProviderError;
 use crate::facilitator::Facilitator;
 use crate::proto;
+use crate::proto::VerifyRequestFormatError;
 use crate::scheme::SchemeRegistry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -134,6 +135,13 @@ impl From<SolanaChainProviderError> for FacilitatorLocalError {
     fn from(value: SolanaChainProviderError) -> Self {
         // TODO ERRORS
         FacilitatorLocalError::ContractCall(value.to_string())
+    }
+}
+
+impl From<VerifyRequestFormatError> for FacilitatorLocalError {
+    fn from(value: VerifyRequestFormatError) -> Self {
+        // TODO ERRORS
+        FacilitatorLocalError::DecodingError(value.to_string())
     }
 }
 

@@ -54,9 +54,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, FacilitatorLocalError> {
-        let request = types::VerifyRequest::from_proto(request.clone()).ok_or(
-            FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
-        )?;
+        let request = types::VerifyRequest::from_proto(request.clone())?;
         let verification = verify_transfer(&self.provider, &request).await?;
         Ok(proto::v1::VerifyResponse::valid(verification.payer.to_string()).into())
     }
@@ -65,9 +63,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
         &self,
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
-        let request = types::SettleRequest::from_proto(request.clone()).ok_or(
-            FacilitatorLocalError::DecodingError("Can not decode payload".to_string()),
-        )?;
+        let request = types::SettleRequest::from_proto(request.clone())?;
         let verification = verify_transfer(&self.provider, &request).await?;
         let payer = verification.payer.to_string();
         let tx_sig = settle_transaction(&self.provider, verification).await?;

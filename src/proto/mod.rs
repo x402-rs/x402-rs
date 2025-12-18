@@ -165,3 +165,7 @@ pub struct VerifyResponse(serde_json::Value);
 /// to be verified.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SettleResponse(serde_json::Value);
+
+#[derive(Debug, thiserror::Error)]
+#[error("Failed to deserialize request: {0}")]
+pub struct VerifyRequestFormatError(#[from] serde_json::Error);
