@@ -6,18 +6,14 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use tracing::instrument;
-
+use crate::proto::PaymentVerificationError;
 use crate::chain::eip155::{
     Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
 };
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
-use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
 use crate::proto::v2;
-use crate::scheme::v1_eip155_exact::{
-    EXACT_SCHEME, ExactEvmPayment, USDC, assert_domain, assert_enough_balance, assert_enough_value,
-    assert_time, settle_payment, verify_payment,
-};
+use crate::scheme::v1_eip155_exact::{EXACT_SCHEME, ExactEvmPayment, USDC, assert_domain, assert_enough_balance, assert_enough_value, assert_time, settle_payment, verify_payment, Eip155ExactError};
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 
 pub struct V2Eip155Exact;
@@ -126,28 +122,22 @@ async fn assert_valid_payment<P: Provider>(
     chain: &Eip155ChainReference,
     payload: &types::PaymentPayload,
     requirements: &types::PaymentRequirements,
-) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), FacilitatorLocalError> {
+) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
     let accepted = &payload.accepted;
     if accepted != requirements {
-        return Err(FacilitatorLocalError::DecodingError(
-            "Accepted requirements do not match payload requirements".to_string(),
-        ));
+        return Err(
+            PaymentVerificationError::AcceptedRequirementsMismatch.into());
     }
     let payload = &payload.payload;
 
-    let payer = payload.authorization.from;
     let chain_id: ChainId = chain.into();
     let payload_chain_id = &accepted.network;
     if payload_chain_id != &chain_id {
-        return Err(FacilitatorLocalError::NetworkMismatch);
+        return Err(PaymentVerificationError::ChainIdMismatch.into());
     }
     let authorization = &payload.authorization;
     if authorization.to != accepted.pay_to {
-        return Err(FacilitatorLocalError::ReceiverMismatch(
-            payer.to_string(),
-            authorization.to.to_string(),
-            accepted.pay_to.to_string(),
-        ));
+        return Err(PaymentVerificationError::ReceiverMismatch.into());
     }
     let valid_after = authorization.valid_after;
     let valid_before = authorization.valid_before;
