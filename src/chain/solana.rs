@@ -1,5 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_account::Account;
+use solana_client::client_error::{ClientError, ClientErrorKind};
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::pubsub_client::PubsubClientError;
@@ -18,10 +19,9 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use solana_client::client_error::{ClientError, ClientErrorKind};
+
 use crate::chain::{ChainId, ChainProviderOps};
 use crate::config::SolanaChainConfig;
-use crate::facilitator_local::FacilitatorLocalError;
 
 pub const SOLANA_NAMESPACE: &str = "solana";
 
@@ -135,7 +135,9 @@ pub enum SolanaChainProviderError {
     #[error("Invalid transaction: {0}")]
     InvalidTransaction(#[from] SolanaTransactionError),
     #[error(transparent)]
-    Transport(Box<ClientErrorKind>)
+    Transport(Box<ClientErrorKind>),
+    #[error(transparent)]
+    PubsubTransport(#[from] PubsubClientError),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -143,7 +145,7 @@ pub enum SolanaTransactionError {
     #[error("No position for signature found")]
     SignerPosition,
     #[error(transparent)]
-    Simulation(UiTransactionError)
+    Simulation(UiTransactionError),
 }
 
 impl From<ClientError> for SolanaChainProviderError {
@@ -280,28 +282,26 @@ impl SolanaChainProvider {
             .rpc_client
             .simulate_transaction_with_config(tx, cfg)
             .await?;
-        if sim.value.err.is_some() {
-            Err(SolanaTransactionError::Simulation(sim.value.err.unwrap()).into())
-        } else {
-            Ok(())
+        match sim.value.err {
+            None => Ok(()),
+            Some(e) => Err(SolanaTransactionError::Simulation(e).into()),
         }
     }
 
     pub async fn get_multiple_accounts(
         &self,
         pubkeys: &[Pubkey],
-    ) -> Result<Vec<Option<Account>>, FacilitatorLocalError> {
-        self.rpc_client
-            .get_multiple_accounts(pubkeys)
-            .await
-            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))
+    ) -> Result<Vec<Option<Account>>, SolanaChainProviderError> {
+        let accounts = self.rpc_client.get_multiple_accounts(pubkeys).await?;
+        Ok(accounts)
     }
 
     pub async fn send(
         &self,
         tx: &VersionedTransaction,
-    ) -> Result<Signature, FacilitatorLocalError> {
-        self.rpc_client
+    ) -> Result<Signature, SolanaChainProviderError> {
+        let signature = self
+            .rpc_client
             .send_transaction_with_config(
                 tx,
                 RpcSendTransactionConfig {
@@ -309,15 +309,15 @@ impl SolanaChainProvider {
                     ..RpcSendTransactionConfig::default()
                 },
             )
-            .await
-            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))
+            .await?;
+        Ok(signature)
     }
 
     pub async fn send_and_confirm(
         &self,
         tx: &VersionedTransaction,
         commitment_config: CommitmentConfig,
-    ) -> Result<Signature, FacilitatorLocalError> {
+    ) -> Result<Signature, SolanaChainProviderError> {
         let tx_sig = tx.get_signature();
 
         use futures_util::stream::StreamExt;
@@ -329,8 +329,7 @@ impl SolanaChainProvider {
             };
             let (mut stream, unsubscribe) = pubsub_client
                 .signature_subscribe(tx_sig, Some(config))
-                .await
-                .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
+                .await?;
             if let Err(e) = self.send(tx).await {
                 tracing::error!(error = %e, "Failed to send transaction");
                 unsubscribe().await;
@@ -342,22 +341,24 @@ impl SolanaChainProvider {
                 } else {
                     None
                 };
-                return match error {
+                match error {
                     None => Ok(*tx_sig),
-                    Some(error) => Err(FacilitatorLocalError::ContractCall(format!("{error}"))),
-                };
+                    Some(error) => Err(SolanaTransactionError::Simulation(error).into()),
+                }
+            } else {
+                Err(SolanaChainProviderError::Transport(Box::new(
+                    ClientErrorKind::Custom(
+                        "Can not get response from signatureSubscribe".to_string(),
+                    ),
+                )))
             }
-            Err(FacilitatorLocalError::DecodingError(
-                "signature_subscribe error".to_string(),
-            ))
         } else {
             self.send(tx).await?;
             loop {
                 let confirmed = self
                     .rpc_client
                     .confirm_transaction_with_commitment(tx_sig, commitment_config)
-                    .await
-                    .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
+                    .await?;
                 if confirmed.value {
                     return Ok(*tx_sig);
                 }

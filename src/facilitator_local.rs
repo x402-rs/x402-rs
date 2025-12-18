@@ -11,13 +11,13 @@
 
 use crate::chain::ChainIdFromNetworkNameError;
 use crate::chain::eip155::Eip155ChainProviderMetaTransactionError;
+use crate::chain::solana::SolanaChainProviderError;
 use crate::facilitator::Facilitator;
 use crate::proto;
 use crate::scheme::SchemeRegistry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
-use crate::chain::solana::SolanaChainProviderError;
 
 /// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
 /// using a network-aware provider cache.

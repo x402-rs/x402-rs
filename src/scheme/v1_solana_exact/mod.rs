@@ -12,7 +12,7 @@ use std::error::Error;
 use std::sync::Arc;
 use tracing_core::Level;
 
-use crate::chain::solana::{Address, SolanaChainProvider};
+use crate::chain::solana::{Address, SolanaChainProvider, SolanaChainProviderError};
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
@@ -207,7 +207,7 @@ impl TransactionInt {
         &self,
         provider: &SolanaChainProvider,
         commitment_config: CommitmentConfig,
-    ) -> Result<Signature, FacilitatorLocalError> {
+    ) -> Result<Signature, SolanaChainProviderError> {
         provider
             .send_and_confirm(&self.inner, commitment_config)
             .await
