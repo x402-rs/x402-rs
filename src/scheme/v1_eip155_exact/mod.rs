@@ -21,10 +21,10 @@ use crate::chain::eip155::{
     Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction,
     MetaTransactionSendError,
 };
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
+use crate::chain::{ChainId, ChainIdFromNetworkNameError, ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
-use crate::proto::v1;
+use crate::proto::{PaymentVerificationError, v1};
 use crate::scheme::v1_eip155_exact::types::PaymentRequirementsExtra;
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
 use crate::timestamp::UnixTimestamp;
@@ -185,31 +185,23 @@ async fn assert_valid_payment<P: Provider>(
     chain: &Eip155ChainReference,
     payload: &types::PaymentPayload,
     requirements: &types::PaymentRequirements,
-) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), FacilitatorLocalError> {
-    let payer = payload.payload.authorization.from;
+) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
     let chain_id: ChainId = chain.into();
     let payload_chain_id = ChainId::from_network_name(&payload.network)?;
     if payload_chain_id != chain_id {
-        return Err(FacilitatorLocalError::NetworkMismatch);
+        return Err(PaymentVerificationError::ChainIdMismatch.into());
     }
     let requirements_chain_id = ChainId::from_network_name(&requirements.network)?;
     if requirements_chain_id != chain_id {
-        return Err(FacilitatorLocalError::NetworkMismatch);
-    }
-    if payload.scheme != requirements.scheme {
-        return Err(FacilitatorLocalError::SchemeMismatch);
+        return Err(PaymentVerificationError::ChainIdMismatch.into());
     }
     let authorization = &payload.payload.authorization;
     if authorization.to != requirements.pay_to {
-        return Err(FacilitatorLocalError::ReceiverMismatch(
-            payer.to_string(),
-            authorization.to.to_string(),
-            requirements.pay_to.to_string(),
-        ));
+        return Err(PaymentVerificationError::ReceiverMismatch.into());
     }
     let valid_after = authorization.valid_after;
     let valid_before = authorization.valid_before;
-    assert_time(payer, valid_after, valid_before)?;
+    assert_time(valid_after, valid_before)?;
     let asset_address = requirements.asset;
     let contract = USDC::new(asset_address, provider);
 
@@ -217,7 +209,7 @@ async fn assert_valid_payment<P: Provider>(
 
     let amount_required = requirements.max_amount_required;
     assert_enough_balance(&contract, &authorization.from, amount_required).await?;
-    assert_enough_value(&payer, &authorization.value, &amount_required)?;
+    assert_enough_value(&authorization.value, &amount_required)?;
 
     let payment = ExactEvmPayment {
         from: authorization.from,
@@ -235,28 +227,17 @@ async fn assert_valid_payment<P: Provider>(
 /// Validates that the current time is within the `validAfter` and `validBefore` bounds.
 ///
 /// Adds a 6-second grace buffer when checking expiration to account for latency.
-///
-/// # Errors
-/// Returns [`FacilitatorLocalError::InvalidTiming`] if the authorization is not yet active or already expired.
-/// Returns [`FacilitatorLocalError::ClockError`] if the system clock cannot be read.
 #[instrument(skip_all, err)]
 pub fn assert_time(
-    payer: Address,
     valid_after: UnixTimestamp,
     valid_before: UnixTimestamp,
-) -> Result<(), FacilitatorLocalError> {
+) -> Result<(), PaymentVerificationError> {
     let now = UnixTimestamp::now();
     if valid_before < now + 6 {
-        return Err(FacilitatorLocalError::InvalidTiming(
-            payer.to_string(),
-            format!("Expired: now {} > valid_before {}", now + 6, valid_before),
-        ));
+        return Err(PaymentVerificationError::Expired);
     }
     if valid_after > now {
-        return Err(FacilitatorLocalError::InvalidTiming(
-            payer.to_string(),
-            format!("Not active yet: valid_after {valid_after} > now {now}",),
-        ));
+        return Err(PaymentVerificationError::NotYetValid);
     }
     Ok(())
 }
@@ -275,7 +256,7 @@ pub async fn assert_domain<P: Provider>(
     token_contract: &USDC::USDCInstance<P>,
     asset_address: &Address,
     extra: &Option<PaymentRequirementsExtra>,
-) -> Result<Eip712Domain, FacilitatorLocalError> {
+) -> Result<Eip712Domain, Eip155ExactError> {
     let name = extra.as_ref().map(|extra| extra.name.clone());
     let name = if let Some(name) = name {
         name
@@ -288,8 +269,7 @@ pub async fn assert_domain<P: Provider>(
                 "fetch_eip712_name",
                 otel.kind = "client",
             ))
-            .await
-            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?
+            .await?
     };
     let version = extra.as_ref().map(|extra| extra.version.clone());
     let version = if let Some(version) = version {
@@ -303,8 +283,7 @@ pub async fn assert_domain<P: Provider>(
                 "fetch_eip712_version",
                 otel.kind = "client",
             ))
-            .await
-            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?
+            .await?
     };
     let domain = eip712_domain! {
         name: name,
@@ -318,10 +297,6 @@ pub async fn assert_domain<P: Provider>(
 /// Checks if the payer has enough on-chain token balance to meet the `maxAmountRequired`.
 ///
 /// Performs an `ERC20.balanceOf()` call using the USDC contract instance.
-///
-/// # Errors
-/// Returns [`FacilitatorLocalError::InsufficientFunds`] if the balance is too low.
-/// Returns [`FacilitatorLocalError::ContractCall`] if the balance query fails.
 #[instrument(skip_all, err, fields(
     sender = %sender,
     max_required = %max_amount_required,
@@ -331,7 +306,7 @@ pub async fn assert_enough_balance<P: Provider>(
     usdc_contract: &USDC::USDCInstance<P>,
     sender: &Address,
     max_amount_required: U256,
-) -> Result<(), FacilitatorLocalError> {
+) -> Result<(), Eip155ExactError> {
     let balance = usdc_contract
         .balanceOf(*sender)
         .call()
@@ -342,11 +317,10 @@ pub async fn assert_enough_balance<P: Provider>(
             sender = %sender,
             otel.kind = "client"
         ))
-        .await
-        .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+        .await?;
 
     if balance < max_amount_required {
-        Err(FacilitatorLocalError::InsufficientFunds(sender.to_string()))
+        Err(PaymentVerificationError::InsufficientFunds.into())
     } else {
         Ok(())
     }
@@ -355,20 +329,16 @@ pub async fn assert_enough_balance<P: Provider>(
 /// Verifies that the declared `value` in the payload is sufficient for the required amount.
 ///
 /// This is a static check (not on-chain) that compares two numbers.
-///
-/// # Errors
-/// Return [`FacilitatorLocalError::InsufficientValue`] if the payload's value is less than required.
 #[instrument(skip_all, err, fields(
     sent = %sent,
     max_amount_required = %max_amount_required
 ))]
 pub fn assert_enough_value(
-    payer: &Address,
     sent: &U256,
     max_amount_required: &U256,
-) -> Result<(), FacilitatorLocalError> {
+) -> Result<(), PaymentVerificationError> {
     if sent < max_amount_required {
-        Err(FacilitatorLocalError::InsufficientValue(payer.to_string()))
+        Err(PaymentVerificationError::InvalidPaymentAmount)
     } else {
         Ok(())
     }
@@ -425,11 +395,6 @@ impl SignedMessage {
     ///    - EIP-1271 (plain signature), and
     ///    - EIP-6492 (counterfactual signature wrapper).
     /// 4. Assemble all parts into a [`SignedMessage`] and return it.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`FacilitatorLocalError`] if:
-    /// - The raw signature cannot be decoded as either EIP-1271 or EIP-6492.
     pub fn extract(
         payment: &ExactEvmPayment,
         domain: &Eip712Domain,
@@ -605,9 +570,6 @@ pub struct TransferWithAuthorization0Call<P> {
 /// Uses `eth_getCode` against this provider. This is useful after a counterfactual
 /// deployment to confirm visibility on the sending RPC before submitting a
 /// follow-up transaction.
-///
-/// # Errors
-/// Return [`FacilitatorLocalError::ContractCall`] if the RPC call fails.
 async fn is_contract_deployed<P: Provider>(
     provider: P,
     address: &Address,
@@ -842,6 +804,10 @@ pub enum Eip155ExactError {
     InvalidSignature,
     #[error("Contract call failed: {0}")]
     ContractCall(String),
+    #[error(transparent)]
+    PaymentVerification(#[from] PaymentVerificationError),
+    #[error(transparent)]
+    UnsupportedNetwork(#[from] ChainIdFromNetworkNameError)
 }
 
 impl From<MetaTransactionSendError> for Eip155ExactError {

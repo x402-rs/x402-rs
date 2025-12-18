@@ -151,7 +151,7 @@ async fn assert_valid_payment<P: Provider>(
     }
     let valid_after = authorization.valid_after;
     let valid_before = authorization.valid_before;
-    assert_time(payer, valid_after, valid_before)?;
+    assert_time(valid_after, valid_before)?;
     let asset_address = accepted.asset;
     let contract = USDC::new(asset_address, provider);
 
@@ -159,7 +159,7 @@ async fn assert_valid_payment<P: Provider>(
 
     let amount_required = accepted.amount;
     assert_enough_balance(&contract, &authorization.from, amount_required).await?;
-    assert_enough_value(&payer, &authorization.value, &amount_required)?;
+    assert_enough_value(&authorization.value, &amount_required)?;
 
     let payment = ExactEvmPayment {
         from: authorization.from,

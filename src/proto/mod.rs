@@ -169,3 +169,19 @@ pub struct SettleResponse(serde_json::Value);
 #[derive(Debug, thiserror::Error)]
 #[error("Failed to deserialize request: {0}")]
 pub struct VerifyRequestFormatError(#[from] serde_json::Error);
+
+#[derive(Debug, thiserror::Error)]
+pub enum PaymentVerificationError { // FIXME ERRORS Should this be a a part of v1_eip155_exact?
+    #[error("Payment amount is invalid with respect to the payment requirements")]
+    InvalidPaymentAmount,
+    #[error("Onchain balance is not enough to cover the payment amount")]
+    InsufficientFunds,
+    #[error("Payment authorization is not yet valid")]
+    NotYetValid,
+    #[error("Payment authorization is expired")]
+    Expired,
+    #[error("Payment chain id is invalid with respect to the payment requirements")]
+    ChainIdMismatch,
+    #[error("Payment receiver is invalid with respect to the payment requirements")]
+    ReceiverMismatch,
+}

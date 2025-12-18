@@ -14,7 +14,7 @@ use crate::chain::eip155::MetaTransactionSendError;
 use crate::chain::solana::SolanaChainProviderError;
 use crate::facilitator::Facilitator;
 use crate::proto;
-use crate::proto::VerifyRequestFormatError;
+use crate::proto::{PaymentVerificationError, VerifyRequestFormatError};
 use crate::scheme::SchemeRegistry;
 use crate::scheme::v1_eip155_exact::{Eip155ExactError, StructuredSignatureFormatError};
 use serde::{Deserialize, Serialize};
@@ -155,6 +155,13 @@ impl From<StructuredSignatureFormatError> for FacilitatorLocalError {
 
 impl From<Eip155ExactError> for FacilitatorLocalError {
     fn from(value: Eip155ExactError) -> Self {
+        // TODO ERRORS
+        FacilitatorLocalError::DecodingError(value.to_string())
+    }
+}
+
+impl From<PaymentVerificationError> for FacilitatorLocalError {
+    fn from(value: PaymentVerificationError) -> Self {
         // TODO ERRORS
         FacilitatorLocalError::DecodingError(value.to_string())
     }
