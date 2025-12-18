@@ -1,3 +1,5 @@
+use crate::chain::{ChainId, ChainProviderOps};
+use crate::config::SolanaChainConfig;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_account::Account;
 use solana_client::client_error::{ClientError, ClientErrorKind};
@@ -14,14 +16,12 @@ use solana_keypair::Keypair;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 use solana_signer::{Signer, SignerError};
+use solana_transaction::TransactionError;
 use solana_transaction::versioned::VersionedTransaction;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-
-use crate::chain::{ChainId, ChainProviderOps};
-use crate::config::SolanaChainConfig;
 
 pub const SOLANA_NAMESPACE: &str = "solana";
 
@@ -133,19 +133,11 @@ pub enum SolanaChainProviderError {
     #[error(transparent)]
     Signer(#[from] SignerError),
     #[error("Invalid transaction: {0}")]
-    InvalidTransaction(#[from] SolanaTransactionError),
+    InvalidTransaction(#[from] UiTransactionError),
     #[error(transparent)]
     Transport(Box<ClientErrorKind>),
     #[error(transparent)]
     PubsubTransport(#[from] PubsubClientError),
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum SolanaTransactionError {
-    #[error("No position for signature found")]
-    SignerPosition,
-    #[error(transparent)]
-    Simulation(UiTransactionError),
 }
 
 impl From<ClientError> for SolanaChainProviderError {
@@ -263,7 +255,9 @@ impl SolanaChainProvider {
         let pos = static_keys[..num_required]
             .iter()
             .position(|k| *k == self.pubkey())
-            .ok_or(SolanaTransactionError::SignerPosition)?;
+            .ok_or(SolanaChainProviderError::InvalidTransaction(
+                UiTransactionError::from(TransactionError::InvalidAccountIndex),
+            ))?;
         // Ensure signature vector is large enough, then place the signature
         if tx.signatures.len() < num_required {
             tx.signatures.resize(num_required, Signature::default());
@@ -284,7 +278,7 @@ impl SolanaChainProvider {
             .await?;
         match sim.value.err {
             None => Ok(()),
-            Some(e) => Err(SolanaTransactionError::Simulation(e).into()),
+            Some(e) => Err(SolanaChainProviderError::InvalidTransaction(e)),
         }
     }
 
@@ -343,7 +337,7 @@ impl SolanaChainProvider {
                 };
                 match error {
                     None => Ok(*tx_sig),
-                    Some(error) => Err(SolanaTransactionError::Simulation(error).into()),
+                    Some(error) => Err(SolanaChainProviderError::InvalidTransaction(error)),
                 }
             } else {
                 Err(SolanaChainProviderError::Transport(Box::new(
