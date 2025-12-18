@@ -103,6 +103,7 @@ pub struct Eip155ChainProvider {
     chain: Eip155ChainReference,
     eip1559: bool,
     flashblocks: bool,
+    receipt_timeout_secs: u64,
     inner: InnerProvider,
     /// Available signer addresses for round-robin selection.
     signer_addresses: Arc<Vec<Address>>,
@@ -200,6 +201,7 @@ impl Eip155ChainProvider {
             chain: config.chain_reference(),
             eip1559: config.eip1559(),
             flashblocks: config.flashblocks(),
+            receipt_timeout_secs: config.receipt_timeout_secs(),
             inner,
             signer_addresses,
             signer_cursor,
@@ -334,12 +336,7 @@ impl MetaEip155Provider for Eip155ChainProvider {
 
         // Get receipt with timeout and error handling for nonce reset
         // Default timeout of 30 seconds is reasonable for most EVM chains
-        let timeout = std::time::Duration::from_secs(
-            std::env::var("TX_RECEIPT_TIMEOUT_SECS")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(30),
-        );
+        let timeout = std::time::Duration::from_secs(self.receipt_timeout_secs);
 
         let watcher = pending_tx
             .with_required_confirmations(tx.confirmations)

@@ -366,6 +366,9 @@ impl Eip155ChainConfig {
     pub fn flashblocks(&self) -> bool {
         self.inner.flashblocks
     }
+    pub fn receipt_timeout_secs(&self) -> u64 {
+        self.inner.receipt_timeout_secs
+    }
     pub fn signers(&self) -> &EvmSignersConfig {
         &self.inner.signers
     }
@@ -418,6 +421,15 @@ pub struct EvmChainConfigInner {
     pub signers: EvmSignersConfig,
     /// RPC provider configuration for this chain (required).
     pub rpc: Vec<RpcConfig>,
+    /// How long to wait till the transaction receipt is available (optional)
+    #[serde(default = "eip155_chain_config::default_receipt_timeout_secs")]
+    pub receipt_timeout_secs: u64,
+}
+
+mod eip155_chain_config {
+    pub fn default_receipt_timeout_secs() -> u64 {
+        30
+    }
 }
 
 /// Configuration specific to Solana chains.
