@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
 use tracing::Instrument;
 
-use crate::chain::{ChainId, ChainIdError, ChainProviderOps};
+use crate::chain::{ChainId, ChainProviderOps};
 use crate::config::Eip155ChainConfig;
 use pending_nonce_manager::PendingNonceManager;
 
@@ -65,24 +65,27 @@ impl From<&Eip155ChainReference> for ChainId {
 }
 
 impl TryFrom<ChainId> for Eip155ChainReference {
-    type Error = ChainIdError;
+    type Error = Eip155ChainReferenceFormatError;
 
     fn try_from(value: ChainId) -> Result<Self, Self::Error> {
         if value.namespace != EIP155_NAMESPACE {
-            return Err(ChainIdError::UnexpectedNamespace(
+            return Err(Eip155ChainReferenceFormatError::InvalidNamespace(
                 value.namespace,
-                EIP155_NAMESPACE.into(),
             ));
         }
-        let chain_id: u64 = value.reference.parse().map_err(|e| {
-            ChainIdError::InvalidReference(
-                value.reference,
-                EIP155_NAMESPACE.into(),
-                format!("{e:?}"),
-            )
+        let chain_id: u64 = value.reference.parse().map_err(|_| {
+            Eip155ChainReferenceFormatError::InvalidReference(value.reference.clone())
         })?;
         Ok(Eip155ChainReference(chain_id))
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Eip155ChainReferenceFormatError {
+    #[error("Invalid namespace {0}, expected eip155")]
+    InvalidNamespace(String),
+    #[error("Invalid eip155 chain reference {0}")]
+    InvalidReference(String),
 }
 
 impl Eip155ChainReference {

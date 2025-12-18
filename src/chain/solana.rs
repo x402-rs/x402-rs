@@ -19,7 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::chain::{ChainId, ChainIdError, ChainProviderOps};
+use crate::chain::{ChainId, ChainProviderOps};
 use crate::config::SolanaChainConfig;
 use crate::facilitator_local::FacilitatorLocalError;
 
@@ -59,24 +59,14 @@ impl Debug for SolanaChainReference {
     }
 }
 
-/// Error type for parsing a SolanaChainReference from a string.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum SolanaChainReferenceParseError {
-    #[error("invalid length: expected 32 characters, got {0}")]
-    InvalidLength(usize),
-    #[error("string contains non-ASCII characters")]
-    NonAscii,
-}
-
 impl FromStr for SolanaChainReference {
-    type Err = SolanaChainReferenceParseError;
+    type Err = SolanaChainReferenceFormatError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() != 32 {
-            return Err(SolanaChainReferenceParseError::InvalidLength(s.len()));
-        }
-        if !s.is_ascii() {
-            return Err(SolanaChainReferenceParseError::NonAscii);
+        if !(s.is_ascii() && s.len() == 32) {
+            return Err(SolanaChainReferenceFormatError::InvalidReference(
+                s.to_string(),
+            ));
         }
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(s.as_bytes());
@@ -116,24 +106,26 @@ impl From<SolanaChainReference> for ChainId {
 }
 
 impl TryFrom<ChainId> for SolanaChainReference {
-    type Error = ChainIdError;
+    type Error = SolanaChainReferenceFormatError;
 
     fn try_from(value: ChainId) -> Result<Self, Self::Error> {
         if value.namespace != SOLANA_NAMESPACE {
-            return Err(ChainIdError::UnexpectedNamespace(
+            return Err(SolanaChainReferenceFormatError::InvalidNamespace(
                 value.namespace,
-                SOLANA_NAMESPACE.into(),
             ));
         }
-        let solana_chain_reference = Self::from_str(&value.reference).map_err(|e| {
-            ChainIdError::InvalidReference(
-                value.reference,
-                SOLANA_NAMESPACE.into(),
-                format!("{e:?}"),
-            )
-        })?;
+        let solana_chain_reference = Self::from_str(&value.reference)
+            .map_err(|_| SolanaChainReferenceFormatError::InvalidReference(value.reference))?;
         Ok(solana_chain_reference)
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SolanaChainReferenceFormatError {
+    #[error("Invalid namespace {0}, expected solana")]
+    InvalidNamespace(String),
+    #[error("Invalid solana chain reference {0}")]
+    InvalidReference(String),
 }
 
 pub struct SolanaChainProvider {

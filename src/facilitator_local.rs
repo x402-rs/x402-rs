@@ -9,7 +9,7 @@
 //! - Contract interaction using Alloy
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
-use crate::chain::ChainIdNetworkError;
+use crate::chain::ChainIdFromNetworkNameError;
 use crate::chain::eip155::Eip155ChainProviderMetaTransactionError;
 use crate::facilitator::Facilitator;
 use crate::proto;
@@ -122,8 +122,8 @@ impl From<Eip155ChainProviderMetaTransactionError> for FacilitatorLocalError {
     }
 }
 
-impl From<ChainIdNetworkError> for FacilitatorLocalError {
-    fn from(_value: ChainIdNetworkError) -> Self {
+impl From<ChainIdFromNetworkNameError> for FacilitatorLocalError {
+    fn from(_value: ChainIdFromNetworkNameError) -> Self {
         // TODO ERRORS
         FacilitatorLocalError::UnsupportedNetwork
     }

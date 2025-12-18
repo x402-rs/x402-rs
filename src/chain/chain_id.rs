@@ -10,11 +10,9 @@ pub struct ChainId {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum ChainIdNetworkError {
-    #[error("Unable to convert network name to chain id {network_name}")]
-    ChainIdByNetwork { network_name: String },
-    #[error("Unable to convert chain id to network name {chain_id}")]
-    NetworkByChainId { chain_id: ChainId },
+#[error("Unable to convert network name to chain id {network_name}")]
+pub struct ChainIdFromNetworkNameError {
+    network_name: String,
 }
 
 impl ChainId {
@@ -33,7 +31,7 @@ impl ChainId {
         &self.reference
     }
 
-    pub fn from_network_name(network_name: &str) -> Result<Self, ChainIdNetworkError> {
+    pub fn from_network_name(network_name: &str) -> Result<Self, ChainIdFromNetworkNameError> {
         let chain_id = match network_name {
             "base-sepolia" => Some(Self::new("eip155", "84532")),
             "base" => Some(Self::new("eip155", "8453")),
@@ -49,8 +47,8 @@ impl ChainId {
             "solana-devnet" => Some(Self::new("solana", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1")),
             _ => None,
         };
-        chain_id.ok_or(ChainIdNetworkError::ChainIdByNetwork {
-            network_name: network_name.into(),
+        chain_id.ok_or(ChainIdFromNetworkNameError {
+            network_name: network_name.to_string(),
         })
     }
 
@@ -95,23 +93,16 @@ impl From<ChainId> for String {
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("invalid chain id format {0}")]
-pub enum ChainIdError {
-    #[error("invalid chain id format {0}")]
-    InvalidFormat(String),
-    #[error("unexpected namespace {0}, expected {1}")]
-    UnexpectedNamespace(String, String),
-    #[error("invalid chain id reference {0} for namespace {1}: {2}")]
-    InvalidReference(String, String, String),
-}
+#[error("Invalid chain id format {0}")]
+pub struct ChainIdFormatError(String);
 
 impl FromStr for ChainId {
-    type Err = ChainIdError;
+    type Err = ChainIdFormatError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.splitn(2, ':').collect();
         if parts.len() != 2 {
-            return Err(ChainIdError::InvalidFormat(s.into()));
+            return Err(ChainIdFormatError(s.into()));
         }
         Ok(ChainId {
             namespace: parts[0].into(),
@@ -223,15 +214,13 @@ impl fmt::Display for ChainIdPattern {
 }
 
 impl FromStr for ChainIdPattern {
-    type Err = ChainIdError;
+    type Err = ChainIdFormatError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (namespace, rest) = s
-            .split_once(':')
-            .ok_or(ChainIdError::InvalidFormat(s.into()))?;
+        let (namespace, rest) = s.split_once(':').ok_or(ChainIdFormatError(s.into()))?;
 
         if namespace.is_empty() {
-            return Err(ChainIdError::InvalidFormat(s.into()));
+            return Err(ChainIdFormatError(s.into()));
         }
 
         // Wildcard: eip155:*
@@ -246,13 +235,13 @@ impl FromStr for ChainIdPattern {
             for item in inner.split(',') {
                 let item = item.trim();
                 if item.is_empty() {
-                    return Err(ChainIdError::InvalidFormat(s.into()));
+                    return Err(ChainIdFormatError(s.into()));
                 }
                 references.insert(item.into());
             }
 
             if references.is_empty() {
-                return Err(ChainIdError::InvalidFormat(s.into()));
+                return Err(ChainIdFormatError(s.into()));
             }
 
             return Ok(ChainIdPattern::set(namespace.into(), references));
@@ -260,7 +249,7 @@ impl FromStr for ChainIdPattern {
 
         // Exact: eip155:1
         if rest.is_empty() {
-            return Err(ChainIdError::InvalidFormat(s.into()));
+            return Err(ChainIdFormatError(s.into()));
         }
 
         Ok(ChainIdPattern::exact(namespace.into(), rest.into()))
