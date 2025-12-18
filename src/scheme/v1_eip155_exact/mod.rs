@@ -14,7 +14,7 @@ use tracing_core::Level;
 pub mod types;
 
 use crate::chain::eip155::{
-    Eip155ChainProvider, Eip155ChainReference, MetaEip155Provider, MetaTransaction,
+    Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction,
 };
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
@@ -708,7 +708,7 @@ pub async fn settle_payment<P, E>(
     eip712_domain: &Eip712Domain,
 ) -> Result<TxHash, FacilitatorLocalError>
 where
-    P: MetaEip155Provider<Error = E>,
+    P: Eip155MetaTransactionProvider<Error = E>,
     FacilitatorLocalError: From<E>,
 {
     let signed_message = SignedMessage::extract(payment, eip712_domain)?;
@@ -724,7 +724,7 @@ where
             let transfer_call = transferWithAuthorization_0(contract, payment, inner).await?;
             if is_contract_deployed {
                 // transferWithAuthorization with inner signature
-                MetaEip155Provider::send_transaction(
+                Eip155MetaTransactionProvider::send_transaction(
                     &provider,
                     MetaTransaction {
                         to: transfer_call.tx.target(),
@@ -761,7 +761,7 @@ where
                 let aggregate_call = IMulticall3::aggregate3Call {
                     calls: vec![deployment_call, transfer_with_authorization_call],
                 };
-                MetaEip155Provider::send_transaction(
+                Eip155MetaTransactionProvider::send_transaction(
                     &provider,
                     MetaTransaction {
                         to: MULTICALL3_ADDRESS,
@@ -789,7 +789,7 @@ where
             let transfer_call =
                 transferWithAuthorization_0(contract, payment, eip1271_signature).await?;
             // transferWithAuthorization with eip1271 signature
-            MetaEip155Provider::send_transaction(
+            Eip155MetaTransactionProvider::send_transaction(
                 &provider,
                 MetaTransaction {
                     to: transfer_call.tx.target(),

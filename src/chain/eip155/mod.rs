@@ -5,7 +5,7 @@ use alloy_primitives::{Address, B256, Bytes};
 use alloy_provider::fillers::{
     BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
 };
-use alloy_provider::{Identity, Provider, ProviderBuilder, RootProvider, WalletProvider};
+use alloy_provider::{Identity, PendingTransactionError, Provider, ProviderBuilder, RootProvider, WalletProvider};
 use alloy_rpc_client::RpcClient;
 use alloy_rpc_types_eth::{BlockId, TransactionReceipt, TransactionRequest};
 use alloy_signer::Signer;
@@ -16,12 +16,12 @@ use std::fmt::{Display, Formatter};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use alloy_transport::TransportError;
 use tower::ServiceBuilder;
 use tracing::Instrument;
 
 use crate::chain::{ChainId, ChainIdError, ChainProviderOps};
 use crate::config::Eip155ChainConfig;
-use crate::facilitator_local::FacilitatorLocalError;
 use pending_nonce_manager::PendingNonceManager;
 
 /// Combined filler type for gas, blob gas, nonce, and chain ID.
@@ -222,8 +222,8 @@ impl Eip155ChainProvider {
     }
 }
 
-impl MetaEip155Provider for &Eip155ChainProvider {
-    type Error = FacilitatorLocalError;
+impl Eip155MetaTransactionProvider for &Eip155ChainProvider {
+    type Error = Eip155ChainProviderMetaTransactionError;
     type Inner = InnerProvider;
     fn inner(&self) -> &Self::Inner {
         (*self).inner()
@@ -239,8 +239,8 @@ impl MetaEip155Provider for &Eip155ChainProvider {
     }
 }
 
-impl MetaEip155Provider for Eip155ChainProvider {
-    type Error = FacilitatorLocalError;
+impl Eip155MetaTransactionProvider for Eip155ChainProvider {
+    type Error = Eip155ChainProviderMetaTransactionError;
     type Inner = InnerProvider;
 
     fn inner(&self) -> &Self::Inner {
@@ -303,8 +303,7 @@ impl MetaEip155Provider for Eip155ChainProvider {
             let gas: u128 = provider
                 .get_gas_price()
                 .instrument(tracing::info_span!("get_gas_price"))
-                .await
-                .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+                .await?;
             txr.set_gas_price(gas);
         }
 
@@ -319,8 +318,7 @@ impl MetaEip155Provider for Eip155ChainProvider {
                 .inner
                 .estimate_gas(txr.clone())
                 .block(block_id)
-                .await
-                .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+                .await?;
             txr.set_gas_limit(gas_limit)
         }
 
@@ -330,7 +328,7 @@ impl MetaEip155Provider for Eip155ChainProvider {
             Err(e) => {
                 // Transaction submission failed - reset nonce to force requery
                 self.nonce_manager.reset_nonce(from_address).await;
-                return Err(FacilitatorLocalError::ContractCall(format!("{e:?}")));
+                return Err(Eip155ChainProviderMetaTransactionError::Transport(e))
             }
         };
 
@@ -347,10 +345,18 @@ impl MetaEip155Provider for Eip155ChainProvider {
             Err(e) => {
                 // Receipt fetch failed (timeout or other error) - reset nonce to force requery
                 self.nonce_manager.reset_nonce(from_address).await;
-                Err(FacilitatorLocalError::ContractCall(format!("{e:?}")))
+                Err(Eip155ChainProviderMetaTransactionError::PendingTransaction(e))
             }
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Eip155ChainProviderMetaTransactionError {
+    #[error(transparent)]
+    Transport(#[from] TransportError),
+    #[error(transparent)]
+    PendingTransaction(#[from] PendingTransactionError)
 }
 
 impl ChainProviderOps for Eip155ChainProvider {
@@ -377,7 +383,7 @@ pub struct MetaTransaction {
 }
 
 /// Trait for sending meta-transactions with custom target and calldata.
-pub trait MetaEip155Provider {
+pub trait Eip155MetaTransactionProvider {
     /// Error type for operations.
     type Error;
     /// Underlying provider type.

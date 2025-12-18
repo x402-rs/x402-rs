@@ -15,6 +15,7 @@ use crate::scheme::SchemeRegistry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
+use crate::chain::eip155::Eip155ChainProviderMetaTransactionError;
 
 /// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
 /// using a network-aware provider cache.
@@ -111,6 +112,12 @@ pub enum FacilitatorLocalError {
     /// The payload decoding failed.
     #[error("Decoding error: {0}")]
     DecodingError(String),
+}
+
+impl From<Eip155ChainProviderMetaTransactionError> for FacilitatorLocalError {
+    fn from(value: Eip155ChainProviderMetaTransactionError) -> Self {
+        FacilitatorLocalError::ContractCall(value.to_string())
+    }
 }
 
 // FIXME ERRORS are fucked up
