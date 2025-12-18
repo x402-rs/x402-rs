@@ -56,43 +56,29 @@ impl ChainId {
 
     pub fn as_network_name(&self) -> Option<&str> {
         let namespace = self.namespace.as_str();
-        match namespace {
-            "solana" => {
-                if self.reference == "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" {
-                    Some("solana")
-                } else if self.reference == "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" {
-                    Some("solana-devnet")
-                } else {
-                    None
-                }
-            }
-            "eip155" => {
-                if self.reference == "84532" {
-                    Some("base-sepolia")
-                } else if self.reference == "8453" {
-                    Some("base")
-                } else if self.reference == "50" {
-                    Some("xdc")
-                } else if self.reference == "4313" {
-                    Some("avalanche-fuji")
-                } else if self.reference == "43114" {
-                    Some("avalanche")
-                } else if self.reference == "1440000" {
-                    Some("xrpl-evm")
-                } else if self.reference == "80002" {
-                    Some("polygon-amoy")
-                } else if self.reference == "137" {
-                    Some("polygon")
-                } else if self.reference == "1329" {
-                    Some("sei")
-                } else if self.reference == "1328" {
-                    Some("sei-testnet")
-                } else {
-                    None
-                }
-            }
+        let reference = self.reference.as_str();
+        let network_name = match namespace {
+            "solana" => match reference {
+                "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" => Some("solana"),
+                "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" => Some("solana-devnet"),
+                _ => None,
+            },
+            "eip155" => match reference {
+                "84532" => Some("base-sepolia"),
+                "8453" => Some("base"),
+                "50" => Some("xdc"),
+                "4313" => Some("avalanche-fuji"),
+                "43114" => Some("avalanche"),
+                "1440000" => Some("xrpl-evm"),
+                "80002" => Some("polygon-amoy"),
+                "137" => Some("polygon"),
+                "1329" => Some("sei"),
+                "1328" => Some("sei-testnet"),
+                _ => None,
+            },
             _ => None,
-        }
+        };
+        network_name
     }
 }
 
