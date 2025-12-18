@@ -7,18 +7,18 @@ use solana_client::rpc_client::SerializableTransaction;
 use solana_client::rpc_config::{
     RpcSendTransactionConfig, RpcSignatureSubscribeConfig, RpcSimulateTransactionConfig,
 };
-use solana_client::rpc_response::RpcSignatureResult;
+use solana_client::rpc_response::{RpcSignatureResult, UiTransactionError};
 use solana_commitment_config::CommitmentConfig;
 use solana_keypair::Keypair;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
-use solana_signer::Signer;
+use solana_signer::{Signer, SignerError};
 use solana_transaction::versioned::VersionedTransaction;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-
+use solana_client::client_error::{ClientError, ClientErrorKind};
 use crate::chain::{ChainId, ChainProviderOps};
 use crate::config::SolanaChainConfig;
 use crate::facilitator_local::FacilitatorLocalError;
@@ -128,6 +128,30 @@ pub enum SolanaChainReferenceFormatError {
     InvalidReference(String),
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum SolanaChainProviderError {
+    #[error(transparent)]
+    Signer(#[from] SignerError),
+    #[error("Invalid transaction: {0}")]
+    InvalidTransaction(#[from] SolanaTransactionError),
+    #[error(transparent)]
+    Transport(Box<ClientErrorKind>)
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum SolanaTransactionError {
+    #[error("No position for signature found")]
+    SignerPosition,
+    #[error(transparent)]
+    Simulation(UiTransactionError)
+}
+
+impl From<ClientError> for SolanaChainProviderError {
+    fn from(value: ClientError) -> Self {
+        SolanaChainProviderError::Transport(value.kind)
+    }
+}
+
 pub struct SolanaChainProvider {
     chain: SolanaChainReference,
     keypair: Arc<Keypair>,
@@ -226,13 +250,10 @@ impl SolanaChainProvider {
     pub fn sign(
         &self,
         tx: VersionedTransaction,
-    ) -> Result<VersionedTransaction, FacilitatorLocalError> {
+    ) -> Result<VersionedTransaction, SolanaChainProviderError> {
         let mut tx = tx.clone();
         let msg_bytes = tx.message.serialize();
-        let signature = self
-            .keypair
-            .try_sign_message(msg_bytes.as_slice())
-            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
+        let signature = self.keypair.try_sign_message(msg_bytes.as_slice())?;
         // Required signatures are the first N account keys
         let num_required = tx.message.header().num_required_signatures as usize;
         let static_keys = tx.message.static_account_keys();
@@ -240,9 +261,7 @@ impl SolanaChainProvider {
         let pos = static_keys[..num_required]
             .iter()
             .position(|k| *k == self.pubkey())
-            .ok_or(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_simulation_failed".to_string(),
-            ))?;
+            .ok_or(SolanaTransactionError::SignerPosition)?;
         // Ensure signature vector is large enough, then place the signature
         if tx.signatures.len() < num_required {
             tx.signatures.resize(num_required, Signature::default());
@@ -256,16 +275,13 @@ impl SolanaChainProvider {
         &self,
         tx: &VersionedTransaction,
         cfg: RpcSimulateTransactionConfig,
-    ) -> Result<(), FacilitatorLocalError> {
+    ) -> Result<(), SolanaChainProviderError> {
         let sim = self
             .rpc_client
             .simulate_transaction_with_config(tx, cfg)
-            .await
-            .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e}")))?;
+            .await?;
         if sim.value.err.is_some() {
-            Err(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_simulation_failed".to_string(),
-            ))
+            Err(SolanaTransactionError::Simulation(sim.value.err.unwrap()).into())
         } else {
             Ok(())
         }

@@ -17,6 +17,7 @@ use crate::scheme::SchemeRegistry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
+use crate::chain::solana::SolanaChainProviderError;
 
 /// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
 /// using a network-aware provider cache.
@@ -126,6 +127,13 @@ impl From<ChainIdFromNetworkNameError> for FacilitatorLocalError {
     fn from(_value: ChainIdFromNetworkNameError) -> Self {
         // TODO ERRORS
         FacilitatorLocalError::UnsupportedNetwork
+    }
+}
+
+impl From<SolanaChainProviderError> for FacilitatorLocalError {
+    fn from(value: SolanaChainProviderError) -> Self {
+        // TODO ERRORS
+        FacilitatorLocalError::ContractCall(value.to_string())
     }
 }
 
