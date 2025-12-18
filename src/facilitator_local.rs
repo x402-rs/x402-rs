@@ -10,12 +10,13 @@
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
 use crate::chain::ChainIdFromNetworkNameError;
-use crate::chain::eip155::Eip155ChainProviderMetaTransactionError;
+use crate::chain::eip155::MetaTransactionSendError;
 use crate::chain::solana::SolanaChainProviderError;
 use crate::facilitator::Facilitator;
 use crate::proto;
 use crate::proto::VerifyRequestFormatError;
 use crate::scheme::SchemeRegistry;
+use crate::scheme::v1_eip155_exact::{Eip155ExactError, StructuredSignatureFormatError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -117,8 +118,8 @@ pub enum FacilitatorLocalError {
     DecodingError(String),
 }
 
-impl From<Eip155ChainProviderMetaTransactionError> for FacilitatorLocalError {
-    fn from(value: Eip155ChainProviderMetaTransactionError) -> Self {
+impl From<MetaTransactionSendError> for FacilitatorLocalError {
+    fn from(value: MetaTransactionSendError) -> Self {
         // TODO ERRORS
         FacilitatorLocalError::ContractCall(value.to_string())
     }
@@ -140,6 +141,20 @@ impl From<SolanaChainProviderError> for FacilitatorLocalError {
 
 impl From<VerifyRequestFormatError> for FacilitatorLocalError {
     fn from(value: VerifyRequestFormatError) -> Self {
+        // TODO ERRORS
+        FacilitatorLocalError::DecodingError(value.to_string())
+    }
+}
+
+impl From<StructuredSignatureFormatError> for FacilitatorLocalError {
+    fn from(value: StructuredSignatureFormatError) -> Self {
+        // TODO ERRORS
+        FacilitatorLocalError::DecodingError(value.to_string())
+    }
+}
+
+impl From<Eip155ExactError> for FacilitatorLocalError {
+    fn from(value: Eip155ExactError) -> Self {
         // TODO ERRORS
         FacilitatorLocalError::DecodingError(value.to_string())
     }

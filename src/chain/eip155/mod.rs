@@ -228,7 +228,7 @@ impl Eip155ChainProvider {
 }
 
 impl Eip155MetaTransactionProvider for &Eip155ChainProvider {
-    type Error = Eip155ChainProviderMetaTransactionError;
+    type Error = MetaTransactionSendError;
     type Inner = InnerProvider;
     fn inner(&self) -> &Self::Inner {
         (*self).inner()
@@ -245,7 +245,7 @@ impl Eip155MetaTransactionProvider for &Eip155ChainProvider {
 }
 
 impl Eip155MetaTransactionProvider for Eip155ChainProvider {
-    type Error = Eip155ChainProviderMetaTransactionError;
+    type Error = MetaTransactionSendError;
     type Inner = InnerProvider;
 
     fn inner(&self) -> &Self::Inner {
@@ -329,7 +329,7 @@ impl Eip155MetaTransactionProvider for Eip155ChainProvider {
             Err(e) => {
                 // Transaction submission failed - reset nonce to force requery
                 self.nonce_manager.reset_nonce(from_address).await;
-                return Err(Eip155ChainProviderMetaTransactionError::Transport(e));
+                return Err(MetaTransactionSendError::Transport(e));
             }
         };
 
@@ -346,16 +346,14 @@ impl Eip155MetaTransactionProvider for Eip155ChainProvider {
             Err(e) => {
                 // Receipt fetch failed (timeout or other error) - reset nonce to force requery
                 self.nonce_manager.reset_nonce(from_address).await;
-                Err(Eip155ChainProviderMetaTransactionError::PendingTransaction(
-                    e,
-                ))
+                Err(MetaTransactionSendError::PendingTransaction(e))
             }
         }
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum Eip155ChainProviderMetaTransactionError {
+pub enum MetaTransactionSendError {
     #[error(transparent)]
     Transport(#[from] TransportError),
     #[error(transparent)]

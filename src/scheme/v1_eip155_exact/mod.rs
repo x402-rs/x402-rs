@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use alloy_contract::SolCallBuilder;
 use alloy_primitives::{Address, B256, Bytes, TxHash, U256, address, hex};
 use alloy_provider::bindings::IMulticall3;
-use alloy_provider::{MULTICALL3_ADDRESS, MulticallItem, Provider};
+use alloy_provider::{MULTICALL3_ADDRESS, MulticallItem, PendingTransactionError, Provider};
+use alloy_rpc_types_eth::TransactionReceipt;
 use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, sol};
+use alloy_transport::TransportError;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::Instrument;
@@ -15,6 +17,7 @@ pub mod types;
 
 use crate::chain::eip155::{
     Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction,
+    MetaTransactionSendError,
 };
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
@@ -428,7 +431,7 @@ impl SignedMessage {
     pub fn extract(
         payment: &ExactEvmPayment,
         domain: &Eip712Domain,
-    ) -> Result<Self, FacilitatorLocalError> {
+    ) -> Result<Self, StructuredSignatureFormatError> {
         let transfer_with_authorization = TransferWithAuthorization {
             from: payment.from,
             to: payment.to,
@@ -492,8 +495,14 @@ sol! {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum StructuredSignatureFormatError {
+    #[error(transparent)]
+    InvalidEIP6492Format(alloy_sol_types::Error),
+}
+
 impl TryFrom<Bytes> for StructuredSignature {
-    type Error = FacilitatorLocalError;
+    type Error = StructuredSignatureFormatError;
 
     /// Parse raw signature bytes into a `StructuredSignature`.
     ///
@@ -506,11 +515,8 @@ impl TryFrom<Bytes> for StructuredSignature {
         let is_eip6492 = bytes.len() >= 32 && bytes[bytes.len() - 32..] == EIP6492_MAGIC_SUFFIX;
         let signature = if is_eip6492 {
             let body = &bytes[..bytes.len() - 32];
-            let sig6492 = Sig6492::abi_decode_params(body).map_err(|e| {
-                FacilitatorLocalError::ContractCall(format!(
-                    "Failed to decode EIP6492 signature: {e}"
-                ))
-            })?;
+            let sig6492 = Sig6492::abi_decode_params(body)
+                .map_err(|e| StructuredSignatureFormatError::InvalidEIP6492Format(e))?;
             StructuredSignature::EIP6492 {
                 factory: sig6492.factory,
                 factory_calldata: sig6492.factoryCalldata,
@@ -536,7 +542,7 @@ async fn transferWithAuthorization_0<'a, P: Provider>(
     contract: &'a USDC::USDCInstance<P>,
     payment: &ExactEvmPayment,
     signature: Bytes,
-) -> Result<TransferWithAuthorization0Call<&'a P>, FacilitatorLocalError> {
+) -> TransferWithAuthorization0Call<&'a P> {
     let from = payment.from;
     let to = payment.to;
     let value = payment.value;
@@ -552,7 +558,7 @@ async fn transferWithAuthorization_0<'a, P: Provider>(
         nonce,
         signature.clone(),
     );
-    Ok(TransferWithAuthorization0Call {
+    TransferWithAuthorization0Call {
         tx,
         from,
         to,
@@ -562,7 +568,7 @@ async fn transferWithAuthorization_0<'a, P: Provider>(
         nonce,
         signature,
         contract_address: *contract.address(),
-    })
+    }
 }
 
 /// A prepared call to `transferWithAuthorization` (ERC-3009) including all derived fields.
@@ -603,7 +609,7 @@ pub struct TransferWithAuthorization0Call<P> {
 async fn is_contract_deployed<P: Provider>(
     provider: P,
     address: &Address,
-) -> Result<bool, FacilitatorLocalError> {
+) -> Result<bool, TransportError> {
     let bytes = provider
         .get_code_at(*address)
         .into_future()
@@ -611,8 +617,7 @@ async fn is_contract_deployed<P: Provider>(
             address = %address,
             otel.kind = "client",
         ))
-        .await
-        .map_err(|e| FacilitatorLocalError::ContractCall(format!("{e:?}")))?;
+        .await?;
     Ok(!bytes.is_empty())
 }
 
@@ -638,7 +643,7 @@ pub async fn verify_payment<P: Provider>(
             let is_valid_signature_call =
                 validator6492.isValidSigWithSideEffects(payer, hash, original);
             // Prepare the call to simulate transfer the funds
-            let transfer_call = transferWithAuthorization_0(contract, payment, inner).await?;
+            let transfer_call = transferWithAuthorization_0(contract, payment, inner).await;
             // Execute both calls in a single transaction simulation to accommodate for possible smart wallet creation
             let (is_valid_signature_result, transfer_result) = provider
                 .multicall()
@@ -670,7 +675,7 @@ pub async fn verify_payment<P: Provider>(
         }
         StructuredSignature::EIP1271(signature) => {
             // It is EOA or EIP-1271 signature, which we can pass to the transfer simulation
-            let transfer_call = transferWithAuthorization_0(contract, payment, signature).await?;
+            let transfer_call = transferWithAuthorization_0(contract, payment, signature).await;
             transfer_call
                 .tx
                 .call()
@@ -699,10 +704,10 @@ pub async fn settle_payment<P, E>(
     contract: &USDC::USDCInstance<&P::Inner>,
     payment: &ExactEvmPayment,
     eip712_domain: &Eip712Domain,
-) -> Result<TxHash, FacilitatorLocalError>
+) -> Result<TxHash, Eip155ExactError>
 where
     P: Eip155MetaTransactionProvider<Error = E>,
-    FacilitatorLocalError: From<E>,
+    Eip155ExactError: From<E>,
 {
     let signed_message = SignedMessage::extract(payment, eip712_domain)?;
     let payer = payment.from;
@@ -713,8 +718,10 @@ where
             inner,
             original: _,
         } => {
-            let is_contract_deployed = is_contract_deployed(provider.inner(), &payer).await?;
-            let transfer_call = transferWithAuthorization_0(contract, payment, inner).await?;
+            let is_contract_deployed = is_contract_deployed(provider.inner(), &payer)
+                .await
+                .unwrap();
+            let transfer_call = transferWithAuthorization_0(contract, payment, inner).await;
             if is_contract_deployed {
                 // transferWithAuthorization with inner signature
                 Eip155MetaTransactionProvider::send_transaction(
@@ -780,7 +787,7 @@ where
         }
         StructuredSignature::EIP1271(eip1271_signature) => {
             let transfer_call =
-                transferWithAuthorization_0(contract, payment, eip1271_signature).await?;
+                transferWithAuthorization_0(contract, payment, eip1271_signature).await;
             // transferWithAuthorization with eip1271 signature
             Eip155MetaTransactionProvider::send_transaction(
                 &provider,
@@ -820,9 +827,27 @@ where
             tx = %receipt.transaction_hash,
             "transferWithAuthorization_0 failed"
         );
-        Err(FacilitatorLocalError::ContractCall(format!(
-            "Transaction failed: {:?}",
-            receipt
-        )))
+        Err(Eip155ExactError::TransactionReverted(Box::new(receipt)))
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Eip155ExactError {
+    #[error(transparent)]
+    StructuredSignatureFormat(#[from] StructuredSignatureFormatError),
+    #[error(transparent)]
+    Transport(#[from] TransportError),
+    #[error(transparent)]
+    PendingTransaction(#[from] PendingTransactionError),
+    #[error("Transaction reverted: {0:?}")]
+    TransactionReverted(Box<TransactionReceipt>),
+}
+
+impl From<MetaTransactionSendError> for Eip155ExactError {
+    fn from(e: MetaTransactionSendError) -> Self {
+        match e {
+            MetaTransactionSendError::Transport(e) => Self::Transport(e),
+            MetaTransactionSendError::PendingTransaction(e) => Self::PendingTransaction(e),
+        }
     }
 }
