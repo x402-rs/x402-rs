@@ -191,9 +191,10 @@ async fn assert_valid_payment<P: Provider>(
     if payload_chain_id != chain_id {
         return Err(PaymentVerificationError::ChainIdMismatch.into());
     }
-    let requirements_chain_id = ChainId::from_network_name(&requirements.network).map_err(|_| {
-        Eip155ExactError::PaymentVerification(PaymentVerificationError::UnsupportedChain.into())
-    })?;
+    let requirements_chain_id =
+        ChainId::from_network_name(&requirements.network).map_err(|_| {
+            Eip155ExactError::PaymentVerification(PaymentVerificationError::UnsupportedChain.into())
+        })?;
     if requirements_chain_id != chain_id {
         return Err(PaymentVerificationError::ChainIdMismatch.into());
     }
@@ -628,12 +629,16 @@ pub async fn verify_payment<P: Provider>(
                         otel.kind = "client",
                 ))
                 .await?;
-            let is_valid_signature_result =
-                is_valid_signature_result.map_err(|e| PaymentVerificationError::InvalidSignature(e.to_string()))?;
+            let is_valid_signature_result = is_valid_signature_result
+                .map_err(|e| PaymentVerificationError::InvalidSignature(e.to_string()))?;
             if !is_valid_signature_result {
-                return Err(PaymentVerificationError::InvalidSignature("wrong signature".to_string()).into());
+                return Err(PaymentVerificationError::InvalidSignature(
+                    "wrong signature".to_string(),
+                )
+                .into());
             }
-            transfer_result.map_err(|e| PaymentVerificationError::TransactionSimulation(e.to_string()))?;
+            transfer_result
+                .map_err(|e| PaymentVerificationError::TransactionSimulation(e.to_string()))?;
         }
         StructuredSignature::EIP1271(signature) => {
             // It is EOA or EIP-1271 signature, which we can pass to the transfer simulation
@@ -786,7 +791,9 @@ where
             tx = %receipt.transaction_hash,
             "transferWithAuthorization_0 failed"
         );
-        Err(Eip155ExactError::TransactionReverted(receipt.transaction_hash))
+        Err(Eip155ExactError::TransactionReverted(
+            receipt.transaction_hash,
+        ))
     }
 }
 
@@ -812,7 +819,7 @@ impl From<Eip155ExactError> for X402SchemeHandlerError {
             Eip155ExactError::PendingTransaction(_) => Self::OnchainFailure(value.to_string()),
             Eip155ExactError::TransactionReverted(_) => Self::OnchainFailure(value.to_string()),
             Eip155ExactError::ContractCall(_) => Self::OnchainFailure(value.to_string()),
-            Eip155ExactError::PaymentVerification(e) => Self::PaymentVerification(e)
+            Eip155ExactError::PaymentVerification(e) => Self::PaymentVerification(e),
         }
     }
 }
@@ -835,10 +842,18 @@ impl From<MetaTransactionSendError> for Eip155ExactError {
 impl From<MulticallError> for Eip155ExactError {
     fn from(e: MulticallError) -> Self {
         match e {
-            MulticallError::ValueTx => Self::PaymentVerification(PaymentVerificationError::TransactionSimulation(e.to_string())),
-            MulticallError::DecodeError(_) => Self::PaymentVerification(PaymentVerificationError::TransactionSimulation(e.to_string())),
-            MulticallError::NoReturnData => Self::PaymentVerification(PaymentVerificationError::TransactionSimulation(e.to_string())),
-            MulticallError::CallFailed(_) => Self::PaymentVerification(PaymentVerificationError::TransactionSimulation(e.to_string())),
+            MulticallError::ValueTx => Self::PaymentVerification(
+                PaymentVerificationError::TransactionSimulation(e.to_string()),
+            ),
+            MulticallError::DecodeError(_) => Self::PaymentVerification(
+                PaymentVerificationError::TransactionSimulation(e.to_string()),
+            ),
+            MulticallError::NoReturnData => Self::PaymentVerification(
+                PaymentVerificationError::TransactionSimulation(e.to_string()),
+            ),
+            MulticallError::CallFailed(_) => Self::PaymentVerification(
+                PaymentVerificationError::TransactionSimulation(e.to_string()),
+            ),
             MulticallError::TransportError(transport_error) => Self::Transport(transport_error),
         }
     }

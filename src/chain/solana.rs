@@ -1,5 +1,6 @@
 use crate::chain::{ChainId, ChainProviderOps};
 use crate::config::SolanaChainConfig;
+use crate::scheme::X402SchemeHandlerError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_account::Account;
 use solana_client::client_error::{ClientError, ClientErrorKind};
@@ -143,6 +144,12 @@ pub enum SolanaChainProviderError {
 impl From<ClientError> for SolanaChainProviderError {
     fn from(value: ClientError) -> Self {
         SolanaChainProviderError::Transport(value.kind)
+    }
+}
+
+impl From<SolanaChainProviderError> for X402SchemeHandlerError {
+    fn from(value: SolanaChainProviderError) -> Self {
+        Self::OnchainFailure(value.to_string())
     }
 }
 

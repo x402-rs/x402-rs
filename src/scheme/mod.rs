@@ -46,7 +46,7 @@ pub enum X402SchemeHandlerError {
     #[error(transparent)]
     PaymentVerification(#[from] PaymentVerificationError),
     #[error("Onchain error: {0}")]
-    OnchainFailure(String)
+    OnchainFailure(String),
 }
 
 #[derive(Default)]

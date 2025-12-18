@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use crate::chain::solana::SolanaChainProvider;
 use crate::chain::{ChainProvider, ChainProviderOps};
-use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
+use crate::proto::PaymentVerificationError;
 use crate::scheme::v1_eip155_exact::EXACT_SCHEME;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::v1_solana_exact::{
@@ -96,21 +96,19 @@ impl X402SchemeHandler for V2SolanaExactHandler {
 pub async fn verify_transfer(
     provider: &SolanaChainProvider,
     request: &types::VerifyRequest,
-) -> Result<VerifyTransferResult, FacilitatorLocalError> {
+) -> Result<VerifyTransferResult, PaymentVerificationError> {
     let payload = &request.payment_payload;
     let requirements = &request.payment_requirements;
 
     let accepted = &payload.accepted;
     if accepted != requirements {
-        return Err(FacilitatorLocalError::DecodingError(
-            "Accepted requirements do not match payload requirements".to_string(),
-        ));
+        return Err(PaymentVerificationError::AcceptedRequirementsMismatch);
     }
 
     let chain_id = provider.chain_id();
     let payload_chain_id = &accepted.network;
     if payload_chain_id != &chain_id {
-        return Err(FacilitatorLocalError::NetworkMismatch);
+        return Err(PaymentVerificationError::UnsupportedChain);
     }
     let transaction_b64_string = payload.payload.transaction.clone();
     let transfer_requirement = TransferRequirement {

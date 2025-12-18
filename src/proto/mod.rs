@@ -1,10 +1,11 @@
-use crate::chain::ChainId;
-use crate::scheme::SchemeHandlerSlug;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
+
+use crate::chain::ChainId;
+use crate::scheme::SchemeHandlerSlug;
 
 pub mod util;
 pub mod v1;
@@ -168,8 +169,8 @@ pub struct SettleResponse(serde_json::Value);
 
 #[derive(Debug, thiserror::Error)]
 pub enum PaymentVerificationError {
-    #[error(transparent)]
-    InvalidJson(#[from] serde_json::Error),
+    #[error("Decoding failure: {0}")]
+    DecodingFailure(String),
     #[error("Payment amount is invalid with respect to the payment requirements")]
     InvalidPaymentAmount,
     #[error("Onchain balance is not enough to cover the payment amount")]
@@ -182,6 +183,8 @@ pub enum PaymentVerificationError {
     ChainIdMismatch,
     #[error("Payment receiver is invalid with respect to the payment requirements")]
     ReceiverMismatch,
+    #[error("Payment asset is invalid with respect to the payment requirements")]
+    AssetMismatch,
     #[error("{0}")]
     InvalidSignature(String),
     #[error("{0}")]
@@ -190,4 +193,12 @@ pub enum PaymentVerificationError {
     UnsupportedChain,
     #[error("Unsupported scheme")]
     UnsupportedScheme,
+    #[error("Accepted does not match payment requirements")]
+    AcceptedRequirementsMismatch,
+}
+
+impl From<serde_json::Error> for PaymentVerificationError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::DecodingFailure(value.to_string())
+    }
 }

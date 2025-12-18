@@ -1,11 +1,13 @@
 pub mod types;
 
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
+use solana_client::rpc_response::UiTransactionError;
 use solana_commitment_config::CommitmentConfig;
 use solana_compute_budget_interface::ID as ComputeBudgetInstructionId;
 use solana_message::compiled_instruction::CompiledInstruction;
 use solana_pubkey::{Pubkey, pubkey};
 use solana_signature::Signature;
+use solana_transaction::TransactionError;
 use solana_transaction::versioned::VersionedTransaction;
 use std::collections::HashMap;
 use std::error::Error;
@@ -16,6 +18,7 @@ use crate::chain::solana::{Address, SolanaChainProvider, SolanaChainProviderErro
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
+use crate::proto::PaymentVerificationError;
 use crate::scheme::v1_eip155_exact::EXACT_SCHEME;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
@@ -107,6 +110,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
 }
 
 pub struct InstructionInt {
+    index: usize,
     instruction: CompiledInstruction,
     account_keys: Vec<Pubkey>,
 }
@@ -124,11 +128,9 @@ impl InstructionInt {
         self.instruction.data.as_slice()
     }
 
-    pub fn assert_not_empty(&self) -> Result<(), FacilitatorLocalError> {
+    pub fn assert_not_empty(&self) -> Result<(), SolanaExactError> {
         if !self.has_data() || !self.has_accounts() {
-            return Err(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_instructions".to_string(),
-            ));
+            return Err(SolanaExactError::EmptyInstructionAtIndex(self.index));
         }
         Ok(())
     }
@@ -137,19 +139,18 @@ impl InstructionInt {
         *self.instruction.program_id(self.account_keys.as_slice())
     }
 
-    pub fn account(&self, index: usize) -> Result<Pubkey, FacilitatorLocalError> {
-        let account_index = self.instruction.accounts.get(index).cloned().ok_or(
-            FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_instructions".to_string(),
-            ),
-        )?;
+    pub fn account(&self, index: u8) -> Result<Pubkey, SolanaExactError> {
+        let account_index = self
+            .instruction
+            .accounts
+            .get(index as usize)
+            .cloned()
+            .ok_or(SolanaExactError::NoAccountAtIndex(index))?;
         let pubkey = self
             .account_keys
             .get(account_index as usize)
             .cloned()
-            .ok_or(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_instructions".to_string(),
-            ))?;
+            .ok_or(SolanaExactError::NoAccountAtIndex(index))?;
         Ok(pubkey)
     }
 }
@@ -162,19 +163,18 @@ impl TransactionInt {
     pub fn new(transaction: VersionedTransaction) -> Self {
         Self { inner: transaction }
     }
-    pub fn instruction(&self, index: usize) -> Result<InstructionInt, FacilitatorLocalError> {
+    pub fn instruction(&self, index: usize) -> Result<InstructionInt, SolanaExactError> {
         let instruction = self
             .inner
             .message
             .instructions()
             .get(index)
             .cloned()
-            .ok_or(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_instructions".to_string(),
-            ))?;
+            .ok_or(SolanaExactError::NoInstructionAtIndex(index))?;
         let account_keys = self.inner.message.static_account_keys().to_vec();
 
         Ok(InstructionInt {
+            index,
             instruction,
             account_keys,
         })
@@ -194,7 +194,7 @@ impl TransactionInt {
         true
     }
 
-    pub fn sign(self, provider: &SolanaChainProvider) -> Result<Self, FacilitatorLocalError> {
+    pub fn sign(self, provider: &SolanaChainProvider) -> Result<Self, SolanaChainProviderError> {
         let tx = provider.sign(self.inner)?;
         Ok(Self { inner: tx })
     }
@@ -237,14 +237,11 @@ pub struct TransferCheckedInstruction {
 pub fn verify_compute_limit_instruction(
     transaction: &VersionedTransaction,
     instruction_index: usize,
-) -> Result<u32, FacilitatorLocalError> {
+) -> Result<u32, SolanaExactError> {
     let instructions = transaction.message.instructions();
-    let instruction =
-        instructions
-            .get(instruction_index)
-            .ok_or(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_instructions_length".to_string(),
-            ))?;
+    let instruction = instructions
+        .get(instruction_index)
+        .ok_or(SolanaExactError::NoInstructionAtIndex(instruction_index))?;
     let account = instruction.program_id(transaction.message.static_account_keys());
     let data = instruction.data.as_slice();
 
@@ -253,9 +250,7 @@ pub fn verify_compute_limit_instruction(
         || data.first().cloned().unwrap_or(0) != 2
         || data.len() != 5
     {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_compute_limit_instruction".to_string(),
-        ));
+        return Err(SolanaExactError::InvalidComputeLimitInstruction);
     }
 
     // Parse compute unit limit (u32 in little-endian)
@@ -270,32 +265,23 @@ pub fn verify_compute_price_instruction(
     max_compute_unit_price: u64,
     transaction: &VersionedTransaction,
     instruction_index: usize,
-) -> Result<(), FacilitatorLocalError> {
+) -> Result<(), SolanaExactError> {
     let instructions = transaction.message.instructions();
-    let instruction =
-        instructions
-            .get(instruction_index)
-            .ok_or(FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_instructions_compute_price_instruction"
-                    .to_string(),
-            ))?;
+    let instruction = instructions
+        .get(instruction_index)
+        .ok_or(SolanaExactError::NoInstructionAtIndex(instruction_index))?;
     let account = instruction.program_id(transaction.message.static_account_keys());
     let compute_budget = solana_compute_budget_interface::ID;
     let data = instruction.data.as_slice();
     if compute_budget.ne(account) || data.first().cloned().unwrap_or(0) != 3 || data.len() != 9 {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_instructions_compute_price_instruction"
-                .to_string(),
-        ));
+        return Err(SolanaExactError::InvalidComputePriceInstruction);
     }
     // It is ComputeBudgetInstruction definitely by now!
     let mut buf = [0u8; 8];
     buf.copy_from_slice(&data[1..]);
     let microlamports = u64::from_le_bytes(buf);
     if microlamports > max_compute_unit_price {
-        return Err(FacilitatorLocalError::DecodingError(
-            "compute unit price exceeds facilitator maximum".to_string(),
-        ));
+        return Err(SolanaExactError::MaxComputeUnitPriceExceeded);
     }
     Ok(())
 }
@@ -304,7 +290,7 @@ pub fn verify_create_ata_instruction(
     transaction: &VersionedTransaction,
     index: usize,
     transfer_requirement: &TransferRequirement,
-) -> Result<(), FacilitatorLocalError> {
+) -> Result<(), PaymentVerificationError> {
     let tx = TransactionInt::new(transaction.clone());
     let instruction = tx.instruction(index)?;
     instruction.assert_not_empty()?;
@@ -312,25 +298,19 @@ pub fn verify_create_ata_instruction(
     // Verify program ID is the Associated Token Account Program
     let program_id = instruction.program_id();
     if program_id != ATA_PROGRAM_PUBKEY {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_create_ata_instruction".to_string(),
-        ));
+        return Err(SolanaExactError::InvalidCreateATAInstruction.into());
     }
 
     // Verify instruction discriminator
     // The ATA program's Create instruction has discriminator 0 (Create) or 1 (CreateIdempotent)
     let data = instruction.data_slice();
     if data.is_empty() || (data[0] != 0 && data[0] != 1) {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_create_ata_instruction".to_string(),
-        ));
+        return Err(SolanaExactError::InvalidCreateATAInstruction.into());
     }
 
     // Verify account count (must have at least 6 accounts)
     if instruction.instruction.accounts.len() < 6 {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_create_ata_instruction".to_string(),
-        ));
+        return Err(SolanaExactError::InvalidCreateATAInstruction.into());
     }
 
     // Payer = 0
@@ -348,69 +328,60 @@ pub fn verify_create_ata_instruction(
 
     // verify that the ATA is created for the expected payee
     if Address::new(owner) != *transfer_requirement.pay_to {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_payee"
-                .to_string(),
-        ));
+        return Err(PaymentVerificationError::ReceiverMismatch);
     }
     if Address::new(mint) != *transfer_requirement.asset {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_create_ata_instruction_incorrect_asset"
-                .to_string(),
-        ));
+        return Err(PaymentVerificationError::AssetMismatch);
     }
-
     Ok(())
 }
 
 pub async fn verify_transfer(
     provider: &SolanaChainProvider,
     request: &types::VerifyRequest,
-) -> Result<VerifyTransferResult, FacilitatorLocalError> {
+) -> Result<VerifyTransferResult, PaymentVerificationError> {
     let payload = &request.payment_payload;
     let requirements = &request.payment_requirements;
 
     // Assert valid payment START
     let chain_id = provider.chain_id();
-    let payload_chain_id = ChainId::from_network_name(&payload.network)?;
+    let payload_chain_id = ChainId::from_network_name(&payload.network)
+        .map_err(|_| PaymentVerificationError::UnsupportedChain)?;
     if payload_chain_id != chain_id {
-        return Err(FacilitatorLocalError::NetworkMismatch);
+        return Err(PaymentVerificationError::ChainIdMismatch);
     }
-    let requirements_chain_id = ChainId::from_network_name(&requirements.network)?;
+    let requirements_chain_id = ChainId::from_network_name(&requirements.network)
+        .map_err(|_| PaymentVerificationError::UnsupportedChain)?;
     if requirements_chain_id != chain_id {
-        return Err(FacilitatorLocalError::NetworkMismatch);
+        return Err(PaymentVerificationError::ChainIdMismatch);
     }
-    if payload.scheme != requirements.scheme {
-        return Err(FacilitatorLocalError::SchemeMismatch);
-    }
-
     let transaction_b64_string = payload.payload.transaction.clone();
     let transfer_requirement = TransferRequirement {
         pay_to: &requirements.pay_to,
         asset: &requirements.asset,
         amount: requirements.max_amount_required.inner(),
     };
-    verify_transaction(provider, transaction_b64_string, &transfer_requirement).await
+    let result =
+        verify_transaction(provider, transaction_b64_string, &transfer_requirement).await?;
+    Ok(result)
 }
 
 pub async fn verify_transaction(
     provider: &SolanaChainProvider,
     transaction_b64_string: String,
     transfer_requirement: &TransferRequirement<'_>,
-) -> Result<VerifyTransferResult, FacilitatorLocalError> {
+) -> Result<VerifyTransferResult, PaymentVerificationError> {
     let bytes = Base64Bytes::from(transaction_b64_string.as_bytes())
         .decode()
-        .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
+        .map_err(|e| SolanaExactError::TransactionDecoding(e.to_string()))?;
     let transaction = bincode::deserialize::<VersionedTransaction>(bytes.as_slice())
-        .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
+        .map_err(|e| SolanaExactError::TransactionDecoding(e.to_string()))?;
 
     // perform transaction introspection to validate the transaction structure and details
     let instructions = transaction.message.instructions();
     let compute_units = verify_compute_limit_instruction(&transaction, 0)?;
     if compute_units > provider.max_compute_unit_limit() {
-        return Err(FacilitatorLocalError::DecodingError(
-            "compute unit limit exceeds facilitator maximum".to_string(),
-        ));
+        return Err(SolanaExactError::MaxComputeUnitLimitExceeded.into());
     }
     tracing::debug!(compute_units = compute_units, "Verified compute unit limit");
     verify_compute_price_instruction(provider.max_compute_unit_price(), &transaction, 1)?;
@@ -424,9 +395,7 @@ pub async fn verify_transaction(
         verify_create_ata_instruction(&transaction, 2, transfer_requirement)?;
         verify_transfer_instruction(provider, &transaction, 3, transfer_requirement, true).await?
     } else {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_instructions_count".to_string(),
-        ));
+        return Err(SolanaExactError::InvalidTransactionInstructionsCount.into());
     };
 
     // Rule 2: Fee payer safety check
@@ -439,14 +408,10 @@ pub async fn verify_transaction(
                 .message
                 .static_account_keys()
                 .get(*account_idx as usize)
-                .ok_or(FacilitatorLocalError::DecodingError(
-                    "invalid_account_index".to_string(),
-                ))?;
+                .ok_or(SolanaExactError::NoAccountAtIndex(*account_idx))?;
 
             if *account == fee_payer_pubkey {
-                return Err(FacilitatorLocalError::DecodingError(
-                        "invalid_exact_svm_payload_transaction_fee_payer_included_in_instruction_accounts".to_string(),
-                    ));
+                return Err(SolanaExactError::FeePayerIncludedInInstructionAccounts.into());
             }
         }
     }
@@ -480,30 +445,21 @@ pub async fn verify_transfer_instruction(
     instruction_index: usize,
     transfer_requirement: &TransferRequirement<'_>,
     has_dest_ata: bool,
-) -> Result<TransferCheckedInstruction, FacilitatorLocalError> {
+) -> Result<TransferCheckedInstruction, PaymentVerificationError> {
     let tx = TransactionInt::new(transaction.clone());
     let instruction = tx.instruction(instruction_index)?;
     instruction.assert_not_empty()?;
     let program_id = instruction.program_id();
     let transfer_checked_instruction = if spl_token::ID.eq(&program_id) {
-        let token_instruction = spl_token::instruction::TokenInstruction::unpack(
-            instruction.data_slice(),
-        )
-        .map_err(|_| {
-            FacilitatorLocalError::DecodingError(
-                "invalid_exact_svm_payload_transaction_instructions".to_string(),
-            )
-        })?;
+        let token_instruction =
+            spl_token::instruction::TokenInstruction::unpack(instruction.data_slice())
+                .map_err(|_| SolanaExactError::InvalidTokenInstruction)?;
         let amount = match token_instruction {
             spl_token::instruction::TokenInstruction::TransferChecked {
                 amount,
                 decimals: _,
             } => amount,
-            _ => {
-                return Err(FacilitatorLocalError::DecodingError(
-                    "invalid_exact_svm_payload_transaction_instructions".to_string(),
-                ));
-            }
+            _ => return Err(SolanaExactError::InvalidTokenInstruction.into()),
         };
         // Source = 0
         let source = instruction.account(0)?;
@@ -523,21 +479,13 @@ pub async fn verify_transfer_instruction(
     } else if spl_token_2022::ID.eq(&program_id) {
         let token_instruction =
             spl_token_2022::instruction::TokenInstruction::unpack(instruction.data_slice())
-                .map_err(|_| {
-                    FacilitatorLocalError::DecodingError(
-                        "invalid_exact_svm_payload_transaction_instructions".to_string(),
-                    )
-                })?;
+                .map_err(|_| SolanaExactError::InvalidTokenInstruction)?;
         let amount = match token_instruction {
             spl_token_2022::instruction::TokenInstruction::TransferChecked {
                 amount,
                 decimals: _,
             } => amount,
-            _ => {
-                return Err(FacilitatorLocalError::DecodingError(
-                    "invalid_exact_svm_payload_transaction_instructions".to_string(),
-                ));
-            }
+            _ => return Err(SolanaExactError::InvalidTokenInstruction.into()),
         };
         // Source = 0
         let source = instruction.account(0)?;
@@ -555,17 +503,13 @@ pub async fn verify_transfer_instruction(
             token_program: spl_token_2022::ID,
         }
     } else {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_not_a_transfer_instruction".to_string(),
-        ));
+        return Err(SolanaExactError::InvalidTokenInstruction.into());
     };
 
     // Verify that the fee payer is not transferring funds (not the authority)
     let fee_payer_pubkey = provider.pubkey();
     if transfer_checked_instruction.authority == fee_payer_pubkey {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_fee_payer_transferring_funds".to_string(),
-        ));
+        return Err(SolanaExactError::FeePayerTransferringFunds.into());
     }
 
     let token_program = transfer_checked_instruction.token_program;
@@ -579,30 +523,22 @@ pub async fn verify_transfer_instruction(
         &ATA_PROGRAM_PUBKEY,
     );
     if transfer_checked_instruction.destination != ata {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_transfer_to_incorrect_ata".to_string(),
-        ));
+        return Err(PaymentVerificationError::ReceiverMismatch.into());
     }
     let accounts = provider
         .get_multiple_accounts(&[transfer_checked_instruction.source, ata])
         .await?;
     let is_sender_missing = accounts.first().cloned().is_none_or(|a| a.is_none());
     if is_sender_missing {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_sender_ata_not_found".to_string(),
-        ));
+        return Err(SolanaExactError::MissingSenderAccount.into());
     }
     let is_receiver_missing = accounts.get(1).cloned().is_none_or(|a| a.is_none());
     if is_receiver_missing && !has_dest_ata {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_receiver_ata_not_found".to_string(),
-        ));
+        return Err(PaymentVerificationError::ReceiverMismatch.into());
     }
     let instruction_amount = transfer_checked_instruction.amount;
     if instruction_amount != transfer_requirement.amount {
-        return Err(FacilitatorLocalError::DecodingError(
-            "invalid_exact_svm_payload_transaction_amount_mismatch".to_string(),
-        ));
+        return Err(PaymentVerificationError::InvalidPaymentAmount);
     }
     Ok(transfer_checked_instruction)
 }
@@ -610,17 +546,80 @@ pub async fn verify_transfer_instruction(
 pub async fn settle_transaction(
     provider: &SolanaChainProvider,
     verification: VerifyTransferResult,
-) -> Result<Signature, FacilitatorLocalError> {
+) -> Result<Signature, SolanaChainProviderError> {
     let tx = TransactionInt::new(verification.transaction).sign(provider)?;
     // Verify if fully signed
     if !tx.is_fully_signed() {
         tracing::event!(Level::WARN, status = "failed", "undersigned transaction");
-        return Err(FacilitatorLocalError::DecodingError(
-            "unexpected_settle_error".to_string(),
+        return Err(SolanaChainProviderError::InvalidTransaction(
+            UiTransactionError::from(TransactionError::SignatureFailure),
         ));
     }
     let tx_sig = tx
         .send_and_confirm(provider, CommitmentConfig::confirmed())
         .await?;
     Ok(tx_sig)
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SolanaExactError {
+    #[error("Can not decode transaction: {0}")]
+    TransactionDecoding(String),
+    #[error("Compute unit limit exceeds facilitator maximum")]
+    MaxComputeUnitLimitExceeded,
+    #[error("Compute unit price exceeds facilitator maximum")]
+    MaxComputeUnitPriceExceeded,
+    #[error("Invalid transaction instructions count")]
+    InvalidTransactionInstructionsCount,
+    #[error("Fee payer included in instruction accounts")]
+    FeePayerIncludedInInstructionAccounts,
+    #[error("Fee payer found transferring funds")]
+    FeePayerTransferringFunds,
+    #[error("Instruction at index {0} not found")]
+    NoInstructionAtIndex(usize),
+    #[error("No account at index {0}")]
+    NoAccountAtIndex(u8),
+    #[error("Empty instruction at index {0}")]
+    EmptyInstructionAtIndex(usize),
+    #[error("Invalid compute limit instruction")]
+    InvalidComputeLimitInstruction,
+    #[error("Invalid compute price instruction")]
+    InvalidComputePriceInstruction,
+    #[error("Invalid Create ATA instruction")]
+    InvalidCreateATAInstruction,
+    #[error("Invalid token instruction")]
+    InvalidTokenInstruction,
+    #[error("Missing sender account in transaction")]
+    MissingSenderAccount,
+}
+
+impl From<SolanaExactError> for PaymentVerificationError {
+    fn from(e: SolanaExactError) -> Self {
+        match e {
+            SolanaExactError::TransactionDecoding(_) => {
+                PaymentVerificationError::DecodingFailure(e.to_string())
+            }
+            SolanaExactError::InvalidCreateATAInstruction
+            | SolanaExactError::MaxComputeUnitLimitExceeded
+            | SolanaExactError::MaxComputeUnitPriceExceeded
+            | SolanaExactError::InvalidTransactionInstructionsCount
+            | SolanaExactError::FeePayerIncludedInInstructionAccounts
+            | SolanaExactError::NoInstructionAtIndex(_)
+            | SolanaExactError::InvalidComputeLimitInstruction
+            | SolanaExactError::NoAccountAtIndex(_)
+            | SolanaExactError::InvalidTokenInstruction
+            | SolanaExactError::EmptyInstructionAtIndex(_)
+            | SolanaExactError::FeePayerTransferringFunds
+            | SolanaExactError::MissingSenderAccount
+            | SolanaExactError::InvalidComputePriceInstruction => {
+                PaymentVerificationError::TransactionSimulation(e.to_string())
+            }
+        }
+    }
+}
+
+impl From<SolanaChainProviderError> for PaymentVerificationError {
+    fn from(value: SolanaChainProviderError) -> Self {
+        Self::TransactionSimulation(value.to_string())
+    }
 }
