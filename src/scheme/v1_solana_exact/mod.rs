@@ -18,7 +18,7 @@ use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
 use crate::scheme::v1_eip155_exact::EXACT_SCHEME;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
-use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
+use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 use crate::util::Base64Bytes;
 
 pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -53,7 +53,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
-    ) -> Result<proto::VerifyResponse, FacilitatorLocalError> {
+    ) -> Result<proto::VerifyResponse, X402SchemeHandlerError> {
         let request = types::VerifyRequest::from_proto(request.clone())?;
         let verification = verify_transfer(&self.provider, &request).await?;
         Ok(proto::v1::VerifyResponse::valid(verification.payer.to_string()).into())
@@ -62,7 +62,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
     async fn settle(
         &self,
         request: &proto::SettleRequest,
-    ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
+    ) -> Result<proto::SettleResponse, X402SchemeHandlerError> {
         let request = types::SettleRequest::from_proto(request.clone())?;
         let verification = verify_transfer(&self.provider, &request).await?;
         let payer = verification.payer.to_string();
@@ -75,7 +75,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
         .into())
     }
 
-    async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeHandlerError> {
         let chain_id = self.provider.chain_id();
         let kinds: Vec<proto::SupportedPaymentKind> = {
             let mut kinds = Vec::with_capacity(1);

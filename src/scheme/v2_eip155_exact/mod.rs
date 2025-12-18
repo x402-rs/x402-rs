@@ -18,7 +18,7 @@ use crate::scheme::v1_eip155_exact::{
     EXACT_SCHEME, ExactEvmPayment, USDC, assert_domain, assert_enough_balance, assert_enough_value,
     assert_time, settle_payment, verify_payment,
 };
-use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
+use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 
 pub struct V2Eip155Exact;
 
@@ -50,7 +50,7 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
-    ) -> Result<proto::VerifyResponse, FacilitatorLocalError> {
+    ) -> Result<proto::VerifyResponse, X402SchemeHandlerError> {
         let request = types::VerifyRequest::from_proto(request.clone())?;
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
@@ -70,7 +70,7 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
     async fn settle(
         &self,
         request: &proto::SettleRequest,
-    ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
+    ) -> Result<proto::SettleResponse, X402SchemeHandlerError> {
         let request = types::SettleRequest::from_proto(request.clone())?;
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
@@ -93,7 +93,7 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
         .into())
     }
 
-    async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeHandlerError> {
         let chain_id = self.provider.chain_id();
         let kinds = vec![proto::SupportedPaymentKind {
             x402_version: proto::X402Version::v2().into(),

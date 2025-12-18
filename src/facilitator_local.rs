@@ -14,8 +14,8 @@ use crate::chain::eip155::MetaTransactionSendError;
 use crate::chain::solana::SolanaChainProviderError;
 use crate::facilitator::Facilitator;
 use crate::proto;
-use crate::proto::{PaymentVerificationError, VerifyRequestFormatError};
-use crate::scheme::SchemeRegistry;
+use crate::proto::PaymentVerificationError;
+use crate::scheme::{SchemeRegistry, X402SchemeHandlerError};
 use crate::scheme::v1_eip155_exact::{Eip155ExactError, StructuredSignatureFormatError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -50,7 +50,8 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
             .scheme_handler_slug()
             .and_then(|slug| self.handlers.by_slug(&slug))
             .ok_or(FacilitatorLocalError::UnsupportedNetwork)?;
-        handler.verify(request).await
+        let response = handler.verify(request).await?; // FIXME ERRORS
+        Ok(response)
     }
 
     async fn settle(
@@ -61,7 +62,8 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
             .scheme_handler_slug()
             .and_then(|slug| self.handlers.by_slug(&slug))
             .ok_or(FacilitatorLocalError::UnsupportedNetwork)?;
-        handler.settle(request).await
+        let response = handler.settle(request).await?; // FIXME ERRORS
+        Ok(response)
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
@@ -139,13 +141,6 @@ impl From<SolanaChainProviderError> for FacilitatorLocalError {
     }
 }
 
-impl From<VerifyRequestFormatError> for FacilitatorLocalError {
-    fn from(value: VerifyRequestFormatError) -> Self {
-        // TODO ERRORS
-        FacilitatorLocalError::DecodingError(value.to_string())
-    }
-}
-
 impl From<StructuredSignatureFormatError> for FacilitatorLocalError {
     fn from(value: StructuredSignatureFormatError) -> Self {
         // TODO ERRORS
@@ -162,6 +157,13 @@ impl From<Eip155ExactError> for FacilitatorLocalError {
 
 impl From<PaymentVerificationError> for FacilitatorLocalError {
     fn from(value: PaymentVerificationError) -> Self {
+        // TODO ERRORS
+        FacilitatorLocalError::DecodingError(value.to_string())
+    }
+}
+
+impl From<X402SchemeHandlerError> for FacilitatorLocalError {
+    fn from(value: X402SchemeHandlerError) -> Self {
         // TODO ERRORS
         FacilitatorLocalError::DecodingError(value.to_string())
     }

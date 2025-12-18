@@ -253,7 +253,7 @@ where
 {
     pub fn from_proto(
         request: proto::VerifyRequest,
-    ) -> Result<Self, proto::VerifyRequestFormatError> {
+    ) -> Result<Self, proto::PaymentVerificationError> {
         let deserialized: Self = serde_json::from_value(request.into_json())?;
         Ok(deserialized)
     }

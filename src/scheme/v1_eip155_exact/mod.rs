@@ -6,7 +6,6 @@ use alloy_provider::bindings::IMulticall3;
 use alloy_provider::{
     MULTICALL3_ADDRESS, MulticallError, MulticallItem, PendingTransactionError, Provider,
 };
-use alloy_rpc_types_eth::TransactionReceipt;
 use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, sol};
 use alloy_transport::TransportError;
 use serde::{Deserialize, Serialize};
@@ -21,12 +20,11 @@ use crate::chain::eip155::{
     Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction,
     MetaTransactionSendError,
 };
-use crate::chain::{ChainId, ChainIdFromNetworkNameError, ChainProvider, ChainProviderOps};
-use crate::facilitator_local::FacilitatorLocalError;
+use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::proto;
 use crate::proto::{PaymentVerificationError, v1};
 use crate::scheme::v1_eip155_exact::types::PaymentRequirementsExtra;
-use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
+use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 use crate::timestamp::UnixTimestamp;
 
 pub const EXACT_SCHEME: types::ExactScheme = types::ExactScheme::Exact;
@@ -65,7 +63,7 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
-    ) -> Result<proto::VerifyResponse, FacilitatorLocalError> {
+    ) -> Result<proto::VerifyResponse, X402SchemeHandlerError> {
         let request = types::VerifyRequest::from_proto(request.clone())?;
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
@@ -86,7 +84,7 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
     async fn settle(
         &self,
         request: &proto::SettleRequest,
-    ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
+    ) -> Result<proto::SettleResponse, X402SchemeHandlerError> {
         let request = types::SettleRequest::from_proto(request.clone())?;
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
@@ -108,7 +106,7 @@ impl X402SchemeHandler for V1Eip155ExactHandler {
         .into())
     }
 
-    async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeHandlerError> {
         let chain_id = self.provider.chain_id();
         let kinds = {
             let mut kinds = Vec::with_capacity(1);
@@ -187,11 +185,15 @@ async fn assert_valid_payment<P: Provider>(
     requirements: &types::PaymentRequirements,
 ) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
     let chain_id: ChainId = chain.into();
-    let payload_chain_id = ChainId::from_network_name(&payload.network)?;
+    let payload_chain_id = ChainId::from_network_name(&payload.network).map_err(|_| {
+        Eip155ExactError::PaymentVerification(PaymentVerificationError::UnsupportedChain.into())
+    })?;
     if payload_chain_id != chain_id {
         return Err(PaymentVerificationError::ChainIdMismatch.into());
     }
-    let requirements_chain_id = ChainId::from_network_name(&requirements.network)?;
+    let requirements_chain_id = ChainId::from_network_name(&requirements.network).map_err(|_| {
+        Eip155ExactError::PaymentVerification(PaymentVerificationError::UnsupportedChain.into())
+    })?;
     if requirements_chain_id != chain_id {
         return Err(PaymentVerificationError::ChainIdMismatch.into());
     }
@@ -627,11 +629,11 @@ pub async fn verify_payment<P: Provider>(
                 ))
                 .await?;
             let is_valid_signature_result =
-                is_valid_signature_result.map_err(|_| Eip155ExactError::InvalidSignature)?;
+                is_valid_signature_result.map_err(|e| PaymentVerificationError::InvalidSignature(e.to_string()))?;
             if !is_valid_signature_result {
-                return Err(Eip155ExactError::InvalidSignature);
+                return Err(PaymentVerificationError::InvalidSignature("wrong signature".to_string()).into());
             }
-            transfer_result.map_err(|_| Eip155ExactError::TransferSimulation)?;
+            transfer_result.map_err(|e| PaymentVerificationError::TransactionSimulation(e.to_string()))?;
         }
         StructuredSignature::EIP1271(signature) => {
             // It is EOA or EIP-1271 signature, which we can pass to the transfer simulation
@@ -784,30 +786,41 @@ where
             tx = %receipt.transaction_hash,
             "transferWithAuthorization_0 failed"
         );
-        Err(Eip155ExactError::TransactionReverted(Box::new(receipt)))
+        Err(Eip155ExactError::TransactionReverted(receipt.transaction_hash))
     }
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum Eip155ExactError {
     #[error(transparent)]
-    StructuredSignatureFormat(#[from] StructuredSignatureFormatError),
+    Transport(#[from] TransportError),
     #[error(transparent)]
-    Transport(#[from] TransportError), // TODO This is weird - does it happen before or after tx got sent?
-    #[error(transparent)]
-    PendingTransaction(#[from] PendingTransactionError), // TODO This is weird - does it happen before or after tx got sent?
-    #[error("Transaction reverted: {0:?}")]
-    TransactionReverted(Box<TransactionReceipt>),
-    #[error("Transfer simulation failed")]
-    TransferSimulation,
-    #[error("Invalid signature")]
-    InvalidSignature,
+    PendingTransaction(#[from] PendingTransactionError),
+    #[error("Transaction {0} reverted")]
+    TransactionReverted(TxHash),
     #[error("Contract call failed: {0}")]
     ContractCall(String),
     #[error(transparent)]
     PaymentVerification(#[from] PaymentVerificationError),
-    #[error(transparent)]
-    UnsupportedNetwork(#[from] ChainIdFromNetworkNameError)
+}
+
+// FIXME Should we get back to X402SchemeHandlerError ??
+impl From<Eip155ExactError> for X402SchemeHandlerError {
+    fn from(value: Eip155ExactError) -> Self {
+        match value {
+            Eip155ExactError::Transport(_) => Self::OnchainFailure(value.to_string()),
+            Eip155ExactError::PendingTransaction(_) => Self::OnchainFailure(value.to_string()),
+            Eip155ExactError::TransactionReverted(_) => Self::OnchainFailure(value.to_string()),
+            Eip155ExactError::ContractCall(_) => Self::OnchainFailure(value.to_string()),
+            Eip155ExactError::PaymentVerification(e) => Self::PaymentVerification(e)
+        }
+    }
+}
+
+impl From<StructuredSignatureFormatError> for Eip155ExactError {
+    fn from(e: StructuredSignatureFormatError) -> Self {
+        Self::PaymentVerification(PaymentVerificationError::InvalidSignature(e.to_string()))
+    }
 }
 
 impl From<MetaTransactionSendError> for Eip155ExactError {
@@ -822,10 +835,10 @@ impl From<MetaTransactionSendError> for Eip155ExactError {
 impl From<MulticallError> for Eip155ExactError {
     fn from(e: MulticallError) -> Self {
         match e {
-            MulticallError::ValueTx => Self::TransferSimulation,
-            MulticallError::DecodeError(_) => Self::TransferSimulation,
-            MulticallError::NoReturnData => Self::TransferSimulation,
-            MulticallError::CallFailed(_) => Self::TransferSimulation,
+            MulticallError::ValueTx => Self::PaymentVerification(PaymentVerificationError::TransactionSimulation(e.to_string())),
+            MulticallError::DecodeError(_) => Self::PaymentVerification(PaymentVerificationError::TransactionSimulation(e.to_string())),
+            MulticallError::NoReturnData => Self::PaymentVerification(PaymentVerificationError::TransactionSimulation(e.to_string())),
+            MulticallError::CallFailed(_) => Self::PaymentVerification(PaymentVerificationError::TransactionSimulation(e.to_string())),
             MulticallError::TransportError(transport_error) => Self::Transport(transport_error),
         }
     }

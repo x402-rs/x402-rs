@@ -13,8 +13,8 @@ use std::str::FromStr;
 
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
 use crate::config::SchemeConfig;
-use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
+use crate::proto::PaymentVerificationError;
 use crate::scheme::v1_solana_exact::V1SolanaExact;
 use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_solana_exact::V2SolanaExact;
@@ -24,12 +24,12 @@ pub trait X402SchemeHandler: Send + Sync {
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
-    ) -> Result<proto::VerifyResponse, FacilitatorLocalError>;
+    ) -> Result<proto::VerifyResponse, X402SchemeHandlerError>;
     async fn settle(
         &self,
         request: &proto::SettleRequest,
-    ) -> Result<proto::SettleResponse, FacilitatorLocalError>;
-    async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError>;
+    ) -> Result<proto::SettleResponse, X402SchemeHandlerError>;
+    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeHandlerError>;
 }
 
 pub trait X402SchemeBlueprint {
@@ -39,6 +39,14 @@ pub trait X402SchemeBlueprint {
         provider: ChainProvider,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn std::error::Error>>;
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum X402SchemeHandlerError {
+    #[error(transparent)]
+    PaymentVerification(#[from] PaymentVerificationError),
+    #[error("Onchain error: {0}")]
+    OnchainFailure(String)
 }
 
 #[derive(Default)]

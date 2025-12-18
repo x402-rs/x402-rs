@@ -13,7 +13,7 @@ use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::v1_solana_exact::{
     TransferRequirement, VerifyTransferResult, settle_transaction, verify_transaction,
 };
-use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler};
+use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 
 pub struct V2SolanaExact;
 
@@ -45,7 +45,7 @@ impl X402SchemeHandler for V2SolanaExactHandler {
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
-    ) -> Result<proto::VerifyResponse, FacilitatorLocalError> {
+    ) -> Result<proto::VerifyResponse, X402SchemeHandlerError> {
         let request = types::VerifyRequest::from_proto(request.clone())?;
         let verification = verify_transfer(&self.provider, &request).await?;
         Ok(proto::v2::VerifyResponse::valid(verification.payer.to_string()).into())
@@ -54,7 +54,7 @@ impl X402SchemeHandler for V2SolanaExactHandler {
     async fn settle(
         &self,
         request: &proto::SettleRequest,
-    ) -> Result<proto::SettleResponse, FacilitatorLocalError> {
+    ) -> Result<proto::SettleResponse, X402SchemeHandlerError> {
         let request = types::SettleRequest::from_proto(request.clone())?;
         let verification = verify_transfer(&self.provider, &request).await?;
         let payer = verification.payer.to_string();
@@ -67,7 +67,7 @@ impl X402SchemeHandler for V2SolanaExactHandler {
         .into())
     }
 
-    async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeHandlerError> {
         let chain_id = self.provider.chain_id();
         let kinds: Vec<proto::SupportedPaymentKind> = {
             let fee_payer = self.provider.fee_payer();
