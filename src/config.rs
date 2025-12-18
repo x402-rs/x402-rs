@@ -256,7 +256,7 @@ impl FromStr for EvmPrivateKey {
 ///   ]
 /// }
 /// ```
-pub type EvmSignersConfig = Vec<LiteralOrEnv<EvmPrivateKey>>;
+pub type Eip155SignersConfig = Vec<LiteralOrEnv<EvmPrivateKey>>;
 
 // ============================================================================
 // Solana Private Key
@@ -353,7 +353,7 @@ impl Deref for SolanaSignerConfig {
 #[derive(Debug, Clone)]
 pub struct Eip155ChainConfig {
     chain_reference: eip155::Eip155ChainReference,
-    inner: EvmChainConfigInner,
+    inner: Eip155ChainConfigInner,
 }
 
 impl Eip155ChainConfig {
@@ -369,7 +369,7 @@ impl Eip155ChainConfig {
     pub fn receipt_timeout_secs(&self) -> u64 {
         self.inner.receipt_timeout_secs
     }
-    pub fn signers(&self) -> &EvmSignersConfig {
+    pub fn signers(&self) -> &Eip155SignersConfig {
         &self.inner.signers
     }
     pub fn rpc(&self) -> &Vec<RpcConfig> {
@@ -409,7 +409,7 @@ impl SolanaChainConfig {
 
 /// Configuration specific to EVM-compatible chains.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EvmChainConfigInner {
+pub struct Eip155ChainConfigInner {
     /// Whether the chain supports EIP-1559 gas pricing.
     #[serde(default)]
     pub eip1559: bool,
@@ -418,7 +418,7 @@ pub struct EvmChainConfigInner {
     pub flashblocks: bool,
     /// Signer configuration for this chain (required).
     /// Array of private keys (hex format) or env var references.
-    pub signers: EvmSignersConfig,
+    pub signers: Eip155SignersConfig,
     /// RPC provider configuration for this chain (required).
     pub rpc: Vec<RpcConfig>,
     /// How long to wait till the transaction receipt is available (optional)
@@ -515,7 +515,7 @@ mod chains_serde {
                     let namespace = chain_id.namespace();
                     let config = match namespace {
                         eip155::EIP155_NAMESPACE => {
-                            let inner: EvmChainConfigInner = access.next_value()?;
+                            let inner: Eip155ChainConfigInner = access.next_value()?;
                             let config = Eip155ChainConfig {
                                 chain_reference: chain_id
                                     .try_into()
