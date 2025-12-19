@@ -1,5 +1,7 @@
 # x402-reqwest-example
 
+> 🔧 **Protocol v2 Update Coming** — This example is being updated for x402 protocol v2. Stay tuned! For v1 examples, see the `protocol-x402-v1` branch.
+
 An example client that uses [`x402-reqwest`](https://crates.io/crates/x402-reqwest) to pay for HTTP requests using the x402 protocol.
 
 This small demo shows how to configure a reqwest client to:

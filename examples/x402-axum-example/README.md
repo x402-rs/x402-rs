@@ -1,5 +1,7 @@
 # x402-axum-example
 
+> 🔧 **Protocol v2 Update Coming** — This example is being updated for x402 protocol v2. Stay tuned! For v1 examples, see the `protocol-x402-v1` branch.
+
 An example Axum server demonstrating how to protect routes using the [`x402-axum`](https://crates.io/crates/x402-axum) crate
 and enforce payments using the [x402 protocol](https://www.x402.org).
 

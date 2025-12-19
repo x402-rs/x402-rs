@@ -3,6 +3,8 @@
 [![Crates.io](https://img.shields.io/crates/v/x402-axum.svg)](https://crates.io/crates/x402-axum)
 [![Docs.rs](https://docs.rs/x402-axum/badge.svg)](https://docs.rs/x402-axum)
 
+> 🔧 **Protocol v2 Update Coming** — This crate is being updated to support x402 protocol v2 with the new multi-chain, multi-scheme architecture. The update is on its way! For v1 support, see the `protocol-x402-v1` branch.
+
 Axum middleware for protecting routes with [x402 protocol](https://www.x402.org) payments.
 
 This crate provides a drop-in `tower::Layer` that intercepts incoming requests,

@@ -6,6 +6,8 @@
 
 > A Rust-based implementation of the x402 protocol with support for protocol v1 and v2.
 
+> 🚀 **x402 Protocol v2** — This is the main branch with x402 protocol v2 support, featuring a ground-up rethinking of how we accommodate various chains and payment schemes. The core facilitator is fully functional and ready for use. The `x402-axum` and `x402-reqwest` crates are being updated to leverage the new multi-chain, multi-scheme architecture and will be available soon. For protocol v1, see the `protocol-x402-v1` branch.
+
 This repository provides:
 
 - `x402-rs` (current crate):
@@ -361,6 +363,8 @@ The service reads configuration from a JSON file (`config.json` by default) or v
 | `slug` | string | ✅ | - | Scheme identifier: `v{version}:{namespace}:{name}` |
 | `chains` | string | ✅ | - | Chain pattern: `eip155:*`, `solana:*`, or specific chain ID |
 | `config` | object | ❌ | - | Scheme-specific configuration |
+
+**Important:** Schemes must be explicitly listed in the `schemes` array to be enabled. If a scheme is not in the configuration, it will not be available for payment verification or settlement.
 
 **Available schemes:**
 - `v1:eip155:exact` - ERC-3009 transferWithAuthorization for EVM chains (protocol v1)
