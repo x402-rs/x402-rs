@@ -546,7 +546,7 @@ impl TryFrom<Bytes> for StructuredSignature {
 }
 
 pub struct TransferWithAuthorization0Call<P>(
-    pub TransferWithAuthorizationCall<P, IEIP3009::transferWithAuthorization_0Call>,
+    pub TransferWithAuthorizationCall<P, IEIP3009::transferWithAuthorization_0Call, Bytes>,
 );
 
 impl<'a, P: Provider> TransferWithAuthorization0Call<&'a P> {
@@ -592,14 +592,62 @@ impl<'a, P: Provider> TransferWithAuthorization0Call<&'a P> {
 }
 
 pub struct TransferWithAuthorization1Call<P>(
-    pub TransferWithAuthorizationCall<P, IEIP3009::transferWithAuthorization_1Call>,
+    pub TransferWithAuthorizationCall<P, IEIP3009::transferWithAuthorization_1Call, Signature>,
 );
+
+impl<'a, P: Provider> TransferWithAuthorization1Call<&'a P> {
+    /// Constructs a full `transferWithAuthorization` call for a verified payment payload
+    /// using split signature components (v, r, s).
+    ///
+    /// This function prepares the transaction builder with gas pricing adapted to the network's
+    /// capabilities (EIP-1559 or legacy) and packages it together with signature metadata
+    /// into a [`TransferWithAuthorization1Call`] structure.
+    ///
+    /// This function does not perform any validation — it assumes inputs are already checked.
+    pub fn new(
+        contract: &'a IEIP3009::IEIP3009Instance<P>,
+        payment: &ExactEvmPayment,
+        signature: Signature,
+    ) -> Self {
+        let from = payment.from;
+        let to = payment.to;
+        let value = payment.value;
+        let valid_after = U256::from(payment.valid_after.as_secs());
+        let valid_before = U256::from(payment.valid_before.as_secs());
+        let nonce = payment.nonce;
+        let v = 27 + (signature.v() as u8);
+        let r = B256::from(signature.r());
+        let s = B256::from(signature.s());
+        let tx = contract.transferWithAuthorization_1(
+            from,
+            to,
+            value,
+            valid_after,
+            valid_before,
+            nonce,
+            v,
+            r,
+            s,
+        );
+        TransferWithAuthorization1Call(TransferWithAuthorizationCall {
+            tx,
+            from,
+            to,
+            value,
+            valid_after,
+            valid_before,
+            nonce,
+            signature,
+            contract_address: *contract.address(),
+        })
+    }
+}
 
 /// A prepared call to `transferWithAuthorization` (ERC-3009) including all derived fields.
 ///
 /// This struct wraps the assembled call builder, making it reusable across verification
 /// (`.call()`) and settlement (`.send()`) flows, along with context useful for tracing/logging.
-pub struct TransferWithAuthorizationCall<P, TCall> {
+pub struct TransferWithAuthorizationCall<P, TCall, TSignature> {
     /// The prepared call builder that can be `.call()`ed or `.send()`ed.
     pub tx: SolCallBuilder<P, TCall>,
     /// The sender (`from`) address for the authorization.
@@ -615,7 +663,7 @@ pub struct TransferWithAuthorizationCall<P, TCall> {
     /// 32-byte authorization nonce (prevents replay).
     pub nonce: B256,
     /// EIP-712 signature for the transfer authorization.
-    pub signature: Bytes,
+    pub signature: TSignature,
     /// Address of the token contract used for this transfer.
     pub contract_address: Address,
 }
@@ -694,7 +742,7 @@ pub async fn verify_payment<P: Provider>(
                 .map_err(|e| PaymentVerificationError::TransactionSimulation(e.to_string()))?;
         }
         StructuredSignature::EIP1271(signature) => {
-            // It is EOA or EIP-1271 signature, which we can pass to the transfer simulation
+            // It is EIP-1271 signature, which we can pass to the transfer simulation
             let transfer_call = TransferWithAuthorization0Call::new(contract, payment, signature);
             let transfer_call = transfer_call.0;
             transfer_call
@@ -714,8 +762,26 @@ pub async fn verify_payment<P: Provider>(
                 ))
                 .await?;
         }
-        StructuredSignature::EOA(_) => {
-            todo!("EOA")
+        StructuredSignature::EOA(signature) => {
+            // It is EOA signature, which we can pass to the transfer simulation of (r,s,v)-based transferWithAuthorization function
+            let transfer_call = TransferWithAuthorization1Call::new(contract, payment, signature);
+            let transfer_call = transfer_call.0;
+            transfer_call
+                .tx
+                .call()
+                .into_future()
+                .instrument(tracing::info_span!("call_transferWithAuthorization_1",
+                        from = %transfer_call.from,
+                        to = %transfer_call.to,
+                        value = %transfer_call.value,
+                        valid_after = %transfer_call.valid_after,
+                        valid_before = %transfer_call.valid_before,
+                        nonce = %transfer_call.nonce,
+                        signature = %transfer_call.signature,
+                        token_contract = %transfer_call.contract_address,
+                        otel.kind = "client",
+                ))
+                .await?;
         }
     }
 
@@ -833,8 +899,30 @@ where
                 otel.kind = "client",
             ))
         }
-        StructuredSignature::EOA(_) => {
-            todo!("EOA")
+        StructuredSignature::EOA(signature) => {
+            let transfer_call = TransferWithAuthorization1Call::new(contract, payment, signature);
+            let transfer_call = transfer_call.0;
+            // transferWithAuthorization with EOA signature
+            Eip155MetaTransactionProvider::send_transaction(
+                &provider,
+                MetaTransaction {
+                    to: transfer_call.tx.target(),
+                    calldata: transfer_call.tx.calldata().clone(),
+                    confirmations: 1,
+                },
+            )
+            .instrument(tracing::info_span!("call_transferWithAuthorization_1",
+                from = %transfer_call.from,
+                to = %transfer_call.to,
+                value = %transfer_call.value,
+                valid_after = %transfer_call.valid_after,
+                valid_before = %transfer_call.valid_before,
+                nonce = %transfer_call.nonce,
+                signature = %transfer_call.signature,
+                token_contract = %transfer_call.contract_address,
+                sig_kind="EOA",
+                otel.kind = "client",
+            ))
         }
     };
     let receipt = transaction_receipt_fut.await?;
