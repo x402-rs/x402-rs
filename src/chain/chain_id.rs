@@ -27,12 +27,12 @@ impl ChainId {
 
     /// Create a ChainId from a network name using the known v1 networks list
     pub fn from_network_name(network_name: &str) -> Option<Self> {
-        known_v1_networks::by_network_name(network_name).map(|n| n.chain_id())
+        known_v1_networks::by_network_name(network_name).cloned()
     }
 
     /// Get the network name for this chain ID using the known v1 networks list
     pub fn as_network_name(&self) -> Option<&'static str> {
-        known_v1_networks::by_chain_id(self).map(|n| n.name)
+        known_v1_networks::by_chain_id(self)
     }
 }
 
@@ -255,7 +255,7 @@ pub mod known_v1_networks {
     }
 
     /// Static list of known networks
-    static KNOWN_NETWORKS: &[NetworkInfo] = &[
+    pub static KNOWN_NETWORKS: &[NetworkInfo] = &[
         // EVM Networks - Mainnets
         NetworkInfo {
             name: "base",
@@ -322,19 +322,27 @@ pub mod known_v1_networks {
     ];
 
     /// Lazy hashmap: network name -> NetworkInfo
-    static NAME_TO_NETWORK: Lazy<HashMap<&'static str, &'static NetworkInfo>> =
-        Lazy::new(|| KNOWN_NETWORKS.iter().map(|n| (n.name, n)).collect());
+    static NAME_TO_CHAIN_ID: Lazy<HashMap<&'static str, ChainId>> = Lazy::new(|| {
+        KNOWN_NETWORKS
+            .iter()
+            .map(|n| (n.name, n.chain_id()))
+            .collect()
+    });
 
     /// Lazy hashmap: ChainId -> NetworkInfo
-    static CHAIN_ID_TO_NETWORK: Lazy<HashMap<ChainId, &'static NetworkInfo>> =
-        Lazy::new(|| KNOWN_NETWORKS.iter().map(|n| (n.chain_id(), n)).collect());
+    static CHAIN_ID_TO_NAME: Lazy<HashMap<ChainId, &'static str>> = Lazy::new(|| {
+        KNOWN_NETWORKS
+            .iter()
+            .map(|n| (n.chain_id(), n.name))
+            .collect()
+    });
 
-    pub fn by_network_name(name: &str) -> Option<&'static NetworkInfo> {
-        NAME_TO_NETWORK.get(name).copied()
+    pub fn by_network_name(name: &str) -> Option<&ChainId> {
+        NAME_TO_CHAIN_ID.get(name)
     }
 
-    pub fn by_chain_id(chain_id: &ChainId) -> Option<&'static NetworkInfo> {
-        CHAIN_ID_TO_NETWORK.get(chain_id).copied()
+    pub fn by_chain_id(chain_id: &ChainId) -> Option<&'static str> {
+        CHAIN_ID_TO_NAME.get(chain_id).copied()
     }
 
     #[cfg(test)]
@@ -361,12 +369,12 @@ pub mod known_v1_networks {
         #[test]
         fn test_known_networks_by_chain_id() {
             let chain_id = ChainId::new("eip155", "8453");
-            let network = by_chain_id(&chain_id).unwrap();
-            assert_eq!(network.name, "base");
+            let network_name = by_chain_id(&chain_id).unwrap();
+            assert_eq!(network_name, "base");
 
             let solana_chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
-            let solana_network = by_chain_id(&solana_chain_id).unwrap();
-            assert_eq!(solana_network.name, "solana");
+            let network_name = by_chain_id(&solana_chain_id).unwrap();
+            assert_eq!(network_name, "solana");
 
             let unknown_chain_id = ChainId::new("eip155", "999999");
             assert!(by_chain_id(&unknown_chain_id).is_none());
@@ -402,8 +410,7 @@ pub mod known_v1_networks {
 
         #[test]
         fn test_network_info_chain_id() {
-            let network = by_network_name("polygon").unwrap();
-            let chain_id = network.chain_id();
+            let chain_id = by_network_name("polygon").unwrap();
             assert_eq!(chain_id.namespace, "eip155");
             assert_eq!(chain_id.reference, "137");
         }
