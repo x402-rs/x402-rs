@@ -626,7 +626,7 @@ pub async fn verify_payment<P: Provider>(
                 .map_err(|e| PaymentVerificationError::InvalidSignature(e.to_string()))?;
             if !is_valid_signature_result {
                 return Err(PaymentVerificationError::InvalidSignature(
-                    "wrong signature".to_string(),
+                    "Chain reported signature to be invalid".to_string(),
                 )
                 .into());
             }
