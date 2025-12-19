@@ -404,8 +404,11 @@ impl SignedMessage {
             nonce: payment.nonce,
         };
         let eip712_hash = transfer_with_authorization.eip712_signing_hash(domain);
-        let structured_signature: StructuredSignature =
-            StructuredSignature::try_from_bytes(payment.signature.clone(), payment.from, &eip712_hash)?;
+        let structured_signature: StructuredSignature = StructuredSignature::try_from_bytes(
+            payment.signature.clone(),
+            payment.from,
+            &eip712_hash,
+        )?;
         let signed_message = Self {
             address: payment.from,
             hash: eip712_hash,
@@ -570,7 +573,7 @@ async fn transferWithAuthorization_0<'a, P: Provider>(
         nonce,
         signature.clone(),
     );
-    TransferWithAuthorization0Call {
+    TransferWithAuthorization0Call(TransferWithAuthorizationCall {
         tx,
         from,
         to,
@@ -580,18 +583,24 @@ async fn transferWithAuthorization_0<'a, P: Provider>(
         nonce,
         signature,
         contract_address: *contract.address(),
-    }
+    })
 }
+
+pub struct TransferWithAuthorization0Call<P>(
+    pub TransferWithAuthorizationCall<P, IEIP3009::transferWithAuthorization_0Call>,
+);
+
+pub struct TransferWithAuthorization1Call<P>(
+    pub TransferWithAuthorizationCall<P, IEIP3009::transferWithAuthorization_1Call>,
+);
 
 /// A prepared call to `transferWithAuthorization` (ERC-3009) including all derived fields.
 ///
 /// This struct wraps the assembled call builder, making it reusable across verification
 /// (`.call()`) and settlement (`.send()`) flows, along with context useful for tracing/logging.
-///
-/// This is created by [`transferWithAuthorization_0`].
-pub struct TransferWithAuthorization0Call<P> {
+pub struct TransferWithAuthorizationCall<P, TCall> {
     /// The prepared call builder that can be `.call()`ed or `.send()`ed.
-    pub tx: SolCallBuilder<P, IEIP3009::transferWithAuthorization_0Call>,
+    pub tx: SolCallBuilder<P, TCall>,
     /// The sender (`from`) address for the authorization.
     pub from: Address,
     /// The recipient (`to`) address for the authorization.
@@ -653,6 +662,7 @@ pub async fn verify_payment<P: Provider>(
                 validator6492.isValidSigWithSideEffects(payer, hash, original);
             // Prepare the call to simulate transfer the funds
             let transfer_call = transferWithAuthorization_0(contract, payment, inner).await;
+            let transfer_call = transfer_call.0;
             // Execute both calls in a single transaction simulation to accommodate for possible smart wallet creation
             let (is_valid_signature_result, transfer_result) = provider
                 .multicall()
@@ -685,6 +695,7 @@ pub async fn verify_payment<P: Provider>(
         StructuredSignature::EIP1271(signature) => {
             // It is EOA or EIP-1271 signature, which we can pass to the transfer simulation
             let transfer_call = transferWithAuthorization_0(contract, payment, signature).await;
+            let transfer_call = transfer_call.0;
             transfer_call
                 .tx
                 .call()
@@ -731,6 +742,7 @@ where
         } => {
             let is_contract_deployed = is_contract_deployed(provider.inner(), &payer).await?;
             let transfer_call = transferWithAuthorization_0(contract, payment, inner).await;
+            let transfer_call = transfer_call.0;
             if is_contract_deployed {
                 // transferWithAuthorization with inner signature
                 Eip155MetaTransactionProvider::send_transaction(
@@ -797,6 +809,7 @@ where
         StructuredSignature::EIP1271(eip1271_signature) => {
             let transfer_call =
                 transferWithAuthorization_0(contract, payment, eip1271_signature).await;
+            let transfer_call = transfer_call.0;
             // transferWithAuthorization with eip1271 signature
             Eip155MetaTransactionProvider::send_transaction(
                 &provider,
