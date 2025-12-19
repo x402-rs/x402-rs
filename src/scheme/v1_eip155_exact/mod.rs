@@ -545,50 +545,51 @@ impl TryFrom<Bytes> for StructuredSignature {
     }
 }
 
-/// Constructs a full `transferWithAuthorization` call for a verified payment payload.
-///
-/// This function prepares the transaction builder with gas pricing adapted to the network's
-/// capabilities (EIP-1559 or legacy) and packages it together with signature metadata
-/// into a [`TransferWithAuthorization0Call`] structure.
-///
-/// This function does not perform any validation — it assumes inputs are already checked.
-#[allow(non_snake_case)]
-async fn transferWithAuthorization_0<'a, P: Provider>(
-    contract: &'a IEIP3009::IEIP3009Instance<P>,
-    payment: &ExactEvmPayment,
-    signature: Bytes,
-) -> TransferWithAuthorization0Call<&'a P> {
-    let from = payment.from;
-    let to = payment.to;
-    let value = payment.value;
-    let valid_after = U256::from(payment.valid_after.as_secs());
-    let valid_before = U256::from(payment.valid_before.as_secs());
-    let nonce = payment.nonce;
-    let tx = contract.transferWithAuthorization_0(
-        from,
-        to,
-        value,
-        valid_after,
-        valid_before,
-        nonce,
-        signature.clone(),
-    );
-    TransferWithAuthorization0Call(TransferWithAuthorizationCall {
-        tx,
-        from,
-        to,
-        value,
-        valid_after,
-        valid_before,
-        nonce,
-        signature,
-        contract_address: *contract.address(),
-    })
-}
-
 pub struct TransferWithAuthorization0Call<P>(
     pub TransferWithAuthorizationCall<P, IEIP3009::transferWithAuthorization_0Call>,
 );
+
+impl<'a, P: Provider> TransferWithAuthorization0Call<&'a P> {
+    /// Constructs a full `transferWithAuthorization` call for a verified payment payload.
+    ///
+    /// This function prepares the transaction builder with gas pricing adapted to the network's
+    /// capabilities (EIP-1559 or legacy) and packages it together with signature metadata
+    /// into a [`TransferWithAuthorization0Call`] structure.
+    ///
+    /// This function does not perform any validation — it assumes inputs are already checked.
+    pub fn new(
+        contract: &'a IEIP3009::IEIP3009Instance<P>,
+        payment: &ExactEvmPayment,
+        signature: Bytes,
+    ) -> Self {
+        let from = payment.from;
+        let to = payment.to;
+        let value = payment.value;
+        let valid_after = U256::from(payment.valid_after.as_secs());
+        let valid_before = U256::from(payment.valid_before.as_secs());
+        let nonce = payment.nonce;
+        let tx = contract.transferWithAuthorization_0(
+            from,
+            to,
+            value,
+            valid_after,
+            valid_before,
+            nonce,
+            signature.clone(),
+        );
+        TransferWithAuthorization0Call(TransferWithAuthorizationCall {
+            tx,
+            from,
+            to,
+            value,
+            valid_after,
+            valid_before,
+            nonce,
+            signature,
+            contract_address: *contract.address(),
+        })
+    }
+}
 
 pub struct TransferWithAuthorization1Call<P>(
     pub TransferWithAuthorizationCall<P, IEIP3009::transferWithAuthorization_1Call>,
@@ -661,7 +662,7 @@ pub async fn verify_payment<P: Provider>(
             let is_valid_signature_call =
                 validator6492.isValidSigWithSideEffects(payer, hash, original);
             // Prepare the call to simulate transfer the funds
-            let transfer_call = transferWithAuthorization_0(contract, payment, inner).await;
+            let transfer_call = TransferWithAuthorization0Call::new(contract, payment, inner);
             let transfer_call = transfer_call.0;
             // Execute both calls in a single transaction simulation to accommodate for possible smart wallet creation
             let (is_valid_signature_result, transfer_result) = provider
@@ -694,7 +695,7 @@ pub async fn verify_payment<P: Provider>(
         }
         StructuredSignature::EIP1271(signature) => {
             // It is EOA or EIP-1271 signature, which we can pass to the transfer simulation
-            let transfer_call = transferWithAuthorization_0(contract, payment, signature).await;
+            let transfer_call = TransferWithAuthorization0Call::new(contract, payment, signature);
             let transfer_call = transfer_call.0;
             transfer_call
                 .tx
@@ -741,7 +742,7 @@ where
             original: _,
         } => {
             let is_contract_deployed = is_contract_deployed(provider.inner(), &payer).await?;
-            let transfer_call = transferWithAuthorization_0(contract, payment, inner).await;
+            let transfer_call = TransferWithAuthorization0Call::new(contract, payment, inner);
             let transfer_call = transfer_call.0;
             if is_contract_deployed {
                 // transferWithAuthorization with inner signature
@@ -808,7 +809,7 @@ where
         }
         StructuredSignature::EIP1271(eip1271_signature) => {
             let transfer_call =
-                transferWithAuthorization_0(contract, payment, eip1271_signature).await;
+                TransferWithAuthorization0Call::new(contract, payment, eip1271_signature);
             let transfer_call = transfer_call.0;
             // transferWithAuthorization with eip1271 signature
             Eip155MetaTransactionProvider::send_transaction(
