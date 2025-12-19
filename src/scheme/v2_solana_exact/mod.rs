@@ -30,7 +30,7 @@ impl X402SchemeBlueprint for V2SolanaExact {
         let provider = if let ChainProvider::Solana(provider) = provider {
             provider
         } else {
-            return Err("V1SolanaExact::build: provider must be a SolanaChainProvider".into());
+            return Err("V2SolanaExact::build: provider must be a SolanaChainProvider".into());
         };
         Ok(Box::new(V2SolanaExactHandler { provider }))
     }
