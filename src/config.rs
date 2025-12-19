@@ -411,10 +411,10 @@ impl SolanaChainConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Eip155ChainConfigInner {
     /// Whether the chain supports EIP-1559 gas pricing.
-    #[serde(default)]
+    #[serde(default = "eip155_chain_config::default_eip1559")]
     pub eip1559: bool,
     /// Whether the chain supports flashblocks.
-    #[serde(default)]
+    #[serde(default = "eip155_chain_config::default_flashblocks")]
     pub flashblocks: bool,
     /// Signer configuration for this chain (required).
     /// Array of private keys (hex format) or env var references.
@@ -427,6 +427,12 @@ pub struct Eip155ChainConfigInner {
 }
 
 mod eip155_chain_config {
+    pub fn default_eip1559() -> bool {
+        true
+    }
+    pub fn default_flashblocks() -> bool {
+        false
+    }
     pub fn default_receipt_timeout_secs() -> u64 {
         30
     }

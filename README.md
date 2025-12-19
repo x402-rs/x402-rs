@@ -2,10 +2,9 @@
 
 [![Crates.io](https://img.shields.io/crates/v/x402-rs.svg)](https://crates.io/crates/x402-rs)
 [![Docs.rs](https://docs.rs/x402-rs/badge.svg)](https://docs.rs/x402-rs)
-[![Docker Pulls](https://img.shields.io/docker/pulls/ukstv/x402-facilitator.svg)](https://hub.docker.com/r/ukstv/x402-facilitator)
-[![GHCR](https://img.shields.io/badge/ghcr.io-x402--facilitator-blue)](https://github.com/orgs/x402-rs/packages)
+[![GHCR](https://img.shields.io/badge/ghcr.io-x402--facilitator-blue)](https://github.com/orgs/x402-rs/packages/container/package/x402-facilitator)
 
-> A Rust-based implementation of the x402 protocol.
+> A Rust-based implementation of the x402 protocol with support for protocol v1 and v2.
 
 This repository provides:
 
@@ -28,13 +27,13 @@ Servers declare payment requirements for specific routes. Clients send cryptogra
 ### Run facilitator
 
 ```shell
-docker run --env-file .env -p 8080:8080 ukstv/x402-facilitator
+docker run -v $(pwd)/config.json:/app/config.json -p 8080:8080 ghcr.io/x402-rs/x402-facilitator
 ```
 
 Or build locally:
 ```shell
 docker build -t x402-rs .
-docker run --env-file .env -p 8080:8080 x402-rs
+docker run -v $(pwd)/config.json:/app/config.json -p 8080:8080 x402-rs
 ```
 
 See the [Facilitator](#facilitator) section below for full usage details
@@ -85,9 +84,9 @@ See [`x402-reqwest` crate docs](./crates/x402-reqwest/README.md).
 | Server Middleware                   | Provide ready-to-use integration for Rust web frameworks such as axum and tower.                         | ✅ Complete |
 | Client Library                      | Provide a lightweight Rust library for initiating and managing x402 payment flows from Rust clients.     | ✅ Complete |
 | Solana Support                      | Support Solana chain.                                                                                    | ✅ Complete |
-| Multiple chains and multiple tokens | Support various tokens and EVM compatible chains.                                                        | ⏳ Planned  |
-| Payment Storage                     | Persist verified and settled payments for analytics, access control, and auditability.                   | 🔜 Planned |
-| Micropayment Support                | Enable fine-grained offchain usage-based payments, including streaming and per-request billing.          | 🔜 Planned |
+| Protocol v2 Support                 | Support x402 protocol version 2 with improved payload structure.                                         | ✅ Complete |
+| Multiple chains and multiple tokens | Support various tokens and EVM compatible chains.                                                        | ✅ Complete |
+| Buiild your own facilitator hooks   | Pre/post hooks for analytics, access control, and auditability.                                          | 🔜 Planned |
 
 The initial focus is on establishing a stable, production-quality Rust SDK and middleware ecosystem for x402 integration.
 
@@ -108,51 +107,99 @@ For a detailed overview of the x402 payment flow and Facilitator role, see the [
 
 ### Usage
 
-#### 1. Provide environment variables
+#### 1. Create a configuration file
 
-Create a `.env` file or set environment variables directly. Example `.env`:
+Create a `config.json` file with your chain and scheme configuration:
 
-```dotenv
-HOST=0.0.0.0
-PORT=8080
-RPC_URL_BASE_SEPOLIA=https://sepolia.base.org
-RPC_URL_BASE=https://mainnet.base.org
-SIGNER_TYPE=private-key
-EVM_PRIVATE_KEY=0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
-SOLANA_PRIVATE_KEY=6ASf5EcmmEHTgDJ4X4ZT5vT6iHVJBXPg5AN5YoTCpGWt
-RUST_LOG=info
+```json
+{
+  "port": 8080,
+  "host": "0.0.0.0",
+  "chains": {
+    "eip155:84532": {
+      "eip1559": true,
+      "flashblocks": true,
+      "signers": ["$EVM_PRIVATE_KEY"],
+      "rpc": [
+        {
+          "http": "https://sepolia.base.org",
+          "rate_limit": 50
+        }
+      ]
+    },
+    "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG": {
+      "signer": "$SOLANA_PRIVATE_KEY",
+      "rpc": "https://api.devnet.solana.com",
+      "pubsub": "wss://api.devnet.solana.com"
+    }
+  },
+  "schemes": [
+    {
+      "slug": "v1:eip155:exact",
+      "chains": "eip155:*"
+    },
+    {
+      "slug": "v2:eip155:exact",
+      "chains": "eip155:*"
+    },
+    {
+      "slug": "v1:solana:exact",
+      "chains": "solana:*"
+    },
+    {
+      "slug": "v2:solana:exact",
+      "chains": "solana:*"
+    }
+  ]
+}
 ```
 
-**Important:**
-The supported networks are determined by which RPC URLs you provide:
-- If you set only `RPC_URL_BASE_SEPOLIA`, then only Base Sepolia network is supported.
-- If you set both `RPC_URL_BASE_SEPOLIA` and `RPC_URL_BASE`, then both Base Sepolia and Base Mainnet are supported.
-- If an RPC URL for a network is missing, that network will not be available for settlement or verification.
+**Configuration structure:**
+
+- **`chains`**: A map of CAIP-2 chain identifiers to chain-specific configuration
+  - EVM chains (`eip155:*`): Configure `signers` (array of private keys), `rpc` endpoints, and optional `eip1559`/`flashblocks` flags
+  - Solana chains (`solana:*`): Configure `signer` (single private key), `rpc` endpoint, and optional `pubsub` endpoint
+- **`schemes`**: List of payment schemes to enable
+  - `slug`: Scheme identifier in format `v{version}:{namespace}:{name}` (e.g., `v2:eip155:exact`)
+  - `chains`: Chain pattern to match (e.g., `eip155:*` for all EVM chains, `eip155:84532` for specific chain)
+
+**Environment variable references:**
+
+Private keys can reference environment variables using `$VAR` or `${VAR}` syntax:
+```json
+"signers": ["$EVM_PRIVATE_KEY"]
+```
+
+Then set the environment variable:
+```shell
+export EVM_PRIVATE_KEY=0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+```
 
 #### 2. Build and Run with Docker
 
-Prebuilt Docker images are available at:
-- [GitHub Container Registry](https://ghcr.io/x402-rs/x402-facilitator): `ghcr.io/x402-rs/x402-facilitator`
-- [Docker Hub](https://hub.docker.com/r/ukstv/x402-facilitator): `ukstv/x402-facilitator`
+Prebuilt Docker images are available at [GitHub Container Registry](https://github.com/orgs/x402-rs/packages/container/package/x402-facilitator): `ghcr.io/x402-rs/x402-facilitator`
 
-Run the container from Docker Hub:
+Run the container:
 ```shell
-docker run --env-file .env -p 8080:8080 ukstv/x402-facilitator
-```
-
-To run using GitHub Container Registry:
-```shell
-docker run --env-file .env -p 8080:8080 ghcr.io/x402-rs/x402-facilitator
+docker run -v $(pwd)/config.json:/app/config.json -p 8080:8080 ghcr.io/x402-rs/x402-facilitator
 ```
 
 Or build a Docker image locally:
 ```shell
 docker build -t x402-rs .
-docker run --env-file .env -p 8080:8080 x402-rs
+docker run -v $(pwd)/config.json:/app/config.json -p 8080:8080 x402-rs
+```
+
+You can also pass environment variables for private keys:
+```shell
+docker run -v $(pwd)/config.json:/app/config.json \
+  -e EVM_PRIVATE_KEY=0x... \
+  -e SOLANA_PRIVATE_KEY=... \
+  -p 8080:8080 ghcr.io/x402-rs/x402-facilitator
 ```
 
 The container:
-* Exposes port `8080` (or a port you configure with `PORT` environment variable).
+* Exposes port `8080` (or a port you configure in `config.json`).
 * Starts on http://localhost:8080 by default.
 * Requires minimal runtime dependencies (based on `debian:bullseye-slim`).
 
@@ -220,26 +267,113 @@ let app = Router::new().route("/paid-content", get(handler).layer(
 
 ### Configuration
 
-The service reads configuration via `.env` file or directly through environment variables.
+The service reads configuration from a JSON file (`config.json` by default) or via CLI argument `--config <path>`.
 
-Available variables:
+#### Configuration File Structure
 
-* `RUST_LOG`: Logging level (e.g., `info`, `debug`, `trace`),
-* `HOST`: HTTP host to bind to (default: `0.0.0.0`),
-* `PORT`: HTTP server port (default: `8080`),
-* `SIGNER_TYPE` (required): Type of signer to use. Only `private-key` is supported now,
-* `EVM_PRIVATE_KEY` (required): Private key in hex for EVM networks, like `0xdeadbeef...`,
-* `SOLANA_PRIVATE_KEY` (required): Private key in hex for Solana networks, like `0xdeadbeef...`,
-* `RPC_URL_BASE_SEPOLIA`: Ethereum RPC endpoint for Base Sepolia testnet,
-* `RPC_URL_BASE`: Ethereum RPC endpoint for Base mainnet,
-* `RPC_URL_AVALANCHE_FUJI`: Ethereum RPC endpoint for Avalanche Fuji testnet,
-* `RPC_URL_AVALANCHE`: Ethereum RPC endpoint for Avalanche C-Chain mainnet.
-* `RPC_URL_SOLANA`: RPC endpoint for Solana mainnet.
-* `RPC_URL_SOLANA_DEVNET`: RPC endpoint for Solana devnet.
-* `RPC_URL_POLYGON`: RPC endpoint for Polygon mainnet.
-* `RPC_URL_POLYGON_AMOY`: RPC endpoint for Polygon Amoy testnet.
-* `RPC_URL_SEI`: RPC endpoint for Sei mainnet.
-* `RPC_URL_SEI_TESTNET`: RPC endpoint for Sei testnet.
+```json
+{
+  "port": 8080,
+  "host": "0.0.0.0",
+  "chains": { ... },
+  "schemes": [ ... ]
+}
+```
+
+#### Top-level Options
+
+| Option | Type | Default | Description |
+|:-------|:-----|:--------|:------------|
+| `port` | number | `8080` | HTTP server port (can also be set via `PORT` env var) |
+| `host` | string | `"0.0.0.0"` | HTTP host to bind to (can also be set via `HOST` env var) |
+| `chains` | object | `{}` | Map of CAIP-2 chain IDs to chain configuration |
+| `schemes` | array | `[]` | List of payment schemes to enable |
+
+#### EVM Chain Configuration (`eip155:*`)
+
+```json
+{
+  "eip155:84532": {
+    "eip1559": true,
+    "flashblocks": true,
+    "receipt_timeout_secs": 30,
+    "signers": ["$EVM_PRIVATE_KEY"],
+    "rpc": [
+      {
+        "http": "https://sepolia.base.org",
+        "rate_limit": 50
+      }
+    ]
+  }
+}
+```
+
+| Option | Type | Required | Default | Description |
+|:-------|:-----|:---------|:--------|:------------|
+| `signers` | array | ✅ | - | Array of private keys (hex format, 0x-prefixed) or env var references |
+| `rpc` | array | ✅ | - | Array of RPC endpoint configurations |
+| `rpc[].http` | string | ✅ | - | HTTP URL for the RPC endpoint |
+| `rpc[].rate_limit` | number | ❌ | - | Rate limit for requests per second |
+| `eip1559` | boolean | ❌ | `true` | Use EIP-1559 transaction type (type 2) instead of legacy transactions |
+| `flashblocks` | boolean | ❌ | `false` | Estimate gas against "latest" block to accommodate flashblocks-enabled RPC semantics |
+| `receipt_timeout_secs` | number | ❌ | `30` | Timeout for waiting for transaction receipt |
+
+#### Solana Chain Configuration (`solana:*`)
+
+```json
+{
+  "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
+    "signer": "$SOLANA_PRIVATE_KEY",
+    "rpc": "https://api.mainnet-beta.solana.com",
+    "pubsub": "wss://api.mainnet-beta.solana.com",
+    "max_compute_unit_limit": 400000,
+    "max_compute_unit_price": 1000000
+  }
+}
+```
+
+| Option | Type | Required | Default | Description |
+|:-------|:-----|:---------|:--------|:------------|
+| `signer` | string | ✅ | - | Private key (base58 format, 64 bytes) or env var reference |
+| `rpc` | string | ✅ | - | HTTP URL for the RPC endpoint |
+| `pubsub` | string | ❌ | - | WebSocket URL for pubsub notifications |
+| `max_compute_unit_limit` | number | ❌ | `400000` | Maximum compute unit limit for transactions |
+| `max_compute_unit_price` | number | ❌ | `1000000` | Maximum compute unit price for transactions |
+
+#### Scheme Configuration
+
+```json
+{
+  "schemes": [
+    {
+      "enabled": true,
+      "slug": "v2:eip155:exact",
+      "chains": "eip155:*",
+      "config": {}
+    }
+  ]
+}
+```
+
+| Option | Type | Required | Default | Description |
+|:-------|:-----|:---------|:--------|:------------|
+| `enabled` | boolean | ❌ | `true` | Whether this scheme is enabled |
+| `slug` | string | ✅ | - | Scheme identifier: `v{version}:{namespace}:{name}` |
+| `chains` | string | ✅ | - | Chain pattern: `eip155:*`, `solana:*`, or specific chain ID |
+| `config` | object | ❌ | - | Scheme-specific configuration |
+
+**Available schemes:**
+- `v1:eip155:exact` - ERC-3009 transferWithAuthorization for EVM chains (protocol v1)
+- `v2:eip155:exact` - ERC-3009 transferWithAuthorization for EVM chains (protocol v2)
+- `v1:solana:exact` - SPL token transfer for Solana (protocol v1)
+- `v2:solana:exact` - SPL token transfer for Solana (protocol v2)
+
+#### Environment Variables
+
+Environment variables can be used for:
+- **Private keys**: Reference in config with `$VAR` or `${VAR}` syntax
+- **Server settings**: `PORT` and `HOST` as fallbacks if not in config file
+- **Logging**: `RUST_LOG` for log level (e.g., `info`, `debug`, `trace`)
 
 
 ### Observability
@@ -264,26 +398,25 @@ The service automatically detects and initializes exporters if `OTEL_EXPORTER_OT
 
 ### Supported Networks
 
-The Facilitator supports different networks based on the environment variables you configure:
+The Facilitator supports any network you configure in `config.json`. Common chain identifiers:
 
-| Network                   | Environment Variable     | Supported if Set | Notes                            |
-|:--------------------------|:-------------------------|:-----------------|:---------------------------------|
-| Base Sepolia Testnet      | `RPC_URL_BASE_SEPOLIA`   | ✅                | Testnet, Recommended for testing |
-| Base Mainnet              | `RPC_URL_BASE`           | ✅                | Mainnet                          |
-| XDC Mainnet               | `RPC_URL_XDC`            | ✅                | Mainnet                          |
-| Avalanche Fuji Testnet    | `RPC_URL_AVALANCHE_FUJI` | ✅                | Testnet                          |
-| Avalanche C-Chain Mainnet | `RPC_URL_AVALANCHE`      | ✅                | Mainnet                          |
-| Polygon Amoy Testnet      | `RPC_URL_POLYGON_AMOY`   | ✅                | Testnet                          |
-| Polygon Mainnet           | `RPC_URL_POLYGON`        | ✅                | Mainnet                          |
-| Sei Testnet               | `RPC_URL_SEI_TESTNET`    | ✅                | Testnet                          |
-| Sei Mainnet               | `RPC_URL_SEI`            | ✅                | Mainnet                          |
-| Solana Mainnet            | `RPC_URL_SOLANA`         | ✅                | Mainnet                          |
-| Solana Devnet             | `RPC_URL_SOLANA_DEVNET`  | ✅                | Testnet, Recommended for testing |
+| Network                   | CAIP-2 Chain ID                              | Notes                            |
+|:--------------------------|:---------------------------------------------|:---------------------------------|
+| Base Sepolia Testnet      | `eip155:84532`                               | Testnet, Recommended for testing |
+| Base Mainnet              | `eip155:8453`                                | Mainnet                          |
+| Ethereum Mainnet          | `eip155:1`                                   | Mainnet                          |
+| Avalanche Fuji Testnet    | `eip155:43113`                               | Testnet                          |
+| Avalanche C-Chain Mainnet | `eip155:43114`                               | Mainnet                          |
+| Polygon Amoy Testnet      | `eip155:80002`                               | Testnet                          |
+| Polygon Mainnet           | `eip155:137`                                 | Mainnet                          |
+| Sei Testnet               | `eip155:713715`                              | Testnet                          |
+| Sei Mainnet               | `eip155:1329`                                | Mainnet                          |
+| Solana Mainnet            | `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`    | Mainnet                          |
+| Solana Devnet             | `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG` | Testnet, Recommended for testing |
 
-- If you provide say only `RPC_URL_BASE_SEPOLIA`, only **Base Sepolia** will be available.
-- If you provide `RPC_URL_BASE_SEPOLIA`, `RPC_URL_BASE`, and other env variables on the list, then all the specified networks will be supported.
+Networks are enabled by adding them to the `chains` section in your `config.json`.
 
-> ℹ️ **Tip:** For initial development and testing, you can start with Base Sepolia only.
+> ℹ️ **Tip:** For initial development and testing, you can start with Base Sepolia (`eip155:84532`) or Solana Devnet only.
 
 ### Development
 
@@ -295,7 +428,13 @@ Build locally:
 ```shell
 cargo build
 ```
-Run:
+
+Run with a config file:
+```shell
+cargo run -- --config config.json
+```
+
+Or place `config.json` in the current directory (it will be auto-detected):
 ```shell
 cargo run
 ```
