@@ -375,6 +375,17 @@ pub mod known_v1_networks {
             namespace: "eip155",
             reference: "97",
         },
+        // Monad
+        NetworkInfo {
+            name: "monad",
+            namespace: "eip155",
+            reference: "143",
+        },
+        NetworkInfo {
+            name: "monad-testnet",
+            namespace: "eip155",
+            reference: "10143",
+        },
         // Solana Networks
         NetworkInfo {
             name: "solana",
