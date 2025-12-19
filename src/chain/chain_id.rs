@@ -256,92 +256,102 @@ pub mod known_v1_networks {
 
     /// Static list of known networks
     pub static KNOWN_NETWORKS: &[NetworkInfo] = &[
-        // EVM Networks - Mainnets
+        // EVM Networks
+        // Base
         NetworkInfo {
             name: "base",
             namespace: "eip155",
             reference: "8453",
         },
         NetworkInfo {
-            name: "polygon",
-            namespace: "eip155",
-            reference: "137",
-        },
-        NetworkInfo {
-            name: "avalanche",
-            namespace: "eip155",
-            reference: "43114",
-        },
-        NetworkInfo {
-            name: "xdc",
-            namespace: "eip155",
-            reference: "50",
-        },
-        NetworkInfo {
-            name: "xrpl-evm",
-            namespace: "eip155",
-            reference: "1440000",
-        },
-        NetworkInfo {
-            name: "sei",
-            namespace: "eip155",
-            reference: "1329",
-        },
-        NetworkInfo {
-            name: "peaq",
-            namespace: "eip155",
-            reference: "3338",
-        },
-        NetworkInfo {
-            name: "iotex",
-            namespace: "eip155",
-            reference: "4689",
-        },
-        NetworkInfo {
-            name: "abstract",
-            namespace: "eip155",
-            reference: "2741",
-        },
-        NetworkInfo {
-            name: "story",
-            namespace: "eip155",
-            reference: "1514",
-        },
-        NetworkInfo {
-            name: "educhain",
-            namespace: "eip155",
-            reference: "41923",
-        },
-        // EVM Networks - Testnets
-        NetworkInfo {
             name: "base-sepolia",
             namespace: "eip155",
             reference: "84532",
+        },
+        NetworkInfo {
+            name: "skale-base-sepolia",
+            namespace: "eip155",
+            reference: "324705682",
+        },
+        // Polygon
+        NetworkInfo {
+            name: "polygon",
+            namespace: "eip155",
+            reference: "137",
         },
         NetworkInfo {
             name: "polygon-amoy",
             namespace: "eip155",
             reference: "80002",
         },
+        // Avalanche
+        NetworkInfo {
+            name: "avalanche",
+            namespace: "eip155",
+            reference: "43114",
+        },
         NetworkInfo {
             name: "avalanche-fuji",
             namespace: "eip155",
             reference: "43113",
+        },
+        // Sei
+        NetworkInfo {
+            name: "sei",
+            namespace: "eip155",
+            reference: "1329",
         },
         NetworkInfo {
             name: "sei-testnet",
             namespace: "eip155",
             reference: "1328",
         },
+        // Abstract
+        NetworkInfo {
+            name: "abstract",
+            namespace: "eip155",
+            reference: "2741",
+        },
         NetworkInfo {
             name: "abstract-testnet",
             namespace: "eip155",
             reference: "11124",
         },
+        // XDC
         NetworkInfo {
-            name: "skale-base-sepolia",
+            name: "xdc",
             namespace: "eip155",
-            reference: "324705682",
+            reference: "50",
+        },
+        // XRPL EVM
+        NetworkInfo {
+            name: "xrpl-evm",
+            namespace: "eip155",
+            reference: "1440000",
+        },
+        // Peaq
+        NetworkInfo {
+            name: "peaq",
+            namespace: "eip155",
+            reference: "3338",
+        },
+        // IoTeX
+        NetworkInfo {
+            name: "iotex",
+            namespace: "eip155",
+            reference: "4689",
+        },
+        // Story
+        NetworkInfo {
+            name: "story",
+            namespace: "eip155",
+            reference: "1514",
+        },
+        // Educhain
+        NetworkInfo {
+            name: "educhain",
+            namespace: "eip155",
+            reference: "41923",
         },
         // Solana Networks
         NetworkInfo {
