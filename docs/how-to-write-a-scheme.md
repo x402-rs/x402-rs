@@ -87,12 +87,12 @@ Three core operations every scheme must implement:
 ```rust
 #[async_trait::async_trait]
 pub trait X402SchemeHandler: Send + Sync {
-    async fn verify(&self, request: &proto::VerifyRequest) 
-        -> Result<proto::VerifyResponse, FacilitatorLocalError>;
-    async fn settle(&self, request: &proto::SettleRequest) 
-        -> Result<proto::SettleResponse, FacilitatorLocalError>;
-    async fn supported(&self) 
-        -> Result<proto::SupportedResponse, FacilitatorLocalError>;
+    async fn verify(&self, request: &proto::VerifyRequest)
+        -> Result<proto::VerifyResponse, X402SchemeHandlerError>;
+    async fn settle(&self, request: &proto::SettleRequest)
+        -> Result<proto::SettleResponse, X402SchemeHandlerError>;
+    async fn supported(&self)
+        -> Result<proto::SupportedResponse, X402SchemeHandlerError>;
 }
 ```
 
@@ -146,24 +146,35 @@ impl X402SchemeBlueprint for V2SolanaMyscheme {
 #[async_trait::async_trait]
 impl X402SchemeHandler for V2SolanaMyschemeHandler {
     async fn verify(&self, request: &proto::VerifyRequest)
-        -> Result<proto::VerifyResponse, FacilitatorLocalError>
+        -> Result<proto::VerifyResponse, X402SchemeHandlerError>
     {
-        let request = types::VerifyRequest::from_proto(request.clone())
-            .ok_or(FacilitatorLocalError::DecodingError("...".into()))?;
+        let request = types::VerifyRequest::from_proto(request.clone())?;
         // Your verification logic...
-        Ok(proto::v2::VerifyResponse::valid(payer).into())
+        Ok(proto::v2::VerifyResponse::valid(payer.to_string()).into())
     }
 
     async fn settle(&self, request: &proto::SettleRequest)
-        -> Result<proto::SettleResponse, FacilitatorLocalError>
+        -> Result<proto::SettleResponse, X402SchemeHandlerError>
     {
         // Your settlement logic...
         Ok(proto::v2::SettleResponse::Success { payer, transaction, network }.into())
     }
 
-    async fn supported(&self) -> Result<proto::SupportedResponse, FacilitatorLocalError> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeHandlerError> {
+        let chain_id = self.provider.chain_id();
+        let kinds = vec![proto::SupportedPaymentKind {
+            x402_version: proto::X402Version::v2().into(),
+            scheme: "myscheme".to_string(),
+            network: chain_id.to_string(),
+            extra: None,
+        }];
+        let signers = {
+            let mut signers = HashMap::with_capacity(1);
+            signers.insert(chain_id, self.provider.signer_addresses());
+            signers
+        };
         Ok(proto::SupportedResponse {
-            kinds: vec![proto::SupportedPaymentKind { ... }],
+            kinds,
             extensions: Vec::new(),
             signers,
         })
