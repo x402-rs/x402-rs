@@ -440,6 +440,7 @@ enum StructuredSignature {
         original: Bytes,
     },
     /// Normalized EOA signature.
+    #[allow(clippy::upper_case_acronyms)]
     EOA(Signature),
     /// A plain EIP-1271 or EOA signature (no 6492 wrappers).
     EIP1271(Bytes),
