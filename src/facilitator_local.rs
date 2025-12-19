@@ -9,9 +9,7 @@
 //! - Contract interaction using Alloy
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::Display;
 
 use crate::facilitator::Facilitator;
 use crate::proto;

@@ -349,12 +349,12 @@ pub async fn verify_transfer(
     // Assert valid payment START
     let chain_id = provider.chain_id();
     let payload_chain_id = ChainId::from_network_name(&payload.network)
-        .map_err(|_| PaymentVerificationError::UnsupportedChain)?;
+        .ok_or(PaymentVerificationError::UnsupportedChain)?;
     if payload_chain_id != chain_id {
         return Err(PaymentVerificationError::ChainIdMismatch);
     }
     let requirements_chain_id = ChainId::from_network_name(&requirements.network)
-        .map_err(|_| PaymentVerificationError::UnsupportedChain)?;
+        .ok_or(PaymentVerificationError::UnsupportedChain)?;
     if requirements_chain_id != chain_id {
         return Err(PaymentVerificationError::ChainIdMismatch);
     }
