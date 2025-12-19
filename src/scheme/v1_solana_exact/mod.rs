@@ -526,7 +526,7 @@ pub async fn verify_transfer_instruction(
         &ATA_PROGRAM_PUBKEY,
     );
     if transfer_checked_instruction.destination != ata {
-        return Err(PaymentVerificationError::RecipientMismatch.into());
+        return Err(PaymentVerificationError::RecipientMismatch);
     }
     let accounts = provider
         .get_multiple_accounts(&[transfer_checked_instruction.source, ata])
@@ -537,7 +537,7 @@ pub async fn verify_transfer_instruction(
     }
     let is_receiver_missing = accounts.get(1).cloned().is_none_or(|a| a.is_none());
     if is_receiver_missing && !has_dest_ata {
-        return Err(PaymentVerificationError::RecipientMismatch.into());
+        return Err(PaymentVerificationError::RecipientMismatch);
     }
     let instruction_amount = transfer_checked_instruction.amount;
     if instruction_amount != transfer_requirement.amount {

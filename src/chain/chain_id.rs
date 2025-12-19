@@ -46,7 +46,7 @@ impl ChainId {
     pub fn as_network_name(&self) -> Option<&str> {
         let namespace = self.namespace.as_str();
         let reference = self.reference.as_str();
-        let network_name = match namespace {
+        match namespace {
             "solana" => match reference {
                 "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" => Some("solana"),
                 "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" => Some("solana-devnet"),
@@ -66,10 +66,11 @@ impl ChainId {
                 _ => None,
             },
             _ => None,
-        };
-        network_name
+        }
     }
 }
+
+// FIXME LIST OF KNOWN NETWORKS
 
 impl fmt::Display for ChainId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

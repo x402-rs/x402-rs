@@ -483,7 +483,7 @@ impl TryFrom<Bytes> for StructuredSignature {
         let signature = if is_eip6492 {
             let body = &bytes[..bytes.len() - 32];
             let sig6492 = Sig6492::abi_decode_params(body)
-                .map_err(|e| StructuredSignatureFormatError::InvalidEIP6492Format(e))?;
+                .map_err(StructuredSignatureFormatError::InvalidEIP6492Format)?;
             StructuredSignature::EIP6492 {
                 factory: sig6492.factory,
                 factory_calldata: sig6492.factoryCalldata,
