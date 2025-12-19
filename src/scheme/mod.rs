@@ -14,7 +14,7 @@ use std::str::FromStr;
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
 use crate::config::SchemeConfig;
 use crate::proto;
-use crate::proto::PaymentVerificationError;
+use crate::proto::{AsErrorReason, ErrorReason, PaymentVerificationError};
 use crate::scheme::v1_solana_exact::V1SolanaExact;
 use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_solana_exact::V2SolanaExact;
@@ -47,6 +47,19 @@ pub enum X402SchemeHandlerError {
     PaymentVerification(#[from] PaymentVerificationError),
     #[error("Onchain error: {0}")]
     OnchainFailure(String),
+}
+
+impl AsErrorReason for X402SchemeHandlerError {
+    fn as_error_reason(&self) -> ErrorReason {
+        match self {
+            X402SchemeHandlerError::PaymentVerification(e) => {
+                todo!("Implement payment verification error reason")
+            }
+            X402SchemeHandlerError::OnchainFailure(_) => {
+                todo!("Implement onchain error reason")
+            }
+        }
+    }
 }
 
 #[derive(Default)]

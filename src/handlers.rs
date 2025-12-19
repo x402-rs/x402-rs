@@ -21,6 +21,7 @@ use tracing::instrument;
 use crate::facilitator::Facilitator;
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
+use crate::proto::{AsErrorReason, ErrorReason};
 use crate::scheme::X402SchemeHandlerError;
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.
@@ -166,7 +167,7 @@ impl IntoResponse for FacilitatorLocalError {
         #[serde(rename_all = "camelCase")]
         struct VerificationErrorResponse {
             is_valid: bool,
-            invalid_reason: String,
+            invalid_reason: ErrorReason,
             invalid_reason_details: String,
             payer: String,
         }
@@ -177,42 +178,44 @@ impl IntoResponse for FacilitatorLocalError {
             success: bool,
             network: String,
             transaction: String,
-            error_reason: String,
+            error_reason: ErrorReason,
             error_reason_details: String,
             payer: String,
         }
 
-        match self {
-            FacilitatorLocalError::InvalidVerification(e) => match e {
-                X402SchemeHandlerError::PaymentVerification(e) => (
-                    StatusCode::BAD_REQUEST,
-                    Json(VerificationErrorResponse {
-                        is_valid: false,
-                        invalid_reason: "invalid_payment".to_string(),
-                        invalid_reason_details: e.to_string(),
-                        payer: "".to_string(),
-                    }),
-                )
-                    .into_response(),
-                X402SchemeHandlerError::OnchainFailure(e) => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(VerificationErrorResponse {
-                        is_valid: false,
-                        invalid_reason: "onchain_failure".to_string(),
-                        invalid_reason_details: e.to_string(),
-                        payer: "".to_string(),
-                    }),
-                )
-                    .into_response(),
-            },
-            FacilitatorLocalError::InvalidSettlement(e) => match e {
+        match &self {
+            FacilitatorLocalError::InvalidVerification(scheme_handler_error) => {
+                match scheme_handler_error {
+                    X402SchemeHandlerError::PaymentVerification(e) => (
+                        StatusCode::BAD_REQUEST,
+                        Json(VerificationErrorResponse {
+                            is_valid: false,
+                            invalid_reason: scheme_handler_error.as_error_reason(),
+                            invalid_reason_details: e.to_string(),
+                            payer: "".to_string(),
+                        }),
+                    )
+                        .into_response(),
+                    X402SchemeHandlerError::OnchainFailure(e) => (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(VerificationErrorResponse {
+                            is_valid: false,
+                            invalid_reason: scheme_handler_error.as_error_reason(),
+                            invalid_reason_details: e.to_string(),
+                            payer: "".to_string(),
+                        }),
+                    )
+                        .into_response(),
+                }
+            }
+            FacilitatorLocalError::InvalidSettlement(scheme_handler_error) => match scheme_handler_error {
                 X402SchemeHandlerError::PaymentVerification(e) => (
                     StatusCode::BAD_REQUEST,
                     Json(SettlementErrorResponse {
                         success: false,
                         network: "".to_string(),
                         transaction: "".to_string(),
-                        error_reason: "invalid_payment".to_string(),
+                        error_reason: scheme_handler_error.as_error_reason(),
                         error_reason_details: e.to_string(),
                         payer: "".to_string(),
                     }),
@@ -224,7 +227,7 @@ impl IntoResponse for FacilitatorLocalError {
                         success: false,
                         network: "".to_string(),
                         transaction: "".to_string(),
-                        error_reason: "unexpected_settle_error".to_string(),
+                        error_reason: scheme_handler_error.as_error_reason(),
                         error_reason_details: e.to_string(),
                         payer: "".to_string(),
                     }),
