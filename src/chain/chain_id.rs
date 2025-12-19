@@ -353,6 +353,28 @@ pub mod known_v1_networks {
             namespace: "eip155",
             reference: "41923",
         },
+        // Celo
+        NetworkInfo {
+            name: "celo",
+            namespace: "eip155",
+            reference: "42220",
+        },
+        NetworkInfo {
+            name: "celo-alfajores",
+            namespace: "eip155",
+            reference: "44787",
+        },
+        // BSC (Binance Smart Chain)
+        NetworkInfo {
+            name: "bsc",
+            namespace: "eip155",
+            reference: "56",
+        },
+        NetworkInfo {
+            name: "bsc-testnet",
+            namespace: "eip155",
+            reference: "97",
+        },
         // Solana Networks
         NetworkInfo {
             name: "solana",
