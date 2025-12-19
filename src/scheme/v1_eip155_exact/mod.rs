@@ -539,7 +539,7 @@ async fn transferWithAuthorization_0<'a, P: Provider>(
 /// This struct wraps the assembled call builder, making it reusable across verification
 /// (`.call()`) and settlement (`.send()`) flows, along with context useful for tracing/logging.
 ///
-/// This is created by [`EvmProvider::transferWithAuthorization_0`].
+/// This is created by [`transferWithAuthorization_0`].
 pub struct TransferWithAuthorization0Call<P> {
     /// The prepared call builder that can be `.call()`ed or `.send()`ed.
     pub tx: SolCallBuilder<P, IEIP3009::transferWithAuthorization_0Call>,
