@@ -287,6 +287,31 @@ pub mod known_v1_networks {
             namespace: "eip155",
             reference: "1329",
         },
+        NetworkInfo {
+            name: "peaq",
+            namespace: "eip155",
+            reference: "3338",
+        },
+        NetworkInfo {
+            name: "iotex",
+            namespace: "eip155",
+            reference: "4689",
+        },
+        NetworkInfo {
+            name: "abstract",
+            namespace: "eip155",
+            reference: "2741",
+        },
+        NetworkInfo {
+            name: "story",
+            namespace: "eip155",
+            reference: "1514",
+        },
+        NetworkInfo {
+            name: "educhain",
+            namespace: "eip155",
+            reference: "41923",
+        },
         // EVM Networks - Testnets
         NetworkInfo {
             name: "base-sepolia",
@@ -307,6 +332,16 @@ pub mod known_v1_networks {
             name: "sei-testnet",
             namespace: "eip155",
             reference: "1328",
+        },
+        NetworkInfo {
+            name: "abstract-testnet",
+            namespace: "eip155",
+            reference: "11124",
+        },
+        NetworkInfo {
+            name: "skale-base-sepolia",
+            namespace: "eip155",
+            reference: "324705682",
         },
         // Solana Networks
         NetworkInfo {
