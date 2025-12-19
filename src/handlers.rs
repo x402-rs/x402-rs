@@ -184,56 +184,34 @@ impl IntoResponse for FacilitatorLocalError {
         }
 
         match &self {
-            FacilitatorLocalError::InvalidVerification(scheme_handler_error) => {
-                match scheme_handler_error {
-                    X402SchemeHandlerError::PaymentVerification(e) => (
-                        StatusCode::BAD_REQUEST,
-                        Json(VerificationErrorResponse {
-                            is_valid: false,
-                            invalid_reason: scheme_handler_error.as_error_reason(),
-                            invalid_reason_details: e.to_string(),
-                            payer: "".to_string(),
-                        }),
-                    )
-                        .into_response(),
-                    X402SchemeHandlerError::OnchainFailure(e) => (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(VerificationErrorResponse {
-                            is_valid: false,
-                            invalid_reason: scheme_handler_error.as_error_reason(),
-                            invalid_reason_details: e.to_string(),
-                            payer: "".to_string(),
-                        }),
-                    )
-                        .into_response(),
-                }
+            FacilitatorLocalError::Verification(scheme_handler_error) => {
+                let verification_error_response = VerificationErrorResponse {
+                    is_valid: false,
+                    invalid_reason: scheme_handler_error.as_error_reason(),
+                    invalid_reason_details: scheme_handler_error.to_string(),
+                    payer: "".to_string(),
+                };
+                let status_code = match scheme_handler_error {
+                    X402SchemeHandlerError::PaymentVerification(_) => StatusCode::BAD_REQUEST,
+                    X402SchemeHandlerError::OnchainFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                };
+                (status_code, Json(verification_error_response)).into_response()
             }
-            FacilitatorLocalError::InvalidSettlement(scheme_handler_error) => match scheme_handler_error {
-                X402SchemeHandlerError::PaymentVerification(e) => (
-                    StatusCode::BAD_REQUEST,
-                    Json(SettlementErrorResponse {
-                        success: false,
-                        network: "".to_string(),
-                        transaction: "".to_string(),
-                        error_reason: scheme_handler_error.as_error_reason(),
-                        error_reason_details: e.to_string(),
-                        payer: "".to_string(),
-                    }),
-                )
-                    .into_response(),
-                X402SchemeHandlerError::OnchainFailure(e) => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(SettlementErrorResponse {
-                        success: false,
-                        network: "".to_string(),
-                        transaction: "".to_string(),
-                        error_reason: scheme_handler_error.as_error_reason(),
-                        error_reason_details: e.to_string(),
-                        payer: "".to_string(),
-                    }),
-                )
-                    .into_response(),
-            },
+            FacilitatorLocalError::Settlement(scheme_handler_error) => {
+                let settlement_error_response = SettlementErrorResponse {
+                    success: false,
+                    network: "".to_string(),
+                    transaction: "".to_string(),
+                    error_reason: scheme_handler_error.as_error_reason(),
+                    error_reason_details: scheme_handler_error.to_string(),
+                    payer: "".to_string(),
+                };
+                let status_code = match scheme_handler_error {
+                    X402SchemeHandlerError::PaymentVerification(_) => StatusCode::BAD_REQUEST,
+                    X402SchemeHandlerError::OnchainFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                };
+                (status_code, Json(settlement_error_response)).into_response()
+            }
         }
     }
 }

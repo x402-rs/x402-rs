@@ -44,13 +44,13 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
         let handler = request
             .scheme_handler_slug()
             .and_then(|slug| self.handlers.by_slug(&slug))
-            .ok_or(FacilitatorLocalError::InvalidVerification(
+            .ok_or(FacilitatorLocalError::Verification(
                 PaymentVerificationError::UnsupportedScheme.into(),
             ))?;
         let response = handler
             .verify(request)
             .await
-            .map_err(FacilitatorLocalError::InvalidVerification)?;
+            .map_err(FacilitatorLocalError::Verification)?;
         Ok(response)
     }
 
@@ -61,13 +61,13 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
         let handler = request
             .scheme_handler_slug()
             .and_then(|slug| self.handlers.by_slug(&slug))
-            .ok_or(FacilitatorLocalError::InvalidVerification(
+            .ok_or(FacilitatorLocalError::Verification(
                 PaymentVerificationError::UnsupportedScheme.into(),
             ))?;
         let response = handler
             .settle(request)
             .await
-            .map_err(FacilitatorLocalError::InvalidSettlement)?;
+            .map_err(FacilitatorLocalError::Settlement)?;
         Ok(response)
     }
 
@@ -94,9 +94,9 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
 #[derive(Debug, thiserror::Error)]
 pub enum FacilitatorLocalError {
     #[error(transparent)]
-    InvalidVerification(X402SchemeHandlerError),
+    Verification(X402SchemeHandlerError),
     #[error(transparent)]
-    InvalidSettlement(X402SchemeHandlerError),
+    Settlement(X402SchemeHandlerError),
 }
 
 // FIXME ERRORS are fucked up
