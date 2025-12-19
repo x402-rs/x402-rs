@@ -100,6 +100,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-// TODO For EOA wallets, parse signature into v, r, s and use that overload
-// TODO For smart wallets, use the bytes signature overload
