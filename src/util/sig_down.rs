@@ -8,7 +8,7 @@ use tokio_util::task::TaskTracker;
 /// Spawns a background task that listens for shutdown signals and triggers
 /// a cancellation token when received.
 pub struct SigDown {
-    _task_tracker: TaskTracker,
+    task_tracker: TaskTracker,
     cancellation_token: CancellationToken,
 }
 
@@ -34,7 +34,7 @@ impl SigDown {
         });
         task_tracker.close();
         Ok(Self {
-            _task_tracker: task_tracker,
+            task_tracker,
             cancellation_token: outer,
         })
     }
@@ -48,6 +48,6 @@ impl SigDown {
     #[allow(dead_code)]
     pub async fn recv(&self) {
         self.cancellation_token.cancelled().await;
-        self._task_tracker.wait().await;
+        self.task_tracker.wait().await;
     }
 }
