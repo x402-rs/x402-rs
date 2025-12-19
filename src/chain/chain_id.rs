@@ -1,5 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::str::FromStr;
 
@@ -27,12 +27,12 @@ impl ChainId {
 
     /// Create a ChainId from a network name using the known v1 networks list
     pub fn from_network_name(network_name: &str) -> Option<Self> {
-        known_v1_networks::KnownNetworks::by_name(network_name).map(|n| n.chain_id())
+        known_v1_networks::by_network_name(network_name).map(|n| n.chain_id())
     }
 
     /// Get the network name for this chain ID using the known v1 networks list
     pub fn as_network_name(&self) -> Option<&'static str> {
-        known_v1_networks::KnownNetworks::by_chain_id(self).map(|n| n.name)
+        known_v1_networks::by_chain_id(self).map(|n| n.name)
     }
 }
 
@@ -233,7 +233,8 @@ impl<'de> Deserialize<'de> for ChainIdPattern {
 
 /// Known networks for v1 protocol schemes
 pub mod known_v1_networks {
-    use super::ChainId;
+    use super::{ChainId, HashMap};
+    use once_cell::sync::Lazy;
 
     /// A known network definition with its chain ID and human-readable name.
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -254,7 +255,7 @@ pub mod known_v1_networks {
     }
 
     /// Static list of known networks
-    pub static KNOWN_NETWORKS: &[NetworkInfo] = &[
+    static KNOWN_NETWORKS: &[NetworkInfo] = &[
         // EVM Networks - Mainnets
         NetworkInfo {
             name: "base",
@@ -320,21 +321,20 @@ pub mod known_v1_networks {
         },
     ];
 
-    /// Query interface for known networks
-    pub struct KnownNetworks;
+    /// Lazy hashmap: network name -> NetworkInfo
+    static NAME_TO_NETWORK: Lazy<HashMap<&'static str, &'static NetworkInfo>> =
+        Lazy::new(|| KNOWN_NETWORKS.iter().map(|n| (n.name, n)).collect());
 
-    impl KnownNetworks {
-        /// Find a network by its human-readable name
-        pub fn by_name(name: &str) -> Option<&'static NetworkInfo> {
-            KNOWN_NETWORKS.iter().find(|n| n.name == name)
-        }
+    /// Lazy hashmap: ChainId -> NetworkInfo
+    static CHAIN_ID_TO_NETWORK: Lazy<HashMap<ChainId, &'static NetworkInfo>> =
+        Lazy::new(|| KNOWN_NETWORKS.iter().map(|n| (n.chain_id(), n)).collect());
 
-        /// Find a network by its chain ID
-        pub fn by_chain_id(chain_id: &ChainId) -> Option<&'static NetworkInfo> {
-            KNOWN_NETWORKS
-                .iter()
-                .find(|n| n.namespace == chain_id.namespace && n.reference == chain_id.reference)
-        }
+    pub fn by_network_name(name: &str) -> Option<&'static NetworkInfo> {
+        NAME_TO_NETWORK.get(name).copied()
+    }
+
+    pub fn by_chain_id(chain_id: &ChainId) -> Option<&'static NetworkInfo> {
+        CHAIN_ID_TO_NETWORK.get(chain_id).copied()
     }
 
     #[cfg(test)]
@@ -343,33 +343,33 @@ pub mod known_v1_networks {
 
         #[test]
         fn test_known_networks_by_name() {
-            let base = KnownNetworks::by_name("base").unwrap();
+            let base = by_network_name("base").unwrap();
             assert_eq!(base.namespace, "eip155");
             assert_eq!(base.reference, "8453");
 
-            let base_sepolia = KnownNetworks::by_name("base-sepolia").unwrap();
+            let base_sepolia = by_network_name("base-sepolia").unwrap();
             assert_eq!(base_sepolia.namespace, "eip155");
             assert_eq!(base_sepolia.reference, "84532");
 
-            let solana = KnownNetworks::by_name("solana").unwrap();
+            let solana = by_network_name("solana").unwrap();
             assert_eq!(solana.namespace, "solana");
             assert_eq!(solana.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
 
-            assert!(KnownNetworks::by_name("unknown-network").is_none());
+            assert!(by_network_name("unknown-network").is_none());
         }
 
         #[test]
         fn test_known_networks_by_chain_id() {
             let chain_id = ChainId::new("eip155", "8453");
-            let network = KnownNetworks::by_chain_id(&chain_id).unwrap();
+            let network = by_chain_id(&chain_id).unwrap();
             assert_eq!(network.name, "base");
 
             let solana_chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
-            let solana_network = KnownNetworks::by_chain_id(&solana_chain_id).unwrap();
+            let solana_network = by_chain_id(&solana_chain_id).unwrap();
             assert_eq!(solana_network.name, "solana");
 
             let unknown_chain_id = ChainId::new("eip155", "999999");
-            assert!(KnownNetworks::by_chain_id(&unknown_chain_id).is_none());
+            assert!(by_chain_id(&unknown_chain_id).is_none());
         }
 
         #[test]
@@ -380,7 +380,10 @@ pub mod known_v1_networks {
 
             let solana_chain_id = ChainId::from_network_name("solana").unwrap();
             assert_eq!(solana_chain_id.namespace, "solana");
-            assert_eq!(solana_chain_id.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+            assert_eq!(
+                solana_chain_id.reference,
+                "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
+            );
 
             assert!(ChainId::from_network_name("unknown").is_none());
         }
@@ -399,14 +402,13 @@ pub mod known_v1_networks {
 
         #[test]
         fn test_network_info_chain_id() {
-            let network = KnownNetworks::by_name("polygon").unwrap();
+            let network = by_network_name("polygon").unwrap();
             let chain_id = network.chain_id();
             assert_eq!(chain_id.namespace, "eip155");
             assert_eq!(chain_id.reference, "137");
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
