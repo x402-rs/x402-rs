@@ -1,20 +1,23 @@
 pub mod types;
 
+use crate::chain::eip155::{
+    Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
+};
+use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
+use crate::proto;
+use crate::proto::PaymentVerificationError;
+use crate::proto::v2;
+use crate::scheme::v1_eip155_exact::{
+    EXACT_SCHEME, Eip155ExactError, ExactEvmPayment, USDC, assert_domain, assert_enough_balance,
+    assert_enough_value, assert_time, settle_payment, verify_payment,
+};
+use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use tracing::instrument;
-use crate::proto::PaymentVerificationError;
-use crate::chain::eip155::{
-    Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
-};
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
-use crate::proto;
-use crate::proto::v2;
-use crate::scheme::v1_eip155_exact::{EXACT_SCHEME, ExactEvmPayment, USDC, assert_domain, assert_enough_balance, assert_enough_value, assert_time, settle_payment, verify_payment, Eip155ExactError};
-use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 
 pub struct V2Eip155Exact;
 
@@ -125,8 +128,7 @@ async fn assert_valid_payment<P: Provider>(
 ) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
     let accepted = &payload.accepted;
     if accepted != requirements {
-        return Err(
-            PaymentVerificationError::AcceptedRequirementsMismatch.into());
+        return Err(PaymentVerificationError::AcceptedRequirementsMismatch.into());
     }
     let payload = &payload.payload;
 

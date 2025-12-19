@@ -185,16 +185,13 @@ async fn assert_valid_payment<P: Provider>(
     requirements: &types::PaymentRequirements,
 ) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
     let chain_id: ChainId = chain.into();
-    let payload_chain_id = ChainId::from_network_name(&payload.network).map_err(|_| {
-        PaymentVerificationError::UnsupportedChain
-    })?;
+    let payload_chain_id = ChainId::from_network_name(&payload.network)
+        .map_err(|_| PaymentVerificationError::UnsupportedChain)?;
     if payload_chain_id != chain_id {
         return Err(PaymentVerificationError::ChainIdMismatch.into());
     }
-    let requirements_chain_id =
-        ChainId::from_network_name(&requirements.network).map_err(|_| {
-            PaymentVerificationError::UnsupportedChain
-        })?;
+    let requirements_chain_id = ChainId::from_network_name(&requirements.network)
+        .map_err(|_| PaymentVerificationError::UnsupportedChain)?;
     if requirements_chain_id != chain_id {
         return Err(PaymentVerificationError::ChainIdMismatch.into());
     }

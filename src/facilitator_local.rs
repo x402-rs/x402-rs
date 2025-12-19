@@ -9,17 +9,14 @@
 //! - Contract interaction using Alloy
 //! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
 
-use crate::chain::ChainIdFromNetworkNameError;
-use crate::chain::eip155::MetaTransactionSendError;
-use crate::chain::solana::SolanaChainProviderError;
-use crate::facilitator::Facilitator;
-use crate::proto;
-use crate::proto::PaymentVerificationError;
-use crate::scheme::v1_eip155_exact::{Eip155ExactError, StructuredSignatureFormatError};
-use crate::scheme::{SchemeRegistry, X402SchemeHandlerError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
+
+use crate::facilitator::Facilitator;
+use crate::proto;
+use crate::proto::PaymentVerificationError;
+use crate::scheme::{SchemeRegistry, X402SchemeHandlerError};
 
 /// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
 /// using a network-aware provider cache.
@@ -49,8 +46,13 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
         let handler = request
             .scheme_handler_slug()
             .and_then(|slug| self.handlers.by_slug(&slug))
-            .ok_or(FacilitatorLocalError::UnsupportedNetwork)?;
-        let response = handler.verify(request).await?; // FIXME ERRORS
+            .ok_or(FacilitatorLocalError::InvalidVerification(
+                PaymentVerificationError::UnsupportedScheme.into(),
+            ))?;
+        let response = handler
+            .verify(request)
+            .await
+            .map_err(FacilitatorLocalError::InvalidVerification)?;
         Ok(response)
     }
 
@@ -61,8 +63,13 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
         let handler = request
             .scheme_handler_slug()
             .and_then(|slug| self.handlers.by_slug(&slug))
-            .ok_or(FacilitatorLocalError::UnsupportedNetwork)?;
-        let response = handler.settle(request).await?; // FIXME ERRORS
+            .ok_or(FacilitatorLocalError::InvalidVerification(
+                PaymentVerificationError::UnsupportedScheme.into(),
+            ))?;
+        let response = handler
+            .settle(request)
+            .await
+            .map_err(FacilitatorLocalError::InvalidSettlement)?;
         Ok(response)
     }
 
@@ -88,86 +95,53 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum FacilitatorLocalError {
-    /// The network is not supported by this facilitator.
-    #[error("Unsupported network")]
-    UnsupportedNetwork,
-    /// The network is not supported by this facilitator.
-    #[error("Network mismatch")]
-    NetworkMismatch,
-    /// Scheme mismatch.
-    #[error("Scheme mismatch")]
-    SchemeMismatch,
-    /// The `pay_to` recipient in the requirements doesn't match the `to` address in the payload.
-    #[error("Incompatible payload receivers (payload: {1}, requirements: {2})")]
-    ReceiverMismatch(String, String, String),
-    /// The `validAfter`/`validBefore` fields on the authorization are not within bounds.
-    #[error("Invalid timing: {1}")]
-    InvalidTiming(String, String),
-    /// Low-level contract interaction failure (e.g. call failed, method not found).
-    #[error("Invalid contract call: {0}")]
-    ContractCall(String),
-    /// EIP-712 signature is invalid or mismatched.
-    #[error("Invalid signature: {1}")]
-    InvalidSignature(String, String),
-    /// The payer's on-chain balance is insufficient for the payment.
-    #[error("Insufficient funds")]
-    InsufficientFunds(String),
-    /// The payload's `value` is not enough to meet the requirements.
-    #[error("Insufficient value")]
-    InsufficientValue(String),
-    /// The payload decoding failed.
-    #[error("Decoding error: {0}")]
-    DecodingError(String),
+    #[error(transparent)]
+    InvalidVerification(X402SchemeHandlerError),
+    #[error(transparent)]
+    InvalidSettlement(X402SchemeHandlerError),
 }
 
-impl From<MetaTransactionSendError> for FacilitatorLocalError {
-    fn from(value: MetaTransactionSendError) -> Self {
-        // TODO ERRORS
-        FacilitatorLocalError::ContractCall(value.to_string())
-    }
-}
-
-impl From<ChainIdFromNetworkNameError> for FacilitatorLocalError {
-    fn from(_value: ChainIdFromNetworkNameError) -> Self {
-        // TODO ERRORS
-        FacilitatorLocalError::UnsupportedNetwork
-    }
-}
-
-impl From<SolanaChainProviderError> for FacilitatorLocalError {
-    fn from(value: SolanaChainProviderError) -> Self {
-        // TODO ERRORS
-        FacilitatorLocalError::ContractCall(value.to_string())
-    }
-}
-
-impl From<StructuredSignatureFormatError> for FacilitatorLocalError {
-    fn from(value: StructuredSignatureFormatError) -> Self {
-        // TODO ERRORS
-        FacilitatorLocalError::DecodingError(value.to_string())
-    }
-}
-
-impl From<Eip155ExactError> for FacilitatorLocalError {
-    fn from(value: Eip155ExactError) -> Self {
-        // TODO ERRORS
-        FacilitatorLocalError::DecodingError(value.to_string())
-    }
-}
-
-impl From<PaymentVerificationError> for FacilitatorLocalError {
-    fn from(value: PaymentVerificationError) -> Self {
-        // TODO ERRORS
-        FacilitatorLocalError::DecodingError(value.to_string())
-    }
-}
-
-impl From<X402SchemeHandlerError> for FacilitatorLocalError {
-    fn from(value: X402SchemeHandlerError) -> Self {
-        // TODO ERRORS
-        FacilitatorLocalError::DecodingError(value.to_string())
-    }
-}
+// impl From<MetaTransactionSendError> for FacilitatorLocalError {
+//     fn from(value: MetaTransactionSendError) -> Self {
+//         // TODO ERRORS
+//         FacilitatorLocalError::ContractCall(value.to_string())
+//     }
+// }
+//
+// impl From<ChainIdFromNetworkNameError> for FacilitatorLocalError {
+//     fn from(_value: ChainIdFromNetworkNameError) -> Self {
+//         // TODO ERRORS
+//         FacilitatorLocalError::UnsupportedNetwork
+//     }
+// }
+//
+// impl From<SolanaChainProviderError> for FacilitatorLocalError {
+//     fn from(value: SolanaChainProviderError) -> Self {
+//         // TODO ERRORS
+//         FacilitatorLocalError::ContractCall(value.to_string())
+//     }
+// }
+//
+// impl From<StructuredSignatureFormatError> for FacilitatorLocalError {
+//     fn from(value: StructuredSignatureFormatError) -> Self {
+//         // TODO ERRORS
+//         FacilitatorLocalError::DecodingError(value.to_string())
+//     }
+// }
+//
+// impl From<Eip155ExactError> for FacilitatorLocalError {
+//     fn from(value: Eip155ExactError) -> Self {
+//         // TODO ERRORS
+//         FacilitatorLocalError::DecodingError(value.to_string())
+//     }
+// }
+//
+// impl From<PaymentVerificationError> for FacilitatorLocalError {
+//     fn from(value: PaymentVerificationError) -> Self {
+//         // TODO ERRORS
+//         FacilitatorLocalError::DecodingError(value.to_string())
+//     }
+// }
 
 // FIXME ERRORS are fucked up
 

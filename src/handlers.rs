@@ -14,12 +14,14 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router, response::IntoResponse};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::instrument;
 
 use crate::facilitator::Facilitator;
-use crate::facilitator_local::{ErrorReason, FacilitatorLocalError};
+use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
+use crate::scheme::X402SchemeHandlerError;
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.
 ///
@@ -160,65 +162,75 @@ where
 
 impl IntoResponse for FacilitatorLocalError {
     fn into_response(self) -> Response {
-        let error = self;
+        #[derive(Serialize, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct VerificationErrorResponse {
+            is_valid: bool,
+            invalid_reason: String,
+            invalid_reason_debug: String,
+            payer: String,
+        }
 
-        let bad_request = (
-            StatusCode::BAD_REQUEST,
-            Json(json!({
-                "error": "Invalid request",
-            })),
-        )
-            .into_response();
+        #[derive(Serialize, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct SettlementErrorResponse {
+            success: bool,
+            network: String,
+            transaction: String,
+            error_reason: String,
+            error_reason_debug: String,
+            payer: String,
+        }
 
-        match error {
-            FacilitatorLocalError::SchemeMismatch => (
-                StatusCode::OK,
-                Json(json!({
-                    "error": ErrorReason::UnsupportedScheme.to_string(),
-                })),
-            )
-                .into_response(),
-            FacilitatorLocalError::ReceiverMismatch(payer, ..)
-            | FacilitatorLocalError::InvalidSignature(payer, ..)
-            | FacilitatorLocalError::InvalidTiming(payer, ..)
-            | FacilitatorLocalError::InsufficientValue(payer) => (
-                StatusCode::OK,
-                Json(json!({
-                    "payer": payer,
-                    "error": ErrorReason::UnsupportedScheme.to_string(),
-                })),
-            )
-                .into_response(),
-            FacilitatorLocalError::NetworkMismatch => (
-                StatusCode::OK,
-                Json(json!({
-                    "error": ErrorReason::UnsupportedScheme.to_string(),
-                })),
-            )
-                .into_response(),
-            FacilitatorLocalError::UnsupportedNetwork => (
-                StatusCode::OK,
-                Json(json!({
-                    "error": ErrorReason::UnsupportedScheme.to_string(),
-                })),
-            )
-                .into_response(),
-            FacilitatorLocalError::ContractCall(..) => bad_request,
-            FacilitatorLocalError::DecodingError(reason) => (
-                StatusCode::OK,
-                Json(json!({
-                    "error": reason,
-                })),
-            )
-                .into_response(),
-            FacilitatorLocalError::InsufficientFunds(payer) => (
-                StatusCode::OK,
-                Json(json!({
-                    "payer": payer,
-                    "error": ErrorReason::InsufficientFunds.to_string(),
-                })),
-            )
-                .into_response(),
+        match self {
+            FacilitatorLocalError::InvalidVerification(e) => match e {
+                X402SchemeHandlerError::PaymentVerification(e) => (
+                    StatusCode::BAD_REQUEST,
+                    Json(VerificationErrorResponse {
+                        is_valid: false,
+                        invalid_reason: "invalid_payment".to_string(),
+                        invalid_reason_debug: e.to_string(),
+                        payer: "".to_string(),
+                    }),
+                )
+                    .into_response(),
+                X402SchemeHandlerError::OnchainFailure(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(VerificationErrorResponse {
+                        is_valid: false,
+                        invalid_reason: "onchain_failure".to_string(),
+                        invalid_reason_debug: e.to_string(),
+                        payer: "".to_string(),
+                    }),
+                )
+                    .into_response(),
+            },
+            FacilitatorLocalError::InvalidSettlement(e) => match e {
+                X402SchemeHandlerError::PaymentVerification(e) => (
+                    StatusCode::BAD_REQUEST,
+                    Json(SettlementErrorResponse {
+                        success: false,
+                        network: "".to_string(),
+                        transaction: "".to_string(),
+                        error_reason: "invalid_payment".to_string(),
+                        error_reason_debug: e.to_string(),
+                        payer: "".to_string(),
+                    }),
+                )
+                    .into_response(),
+                X402SchemeHandlerError::OnchainFailure(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(SettlementErrorResponse {
+                        success: false,
+                        network: "".to_string(),
+                        transaction: "".to_string(),
+                        error_reason: "unexpected_settle_error".to_string(),
+                        error_reason_debug: e.to_string(),
+                        payer: "".to_string(),
+                    }),
+                )
+                    .into_response(),
+            },
         }
     }
 }

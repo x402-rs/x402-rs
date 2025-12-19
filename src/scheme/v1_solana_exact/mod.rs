@@ -16,7 +16,6 @@ use tracing_core::Level;
 
 use crate::chain::solana::{Address, SolanaChainProvider, SolanaChainProviderError};
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
-use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::scheme::v1_eip155_exact::EXACT_SCHEME;
@@ -210,15 +209,19 @@ impl TransactionInt {
     }
 
     #[allow(dead_code)] // Public for consumption by downstream crates.
-    pub fn as_base64(&self) -> Result<String, FacilitatorLocalError> {
-        let bytes = bincode::serialize(&self.inner)
-            .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
+    pub fn as_base64(&self) -> Result<String, TransactionToB64Error> {
+        let bytes =
+            bincode::serialize(&self.inner).map_err(|e| TransactionToB64Error(format!("{e}")))?;
         let base64_bytes = Base64Bytes::encode(bytes);
         let string = String::from_utf8(base64_bytes.0.into_owned())
-            .map_err(|e| FacilitatorLocalError::DecodingError(format!("{e}")))?;
+            .map_err(|e| TransactionToB64Error(format!("{e}")))?;
         Ok(string)
     }
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("Can not encode transaction to base64: {0}")]
+pub struct TransactionToB64Error(String);
 
 pub struct VerifyTransferResult {
     pub payer: Address,
