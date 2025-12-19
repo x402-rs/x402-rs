@@ -139,7 +139,7 @@ async fn assert_valid_payment<P: Provider>(
     }
     let authorization = &payload.authorization;
     if authorization.to != accepted.pay_to {
-        return Err(PaymentVerificationError::ReceiverMismatch.into());
+        return Err(PaymentVerificationError::RecipientMismatch.into());
     }
     let valid_after = authorization.valid_after;
     let valid_before = authorization.valid_before;

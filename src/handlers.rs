@@ -21,7 +21,7 @@ use tracing::instrument;
 use crate::facilitator::Facilitator;
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
-use crate::proto::{AsErrorReason, ErrorReason};
+use crate::proto::{AsPaymentProblem, ErrorReason};
 use crate::scheme::X402SchemeHandlerError;
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.
@@ -165,31 +165,32 @@ impl IntoResponse for FacilitatorLocalError {
     fn into_response(self) -> Response {
         #[derive(Serialize, Deserialize)]
         #[serde(rename_all = "camelCase")]
-        struct VerificationErrorResponse {
+        struct VerificationErrorResponse<'a> {
             is_valid: bool,
             invalid_reason: ErrorReason,
-            invalid_reason_details: String,
-            payer: String,
+            invalid_reason_details: &'a str,
+            payer: &'a str,
         }
 
         #[derive(Serialize, Deserialize)]
         #[serde(rename_all = "camelCase")]
-        struct SettlementErrorResponse {
+        struct SettlementErrorResponse<'a> {
             success: bool,
-            network: String,
-            transaction: String,
+            network: &'a str,
+            transaction: &'a str,
             error_reason: ErrorReason,
-            error_reason_details: String,
-            payer: String,
+            error_reason_details: &'a str,
+            payer: &'a str,
         }
 
-        match &self {
+        match self {
             FacilitatorLocalError::Verification(scheme_handler_error) => {
+                let problem = scheme_handler_error.as_payment_problem();
                 let verification_error_response = VerificationErrorResponse {
                     is_valid: false,
-                    invalid_reason: scheme_handler_error.as_error_reason(),
-                    invalid_reason_details: scheme_handler_error.to_string(),
-                    payer: "".to_string(),
+                    invalid_reason: problem.reason(),
+                    invalid_reason_details: problem.details(),
+                    payer: "",
                 };
                 let status_code = match scheme_handler_error {
                     X402SchemeHandlerError::PaymentVerification(_) => StatusCode::BAD_REQUEST,
@@ -198,13 +199,14 @@ impl IntoResponse for FacilitatorLocalError {
                 (status_code, Json(verification_error_response)).into_response()
             }
             FacilitatorLocalError::Settlement(scheme_handler_error) => {
+                let problem = scheme_handler_error.as_payment_problem();
                 let settlement_error_response = SettlementErrorResponse {
                     success: false,
-                    network: "".to_string(),
-                    transaction: "".to_string(),
-                    error_reason: scheme_handler_error.as_error_reason(),
-                    error_reason_details: scheme_handler_error.to_string(),
-                    payer: "".to_string(),
+                    network: "",
+                    transaction: "",
+                    error_reason: problem.reason(),
+                    error_reason_details: problem.details(),
+                    payer: "",
                 };
                 let status_code = match scheme_handler_error {
                     X402SchemeHandlerError::PaymentVerification(_) => StatusCode::BAD_REQUEST,

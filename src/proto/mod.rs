@@ -169,22 +169,22 @@ pub struct SettleResponse(serde_json::Value);
 
 #[derive(Debug, thiserror::Error)]
 pub enum PaymentVerificationError {
-    #[error("Decoding failure: {0}")]
-    DecodingFailure(String),
+    #[error("Invalid format: {0}")]
+    InvalidFormat(String),
     #[error("Payment amount is invalid with respect to the payment requirements")]
     InvalidPaymentAmount,
-    #[error("Onchain balance is not enough to cover the payment amount")]
-    InsufficientFunds,
     #[error("Payment authorization is not yet valid")]
-    NotYetValid,
+    Early,
     #[error("Payment authorization is expired")]
     Expired,
     #[error("Payment chain id is invalid with respect to the payment requirements")]
     ChainIdMismatch,
-    #[error("Payment receiver is invalid with respect to the payment requirements")]
-    ReceiverMismatch,
+    #[error("Payment recipient is invalid with respect to the payment requirements")]
+    RecipientMismatch,
     #[error("Payment asset is invalid with respect to the payment requirements")]
     AssetMismatch,
+    #[error("Onchain balance is not enough to cover the payment amount")]
+    InsufficientFunds,
     #[error("{0}")]
     InvalidSignature(String),
     #[error("{0}")]
@@ -197,59 +197,73 @@ pub enum PaymentVerificationError {
     AcceptedRequirementsMismatch,
 }
 
+impl AsPaymentProblem for PaymentVerificationError {
+    fn as_payment_problem(&self) -> PaymentProblem {
+        let error_reason = match self {
+            PaymentVerificationError::InvalidFormat(_) => ErrorReason::InvalidFormat,
+            PaymentVerificationError::InvalidPaymentAmount => ErrorReason::InvalidPaymentAmount,
+            PaymentVerificationError::InsufficientFunds => ErrorReason::InsufficientFunds,
+            PaymentVerificationError::Early => ErrorReason::InvalidPaymentEarly,
+            PaymentVerificationError::Expired => ErrorReason::InvalidPaymentExpired,
+            PaymentVerificationError::ChainIdMismatch => ErrorReason::ChainIdMismatch,
+            PaymentVerificationError::RecipientMismatch => ErrorReason::RecipientMismatch,
+            PaymentVerificationError::AssetMismatch => ErrorReason::AssetMismatch,
+            PaymentVerificationError::InvalidSignature(_) => ErrorReason::InvalidSignature,
+            PaymentVerificationError::TransactionSimulation(_) => {
+                ErrorReason::TransactionSimulation
+            }
+            PaymentVerificationError::UnsupportedChain => ErrorReason::UnsupportedChain,
+            PaymentVerificationError::UnsupportedScheme => ErrorReason::UnsupportedScheme,
+            PaymentVerificationError::AcceptedRequirementsMismatch => {
+                ErrorReason::AcceptedRequirementsMismatch
+            }
+        };
+        PaymentProblem::new(error_reason, self.to_string())
+    }
+}
+
 impl From<serde_json::Error> for PaymentVerificationError {
     fn from(value: serde_json::Error) -> Self {
-        Self::DecodingFailure(value.to_string())
+        Self::InvalidFormat(value.to_string())
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorReason {
-    // eip155 exact
-    InvalidExactEvmPayloadAuthorizationValidAfter,
-    InvalidExactEvmPayloadAuthorizationValidBefore,
-    InvalidExactEvmPayloadAuthorizationValue,
-    InvalidExactEvmPayloadSignature,
-    InvalidExactEvmPayloadUndeployedSmartWallet,
-    InvalidExactEvmPayloadRecipientMismatch,
-    // solana exact
-    InvalidExactSvmPayloadTransaction,
-    InvalidExactSvmPayloadTransactionAmountMismatch,
-    InvalidExactSvmPayloadTransactionCreateAtaInstruction,
-    InvalidExactSvmPayloadTransactionCreateAtaInstructionIncorrectPayee,
-    InvalidExactSvmPayloadTransactionCreateAtaInstructionIncorrectAsset,
-    InvalidExactSvmPayloadTransactionInstructions,
-    InvalidExactSvmPayloadTransactionInstructionsLength,
-    InvalidExactSvmPayloadTransactionInstructionsComputeLimitInstruction,
-    InvalidExactSvmPayloadTransactionInstructionsComputePriceInstruction,
-    InvalidExactSvmPayloadTransactionInstructionsComputePriceInstructionTooHigh,
-    InvalidExactSvmPayloadTransactionInstructionNotSplTokenTransferChecked,
-    InvalidExactSvmPayloadTransactionInstructionNotToken2022TransferChecked,
-    InvalidExactSvmPayloadTransactionFeePayerIncludedInInstructionAccounts,
-    InvalidExactSvmPayloadTransactionFeePayerTransferringFunds,
-    InvalidExactSvmPayloadTransactionNotATransferInstruction,
-    InvalidExactSvmPayloadTransactionReceiverAtaNotFound,
-    InvalidExactSvmPayloadTransactionSenderAtaNotFound,
-    InvalidExactSvmPayloadTransactionSimulationFailed,
-    InvalidExactSvmPayloadTransactionTransferToIncorrectAta,
-    SettleExactSvmBlockHeightExceeded,
-    SettleExactSvmTransactionConfirmationTimedOut,
-    // general
+    InvalidFormat,
+    InvalidPaymentAmount,
+    InvalidPaymentEarly,
+    InvalidPaymentExpired,
+    ChainIdMismatch,
+    RecipientMismatch,
+    AssetMismatch,
+    AcceptedRequirementsMismatch,
+    InvalidSignature,
+    TransactionSimulation,
     InsufficientFunds,
-    InvalidNetwork,
-    InvalidPayload,
-    InvalidPaymentRequirements,
-    InvalidScheme,
-    InvalidPayment,
-    PaymentExpired,
+    UnsupportedChain,
     UnsupportedScheme,
-    InvalidX402Version,
-    InvalidTransactionState,
-    UnexpectedSettleError,
-    UnexpectedVerifyError,
+    UnexpectedError,
 }
 
-pub trait AsErrorReason {
-    fn as_error_reason(&self) -> ErrorReason;
+pub trait AsPaymentProblem {
+    fn as_payment_problem(&self) -> PaymentProblem;
+}
+
+pub struct PaymentProblem {
+    reason: ErrorReason,
+    details: String,
+}
+
+impl PaymentProblem {
+    pub fn new(reason: ErrorReason, details: String) -> Self {
+        Self { reason, details }
+    }
+    pub fn reason(&self) -> ErrorReason {
+        self.reason
+    }
+    pub fn details(&self) -> &str {
+        &self.details
+    }
 }

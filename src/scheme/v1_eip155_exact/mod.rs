@@ -197,7 +197,7 @@ async fn assert_valid_payment<P: Provider>(
     }
     let authorization = &payload.payload.authorization;
     if authorization.to != requirements.pay_to {
-        return Err(PaymentVerificationError::ReceiverMismatch.into());
+        return Err(PaymentVerificationError::RecipientMismatch.into());
     }
     let valid_after = authorization.valid_after;
     let valid_before = authorization.valid_before;
@@ -237,7 +237,7 @@ pub fn assert_time(
         return Err(PaymentVerificationError::Expired);
     }
     if valid_after > now {
-        return Err(PaymentVerificationError::NotYetValid);
+        return Err(PaymentVerificationError::Early);
     }
     Ok(())
 }
@@ -808,7 +808,6 @@ pub enum Eip155ExactError {
     PaymentVerification(#[from] PaymentVerificationError),
 }
 
-// FIXME Should we get back to X402SchemeHandlerError ??
 impl From<Eip155ExactError> for X402SchemeHandlerError {
     fn from(value: Eip155ExactError) -> Self {
         match value {

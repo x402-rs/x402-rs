@@ -98,5 +98,3 @@ pub enum FacilitatorLocalError {
     #[error(transparent)]
     Settlement(X402SchemeHandlerError),
 }
-
-// FIXME ERRORS are fucked up

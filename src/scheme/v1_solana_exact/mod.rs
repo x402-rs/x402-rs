@@ -331,7 +331,7 @@ pub fn verify_create_ata_instruction(
 
     // verify that the ATA is created for the expected payee
     if Address::new(owner) != *transfer_requirement.pay_to {
-        return Err(PaymentVerificationError::ReceiverMismatch);
+        return Err(PaymentVerificationError::RecipientMismatch);
     }
     if Address::new(mint) != *transfer_requirement.asset {
         return Err(PaymentVerificationError::AssetMismatch);
@@ -526,7 +526,7 @@ pub async fn verify_transfer_instruction(
         &ATA_PROGRAM_PUBKEY,
     );
     if transfer_checked_instruction.destination != ata {
-        return Err(PaymentVerificationError::ReceiverMismatch.into());
+        return Err(PaymentVerificationError::RecipientMismatch.into());
     }
     let accounts = provider
         .get_multiple_accounts(&[transfer_checked_instruction.source, ata])
@@ -537,7 +537,7 @@ pub async fn verify_transfer_instruction(
     }
     let is_receiver_missing = accounts.get(1).cloned().is_none_or(|a| a.is_none());
     if is_receiver_missing && !has_dest_ata {
-        return Err(PaymentVerificationError::ReceiverMismatch.into());
+        return Err(PaymentVerificationError::RecipientMismatch.into());
     }
     let instruction_amount = transfer_checked_instruction.amount;
     if instruction_amount != transfer_requirement.amount {
@@ -600,7 +600,7 @@ impl From<SolanaExactError> for PaymentVerificationError {
     fn from(e: SolanaExactError) -> Self {
         match e {
             SolanaExactError::TransactionDecoding(_) => {
-                PaymentVerificationError::DecodingFailure(e.to_string())
+                PaymentVerificationError::InvalidFormat(e.to_string())
             }
             SolanaExactError::InvalidCreateATAInstruction
             | SolanaExactError::MaxComputeUnitLimitExceeded
