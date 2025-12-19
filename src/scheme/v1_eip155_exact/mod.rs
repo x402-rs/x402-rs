@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use alloy_contract::SolCallBuilder;
-use alloy_primitives::{Address, B256, Bytes, TxHash, U256, address, hex};
+use alloy_primitives::{Address, B256, Bytes, Signature, TxHash, U256, address, hex};
 use alloy_provider::bindings::IMulticall3;
 use alloy_provider::{
     MULTICALL3_ADDRESS, MulticallError, MulticallItem, PendingTransactionError, Provider,
@@ -404,7 +404,8 @@ impl SignedMessage {
             nonce: payment.nonce,
         };
         let eip712_hash = transfer_with_authorization.eip712_signing_hash(domain);
-        let structured_signature: StructuredSignature = payment.signature.clone().try_into()?;
+        let structured_signature: StructuredSignature =
+            StructuredSignature::try_from_bytes(payment.signature.clone(), payment.from, &eip712_hash)?;
         let signed_message = Self {
             address: payment.from,
             hash: eip712_hash,
@@ -435,6 +436,8 @@ enum StructuredSignature {
         /// Full original bytes including the 6492 wrapper and magic bytes suffix.
         original: Bytes,
     },
+    /// Normalized EOA signature.
+    EOA(Signature),
     /// A plain EIP-1271 or EOA signature (no 6492 wrappers).
     EIP1271(Bytes),
 }
@@ -462,6 +465,52 @@ sol! {
 pub enum StructuredSignatureFormatError {
     #[error(transparent)]
     InvalidEIP6492Format(alloy_sol_types::Error),
+}
+
+impl StructuredSignature {
+    pub fn try_from_bytes(
+        bytes: Bytes,
+        expected_signer: Address,
+        prehash: &B256,
+    ) -> Result<Self, StructuredSignatureFormatError> {
+        let is_eip6492 = bytes.len() >= 32 && bytes[bytes.len() - 32..] == EIP6492_MAGIC_SUFFIX;
+        let signature = if is_eip6492 {
+            let body = &bytes[..bytes.len() - 32];
+            let sig6492 = Sig6492::abi_decode_params(body)
+                .map_err(StructuredSignatureFormatError::InvalidEIP6492Format)?;
+            StructuredSignature::EIP6492 {
+                factory: sig6492.factory,
+                factory_calldata: sig6492.factoryCalldata,
+                inner: sig6492.innerSig,
+                original: bytes,
+            }
+        } else {
+            // Let's see if it is a EOA signature
+            let eoa_signature = if bytes.len() == 65 {
+                Signature::from_raw(&bytes).ok().map(|s| s.normalized_s())
+            } else if bytes.len() == 64 {
+                Some(Signature::from_erc2098(&bytes).normalized_s())
+            } else {
+                None
+            };
+            match eoa_signature {
+                None => StructuredSignature::EIP1271(bytes),
+                Some(s) => {
+                    let is_expected_signer = s
+                        .recover_address_from_prehash(prehash)
+                        .ok()
+                        .map(|r| r == expected_signer)
+                        .unwrap_or(false);
+                    if is_expected_signer {
+                        StructuredSignature::EOA(s)
+                    } else {
+                        StructuredSignature::EIP1271(bytes)
+                    }
+                }
+            }
+        };
+        Ok(signature)
+    }
 }
 
 impl TryFrom<Bytes> for StructuredSignature {
@@ -653,6 +702,9 @@ pub async fn verify_payment<P: Provider>(
                 ))
                 .await?;
         }
+        StructuredSignature::EOA(_) => {
+            todo!("EOA")
+        }
     }
 
     Ok(payer)
@@ -766,6 +818,9 @@ where
                 sig_kind="EIP1271",
                 otel.kind = "client",
             ))
+        }
+        StructuredSignature::EOA(_) => {
+            todo!("EOA")
         }
     };
     let receipt = transaction_receipt_fut.await?;
