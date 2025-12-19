@@ -167,7 +167,7 @@ impl IntoResponse for FacilitatorLocalError {
         struct VerificationErrorResponse {
             is_valid: bool,
             invalid_reason: String,
-            invalid_reason_debug: String,
+            invalid_reason_details: String,
             payer: String,
         }
 
@@ -178,7 +178,7 @@ impl IntoResponse for FacilitatorLocalError {
             network: String,
             transaction: String,
             error_reason: String,
-            error_reason_debug: String,
+            error_reason_details: String,
             payer: String,
         }
 
@@ -189,7 +189,7 @@ impl IntoResponse for FacilitatorLocalError {
                     Json(VerificationErrorResponse {
                         is_valid: false,
                         invalid_reason: "invalid_payment".to_string(),
-                        invalid_reason_debug: e.to_string(),
+                        invalid_reason_details: e.to_string(),
                         payer: "".to_string(),
                     }),
                 )
@@ -199,7 +199,7 @@ impl IntoResponse for FacilitatorLocalError {
                     Json(VerificationErrorResponse {
                         is_valid: false,
                         invalid_reason: "onchain_failure".to_string(),
-                        invalid_reason_debug: e.to_string(),
+                        invalid_reason_details: e.to_string(),
                         payer: "".to_string(),
                     }),
                 )
@@ -213,7 +213,7 @@ impl IntoResponse for FacilitatorLocalError {
                         network: "".to_string(),
                         transaction: "".to_string(),
                         error_reason: "invalid_payment".to_string(),
-                        error_reason_debug: e.to_string(),
+                        error_reason_details: e.to_string(),
                         payer: "".to_string(),
                     }),
                 )
@@ -225,7 +225,7 @@ impl IntoResponse for FacilitatorLocalError {
                         network: "".to_string(),
                         transaction: "".to_string(),
                         error_reason: "unexpected_settle_error".to_string(),
-                        error_reason_debug: e.to_string(),
+                        error_reason_details: e.to_string(),
                         payer: "".to_string(),
                     }),
                 )

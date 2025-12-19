@@ -202,3 +202,54 @@ impl From<serde_json::Error> for PaymentVerificationError {
         Self::DecodingFailure(value.to_string())
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorReason {
+    // eip155 exact
+    InvalidExactEvmPayloadAuthorizationValidAfter,
+    InvalidExactEvmPayloadAuthorizationValidBefore,
+    InvalidExactEvmPayloadAuthorizationValue,
+    InvalidExactEvmPayloadSignature,
+    InvalidExactEvmPayloadUndeployedSmartWallet,
+    InvalidExactEvmPayloadRecipientMismatch,
+    // solana exact
+    InvalidExactSvmPayloadTransaction,
+    InvalidExactSvmPayloadTransactionAmountMismatch,
+    InvalidExactSvmPayloadTransactionCreateAtaInstruction,
+    InvalidExactSvmPayloadTransactionCreateAtaInstructionIncorrectPayee,
+    InvalidExactSvmPayloadTransactionCreateAtaInstructionIncorrectAsset,
+    InvalidExactSvmPayloadTransactionInstructions,
+    InvalidExactSvmPayloadTransactionInstructionsLength,
+    InvalidExactSvmPayloadTransactionInstructionsComputeLimitInstruction,
+    InvalidExactSvmPayloadTransactionInstructionsComputePriceInstruction,
+    InvalidExactSvmPayloadTransactionInstructionsComputePriceInstructionTooHigh,
+    InvalidExactSvmPayloadTransactionInstructionNotSplTokenTransferChecked,
+    InvalidExactSvmPayloadTransactionInstructionNotToken2022TransferChecked,
+    InvalidExactSvmPayloadTransactionFeePayerIncludedInInstructionAccounts,
+    InvalidExactSvmPayloadTransactionFeePayerTransferringFunds,
+    InvalidExactSvmPayloadTransactionNotATransferInstruction,
+    InvalidExactSvmPayloadTransactionReceiverAtaNotFound,
+    InvalidExactSvmPayloadTransactionSenderAtaNotFound,
+    InvalidExactSvmPayloadTransactionSimulationFailed,
+    InvalidExactSvmPayloadTransactionTransferToIncorrectAta,
+    SettleExactSvmBlockHeightExceeded,
+    SettleExactSvmTransactionConfirmationTimedOut,
+    // general
+    InsufficientFunds,
+    InvalidNetwork,
+    InvalidPayload,
+    InvalidPaymentRequirements,
+    InvalidScheme,
+    InvalidPayment,
+    PaymentExpired,
+    UnsupportedScheme,
+    InvalidX402Version,
+    InvalidTransactionState,
+    UnexpectedSettleError,
+    UnexpectedVerifyError,
+}
+
+pub trait AsErrorReason {
+    fn as_error_reason(&self) -> ErrorReason;
+}
