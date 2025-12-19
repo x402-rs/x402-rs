@@ -31,7 +31,7 @@ pub struct ExactEvmPayload {
 }
 
 /// EIP-712 structured data for ERC-3009-based authorization.
-/// Defines who can transfer how much USDC and when.
+/// Defines who can transfer how much tokens and when.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExactEvmPayloadAuthorization {

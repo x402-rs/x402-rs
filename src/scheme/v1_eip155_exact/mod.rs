@@ -158,8 +158,8 @@ sol!(
     #[allow(clippy::too_many_arguments)]
     #[derive(Debug)]
     #[sol(rpc)]
-    USDC,
-    "abi/USDC.json"
+    IEIP3009,
+    "abi/IEIP3009.json"
 );
 
 sol! {
@@ -183,7 +183,7 @@ async fn assert_valid_payment<P: Provider>(
     chain: &Eip155ChainReference,
     payload: &types::PaymentPayload,
     requirements: &types::PaymentRequirements,
-) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
+) -> Result<(IEIP3009::IEIP3009Instance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
     let chain_id: ChainId = chain.into();
     let payload_chain_id = ChainId::from_network_name(&payload.network)
         .ok_or(PaymentVerificationError::UnsupportedChain)?;
@@ -203,7 +203,7 @@ async fn assert_valid_payment<P: Provider>(
     let valid_before = authorization.valid_before;
     assert_time(valid_after, valid_before)?;
     let asset_address = requirements.asset;
-    let contract = USDC::new(asset_address, provider);
+    let contract = IEIP3009::new(asset_address, provider);
 
     let domain = assert_domain(chain, &contract, &asset_address, &requirements.extra).await?;
 
@@ -243,17 +243,13 @@ pub fn assert_time(
 }
 
 /// Constructs the correct EIP-712 domain for signature verification.
-///
-/// Resolves the `name` and `version` based on:
-/// - Static metadata from [`USDCDeployment`] (if available),
-/// - Or by calling `version()` on the token contract if not matched statically.
 #[instrument(skip_all, err, fields(
     network = %chain.as_chain_id(),
     asset = %asset_address
 ))]
 pub async fn assert_domain<P: Provider>(
     chain: &Eip155ChainReference,
-    token_contract: &USDC::USDCInstance<P>,
+    token_contract: &IEIP3009::IEIP3009Instance<P>,
     asset_address: &Address,
     extra: &Option<PaymentRequirementsExtra>,
 ) -> Result<Eip712Domain, Eip155ExactError> {
@@ -296,24 +292,24 @@ pub async fn assert_domain<P: Provider>(
 
 /// Checks if the payer has enough on-chain token balance to meet the `maxAmountRequired`.
 ///
-/// Performs an `ERC20.balanceOf()` call using the USDC contract instance.
+/// Performs an `ERC20.balanceOf()` call using the token contract instance.
 #[instrument(skip_all, err, fields(
     sender = %sender,
     max_required = %max_amount_required,
-    token_contract = %usdc_contract.address()
+    token_contract = %ieip3009_token_contract.address()
 ))]
 pub async fn assert_enough_balance<P: Provider>(
-    usdc_contract: &USDC::USDCInstance<P>,
+    ieip3009_token_contract: &IEIP3009::IEIP3009Instance<P>,
     sender: &Address,
     max_amount_required: U256,
 ) -> Result<(), Eip155ExactError> {
-    let balance = usdc_contract
+    let balance = ieip3009_token_contract
         .balanceOf(*sender)
         .call()
         .into_future()
         .instrument(tracing::info_span!(
             "fetch_token_balance",
-            token_contract = %usdc_contract.address(),
+            token_contract = %ieip3009_token_contract.address(),
             sender = %sender,
             otel.kind = "client"
         ))
@@ -506,7 +502,7 @@ impl TryFrom<Bytes> for StructuredSignature {
 /// This function does not perform any validation — it assumes inputs are already checked.
 #[allow(non_snake_case)]
 async fn transferWithAuthorization_0<'a, P: Provider>(
-    contract: &'a USDC::USDCInstance<P>,
+    contract: &'a IEIP3009::IEIP3009Instance<P>,
     payment: &ExactEvmPayment,
     signature: Bytes,
 ) -> TransferWithAuthorization0Call<&'a P> {
@@ -546,7 +542,7 @@ async fn transferWithAuthorization_0<'a, P: Provider>(
 /// This is created by [`EvmProvider::transferWithAuthorization_0`].
 pub struct TransferWithAuthorization0Call<P> {
     /// The prepared call builder that can be `.call()`ed or `.send()`ed.
-    pub tx: SolCallBuilder<P, USDC::transferWithAuthorization_0Call>,
+    pub tx: SolCallBuilder<P, IEIP3009::transferWithAuthorization_0Call>,
     /// The sender (`from`) address for the authorization.
     pub from: Address,
     /// The recipient (`to`) address for the authorization.
@@ -587,7 +583,7 @@ async fn is_contract_deployed<P: Provider>(
 
 pub async fn verify_payment<P: Provider>(
     provider: P,
-    contract: &USDC::USDCInstance<P>,
+    contract: &IEIP3009::IEIP3009Instance<P>,
     payment: &ExactEvmPayment,
     eip712_domain: &Eip712Domain,
 ) -> Result<Address, Eip155ExactError> {
@@ -664,7 +660,7 @@ pub async fn verify_payment<P: Provider>(
 
 pub async fn settle_payment<P, E>(
     provider: P,
-    contract: &USDC::USDCInstance<&P::Inner>,
+    contract: &IEIP3009::IEIP3009Instance<&P::Inner>,
     payment: &ExactEvmPayment,
     eip712_domain: &Eip712Domain,
 ) -> Result<TxHash, Eip155ExactError>

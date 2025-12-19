@@ -8,8 +8,8 @@ use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::proto::v2;
 use crate::scheme::v1_eip155_exact::{
-    EXACT_SCHEME, Eip155ExactError, ExactEvmPayment, USDC, assert_domain, assert_enough_balance,
-    assert_enough_value, assert_time, settle_payment, verify_payment,
+    EXACT_SCHEME, Eip155ExactError, ExactEvmPayment, IEIP3009, assert_domain,
+    assert_enough_balance, assert_enough_value, assert_time, settle_payment, verify_payment,
 };
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 use alloy_provider::Provider;
@@ -125,7 +125,7 @@ async fn assert_valid_payment<P: Provider>(
     chain: &Eip155ChainReference,
     payload: &types::PaymentPayload,
     requirements: &types::PaymentRequirements,
-) -> Result<(USDC::USDCInstance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
+) -> Result<(IEIP3009::IEIP3009Instance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
     let accepted = &payload.accepted;
     if accepted != requirements {
         return Err(PaymentVerificationError::AcceptedRequirementsMismatch.into());
@@ -145,7 +145,7 @@ async fn assert_valid_payment<P: Provider>(
     let valid_before = authorization.valid_before;
     assert_time(valid_after, valid_before)?;
     let asset_address = accepted.asset;
-    let contract = USDC::new(asset_address, provider);
+    let contract = IEIP3009::new(asset_address, provider);
 
     let domain = assert_domain(chain, &contract, &asset_address, &accepted.extra).await?;
 
