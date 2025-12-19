@@ -25,52 +25,16 @@ impl ChainId {
         &self.reference
     }
 
+    /// Create a ChainId from a network name using the known v1 networks list
     pub fn from_network_name(network_name: &str) -> Option<Self> {
-        match network_name {
-            "base-sepolia" => Some(Self::new("eip155", "84532")),
-            "base" => Some(Self::new("eip155", "8453")),
-            "xdc" => Some(Self::new("eip155", "50")),
-            "avalanche-fuji" => Some(Self::new("eip155", "4313")),
-            "avalanche" => Some(Self::new("eip155", "43114")),
-            "xrpl-evm" => Some(Self::new("eip155", "1440000")),
-            "polygon-amoy" => Some(Self::new("eip155", "80002")),
-            "polygon" => Some(Self::new("eip155", "137")),
-            "sei" => Some(Self::new("eip155", "1329")),
-            "sei-testnet" => Some(Self::new("eip155", "1328")),
-            "solana" => Some(Self::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")),
-            "solana-devnet" => Some(Self::new("solana", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1")),
-            _ => None,
-        }
+        known_v1_networks::KnownNetworks::by_name(network_name).map(|n| n.chain_id())
     }
 
-    pub fn as_network_name(&self) -> Option<&str> {
-        let namespace = self.namespace.as_str();
-        let reference = self.reference.as_str();
-        match namespace {
-            "solana" => match reference {
-                "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" => Some("solana"),
-                "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" => Some("solana-devnet"),
-                _ => None,
-            },
-            "eip155" => match reference {
-                "84532" => Some("base-sepolia"),
-                "8453" => Some("base"),
-                "50" => Some("xdc"),
-                "4313" => Some("avalanche-fuji"),
-                "43114" => Some("avalanche"),
-                "1440000" => Some("xrpl-evm"),
-                "80002" => Some("polygon-amoy"),
-                "137" => Some("polygon"),
-                "1329" => Some("sei"),
-                "1328" => Some("sei-testnet"),
-                _ => None,
-            },
-            _ => None,
-        }
+    /// Get the network name for this chain ID using the known v1 networks list
+    pub fn as_network_name(&self) -> Option<&'static str> {
+        known_v1_networks::KnownNetworks::by_chain_id(self).map(|n| n.name)
     }
 }
-
-// FIXME LIST OF KNOWN NETWORKS
 
 impl fmt::Display for ChainId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -266,6 +230,183 @@ impl<'de> Deserialize<'de> for ChainIdPattern {
         ChainIdPattern::from_str(&s).map_err(de::Error::custom)
     }
 }
+
+/// Known networks for v1 protocol schemes
+pub mod known_v1_networks {
+    use super::ChainId;
+
+    /// A known network definition with its chain ID and human-readable name.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct NetworkInfo {
+        /// Human-readable network name (e.g., "base-sepolia", "solana")
+        pub name: &'static str,
+        /// CAIP-2 namespace (e.g., "eip155", "solana")
+        pub namespace: &'static str,
+        /// Chain reference (e.g., "84532" for Base Sepolia, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" for Solana mainnet)
+        pub reference: &'static str,
+    }
+
+    impl NetworkInfo {
+        /// Create a ChainId from this network info
+        pub fn chain_id(&self) -> ChainId {
+            ChainId::new(self.namespace, self.reference)
+        }
+    }
+
+    /// Static list of known networks
+    pub static KNOWN_NETWORKS: &[NetworkInfo] = &[
+        // EVM Networks - Mainnets
+        NetworkInfo {
+            name: "base",
+            namespace: "eip155",
+            reference: "8453",
+        },
+        NetworkInfo {
+            name: "polygon",
+            namespace: "eip155",
+            reference: "137",
+        },
+        NetworkInfo {
+            name: "avalanche",
+            namespace: "eip155",
+            reference: "43114",
+        },
+        NetworkInfo {
+            name: "xdc",
+            namespace: "eip155",
+            reference: "50",
+        },
+        NetworkInfo {
+            name: "xrpl-evm",
+            namespace: "eip155",
+            reference: "1440000",
+        },
+        NetworkInfo {
+            name: "sei",
+            namespace: "eip155",
+            reference: "1329",
+        },
+        // EVM Networks - Testnets
+        NetworkInfo {
+            name: "base-sepolia",
+            namespace: "eip155",
+            reference: "84532",
+        },
+        NetworkInfo {
+            name: "polygon-amoy",
+            namespace: "eip155",
+            reference: "80002",
+        },
+        NetworkInfo {
+            name: "avalanche-fuji",
+            namespace: "eip155",
+            reference: "43113",
+        },
+        NetworkInfo {
+            name: "sei-testnet",
+            namespace: "eip155",
+            reference: "1328",
+        },
+        // Solana Networks
+        NetworkInfo {
+            name: "solana",
+            namespace: "solana",
+            reference: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+        },
+        NetworkInfo {
+            name: "solana-devnet",
+            namespace: "solana",
+            reference: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+        },
+    ];
+
+    /// Query interface for known networks
+    pub struct KnownNetworks;
+
+    impl KnownNetworks {
+        /// Find a network by its human-readable name
+        pub fn by_name(name: &str) -> Option<&'static NetworkInfo> {
+            KNOWN_NETWORKS.iter().find(|n| n.name == name)
+        }
+
+        /// Find a network by its chain ID
+        pub fn by_chain_id(chain_id: &ChainId) -> Option<&'static NetworkInfo> {
+            KNOWN_NETWORKS
+                .iter()
+                .find(|n| n.namespace == chain_id.namespace && n.reference == chain_id.reference)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_known_networks_by_name() {
+            let base = KnownNetworks::by_name("base").unwrap();
+            assert_eq!(base.namespace, "eip155");
+            assert_eq!(base.reference, "8453");
+
+            let base_sepolia = KnownNetworks::by_name("base-sepolia").unwrap();
+            assert_eq!(base_sepolia.namespace, "eip155");
+            assert_eq!(base_sepolia.reference, "84532");
+
+            let solana = KnownNetworks::by_name("solana").unwrap();
+            assert_eq!(solana.namespace, "solana");
+            assert_eq!(solana.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+
+            assert!(KnownNetworks::by_name("unknown-network").is_none());
+        }
+
+        #[test]
+        fn test_known_networks_by_chain_id() {
+            let chain_id = ChainId::new("eip155", "8453");
+            let network = KnownNetworks::by_chain_id(&chain_id).unwrap();
+            assert_eq!(network.name, "base");
+
+            let solana_chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+            let solana_network = KnownNetworks::by_chain_id(&solana_chain_id).unwrap();
+            assert_eq!(solana_network.name, "solana");
+
+            let unknown_chain_id = ChainId::new("eip155", "999999");
+            assert!(KnownNetworks::by_chain_id(&unknown_chain_id).is_none());
+        }
+
+        #[test]
+        fn test_chain_id_from_network_name() {
+            let chain_id = ChainId::from_network_name("base").unwrap();
+            assert_eq!(chain_id.namespace, "eip155");
+            assert_eq!(chain_id.reference, "8453");
+
+            let solana_chain_id = ChainId::from_network_name("solana").unwrap();
+            assert_eq!(solana_chain_id.namespace, "solana");
+            assert_eq!(solana_chain_id.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+
+            assert!(ChainId::from_network_name("unknown").is_none());
+        }
+
+        #[test]
+        fn test_chain_id_as_network_name() {
+            let chain_id = ChainId::new("eip155", "8453");
+            assert_eq!(chain_id.as_network_name(), Some("base"));
+
+            let solana_chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+            assert_eq!(solana_chain_id.as_network_name(), Some("solana"));
+
+            let unknown_chain_id = ChainId::new("eip155", "999999");
+            assert!(unknown_chain_id.as_network_name().is_none());
+        }
+
+        #[test]
+        fn test_network_info_chain_id() {
+            let network = KnownNetworks::by_name("polygon").unwrap();
+            let chain_id = network.chain_id();
+            assert_eq!(chain_id.namespace, "eip155");
+            assert_eq!(chain_id.reference, "137");
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
