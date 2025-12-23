@@ -19,7 +19,7 @@ use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
-use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
+use crate::scheme::{X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 use crate::util::Base64Bytes;
 
 pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -27,8 +27,16 @@ pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25
 pub struct V1SolanaExact;
 
 impl X402SchemeBlueprint for V1SolanaExact {
-    fn slug(&self) -> SchemeSlug {
-        SchemeSlug::new(1, "solana", types::ExactScheme.to_string())
+    fn x402_version(&self) -> u8 {
+        1
+    }
+
+    fn namespace(&self) -> &str {
+        "solana"
+    }
+
+    fn scheme(&self) -> &str {
+        types::ExactScheme.as_ref()
     }
 
     fn build(

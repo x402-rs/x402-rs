@@ -12,13 +12,21 @@ use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::v1_solana_exact::{
     TransferRequirement, VerifyTransferResult, settle_transaction, verify_transaction,
 };
-use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
+use crate::scheme::{X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 
 pub struct V2SolanaExact;
 
 impl X402SchemeBlueprint for V2SolanaExact {
-    fn slug(&self) -> SchemeSlug {
-        SchemeSlug::new(2, "solana", types::ExactScheme.to_string())
+    fn x402_version(&self) -> u8 {
+        2
+    }
+
+    fn namespace(&self) -> &str {
+        "solana"
+    }
+
+    fn scheme(&self) -> &str {
+        types::ExactScheme.as_ref()
     }
 
     fn build(

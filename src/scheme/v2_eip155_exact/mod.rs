@@ -11,7 +11,7 @@ use crate::scheme::v1_eip155_exact::{
     Eip155ExactError, ExactEvmPayment, IEIP3009, assert_domain, assert_enough_balance,
     assert_enough_value, assert_time, settle_payment, verify_payment,
 };
-use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
+use crate::scheme::{X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
@@ -22,8 +22,16 @@ use tracing::instrument;
 pub struct V2Eip155Exact;
 
 impl X402SchemeBlueprint for V2Eip155Exact {
-    fn slug(&self) -> SchemeSlug {
-        SchemeSlug::new(2, "eip155", types::ExactScheme.to_string())
+    fn x402_version(&self) -> u8 {
+        2
+    }
+
+    fn namespace(&self) -> &str {
+        "eip155"
+    }
+
+    fn scheme(&self) -> &str {
+        types::ExactScheme.as_ref()
     }
 
     fn build(

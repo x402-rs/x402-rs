@@ -13,7 +13,6 @@ use url::Url;
 use crate::chain::eip155;
 use crate::chain::solana;
 use crate::chain::{ChainId, ChainIdPattern};
-use crate::scheme::SchemeSlug;
 
 /// CLI arguments for the x402 facilitator server.
 #[derive(Parser, Debug)]
@@ -49,8 +48,8 @@ pub struct SchemeConfig {
     /// Whether this scheme is enabled (defaults to true).
     #[serde(default = "scheme_config_defaults::default_enabled")]
     pub enabled: bool,
-    /// The scheme slug (e.g., "v1:eip155:exact").
-    pub slug: SchemeSlug,
+    /// The scheme id (e.g., "v1-eip155-exact").
+    pub id: String,
     /// The chain pattern this scheme applies to (e.g., "eip155:84532", "eip155:*", "eip155:{1,8453}").
     pub chains: ChainIdPattern,
     /// Scheme-specific configuration (optional).

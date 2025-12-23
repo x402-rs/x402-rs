@@ -6,15 +6,11 @@ macro_rules! lit_str {
 
         impl $struct_name {
             const VALUE: &'static str = $val;
+        }
 
-            #[allow(dead_code)]
-            pub fn as_str() -> &'static str {
+        impl AsRef<str> for $struct_name {
+            fn as_ref(&self) -> &str {
                 Self::VALUE
-            }
-
-            #[allow(dead_code)]
-            pub fn to_string() -> String {
-                Self::VALUE.to_string()
             }
         }
 
