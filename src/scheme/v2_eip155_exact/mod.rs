@@ -22,10 +22,6 @@ use tracing::instrument;
 pub struct V2Eip155Exact;
 
 impl X402SchemeBlueprint for V2Eip155Exact {
-    fn x402_version(&self) -> u8 {
-        2
-    }
-
     fn namespace(&self) -> &str {
         "eip155"
     }

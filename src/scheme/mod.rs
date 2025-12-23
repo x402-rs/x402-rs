@@ -31,7 +31,9 @@ pub trait X402SchemeHandler: Send + Sync {
 }
 
 pub trait X402SchemeBlueprint {
-    fn x402_version(&self) -> u8;
+    fn x402_version(&self) -> u8 {
+        2
+    }
     fn namespace(&self) -> &str;
     fn scheme(&self) -> &str;
     fn id(&self) -> String {

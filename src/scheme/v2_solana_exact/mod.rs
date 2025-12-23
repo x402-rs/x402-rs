@@ -17,10 +17,6 @@ use crate::scheme::{X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerErr
 pub struct V2SolanaExact;
 
 impl X402SchemeBlueprint for V2SolanaExact {
-    fn x402_version(&self) -> u8 {
-        2
-    }
-
     fn namespace(&self) -> &str {
         "solana"
     }
