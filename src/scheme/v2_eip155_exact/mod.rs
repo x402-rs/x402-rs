@@ -8,8 +8,8 @@ use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::proto::v2;
 use crate::scheme::v1_eip155_exact::{
-    ExactScheme, Eip155ExactError, ExactEvmPayment, IEIP3009, assert_domain,
-    assert_enough_balance, assert_enough_value, assert_time, settle_payment, verify_payment,
+    Eip155ExactError, ExactEvmPayment, IEIP3009, assert_domain, assert_enough_balance,
+    assert_enough_value, assert_time, settle_payment, verify_payment,
 };
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 use alloy_provider::Provider;
@@ -23,7 +23,7 @@ pub struct V2Eip155Exact;
 
 impl X402SchemeBlueprint for V2Eip155Exact {
     fn slug(&self) -> SchemeSlug {
-        SchemeSlug::new(2, "eip155", ExactScheme.to_string())
+        SchemeSlug::new(2, "eip155", types::ExactScheme.to_string())
     }
 
     fn build(
@@ -96,7 +96,7 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
         let chain_id = self.provider.chain_id();
         let kinds = vec![proto::SupportedPaymentKind {
             x402_version: proto::X402Version::v2().into(),
-            scheme: ExactScheme.to_string(),
+            scheme: types::ExactScheme.to_string(),
             network: chain_id.clone().into(),
             extra: None,
         }];

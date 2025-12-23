@@ -1,21 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
 
 use crate::chain::solana::Address;
 use crate::proto;
 use crate::proto::util::U64String;
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-pub enum ExactScheme {
-    #[serde(rename = "exact")]
-    Exact, // serializes as "exact", deserializes only from "exact"
-}
-
-impl Display for ExactScheme {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "exact")
-    }
-}
+pub use crate::scheme::v1_eip155_exact::ExactScheme;
 
 pub type VerifyRequest = proto::v1::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;

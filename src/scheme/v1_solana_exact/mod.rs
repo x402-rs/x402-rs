@@ -18,7 +18,6 @@ use crate::chain::solana::{Address, SolanaChainProvider, SolanaChainProviderErro
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
-use crate::scheme::v1_eip155_exact::ExactScheme;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 use crate::util::Base64Bytes;
@@ -29,7 +28,7 @@ pub struct V1SolanaExact;
 
 impl X402SchemeBlueprint for V1SolanaExact {
     fn slug(&self) -> SchemeSlug {
-        SchemeSlug::new(1, "solana", ExactScheme.to_string())
+        SchemeSlug::new(1, "solana", types::ExactScheme.to_string())
     }
 
     fn build(
@@ -88,7 +87,7 @@ impl X402SchemeHandler for V1SolanaExactHandler {
             if let Some(network) = network {
                 kinds.push(proto::SupportedPaymentKind {
                     x402_version: proto::v1::X402Version1.into(),
-                    scheme: ExactScheme.to_string(),
+                    scheme: types::ExactScheme.to_string(),
                     network: network.to_string(),
                     extra,
                 });
