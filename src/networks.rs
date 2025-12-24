@@ -87,7 +87,7 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-use crate::chain::{solana, ChainId};
+use crate::chain::{ChainId, solana};
 
 /// A known network definition with its chain ID and human-readable name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,66 +141,66 @@ impl NetworkInfo {
 /// // let usdc_polygon = UsdcAddress::polygon();
 /// ```
 #[allow(dead_code)]
-pub trait KnownNetworkEip155 {
+pub trait KnownNetworkEip155<A> {
     /// Returns the instance for Base mainnet (eip155:8453)
-    fn base() -> Self;
+    fn base() -> A;
     /// Returns the instance for Base Sepolia testnet (eip155:84532)
-    fn base_sepolia() -> Self;
+    fn base_sepolia() -> A;
     /// Returns the instance for Skale Base Sepolia (eip155:324705682)
-    fn skale_base_sepolia() -> Self;
+    fn skale_base_sepolia() -> A;
 
     /// Returns the instance for Polygon mainnet (eip155:137)
-    fn polygon() -> Self;
+    fn polygon() -> A;
     /// Returns the instance for Polygon Amoy testnet (eip155:80002)
-    fn polygon_amoy() -> Self;
+    fn polygon_amoy() -> A;
 
     /// Returns the instance for Avalanche C-Chain mainnet (eip155:43114)
-    fn avalanche() -> Self;
+    fn avalanche() -> A;
     /// Returns the instance for Avalanche Fuji testnet (eip155:43113)
-    fn avalanche_fuji() -> Self;
+    fn avalanche_fuji() -> A;
 
     /// Returns the instance for Sei mainnet (eip155:1329)
-    fn sei() -> Self;
+    fn sei() -> A;
     /// Returns the instance for Sei testnet (eip155:1328)
-    fn sei_testnet() -> Self;
+    fn sei_testnet() -> A;
 
     /// Returns the instance for Abstract mainnet (eip155:2741)
-    fn abstract_network() -> Self;
+    fn abstract_network() -> A;
     /// Returns the instance for Abstract testnet (eip155:11124)
-    fn abstract_testnet() -> Self;
+    fn abstract_testnet() -> A;
 
     /// Returns the instance for XDC Network (eip155:50)
-    fn xdc() -> Self;
+    fn xdc() -> A;
 
     /// Returns the instance for XRPL EVM (eip155:1440000)
-    fn xrpl_evm() -> Self;
+    fn xrpl_evm() -> A;
 
     /// Returns the instance for Peaq (eip155:3338)
-    fn peaq() -> Self;
+    fn peaq() -> A;
 
     /// Returns the instance for IoTeX (eip155:4689)
-    fn iotex() -> Self;
+    fn iotex() -> A;
 
     /// Returns the instance for Story (eip155:1514)
-    fn story() -> Self;
+    fn story() -> A;
 
     /// Returns the instance for Educhain (eip155:41923)
-    fn educhain() -> Self;
+    fn educhain() -> A;
 
     /// Returns the instance for Celo mainnet (eip155:42220)
-    fn celo() -> Self;
+    fn celo() -> A;
     /// Returns the instance for Celo Alfajores testnet (eip155:44787)
-    fn celo_alfajores() -> Self;
+    fn celo_alfajores() -> A;
 
     /// Returns the instance for Binance Smart Chain mainnet (eip155:56)
-    fn bsc() -> Self;
+    fn bsc() -> A;
     /// Returns the instance for Binance Smart Chain testnet (eip155:97)
-    fn bsc_testnet() -> Self;
+    fn bsc_testnet() -> A;
 
     /// Returns the instance for Monad (eip155:143)
-    fn monad() -> Self;
+    fn monad() -> A;
     /// Returns the instance for Monad testnet (eip155:10143)
-    fn monad_testnet() -> Self;
+    fn monad_testnet() -> A;
 }
 
 /// Trait providing convenient methods to get instances for well-known Solana networks.
@@ -232,11 +232,11 @@ pub trait KnownNetworkEip155 {
 /// assert_eq!(devnet.namespace, "solana");
 /// ```
 #[allow(dead_code)]
-pub trait KnownNetworkSolana {
+pub trait KnownNetworkSolana<A> {
     /// Returns the instance for Solana mainnet (solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp)
-    fn solana() -> Self;
+    fn solana() -> A;
     /// Returns the instance for Solana devnet (solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1)
-    fn solana_devnet() -> Self;
+    fn solana_devnet() -> A;
 }
 
 /// Implementation of KnownNetworkEip155 for ChainId.
@@ -248,7 +248,7 @@ pub trait KnownNetworkSolana {
 /// This is one example of implementing the KnownNetworkEip155 trait. Other types
 /// (such as token address types) can also implement this trait to provide
 /// per-network instances with better developer experience.
-impl KnownNetworkEip155 for ChainId {
+impl KnownNetworkEip155<ChainId> for ChainId {
     fn base() -> ChainId {
         ChainId::new("eip155", "8453")
     }
@@ -351,7 +351,7 @@ impl KnownNetworkEip155 for ChainId {
 /// This is one example of implementing the KnownNetworkSolana trait. Other types
 /// (such as token address types) can also implement this trait to provide
 /// per-network instances with better developer experience.
-impl KnownNetworkSolana for ChainId {
+impl KnownNetworkSolana<ChainId> for ChainId {
     fn solana() -> ChainId {
         solana::SolanaChainReference::solana().into()
     }

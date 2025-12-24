@@ -23,8 +23,8 @@ use std::time::Duration;
 
 use crate::chain::{ChainId, ChainProviderOps};
 use crate::config::SolanaChainConfig;
-use crate::scheme::X402SchemeHandlerError;
 use crate::networks::KnownNetworkSolana;
+use crate::scheme::X402SchemeHandlerError;
 
 pub const SOLANA_NAMESPACE: &str = "solana";
 
@@ -37,7 +37,7 @@ impl SolanaChainReference {
     /// Creates a new SolanaChainReference from a 32-byte array.
     /// Returns None if any byte is not a valid ASCII character.
     #[allow(dead_code)]
-     pub const fn new(bytes: [u8; 32]) -> Self {
+    pub const fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 
@@ -54,7 +54,7 @@ impl SolanaChainReference {
     }
 }
 
-impl KnownNetworkSolana for SolanaChainReference {
+impl KnownNetworkSolana<SolanaChainReference> for SolanaChainReference {
     fn solana() -> Self {
         Self::new(*b"5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")
     }
