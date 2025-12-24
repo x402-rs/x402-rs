@@ -24,28 +24,54 @@
 //! # Module Contents
 //!
 //! - [`NetworkInfo`]: A struct representing a known network with its name, namespace, and reference
-//! - [`KnownNetwork`]: A generic trait providing convenient static methods to get per-network instances
-//! - [`KNOWN_NETWORKS`]: A static array of well-known networks
+//! - [`KnownNetworkEip155`]: Trait for convenient access to EVM networks (eip155 namespace)
+//! - [`KnownNetworkSolana`]: Trait for convenient access to Solana networks
+//! - [`KNOWN_NETWORKS`]: A static array of all well-known networks
 //! - [`chain_id_by_network_name`]: Lookup function to get ChainId by network name
 //! - [`network_name_by_chain_id`]: Reverse lookup function to get network name by ChainId
 //!
+//! # Namespace-Specific Traits
+//!
+//! The module provides two namespace-specific traits for better organization and flexibility:
+//!
+//! ## KnownNetworkEip155
+//! Provides convenient static methods for all EVM networks (eip155 namespace):
+//! - Base, Base Sepolia, Skale Base Sepolia
+//! - Polygon, Polygon Amoy
+//! - Avalanche, Avalanche Fuji
+//! - Sei, Sei Testnet
+//! - Abstract, Abstract Testnet
+//! - XDC, XRPL EVM, Peaq, IoTeX, Story, Educhain
+//! - Celo, Celo Alfajores
+//! - BSC, BSC Testnet
+//! - Monad, Monad Testnet
+//!
+//! ## KnownNetworkSolana
+//! Provides convenient static methods for Solana networks:
+//! - Solana mainnet
+//! - Solana devnet
+//!
 //! # Supported Networks
 //!
-//! The module supports 31 blockchain networks:
-//! - **EVM Networks (23)**: Base, Polygon, Avalanche, Sei, Abstract, XDC, XRPL EVM, Peaq, IoTeX,
-//!   Story, Educhain, Celo, BSC, and Monad (with mainnet and testnet variants)
+//! The module supports 31 blockchain networks across two namespaces:
+//! - **EVM Networks (23)**: All networks in the eip155 namespace
 //! - **Solana Networks (2)**: Solana mainnet and devnet
 //!
 //! # Examples
 //!
 //! ```ignore
 //! use x402_rs::chain::ChainId;
-//! use x402_rs::known::{KnownNetwork, chain_id_by_network_name};
+//! use x402_rs::known::{KnownNetworkEip155, KnownNetworkSolana, chain_id_by_network_name};
 //!
-//! // Using the trait methods for convenient access
+//! // Using EVM network trait methods
 //! let base = ChainId::base();
 //! assert_eq!(base.namespace, "eip155");
 //! assert_eq!(base.reference, "8453");
+//!
+//! // Using Solana network trait methods
+//! let solana = ChainId::solana();
+//! assert_eq!(solana.namespace, "solana");
+//! assert_eq!(solana.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
 //!
 //! // Using lookup functions
 //! let polygon = chain_id_by_network_name("polygon").unwrap();
@@ -54,7 +80,7 @@
 //!
 //! // Reverse lookup
 //! let chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
-//! let name = x402_rs::known::network_name_by_chain_id(&chain_id).unwrap();
+//! let name = chain_id_by_network_name("solana").unwrap();
 //! assert_eq!(name, "solana");
 //! ```
 
@@ -81,131 +107,148 @@ impl NetworkInfo {
     }
 }
 
-/// Trait providing convenient methods to get instances for well-known networks.
+/// Trait providing convenient methods to get instances for well-known EVM networks (eip155 namespace).
 ///
 /// This trait can be implemented for any type to provide static methods that create
-/// instances for well-known blockchain networks. Each method returns `Self`, allowing
+/// instances for well-known EVM blockchain networks. Each method returns `Self`, allowing
 /// the trait to be used with different types that need per-network configuration.
 ///
 /// # Use Cases
 ///
-/// - **ChainId**: Get CAIP-2 chain identifiers for different networks
-/// - **Token Deployments**: Get per-chain token addresses (e.g., USDC on different chains)
-/// - **Network Configuration**: Get network-specific configuration objects
-/// - **Any Per-Network Data**: Any type that needs network-specific instances
+/// - **ChainId**: Get CAIP-2 chain identifiers for EVM networks
+/// - **Token Deployments**: Get per-chain token addresses (e.g., USDC on different EVM chains)
+/// - **Network Configuration**: Get network-specific configuration objects for EVM chains
+/// - **Any Per-Network Data**: Any type that needs EVM network-specific instances
 ///
 /// # Examples
 ///
 /// ```ignore
 /// use x402_rs::chain::ChainId;
-/// use x402_rs::known::KnownNetwork;
+/// use x402_rs::known::KnownNetworkEip155;
 ///
 /// // Get Base mainnet chain ID
 /// let base = ChainId::base();
 /// assert_eq!(base.namespace, "eip155");
 /// assert_eq!(base.reference, "8453");
 ///
-/// // Get Solana mainnet chain ID
-/// let solana = ChainId::solana();
-/// assert_eq!(solana.namespace, "solana");
+/// // Get Polygon mainnet chain ID
+/// let polygon = ChainId::polygon();
+/// assert_eq!(polygon.namespace, "eip155");
+/// assert_eq!(polygon.reference, "137");
 ///
 /// // Can also be implemented for other types like token addresses
 /// // let usdc_base = UsdcAddress::base();
 /// // let usdc_polygon = UsdcAddress::polygon();
 /// ```
 #[allow(dead_code)]
-pub trait KnownNetwork {
-    // Base
-    /// Returns the ChainId for Base mainnet (eip155:8453)
+pub trait KnownNetworkEip155 {
+    /// Returns the instance for Base mainnet (eip155:8453)
     fn base() -> Self;
-    /// Returns the ChainId for Base Sepolia testnet (eip155:84532)
+    /// Returns the instance for Base Sepolia testnet (eip155:84532)
     fn base_sepolia() -> Self;
-    /// Returns the ChainId for Skale Base Sepolia (eip155:324705682)
+    /// Returns the instance for Skale Base Sepolia (eip155:324705682)
     fn skale_base_sepolia() -> Self;
 
-    // Polygon
-    /// Returns the ChainId for Polygon mainnet (eip155:137)
+    /// Returns the instance for Polygon mainnet (eip155:137)
     fn polygon() -> Self;
-    /// Returns the ChainId for Polygon Amoy testnet (eip155:80002)
+    /// Returns the instance for Polygon Amoy testnet (eip155:80002)
     fn polygon_amoy() -> Self;
 
-    // Avalanche
-    /// Returns the ChainId for Avalanche C-Chain mainnet (eip155:43114)
+    /// Returns the instance for Avalanche C-Chain mainnet (eip155:43114)
     fn avalanche() -> Self;
-    /// Returns the ChainId for Avalanche Fuji testnet (eip155:43113)
+    /// Returns the instance for Avalanche Fuji testnet (eip155:43113)
     fn avalanche_fuji() -> Self;
 
-    // Sei
-    /// Returns the ChainId for Sei mainnet (eip155:1329)
+    /// Returns the instance for Sei mainnet (eip155:1329)
     fn sei() -> Self;
-    /// Returns the ChainId for Sei testnet (eip155:1328)
+    /// Returns the instance for Sei testnet (eip155:1328)
     fn sei_testnet() -> Self;
 
-    // Abstract
-    /// Returns the ChainId for Abstract mainnet (eip155:2741)
+    /// Returns the instance for Abstract mainnet (eip155:2741)
     fn abstract_network() -> Self;
-    /// Returns the ChainId for Abstract testnet (eip155:11124)
+    /// Returns the instance for Abstract testnet (eip155:11124)
     fn abstract_testnet() -> Self;
 
-    // XDC
-    /// Returns the ChainId for XDC Network (eip155:50)
+    /// Returns the instance for XDC Network (eip155:50)
     fn xdc() -> Self;
 
-    // XRPL EVM
-    /// Returns the ChainId for XRPL EVM (eip155:1440000)
+    /// Returns the instance for XRPL EVM (eip155:1440000)
     fn xrpl_evm() -> Self;
 
-    // Peaq
-    /// Returns the ChainId for Peaq (eip155:3338)
+    /// Returns the instance for Peaq (eip155:3338)
     fn peaq() -> Self;
 
-    // IoTeX
-    /// Returns the ChainId for IoTeX (eip155:4689)
+    /// Returns the instance for IoTeX (eip155:4689)
     fn iotex() -> Self;
 
-    // Story
-    /// Returns the ChainId for Story (eip155:1514)
+    /// Returns the instance for Story (eip155:1514)
     fn story() -> Self;
 
-    // Educhain
-    /// Returns the ChainId for Educhain (eip155:41923)
+    /// Returns the instance for Educhain (eip155:41923)
     fn educhain() -> Self;
 
-    // Celo
-    /// Returns the ChainId for Celo mainnet (eip155:42220)
+    /// Returns the instance for Celo mainnet (eip155:42220)
     fn celo() -> Self;
-    /// Returns the ChainId for Celo Alfajores testnet (eip155:44787)
+    /// Returns the instance for Celo Alfajores testnet (eip155:44787)
     fn celo_alfajores() -> Self;
 
-    // BSC (Binance Smart Chain)
-    /// Returns the ChainId for Binance Smart Chain mainnet (eip155:56)
+    /// Returns the instance for Binance Smart Chain mainnet (eip155:56)
     fn bsc() -> Self;
-    /// Returns the ChainId for Binance Smart Chain testnet (eip155:97)
+    /// Returns the instance for Binance Smart Chain testnet (eip155:97)
     fn bsc_testnet() -> Self;
 
-    // Monad
-    /// Returns the ChainId for Monad (eip155:143)
+    /// Returns the instance for Monad (eip155:143)
     fn monad() -> Self;
-    /// Returns the ChainId for Monad testnet (eip155:10143)
+    /// Returns the instance for Monad testnet (eip155:10143)
     fn monad_testnet() -> Self;
+}
 
-    // Solana
-    /// Returns the ChainId for Solana mainnet (solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp)
+/// Trait providing convenient methods to get instances for well-known Solana networks.
+///
+/// This trait can be implemented for any type to provide static methods that create
+/// instances for well-known Solana blockchain networks. Each method returns `Self`, allowing
+/// the trait to be used with different types that need per-network configuration.
+///
+/// # Use Cases
+///
+/// - **ChainId**: Get CAIP-2 chain identifiers for Solana networks
+/// - **Token Deployments**: Get per-chain token addresses (e.g., USDC on different Solana networks)
+/// - **Network Configuration**: Get network-specific configuration objects for Solana chains
+/// - **Any Per-Network Data**: Any type that needs Solana network-specific instances
+///
+/// # Examples
+///
+/// ```ignore
+/// use x402_rs::chain::ChainId;
+/// use x402_rs::known::KnownNetworkSolana;
+///
+/// // Get Solana mainnet chain ID
+/// let solana = ChainId::solana();
+/// assert_eq!(solana.namespace, "solana");
+/// assert_eq!(solana.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+///
+/// // Get Solana devnet chain ID
+/// let devnet = ChainId::solana_devnet();
+/// assert_eq!(devnet.namespace, "solana");
+/// ```
+#[allow(dead_code)]
+pub trait KnownNetworkSolana {
+    /// Returns the instance for Solana mainnet (solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp)
     fn solana() -> Self;
-    /// Returns the ChainId for Solana devnet (solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1)
+    /// Returns the instance for Solana devnet (solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1)
     fn solana_devnet() -> Self;
 }
 
-/// Implementation of KnownNetwork for ChainId.
+/// Implementation of KnownNetworkEip155 for ChainId.
 ///
 /// Provides convenient static methods to create ChainId instances for well-known
-/// blockchain networks. Each method returns a properly configured ChainId with the
-/// correct CAIP-2 namespace and reference values.
+/// EVM blockchain networks. Each method returns a properly configured ChainId with the
+/// "eip155" namespace and the correct chain reference.
 ///
-/// This is one example of implementing the KnownNetwork trait. Other types
+/// This is one example of implementing the KnownNetworkEip155 trait. Other types
 /// (such as token address types) can also implement this trait to provide
 /// per-network instances with better developer experience.
-impl KnownNetwork for ChainId {
+impl KnownNetworkEip155 for ChainId {
     fn base() -> ChainId {
         ChainId::new("eip155", "8453")
     }
@@ -297,7 +340,18 @@ impl KnownNetwork for ChainId {
     fn monad_testnet() -> ChainId {
         ChainId::new("eip155", "10143")
     }
+}
 
+/// Implementation of KnownNetworkSolana for ChainId.
+///
+/// Provides convenient static methods to create ChainId instances for well-known
+/// Solana blockchain networks. Each method returns a properly configured ChainId with the
+/// "solana" namespace and the correct chain reference.
+///
+/// This is one example of implementing the KnownNetworkSolana trait. Other types
+/// (such as token address types) can also implement this trait to provide
+/// per-network instances with better developer experience.
+impl KnownNetworkSolana for ChainId {
     fn solana() -> ChainId {
         ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")
     }
