@@ -1,6 +1,6 @@
 # How to Write a Scheme for x402-rs
 
-This guide explains how to create a custom payment scheme for the x402 facilitator.
+This guide explains how to create a custom payment scheme for the x402-rs facilitator.
 
 ## What is a Scheme?
 
@@ -48,7 +48,7 @@ Scheme IDs follow the pattern: `v{version}-{namespace}-{scheme}`
 | `v1-eip155-exact` | `V1Eip155Exact` | `v1_eip155_exact/` |
 | `v2-solana-myscheme` | `V2SolanaMyscheme` | `v2_solana_myscheme/` |
 
-This makes it easy to map between IDs, chain namespaces, and scheme names.
+This makes it easy to map between IDs, chain namespaces, scheme names, and code.
 
 ## Core Traits and Structs
 
@@ -357,11 +357,13 @@ If you want your scheme included in the default x402-rs distribution:
    .and_register(V2SolanaMyscheme)
    ```
 
-## Summary Checklist
+## Checklist for creating a new scheme
 
-- [ ] Define types using proto v2 generics
-- [ ] Implement `X402SchemeBlueprint` with correct `x402_version()`, `namespace()`, and `scheme()`
+- [ ] Declare a struct for your new scheme, for example, `V2SolanaMyscheme`
+- [ ] Declare a struct for the scheme handler, for example, `V2SolanaMyschemeHandler`
+- [ ] Implement `X402SchemeBlueprint` for `V2SolanaMyScheme` with correct `x402_version()`, `namespace()`, `scheme()`, and `build()`
 - [ ] Optionally override `id()` for custom scheme variants
-- [ ] Implement `X402SchemeHandler` (verify/settle/supported)
+- [ ] Implement `X402SchemeHandler` (verify/settle/supported) for `V2SolanaMySchemeHandler`
+- [ ] Define concrete types for the scheme using proto v2 generics
 - [ ] Register in `SchemeBlueprints`
-- [ ] Configure in `config.json` with appropriate `id` and `chains` pattern
+- [ ] Configure in `config.json` with appropriate `id` and `chains` pattern, and update `config.json.example`
