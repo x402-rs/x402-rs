@@ -24,7 +24,7 @@ use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::proto;
 use crate::proto::{PaymentVerificationError, v1};
 use crate::scheme::v1_eip155_exact::types::PaymentRequirementsExtra;
-use crate::scheme::{X402Scheme, X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId};
+use crate::scheme::{X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId};
 use crate::timestamp::UnixTimestamp;
 
 pub use types::ExactScheme;
@@ -34,11 +34,6 @@ pub use types::ExactScheme;
 pub const VALIDATOR_ADDRESS: Address = address!("0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B");
 
 pub struct V1Eip155Exact;
-
-impl X402Scheme for V1Eip155Exact {
-    type Id = V1Eip155Exact;
-    type FacilitatorBuilder = V1Eip155Exact;
-}
 
 impl X402SchemeId for V1Eip155Exact {
     fn x402_version(&self) -> u8 {

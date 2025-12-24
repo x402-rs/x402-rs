@@ -1,5 +1,12 @@
 pub mod types;
 
+use alloy_provider::Provider;
+use alloy_sol_types::Eip712Domain;
+use std::collections::HashMap;
+use std::error::Error;
+use std::sync::Arc;
+use tracing::instrument;
+
 use crate::chain::eip155::{
     Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
 };
@@ -14,12 +21,6 @@ use crate::scheme::v1_eip155_exact::{
 use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
-use alloy_provider::Provider;
-use alloy_sol_types::Eip712Domain;
-use std::collections::HashMap;
-use std::error::Error;
-use std::sync::Arc;
-use tracing::instrument;
 
 pub struct V2Eip155Exact;
 

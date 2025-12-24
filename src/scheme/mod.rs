@@ -30,11 +30,6 @@ pub trait X402SchemeFacilitator: Send + Sync {
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError>;
 }
 
-pub trait X402Scheme {
-    type Id: X402SchemeId;
-    type FacilitatorBuilder: X402SchemeFacilitatorBuilder;
-}
-
 pub trait X402SchemeBlueprint: X402SchemeId + X402SchemeFacilitatorBuilder {}
 impl<T> X402SchemeBlueprint for T where T: X402SchemeId + X402SchemeFacilitatorBuilder {}
 
