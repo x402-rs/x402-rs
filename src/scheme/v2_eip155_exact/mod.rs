@@ -12,7 +12,7 @@ use crate::scheme::v1_eip155_exact::{
     assert_enough_value, assert_time, settle_payment, verify_payment,
 };
 use crate::scheme::{
-    X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorError, X402SchemeId,
+    X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
@@ -53,6 +53,16 @@ impl X402SchemeId for V2Eip155Exact {
 
     fn scheme(&self) -> &str {
         types::ExactScheme.as_ref()
+    }
+}
+
+impl X402SchemeFacilitatorBuilder for V2Eip155Exact {
+    fn build(
+        &self,
+        provider: ChainProvider,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
+        X402SchemeBlueprint::build(self, provider, config)
     }
 }
 

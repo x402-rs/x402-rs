@@ -13,7 +13,7 @@ use crate::scheme::v1_solana_exact::{
     TransferRequirement, VerifyTransferResult, settle_transaction, verify_transaction,
 };
 use crate::scheme::{
-    X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorError, X402SchemeId,
+    X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 
 pub struct V2SolanaExact;
@@ -48,6 +48,16 @@ impl X402SchemeId for V2SolanaExact {
 
     fn scheme(&self) -> &str {
         types::ExactScheme.as_ref()
+    }
+}
+
+impl X402SchemeFacilitatorBuilder for V2SolanaExact {
+    fn build(
+        &self,
+        provider: ChainProvider,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
+        X402SchemeBlueprint::build(self, provider, config)
     }
 }
 

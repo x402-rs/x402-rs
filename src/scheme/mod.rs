@@ -68,6 +68,14 @@ pub trait X402SchemeId {
     }
 }
 
+pub trait X402SchemeFacilitatorBuilder {
+    fn build(
+        &self,
+        provider: ChainProvider,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>>;
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum X402SchemeFacilitatorError {
     #[error(transparent)]

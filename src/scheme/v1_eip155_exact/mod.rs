@@ -25,7 +25,7 @@ use crate::proto;
 use crate::proto::{PaymentVerificationError, v1};
 use crate::scheme::v1_eip155_exact::types::PaymentRequirementsExtra;
 use crate::scheme::{
-    X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorError, X402SchemeId,
+    X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 use crate::timestamp::UnixTimestamp;
 
@@ -73,6 +73,16 @@ impl X402SchemeId for V1Eip155Exact {
     }
     fn scheme(&self) -> &str {
         ExactScheme.as_ref()
+    }
+}
+
+impl X402SchemeFacilitatorBuilder for V1Eip155Exact {
+    fn build(
+        &self,
+        provider: ChainProvider,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        X402SchemeBlueprint::build(self, provider, config)
     }
 }
 

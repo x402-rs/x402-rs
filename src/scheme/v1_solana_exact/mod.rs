@@ -20,7 +20,7 @@ use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::{
-    X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorError, X402SchemeId,
+    X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 use crate::util::Base64Bytes;
 
@@ -66,6 +66,16 @@ impl X402SchemeId for V1SolanaExact {
 
     fn scheme(&self) -> &str {
         types::ExactScheme.as_ref()
+    }
+}
+
+impl X402SchemeFacilitatorBuilder for V1SolanaExact {
+    fn build(
+        &self,
+        provider: ChainProvider,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
+        X402SchemeBlueprint::build(self, provider, config)
     }
 }
 
