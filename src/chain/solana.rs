@@ -1,6 +1,3 @@
-use crate::chain::{ChainId, ChainProviderOps};
-use crate::config::SolanaChainConfig;
-use crate::scheme::X402SchemeHandlerError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_account::Account;
 use solana_client::client_error::{ClientError, ClientErrorKind};
@@ -24,18 +21,23 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::chain::{ChainId, ChainProviderOps};
+use crate::config::SolanaChainConfig;
+use crate::networks::KnownNetworkSolana;
+use crate::scheme::X402SchemeHandlerError;
+
 pub const SOLANA_NAMESPACE: &str = "solana";
 
 /// A Solana chain reference consisting of 32 ASCII characters.
 /// The genesis hash is the first 32 characters of the base58-encoded genesis block hash.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SolanaChainReference([u8; 32]);
 
 impl SolanaChainReference {
     /// Creates a new SolanaChainReference from a 32-byte array.
     /// Returns None if any byte is not a valid ASCII character.
     #[allow(dead_code)]
-    pub fn new(bytes: [u8; 32]) -> Self {
+    pub const fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 
@@ -49,6 +51,16 @@ impl SolanaChainReference {
     pub fn as_str(&self) -> &str {
         // Safe because we validate ASCII on construction
         std::str::from_utf8(&self.0).expect("SolanaChainReference contains valid ASCII")
+    }
+}
+
+impl KnownNetworkSolana<SolanaChainReference> for SolanaChainReference {
+    fn solana() -> Self {
+        Self::new(*b"5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")
+    }
+
+    fn solana_devnet() -> Self {
+        Self::new(*b"EtWTRABZaYq6iMfeYKouRu166VU2xqa1")
     }
 }
 
@@ -127,6 +139,23 @@ pub enum SolanaChainReferenceFormatError {
     InvalidNamespace(String),
     #[error("Invalid solana chain reference {0}")]
     InvalidReference(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct SolanaTokenDeployment {
+    pub chain_reference: SolanaChainReference,
+    pub address: Address,
+    pub decimals: u8,
+}
+
+impl SolanaTokenDeployment {
+    pub fn new(chain_reference: SolanaChainReference, address: Address, decimals: u8) -> Self {
+        Self {
+            chain_reference,
+            address,
+            decimals,
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]

@@ -103,6 +103,20 @@ impl Display for Eip155ChainReference {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct Eip155TokenDeployment {
+    pub chain_reference: Eip155ChainReference,
+    pub address: Address,
+    pub decimals: u8,
+    pub eip712: Option<TokenDeploymentEip712>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct TokenDeploymentEip712 {
+    pub name: String,
+    pub version: String,
+}
+
 #[derive(Debug)]
 pub struct Eip155ChainProvider {
     chain: Eip155ChainReference,
