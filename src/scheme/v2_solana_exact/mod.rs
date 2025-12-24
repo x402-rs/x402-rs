@@ -42,8 +42,13 @@ impl X402SchemeBlueprint for V2SolanaExact {
 }
 
 impl X402SchemeId for V2SolanaExact {
-    const NAMESPACE: &'static str = "solana";
-    const SCHEME: &'static str = types::ExactScheme::VALUE;
+    fn namespace(&self) -> &str {
+        "solana"
+    }
+
+    fn scheme(&self) -> &str {
+        types::ExactScheme.as_ref()
+    }
 }
 
 pub struct V2SolanaExactFacilitator {

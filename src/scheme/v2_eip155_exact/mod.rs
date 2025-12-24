@@ -47,8 +47,13 @@ impl X402SchemeBlueprint for V2Eip155Exact {
 }
 
 impl X402SchemeId for V2Eip155Exact {
-    const NAMESPACE: &'static str = "eip155";
-    const SCHEME: &'static str = types::ExactScheme::VALUE;
+    fn namespace(&self) -> &str {
+        "eip155"
+    }
+
+    fn scheme(&self) -> &str {
+        types::ExactScheme.as_ref()
+    }
 }
 
 pub struct V2Eip155ExactFacilitator {
