@@ -12,7 +12,7 @@ use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::v1_solana_exact::{
     TransferRequirement, VerifyTransferResult, settle_transaction, verify_transaction,
 };
-use crate::scheme::{X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
+use crate::scheme::{X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorError};
 
 pub struct V2SolanaExact;
 
@@ -29,26 +29,26 @@ impl X402SchemeBlueprint for V2SolanaExact {
         &self,
         provider: ChainProvider,
         _config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>> {
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
         let provider = if let ChainProvider::Solana(provider) = provider {
             provider
         } else {
             return Err("V2SolanaExact::build: provider must be a SolanaChainProvider".into());
         };
-        Ok(Box::new(V2SolanaExactHandler { provider }))
+        Ok(Box::new(V2SolanaExactFacilitator { provider }))
     }
 }
 
-pub struct V2SolanaExactHandler {
+pub struct V2SolanaExactFacilitator {
     provider: Arc<SolanaChainProvider>,
 }
 
 #[async_trait::async_trait]
-impl X402SchemeHandler for V2SolanaExactHandler {
+impl X402SchemeFacilitator for V2SolanaExactFacilitator {
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
-    ) -> Result<proto::VerifyResponse, X402SchemeHandlerError> {
+    ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
         let request = types::VerifyRequest::from_proto(request.clone())?;
         let verification = verify_transfer(&self.provider, &request).await?;
         Ok(proto::v2::VerifyResponse::valid(verification.payer.to_string()).into())
@@ -57,7 +57,7 @@ impl X402SchemeHandler for V2SolanaExactHandler {
     async fn settle(
         &self,
         request: &proto::SettleRequest,
-    ) -> Result<proto::SettleResponse, X402SchemeHandlerError> {
+    ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError> {
         let request = types::SettleRequest::from_proto(request.clone())?;
         let verification = verify_transfer(&self.provider, &request).await?;
         let payer = verification.payer.to_string();
@@ -70,7 +70,7 @@ impl X402SchemeHandler for V2SolanaExactHandler {
         .into())
     }
 
-    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeHandlerError> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
         let kinds: Vec<proto::SupportedPaymentKind> = {
             let fee_payer = self.provider.fee_payer();

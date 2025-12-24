@@ -22,7 +22,7 @@ use crate::facilitator::Facilitator;
 use crate::facilitator_local::FacilitatorLocalError;
 use crate::proto;
 use crate::proto::{AsPaymentProblem, ErrorReason};
-use crate::scheme::X402SchemeHandlerError;
+use crate::scheme::X402SchemeFacilitatorError;
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.
 ///
@@ -193,8 +193,8 @@ impl IntoResponse for FacilitatorLocalError {
                     payer: "",
                 };
                 let status_code = match scheme_handler_error {
-                    X402SchemeHandlerError::PaymentVerification(_) => StatusCode::BAD_REQUEST,
-                    X402SchemeHandlerError::OnchainFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                    X402SchemeFacilitatorError::PaymentVerification(_) => StatusCode::BAD_REQUEST,
+                    X402SchemeFacilitatorError::OnchainFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
                 };
                 (status_code, Json(verification_error_response)).into_response()
             }
@@ -209,8 +209,8 @@ impl IntoResponse for FacilitatorLocalError {
                     payer: "",
                 };
                 let status_code = match scheme_handler_error {
-                    X402SchemeHandlerError::PaymentVerification(_) => StatusCode::BAD_REQUEST,
-                    X402SchemeHandlerError::OnchainFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                    X402SchemeFacilitatorError::PaymentVerification(_) => StatusCode::BAD_REQUEST,
+                    X402SchemeFacilitatorError::OnchainFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
                 };
                 (status_code, Json(settlement_error_response)).into_response()
             }

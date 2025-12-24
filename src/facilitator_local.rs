@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use crate::facilitator::Facilitator;
 use crate::proto;
 use crate::proto::PaymentVerificationError;
-use crate::scheme::{SchemeRegistry, X402SchemeHandlerError};
+use crate::scheme::{SchemeRegistry, X402SchemeFacilitatorError};
 
 /// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
 /// using a network-aware provider cache.
@@ -94,7 +94,7 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
 #[derive(Debug, thiserror::Error)]
 pub enum FacilitatorLocalError {
     #[error(transparent)]
-    Verification(X402SchemeHandlerError),
+    Verification(X402SchemeFacilitatorError),
     #[error(transparent)]
-    Settlement(X402SchemeHandlerError),
+    Settlement(X402SchemeFacilitatorError),
 }

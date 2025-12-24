@@ -11,7 +11,7 @@ use crate::scheme::v1_eip155_exact::{
     Eip155ExactError, ExactEvmPayment, IEIP3009, assert_domain, assert_enough_balance,
     assert_enough_value, assert_time, settle_payment, verify_payment,
 };
-use crate::scheme::{X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
+use crate::scheme::{X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorError};
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
@@ -34,26 +34,26 @@ impl X402SchemeBlueprint for V2Eip155Exact {
         &self,
         provider: ChainProvider,
         _config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>> {
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
         let provider = if let ChainProvider::Eip155(provider) = provider {
             provider
         } else {
             return Err("V2Eip155Exact::build: provider must be an Eip155ChainProvider".into());
         };
-        Ok(Box::new(V2Eip155ExactHandler { provider }))
+        Ok(Box::new(V2Eip155ExactFacilitator { provider }))
     }
 }
 
-pub struct V2Eip155ExactHandler {
+pub struct V2Eip155ExactFacilitator {
     provider: Arc<Eip155ChainProvider>,
 }
 
 #[async_trait::async_trait]
-impl X402SchemeHandler for V2Eip155ExactHandler {
+impl X402SchemeFacilitator for V2Eip155ExactFacilitator {
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
-    ) -> Result<proto::VerifyResponse, X402SchemeHandlerError> {
+    ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
         let request = types::VerifyRequest::from_proto(request.clone())?;
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
@@ -73,7 +73,7 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
     async fn settle(
         &self,
         request: &proto::SettleRequest,
-    ) -> Result<proto::SettleResponse, X402SchemeHandlerError> {
+    ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError> {
         let request = types::SettleRequest::from_proto(request.clone())?;
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
@@ -96,7 +96,7 @@ impl X402SchemeHandler for V2Eip155ExactHandler {
         .into())
     }
 
-    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeHandlerError> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
         let kinds = vec![proto::SupportedPaymentKind {
             x402_version: proto::X402Version::v2().into(),

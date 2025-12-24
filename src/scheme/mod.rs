@@ -18,16 +18,16 @@ use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_solana_exact::V2SolanaExact;
 
 #[async_trait::async_trait]
-pub trait X402SchemeHandler: Send + Sync {
+pub trait X402SchemeFacilitator: Send + Sync {
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
-    ) -> Result<proto::VerifyResponse, X402SchemeHandlerError>;
+    ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError>;
     async fn settle(
         &self,
         request: &proto::SettleRequest,
-    ) -> Result<proto::SettleResponse, X402SchemeHandlerError>;
-    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeHandlerError>;
+    ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError>;
+    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError>;
 }
 
 pub trait X402SchemeBlueprint {
@@ -49,22 +49,22 @@ pub trait X402SchemeBlueprint {
         &self,
         provider: ChainProvider,
         config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn std::error::Error>>;
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>>;
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum X402SchemeHandlerError {
+pub enum X402SchemeFacilitatorError {
     #[error(transparent)]
     PaymentVerification(#[from] PaymentVerificationError),
     #[error("Onchain error: {0}")]
     OnchainFailure(String),
 }
 
-impl AsPaymentProblem for X402SchemeHandlerError {
+impl AsPaymentProblem for X402SchemeFacilitatorError {
     fn as_payment_problem(&self) -> PaymentProblem {
         match self {
-            X402SchemeHandlerError::PaymentVerification(e) => e.as_payment_problem(),
-            X402SchemeHandlerError::OnchainFailure(e) => {
+            X402SchemeFacilitatorError::PaymentVerification(e) => e.as_payment_problem(),
+            X402SchemeFacilitatorError::OnchainFailure(e) => {
                 PaymentProblem::new(ErrorReason::UnexpectedError, e.to_string())
             }
         }
@@ -136,7 +136,7 @@ impl Display for SchemeHandlerSlug {
 }
 
 #[derive(Default)]
-pub struct SchemeRegistry(HashMap<SchemeHandlerSlug, Box<dyn X402SchemeHandler>>);
+pub struct SchemeRegistry(HashMap<SchemeHandlerSlug, Box<dyn X402SchemeFacilitator>>);
 
 impl Debug for SchemeRegistry {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -194,12 +194,12 @@ impl SchemeRegistry {
         Self(handlers)
     }
 
-    pub fn by_slug(&self, slug: &SchemeHandlerSlug) -> Option<&dyn X402SchemeHandler> {
+    pub fn by_slug(&self, slug: &SchemeHandlerSlug) -> Option<&dyn X402SchemeFacilitator> {
         let handler = self.0.get(slug)?.deref();
         Some(handler)
     }
 
-    pub fn values(&self) -> impl Iterator<Item = &dyn X402SchemeHandler> {
+    pub fn values(&self) -> impl Iterator<Item = &dyn X402SchemeFacilitator> {
         self.0.values().map(|v| v.deref())
     }
 }

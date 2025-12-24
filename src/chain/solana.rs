@@ -24,7 +24,7 @@ use std::time::Duration;
 use crate::chain::{ChainId, ChainProviderOps};
 use crate::config::SolanaChainConfig;
 use crate::networks::KnownNetworkSolana;
-use crate::scheme::X402SchemeHandlerError;
+use crate::scheme::X402SchemeFacilitatorError;
 
 pub const SOLANA_NAMESPACE: &str = "solana";
 
@@ -176,7 +176,7 @@ impl From<ClientError> for SolanaChainProviderError {
     }
 }
 
-impl From<SolanaChainProviderError> for X402SchemeHandlerError {
+impl From<SolanaChainProviderError> for X402SchemeFacilitatorError {
     fn from(value: SolanaChainProviderError) -> Self {
         Self::OnchainFailure(value.to_string())
     }
