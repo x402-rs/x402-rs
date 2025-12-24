@@ -194,7 +194,9 @@ impl IntoResponse for FacilitatorLocalError {
                 };
                 let status_code = match scheme_handler_error {
                     X402SchemeFacilitatorError::PaymentVerification(_) => StatusCode::BAD_REQUEST,
-                    X402SchemeFacilitatorError::OnchainFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                    X402SchemeFacilitatorError::OnchainFailure(_) => {
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    }
                 };
                 (status_code, Json(verification_error_response)).into_response()
             }
@@ -210,7 +212,9 @@ impl IntoResponse for FacilitatorLocalError {
                 };
                 let status_code = match scheme_handler_error {
                     X402SchemeFacilitatorError::PaymentVerification(_) => StatusCode::BAD_REQUEST,
-                    X402SchemeFacilitatorError::OnchainFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                    X402SchemeFacilitatorError::OnchainFailure(_) => {
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    }
                 };
                 (status_code, Json(settlement_error_response)).into_response()
             }

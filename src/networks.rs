@@ -83,7 +83,6 @@
 use once_cell::sync::Lazy;
 use solana_pubkey::pubkey;
 use std::collections::HashMap;
-use std::str::FromStr;
 
 use crate::chain::{ChainId, eip155, solana};
 

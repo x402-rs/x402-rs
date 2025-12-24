@@ -53,17 +53,15 @@ pub trait X402SchemeBlueprint {
 }
 
 pub trait X402SchemeId {
-    fn x402_version(&self) -> u8 {
-        2
-    }
-    fn namespace(&self) -> &str;
-    fn scheme(&self) -> &str;
+    const X402_VERSION: u8 = 2;
+    const NAMESPACE: &'static str;
+    const SCHEME: &'static str;
     fn id(&self) -> String {
         format!(
             "v{}-{}-{}",
-            self.x402_version(),
-            self.namespace(),
-            self.scheme()
+            Self::X402_VERSION,
+            Self::NAMESPACE,
+            Self::SCHEME,
         )
     }
 }

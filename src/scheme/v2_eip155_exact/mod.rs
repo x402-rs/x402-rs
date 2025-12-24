@@ -11,7 +11,9 @@ use crate::scheme::v1_eip155_exact::{
     Eip155ExactError, ExactEvmPayment, IEIP3009, assert_domain, assert_enough_balance,
     assert_enough_value, assert_time, settle_payment, verify_payment,
 };
-use crate::scheme::{X402SchemeBlueprint, X402SchemeId, X402SchemeFacilitator, X402SchemeFacilitatorError};
+use crate::scheme::{
+    X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorError, X402SchemeId,
+};
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
@@ -45,13 +47,8 @@ impl X402SchemeBlueprint for V2Eip155Exact {
 }
 
 impl X402SchemeId for V2Eip155Exact {
-    fn namespace(&self) -> &str {
-        "eip155"
-    }
-
-    fn scheme(&self) -> &str {
-        types::ExactScheme.as_ref()
-    }
+    const NAMESPACE: &'static str = "eip155";
+    const SCHEME: &'static str = types::ExactScheme::VALUE;
 }
 
 pub struct V2Eip155ExactFacilitator {

@@ -5,7 +5,7 @@ macro_rules! lit_str {
         pub struct $struct_name;
 
         impl $struct_name {
-            const VALUE: &'static str = $val;
+            pub const VALUE: &'static str = $val;
         }
 
         impl AsRef<str> for $struct_name {
