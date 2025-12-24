@@ -87,7 +87,7 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-use crate::chain::ChainId;
+use crate::chain::{solana, ChainId};
 
 /// A known network definition with its chain ID and human-readable name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -353,11 +353,11 @@ impl KnownNetworkEip155 for ChainId {
 /// per-network instances with better developer experience.
 impl KnownNetworkSolana for ChainId {
     fn solana() -> ChainId {
-        ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")
+        solana::SolanaChainReference::solana().into()
     }
 
     fn solana_devnet() -> ChainId {
-        ChainId::new("solana", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1")
+        solana::SolanaChainReference::solana_devnet().into()
     }
 }
 

@@ -23,6 +23,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use crate::networks::KnownNetworkSolana;
 
 pub const SOLANA_NAMESPACE: &str = "solana";
 
@@ -35,7 +36,7 @@ impl SolanaChainReference {
     /// Creates a new SolanaChainReference from a 32-byte array.
     /// Returns None if any byte is not a valid ASCII character.
     #[allow(dead_code)]
-    pub fn new(bytes: [u8; 32]) -> Self {
+     pub const fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 
@@ -49,6 +50,16 @@ impl SolanaChainReference {
     pub fn as_str(&self) -> &str {
         // Safe because we validate ASCII on construction
         std::str::from_utf8(&self.0).expect("SolanaChainReference contains valid ASCII")
+    }
+}
+
+impl KnownNetworkSolana for SolanaChainReference {
+    fn solana() -> Self {
+        Self::new(*b"5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")
+    }
+
+    fn solana_devnet() -> Self {
+        Self::new(*b"EtWTRABZaYq6iMfeYKouRu166VU2xqa1")
     }
 }
 
@@ -127,6 +138,35 @@ pub enum SolanaChainReferenceFormatError {
     InvalidNamespace(String),
     #[error("Invalid solana chain reference {0}")]
     InvalidReference(String),
+}
+
+#[derive(Clone, Debug)]
+pub struct SolanaTokenDeployment {
+    chain_reference: SolanaChainReference,
+    address: Address,
+    decimals: u8,
+}
+
+impl SolanaTokenDeployment {
+    pub fn new(chain_reference: SolanaChainReference, address: Address, decimals: u8) -> Self {
+        Self {
+            chain_reference,
+            address,
+            decimals,
+        }
+    }
+
+    pub fn chain_reference(&self) -> SolanaChainReference {
+        self.chain_reference
+    }
+
+    pub fn address(&self) -> &Address {
+        &self.address
+    }
+
+    pub fn decimals(&self) -> u8 {
+        self.decimals
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
