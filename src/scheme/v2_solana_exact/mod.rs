@@ -12,7 +12,7 @@ use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::v1_solana_exact::{
     TransferRequirement, VerifyTransferResult, settle_transaction, verify_transaction,
 };
-use crate::scheme::{X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorError};
+use crate::scheme::{X402SchemeBlueprint, X402SchemeId, X402SchemeFacilitator, X402SchemeFacilitatorError};
 
 pub struct V2SolanaExact;
 
@@ -36,6 +36,16 @@ impl X402SchemeBlueprint for V2SolanaExact {
             return Err("V2SolanaExact::build: provider must be a SolanaChainProvider".into());
         };
         Ok(Box::new(V2SolanaExactFacilitator { provider }))
+    }
+}
+
+impl X402SchemeId for V2SolanaExact {
+    fn namespace(&self) -> &str {
+        "solana"
+    }
+
+    fn scheme(&self) -> &str {
+        types::ExactScheme.as_ref()
     }
 }
 

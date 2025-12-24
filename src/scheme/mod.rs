@@ -52,6 +52,22 @@ pub trait X402SchemeBlueprint {
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>>;
 }
 
+pub trait X402SchemeId {
+    fn x402_version(&self) -> u8 {
+        2
+    }
+    fn namespace(&self) -> &str;
+    fn scheme(&self) -> &str;
+    fn id(&self) -> String {
+        format!(
+            "v{}-{}-{}",
+            self.x402_version(),
+            self.namespace(),
+            self.scheme()
+        )
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum X402SchemeFacilitatorError {
     #[error(transparent)]

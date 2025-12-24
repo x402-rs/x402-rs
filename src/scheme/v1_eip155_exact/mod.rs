@@ -24,7 +24,7 @@ use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::proto;
 use crate::proto::{PaymentVerificationError, v1};
 use crate::scheme::v1_eip155_exact::types::PaymentRequirementsExtra;
-use crate::scheme::{X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorError};
+use crate::scheme::{X402SchemeBlueprint, X402SchemeId, X402SchemeFacilitator, X402SchemeFacilitatorError};
 use crate::timestamp::UnixTimestamp;
 
 pub use types::ExactScheme;
@@ -59,6 +59,20 @@ impl X402SchemeBlueprint for V1Eip155Exact {
             return Err("V1Eip155Exact::build: provider must be an Eip155ChainProvider".into());
         };
         Ok(Box::new(V1Eip155ExactFacilitator { provider }))
+    }
+}
+
+impl X402SchemeId for V1Eip155Exact {
+    fn x402_version(&self) -> u8 {
+        1
+    }
+
+    fn namespace(&self) -> &str {
+        "eip155"
+    }
+
+    fn scheme(&self) -> &str {
+        ExactScheme.as_ref()
     }
 }
 
