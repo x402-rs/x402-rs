@@ -27,7 +27,7 @@ For example, the `exact` scheme implements ERC-3009 `transferWithAuthorization` 
 flowchart TB
     subgraph Registration
         SB[SchemeBlueprints] -->|by id| BP[X402SchemeBlueprint]
-        BP -->|build with ChainProvider| H[Box dyn X402SchemeHandler]
+        BP -->|build with ChainProvider| H[Box dyn X402SchemeFacilitator]
     end
     
     subgraph Runtime
@@ -52,12 +52,12 @@ This makes it easy to map between IDs, chain namespaces, scheme names, and code.
 
 ## Core Traits and Structs
 
-### X402SchemeBlueprint
+### X402SchemeId
 
-Factory for creating scheme handlers. The trait provides methods to identify the scheme and build handlers:
+Provides identification for a scheme. This trait defines the scheme's version, namespace, and name:
 
 ```rust
-pub trait X402SchemeBlueprint {
+pub trait X402SchemeId {
     /// The x402 protocol version (1 or 2). Defaults to 2.
     fn x402_version(&self) -> u8 {
         2
@@ -78,32 +78,49 @@ pub trait X402SchemeBlueprint {
             self.scheme()
         )
     }
+}
+```
 
-    /// Build a handler instance for a specific chain
+### X402SchemeFacilitatorBuilder
+
+Factory for creating scheme facilitators:
+
+```rust
+pub trait X402SchemeFacilitatorBuilder {
+    /// Build a facilitator instance for a specific chain
     fn build(
         &self,
         provider: ChainProvider,
         config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeHandler>, Box<dyn std::error::Error>>;
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>>;
 }
 ```
 
 - The `build` method receives a `ChainProvider` enum—match against the expected variant
 - The optional `config` allows scheme-specific configuration (parse however you wish, see "Configure in JSON" section)
 
-### X402SchemeHandler
+### X402SchemeBlueprint
 
-Three core operations every scheme must implement:
+A combined trait that requires both `X402SchemeId` and `X402SchemeFacilitatorBuilder`. This is automatically implemented for any type that implements both traits:
+
+```rust
+pub trait X402SchemeBlueprint: X402SchemeId + X402SchemeFacilitatorBuilder {}
+impl<T> X402SchemeBlueprint for T where T: X402SchemeId + X402SchemeFacilitatorBuilder {}
+```
+
+### X402SchemeFacilitator
+
+Three core operations every scheme facilitator must implement:
 
 ```rust
 #[async_trait::async_trait]
-pub trait X402SchemeHandler: Send + Sync {
+pub trait X402SchemeFacilitator: Send + Sync {
     async fn verify(&self, request: &proto::VerifyRequest)
-        -> Result<proto::VerifyResponse, X402SchemeHandlerError>;
+        -> Result<proto::VerifyResponse, X402SchemeFacilitatorError>;
     async fn settle(&self, request: &proto::SettleRequest)
-        -> Result<proto::SettleResponse, X402SchemeHandlerError>;
+        -> Result<proto::SettleResponse, X402SchemeFacilitatorError>;
     async fn supported(&self)
-        -> Result<proto::SupportedResponse, X402SchemeHandlerError>;
+        -> Result<proto::SupportedResponse, X402SchemeFacilitatorError>;
 }
 ```
 
@@ -142,12 +159,12 @@ pub type VerifyRequest = v2::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;
 ```
 
-### Step 2: Implement Blueprint
+### Step 2: Implement X402SchemeId
 
 ```rust
 pub struct V2SolanaMyscheme;
 
-impl X402SchemeBlueprint for V2SolanaMyscheme {
+impl X402SchemeId for V2SolanaMyscheme {
     // x402_version() defaults to 2, no need to override
 
     fn namespace(&self) -> &str {
@@ -157,27 +174,37 @@ impl X402SchemeBlueprint for V2SolanaMyscheme {
     fn scheme(&self) -> &str {
         "myscheme"
     }
+}
+```
 
+### Step 3: Implement X402SchemeFacilitatorBuilder
+
+```rust
+impl X402SchemeFacilitatorBuilder for V2SolanaMyscheme {
     fn build(&self, provider: ChainProvider, config: Option<serde_json::Value>)
-        -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>>
+        -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>>
     {
         let provider = match provider {
             ChainProvider::Solana(p) => p,
             _ => return Err("Requires SolanaChainProvider".into()),
         };
         // Optionally parse config here
-        Ok(Box::new(V2SolanaMyschemeHandler { provider }))
+        Ok(Box::new(V2SolanaMyschemeFacilitator { provider }))
     }
 }
 ```
 
-### Step 3: Implement Handler
+### Step 4: Implement Facilitator
 
 ```rust
+pub struct V2SolanaMyschemeFacilitator {
+    provider: Arc<SolanaChainProvider>,
+}
+
 #[async_trait::async_trait]
-impl X402SchemeHandler for V2SolanaMyschemeHandler {
+impl X402SchemeFacilitator for V2SolanaMyschemeFacilitator {
     async fn verify(&self, request: &proto::VerifyRequest)
-        -> Result<proto::VerifyResponse, X402SchemeHandlerError>
+        -> Result<proto::VerifyResponse, X402SchemeFacilitatorError>
     {
         let request = types::VerifyRequest::from_proto(request.clone())?;
         // Your verification logic...
@@ -185,13 +212,13 @@ impl X402SchemeHandler for V2SolanaMyschemeHandler {
     }
 
     async fn settle(&self, request: &proto::SettleRequest)
-        -> Result<proto::SettleResponse, X402SchemeHandlerError>
+        -> Result<proto::SettleResponse, X402SchemeFacilitatorError>
     {
         // Your settlement logic...
         Ok(proto::v2::SettleResponse::Success { payer, transaction, network }.into())
     }
 
-    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeHandlerError> {
+    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
         let kinds = vec![proto::SupportedPaymentKind {
             x402_version: proto::X402Version::v2().into(),
@@ -213,14 +240,14 @@ impl X402SchemeHandler for V2SolanaMyschemeHandler {
 }
 ```
 
-### Step 4: Register the Scheme
+### Step 5: Register the Scheme
 
 For custom facilitators, register dynamically:
 ```rust,ignore
 let blueprints = SchemeBlueprints::new().and_register(V2SolanaMyscheme);
 ```
 
-### Step 5: Configure in JSON
+### Step 6: Configure in JSON
 
 ```json
 {
@@ -235,7 +262,7 @@ let blueprints = SchemeBlueprints::new().and_register(V2SolanaMyscheme);
 }
 ```
 
-- `id`: The scheme blueprint ID (matches `X402SchemeBlueprint::id()`)
+- `id`: The scheme blueprint ID (matches `X402SchemeId::id()`)
 - `chains`: Pattern matching (`*` for all, `{a,b}` for specific chain references)
 - `config`: Passed to your `build()` method
 
@@ -262,7 +289,7 @@ Suppose you want `eip155:3` to use custom logic while all other EVM chains use t
 ```rust
 pub struct V1Eip155ExactCustom;
 
-impl X402SchemeBlueprint for V1Eip155ExactCustom {
+impl X402SchemeId for V1Eip155ExactCustom {
     fn x402_version(&self) -> u8 {
         1
     }
@@ -279,16 +306,18 @@ impl X402SchemeBlueprint for V1Eip155ExactCustom {
     fn id(&self) -> String {
         "v1-eip155-exact-custom".to_string()
     }
+}
 
+impl X402SchemeFacilitatorBuilder for V1Eip155ExactCustom {
     fn build(&self, provider: ChainProvider, config: Option<serde_json::Value>)
-        -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>>
+        -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>>
     {
         let provider = match provider {
             ChainProvider::Eip155(p) => p,
             _ => return Err("Requires Eip155ChainProvider".into()),
         };
-        // Your custom handler with chain-specific logic
-        Ok(Box::new(V1Eip155ExactCustomHandler { provider, config }))
+        // Your custom facilitator with chain-specific logic
+        Ok(Box::new(V1Eip155ExactCustomFacilitator { provider, config }))
     }
 }
 ```
@@ -360,10 +389,11 @@ If you want your scheme included in the default x402-rs distribution:
 ## Checklist for creating a new scheme
 
 - [ ] Declare a struct for your new scheme, for example, `V2SolanaMyscheme`
-- [ ] Declare a struct for the scheme handler, for example, `V2SolanaMyschemeHandler`
-- [ ] Implement `X402SchemeBlueprint` for `V2SolanaMyScheme` with correct `x402_version()`, `namespace()`, `scheme()`, and `build()`
+- [ ] Declare a struct for the scheme facilitator, for example, `V2SolanaMyschemeFacilitator`
+- [ ] Implement `X402SchemeId` for `V2SolanaMyscheme` with correct `x402_version()`, `namespace()`, and `scheme()`
 - [ ] Optionally override `id()` for custom scheme variants
-- [ ] Implement `X402SchemeHandler` (verify/settle/supported) for `V2SolanaMySchemeHandler`
+- [ ] Implement `X402SchemeFacilitatorBuilder` for `V2SolanaMyscheme` with `build()` method
+- [ ] Implement `X402SchemeFacilitator` (verify/settle/supported) for `V2SolanaMyschemeFacilitator`
 - [ ] Define concrete types for the scheme using proto v2 generics
 - [ ] Register in `SchemeBlueprints`
 - [ ] Configure in `config.json` with appropriate `id` and `chains` pattern, and update `config.json.example`
