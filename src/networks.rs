@@ -36,15 +36,11 @@
 //!
 //! ## KnownNetworkEip155
 //! Provides convenient static methods for all EVM networks (eip155 namespace):
-//! - Base, Base Sepolia, Skale Base Sepolia
+//! - Base, Base Sepolia
 //! - Polygon, Polygon Amoy
 //! - Avalanche, Avalanche Fuji
 //! - Sei, Sei Testnet
-//! - Abstract, Abstract Testnet
-//! - XDC, XRPL EVM, Peaq, IoTeX, Story, Educhain
-//! - Celo, Celo Alfajores
-//! - BSC, BSC Testnet
-//! - Monad, Monad Testnet
+//! - XDC, XRPL EVM, Peaq, IoTeX
 //!
 //! ## KnownNetworkSolana
 //! Provides convenient static methods for Solana networks:
@@ -53,8 +49,8 @@
 //!
 //! # Supported Networks
 //!
-//! The module supports 31 blockchain networks across two namespaces:
-//! - **EVM Networks (23)**: All networks in the eip155 namespace
+//! The module supports 14 blockchain networks across two namespaces:
+//! - **EVM Networks (12)**: All networks in the eip155 namespace
 //! - **Solana Networks (2)**: Solana mainnet and devnet
 //!
 //! # Examples
@@ -87,8 +83,9 @@
 use once_cell::sync::Lazy;
 use solana_pubkey::pubkey;
 use std::collections::HashMap;
+use std::str::FromStr;
 
-use crate::chain::{ChainId, solana, eip155};
+use crate::chain::{ChainId, eip155, solana};
 
 /// A known network definition with its chain ID and human-readable name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -147,8 +144,6 @@ pub trait KnownNetworkEip155<A> {
     fn base() -> A;
     /// Returns the instance for Base Sepolia testnet (eip155:84532)
     fn base_sepolia() -> A;
-    /// Returns the instance for Skale Base Sepolia (eip155:324705682)
-    fn skale_base_sepolia() -> A;
 
     /// Returns the instance for Polygon mainnet (eip155:137)
     fn polygon() -> A;
@@ -165,11 +160,6 @@ pub trait KnownNetworkEip155<A> {
     /// Returns the instance for Sei testnet (eip155:1328)
     fn sei_testnet() -> A;
 
-    /// Returns the instance for Abstract mainnet (eip155:2741)
-    fn abstract_network() -> A;
-    /// Returns the instance for Abstract testnet (eip155:11124)
-    fn abstract_testnet() -> A;
-
     /// Returns the instance for XDC Network (eip155:50)
     fn xdc() -> A;
 
@@ -181,27 +171,6 @@ pub trait KnownNetworkEip155<A> {
 
     /// Returns the instance for IoTeX (eip155:4689)
     fn iotex() -> A;
-
-    /// Returns the instance for Story (eip155:1514)
-    fn story() -> A;
-
-    /// Returns the instance for Educhain (eip155:41923)
-    fn educhain() -> A;
-
-    /// Returns the instance for Celo mainnet (eip155:42220)
-    fn celo() -> A;
-    /// Returns the instance for Celo Alfajores testnet (eip155:44787)
-    fn celo_alfajores() -> A;
-
-    /// Returns the instance for Binance Smart Chain mainnet (eip155:56)
-    fn bsc() -> A;
-    /// Returns the instance for Binance Smart Chain testnet (eip155:97)
-    fn bsc_testnet() -> A;
-
-    /// Returns the instance for Monad (eip155:143)
-    fn monad() -> A;
-    /// Returns the instance for Monad testnet (eip155:10143)
-    fn monad_testnet() -> A;
 }
 
 /// Trait providing convenient methods to get instances for well-known Solana networks.
@@ -258,10 +227,6 @@ impl KnownNetworkEip155<ChainId> for ChainId {
         ChainId::new("eip155", "84532")
     }
 
-    fn skale_base_sepolia() -> ChainId {
-        ChainId::new("eip155", "324705682")
-    }
-
     fn polygon() -> ChainId {
         ChainId::new("eip155", "137")
     }
@@ -286,14 +251,6 @@ impl KnownNetworkEip155<ChainId> for ChainId {
         ChainId::new("eip155", "1328")
     }
 
-    fn abstract_network() -> ChainId {
-        ChainId::new("eip155", "2741")
-    }
-
-    fn abstract_testnet() -> ChainId {
-        ChainId::new("eip155", "11124")
-    }
-
     fn xdc() -> ChainId {
         ChainId::new("eip155", "50")
     }
@@ -308,38 +265,6 @@ impl KnownNetworkEip155<ChainId> for ChainId {
 
     fn iotex() -> ChainId {
         ChainId::new("eip155", "4689")
-    }
-
-    fn story() -> ChainId {
-        ChainId::new("eip155", "1514")
-    }
-
-    fn educhain() -> ChainId {
-        ChainId::new("eip155", "41923")
-    }
-
-    fn celo() -> ChainId {
-        ChainId::new("eip155", "42220")
-    }
-
-    fn celo_alfajores() -> ChainId {
-        ChainId::new("eip155", "44787")
-    }
-
-    fn bsc() -> ChainId {
-        ChainId::new("eip155", "56")
-    }
-
-    fn bsc_testnet() -> ChainId {
-        ChainId::new("eip155", "97")
-    }
-
-    fn monad() -> ChainId {
-        ChainId::new("eip155", "143")
-    }
-
-    fn monad_testnet() -> ChainId {
-        ChainId::new("eip155", "10143")
     }
 }
 
@@ -385,11 +310,6 @@ static KNOWN_NETWORKS: &[NetworkInfo] = &[
         namespace: "eip155",
         reference: "84532",
     },
-    NetworkInfo {
-        name: "skale-base-sepolia",
-        namespace: "eip155",
-        reference: "324705682",
-    },
     // Polygon
     NetworkInfo {
         name: "polygon",
@@ -423,17 +343,6 @@ static KNOWN_NETWORKS: &[NetworkInfo] = &[
         namespace: "eip155",
         reference: "1328",
     },
-    // Abstract
-    NetworkInfo {
-        name: "abstract",
-        namespace: "eip155",
-        reference: "2741",
-    },
-    NetworkInfo {
-        name: "abstract-testnet",
-        namespace: "eip155",
-        reference: "11124",
-    },
     // XDC
     NetworkInfo {
         name: "xdc",
@@ -457,51 +366,6 @@ static KNOWN_NETWORKS: &[NetworkInfo] = &[
         name: "iotex",
         namespace: "eip155",
         reference: "4689",
-    },
-    // Story
-    NetworkInfo {
-        name: "story",
-        namespace: "eip155",
-        reference: "1514",
-    },
-    // Educhain
-    NetworkInfo {
-        name: "educhain",
-        namespace: "eip155",
-        reference: "41923",
-    },
-    // Celo
-    NetworkInfo {
-        name: "celo",
-        namespace: "eip155",
-        reference: "42220",
-    },
-    NetworkInfo {
-        name: "celo-alfajores",
-        namespace: "eip155",
-        reference: "44787",
-    },
-    // BSC (Binance Smart Chain)
-    NetworkInfo {
-        name: "bsc",
-        namespace: "eip155",
-        reference: "56",
-    },
-    NetworkInfo {
-        name: "bsc-testnet",
-        namespace: "eip155",
-        reference: "97",
-    },
-    // Monad
-    NetworkInfo {
-        name: "monad",
-        namespace: "eip155",
-        reference: "143",
-    },
-    NetworkInfo {
-        name: "monad-testnet",
-        namespace: "eip155",
-        reference: "10143",
     },
     // Solana Networks
     NetworkInfo {
@@ -645,95 +509,144 @@ impl KnownNetworkSolana<solana::SolanaTokenDeployment> for USDC {
 
 impl KnownNetworkEip155<eip155::Eip155TokenDeployment> for USDC {
     fn base() -> eip155::Eip155TokenDeployment {
-        todo!()
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(8453),
+            address: alloy_primitives::address!("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "USD Coin".into(),
+                version: "2".into(),
+            }),
+        }
     }
 
     fn base_sepolia() -> eip155::Eip155TokenDeployment {
-        todo!()
-    }
-
-    fn skale_base_sepolia() -> eip155::Eip155TokenDeployment {
-        todo!()
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(84532),
+            address: alloy_primitives::address!("0x036CbD53842c5426634e7929541eC2318f3dCF7e"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "USDC".into(),
+                version: "2".into(),
+            }),
+        }
     }
 
     fn polygon() -> eip155::Eip155TokenDeployment {
-        todo!()
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(137),
+            address: alloy_primitives::address!("0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "USDC".into(),
+                version: "2".into(),
+            }),
+        }
     }
 
     fn polygon_amoy() -> eip155::Eip155TokenDeployment {
-        todo!()
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(80002),
+            address: alloy_primitives::address!("0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "USDC".into(),
+                version: "2".into(),
+            }),
+        }
     }
 
     fn avalanche() -> eip155::Eip155TokenDeployment {
-        todo!()
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(43114),
+            address: alloy_primitives::address!("0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "USD Coin".into(),
+                version: "2".into(),
+            }),
+        }
     }
 
     fn avalanche_fuji() -> eip155::Eip155TokenDeployment {
-        todo!()
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(43113),
+            address: alloy_primitives::address!("0x5425890298aed601595a70AB815c96711a31Bc65"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "USD Coin".into(),
+                version: "2".into(),
+            }),
+        }
     }
 
     fn sei() -> eip155::Eip155TokenDeployment {
-        todo!()
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(1329),
+            address: alloy_primitives::address!("0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "USDC".into(),
+                version: "2".into(),
+            }),
+        }
     }
 
     fn sei_testnet() -> eip155::Eip155TokenDeployment {
-        todo!()
-    }
-
-    fn abstract_network() -> eip155::Eip155TokenDeployment {
-        todo!()
-    }
-
-    fn abstract_testnet() -> eip155::Eip155TokenDeployment {
-        todo!()
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(1328),
+            address: alloy_primitives::address!("0x4fCF1784B31630811181f670Aea7A7bEF803eaED"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "USDC".into(),
+                version: "2".into(),
+            }),
+        }
     }
 
     fn xdc() -> eip155::Eip155TokenDeployment {
-        todo!()
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(50),
+            address: alloy_primitives::address!("0xfA2958CB79b0491CC627c1557F441eF849Ca8eb1"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "USDC".into(),
+                version: "2".into(),
+            }),
+        }
     }
 
     fn xrpl_evm() -> eip155::Eip155TokenDeployment {
-        todo!()
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(1440000),
+            address: alloy_primitives::address!("0xDaF4556169c4F3f2231d8ab7BC8772Ddb7D4c84C"),
+            decimals: 6,
+            eip712: None,
+        }
     }
 
     fn peaq() -> eip155::Eip155TokenDeployment {
-        todo!()
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(3338),
+            address: alloy_primitives::address!("0xbbA60da06c2c5424f03f7434542280FCAd453d10"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "USDC".into(),
+                version: "2".into(),
+            }),
+        }
     }
 
     fn iotex() -> eip155::Eip155TokenDeployment {
-        todo!()
-    }
-
-    fn story() -> eip155::Eip155TokenDeployment {
-        todo!()
-    }
-
-    fn educhain() -> eip155::Eip155TokenDeployment {
-        todo!()
-    }
-
-    fn celo() -> eip155::Eip155TokenDeployment {
-        todo!()
-    }
-
-    fn celo_alfajores() -> eip155::Eip155TokenDeployment {
-        todo!()
-    }
-
-    fn bsc() -> eip155::Eip155TokenDeployment {
-        todo!()
-    }
-
-    fn bsc_testnet() -> eip155::Eip155TokenDeployment {
-        todo!()
-    }
-
-    fn monad() -> eip155::Eip155TokenDeployment {
-        todo!()
-    }
-
-    fn monad_testnet() -> eip155::Eip155TokenDeployment {
-        todo!()
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(4689),
+            address: alloy_primitives::address!("0xcdf79194c6c285077a58da47641d4dbe51f63542"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "Bridged USDC".into(),
+                version: "2".into(),
+            }),
+        }
     }
 }
 
