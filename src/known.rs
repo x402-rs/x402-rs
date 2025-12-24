@@ -24,8 +24,8 @@
 //! # Module Contents
 //!
 //! - [`NetworkInfo`]: A struct representing a known network with its name, namespace, and reference
-//! - [`KnownChainId`]: A trait providing convenient static methods to get ChainId instances
-//! - [`KNOWN_NETWORKS`]: A static array of all supported networks
+//! - [`KnownNetwork`]: A generic trait providing convenient static methods to get per-network instances
+//! - [`KNOWN_NETWORKS`]: A static array of well-known networks
 //! - [`chain_id_by_network_name`]: Lookup function to get ChainId by network name
 //! - [`network_name_by_chain_id`]: Reverse lookup function to get network name by ChainId
 //!
@@ -40,7 +40,7 @@
 //!
 //! ```ignore
 //! use x402_rs::chain::ChainId;
-//! use x402_rs::known::{KnownChainId, chain_id_by_network_name};
+//! use x402_rs::known::{KnownNetwork, chain_id_by_network_name};
 //!
 //! // Using the trait methods for convenient access
 //! let base = ChainId::base();
@@ -81,17 +81,24 @@ impl NetworkInfo {
     }
 }
 
-/// Trait providing convenient methods to get ChainId instances for all known networks.
+/// Trait providing convenient methods to get instances for well-known networks.
 ///
-/// This trait is implemented for `ChainId` and provides static methods to create
-/// ChainId instances for all supported blockchain networks. Each method returns a
-/// properly configured ChainId with the correct namespace and reference values.
+/// This trait can be implemented for any type to provide static methods that create
+/// instances for well-known blockchain networks. Each method returns `Self`, allowing
+/// the trait to be used with different types that need per-network configuration.
+///
+/// # Use Cases
+///
+/// - **ChainId**: Get CAIP-2 chain identifiers for different networks
+/// - **Token Deployments**: Get per-chain token addresses (e.g., USDC on different chains)
+/// - **Network Configuration**: Get network-specific configuration objects
+/// - **Any Per-Network Data**: Any type that needs network-specific instances
 ///
 /// # Examples
 ///
 /// ```ignore
 /// use x402_rs::chain::ChainId;
-/// use x402_rs::known::KnownChainId;
+/// use x402_rs::known::KnownNetwork;
 ///
 /// // Get Base mainnet chain ID
 /// let base = ChainId::base();
@@ -101,96 +108,104 @@ impl NetworkInfo {
 /// // Get Solana mainnet chain ID
 /// let solana = ChainId::solana();
 /// assert_eq!(solana.namespace, "solana");
+///
+/// // Can also be implemented for other types like token addresses
+/// // let usdc_base = UsdcAddress::base();
+/// // let usdc_polygon = UsdcAddress::polygon();
 /// ```
 #[allow(dead_code)]
-pub trait KnownChainId {
+pub trait KnownNetwork {
     // Base
     /// Returns the ChainId for Base mainnet (eip155:8453)
-    fn base() -> ChainId;
+    fn base() -> Self;
     /// Returns the ChainId for Base Sepolia testnet (eip155:84532)
-    fn base_sepolia() -> ChainId;
+    fn base_sepolia() -> Self;
     /// Returns the ChainId for Skale Base Sepolia (eip155:324705682)
-    fn skale_base_sepolia() -> ChainId;
+    fn skale_base_sepolia() -> Self;
 
     // Polygon
     /// Returns the ChainId for Polygon mainnet (eip155:137)
-    fn polygon() -> ChainId;
+    fn polygon() -> Self;
     /// Returns the ChainId for Polygon Amoy testnet (eip155:80002)
-    fn polygon_amoy() -> ChainId;
+    fn polygon_amoy() -> Self;
 
     // Avalanche
     /// Returns the ChainId for Avalanche C-Chain mainnet (eip155:43114)
-    fn avalanche() -> ChainId;
+    fn avalanche() -> Self;
     /// Returns the ChainId for Avalanche Fuji testnet (eip155:43113)
-    fn avalanche_fuji() -> ChainId;
+    fn avalanche_fuji() -> Self;
 
     // Sei
     /// Returns the ChainId for Sei mainnet (eip155:1329)
-    fn sei() -> ChainId;
+    fn sei() -> Self;
     /// Returns the ChainId for Sei testnet (eip155:1328)
-    fn sei_testnet() -> ChainId;
+    fn sei_testnet() -> Self;
 
     // Abstract
     /// Returns the ChainId for Abstract mainnet (eip155:2741)
-    fn abstract_network() -> ChainId;
+    fn abstract_network() -> Self;
     /// Returns the ChainId for Abstract testnet (eip155:11124)
-    fn abstract_testnet() -> ChainId;
+    fn abstract_testnet() -> Self;
 
     // XDC
     /// Returns the ChainId for XDC Network (eip155:50)
-    fn xdc() -> ChainId;
+    fn xdc() -> Self;
 
     // XRPL EVM
     /// Returns the ChainId for XRPL EVM (eip155:1440000)
-    fn xrpl_evm() -> ChainId;
+    fn xrpl_evm() -> Self;
 
     // Peaq
     /// Returns the ChainId for Peaq (eip155:3338)
-    fn peaq() -> ChainId;
+    fn peaq() -> Self;
 
     // IoTeX
     /// Returns the ChainId for IoTeX (eip155:4689)
-    fn iotex() -> ChainId;
+    fn iotex() -> Self;
 
     // Story
     /// Returns the ChainId for Story (eip155:1514)
-    fn story() -> ChainId;
+    fn story() -> Self;
 
     // Educhain
     /// Returns the ChainId for Educhain (eip155:41923)
-    fn educhain() -> ChainId;
+    fn educhain() -> Self;
 
     // Celo
     /// Returns the ChainId for Celo mainnet (eip155:42220)
-    fn celo() -> ChainId;
+    fn celo() -> Self;
     /// Returns the ChainId for Celo Alfajores testnet (eip155:44787)
-    fn celo_alfajores() -> ChainId;
+    fn celo_alfajores() -> Self;
 
     // BSC (Binance Smart Chain)
     /// Returns the ChainId for Binance Smart Chain mainnet (eip155:56)
-    fn bsc() -> ChainId;
+    fn bsc() -> Self;
     /// Returns the ChainId for Binance Smart Chain testnet (eip155:97)
-    fn bsc_testnet() -> ChainId;
+    fn bsc_testnet() -> Self;
 
     // Monad
     /// Returns the ChainId for Monad (eip155:143)
-    fn monad() -> ChainId;
+    fn monad() -> Self;
     /// Returns the ChainId for Monad testnet (eip155:10143)
-    fn monad_testnet() -> ChainId;
+    fn monad_testnet() -> Self;
 
     // Solana
     /// Returns the ChainId for Solana mainnet (solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp)
-    fn solana() -> ChainId;
+    fn solana() -> Self;
     /// Returns the ChainId for Solana devnet (solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1)
-    fn solana_devnet() -> ChainId;
+    fn solana_devnet() -> Self;
 }
 
-/// Implementation of KnownChainId for ChainId.
+/// Implementation of KnownNetwork for ChainId.
 ///
-/// Provides convenient static methods to create ChainId instances for all
-/// supported blockchain networks. Each method returns a properly configured
-/// ChainId with the correct CAIP-2 namespace and reference values.
-impl KnownChainId for ChainId {
+/// Provides convenient static methods to create ChainId instances for well-known
+/// blockchain networks. Each method returns a properly configured ChainId with the
+/// correct CAIP-2 namespace and reference values.
+///
+/// This is one example of implementing the KnownNetwork trait. Other types
+/// (such as token address types) can also implement this trait to provide
+/// per-network instances with better developer experience.
+impl KnownNetwork for ChainId {
     fn base() -> ChainId {
         ChainId::new("eip155", "8453")
     }
@@ -292,11 +307,12 @@ impl KnownChainId for ChainId {
     }
 }
 
-/// A static array of all known blockchain networks.
+/// A static array of well-known blockchain networks.
 ///
-/// This array contains the complete registry of supported blockchain networks,
-/// organized by ecosystem (EVM networks first, then Solana networks). Each entry
-/// includes the network's human-readable name, CAIP-2 namespace, and chain reference.
+/// This array contains a registry of well-known blockchain networks for improved
+/// developer experience and x402 protocol v1 compatibility, organized by ecosystem
+/// (EVM networks first, then Solana networks). Each entry includes the network's
+/// human-readable name, CAIP-2 namespace, and chain reference.
 ///
 /// The array is used to populate the lazy-initialized lookup hashmaps:
 /// - [`NAME_TO_CHAIN_ID`] for name-based lookups
