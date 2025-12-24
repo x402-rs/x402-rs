@@ -216,7 +216,7 @@ impl X402SchemeHandler for V2SolanaMyschemeHandler {
 ### Step 4: Register the Scheme
 
 For custom facilitators, register dynamically:
-```rust
+```rust,ignore
 let blueprints = SchemeBlueprints::new().and_register(V2SolanaMyscheme);
 ```
 
@@ -295,7 +295,7 @@ impl X402SchemeBlueprint for V1Eip155ExactCustom {
 
 **Step 2: Register both schemes**
 
-```rust
+```rust,ignore
 let blueprints = SchemeBlueprints::new()
     .and_register(V1Eip155Exact)        // Standard handler
     .and_register(V1Eip155ExactCustom); // Custom handler
@@ -303,7 +303,7 @@ let blueprints = SchemeBlueprints::new()
 
 **Step 3: Configure in JSON**
 
-```json
+```json,ignore
 {
   "chains": {
     "eip155:1": { ... },
@@ -353,7 +353,7 @@ If you want your scheme included in the default x402-rs distribution:
    pub mod v2_solana_myscheme;
    ```
 3. Register in `SchemeBlueprints::full()`:
-   ```rust
+   ```rust,ignore
    .and_register(V2SolanaMyscheme)
    ```
 
