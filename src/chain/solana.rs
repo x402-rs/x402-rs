@@ -1,6 +1,3 @@
-use crate::chain::{ChainId, ChainProviderOps};
-use crate::config::SolanaChainConfig;
-use crate::scheme::X402SchemeHandlerError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_account::Account;
 use solana_client::client_error::{ClientError, ClientErrorKind};
@@ -23,6 +20,10 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+
+use crate::chain::{ChainId, ChainProviderOps};
+use crate::config::SolanaChainConfig;
+use crate::scheme::X402SchemeHandlerError;
 use crate::networks::KnownNetworkSolana;
 
 pub const SOLANA_NAMESPACE: &str = "solana";
