@@ -102,6 +102,7 @@ impl NetworkInfo {
 /// let solana = ChainId::solana();
 /// assert_eq!(solana.namespace, "solana");
 /// ```
+#[allow(dead_code)]
 pub trait KnownChainId {
     // Base
     /// Returns the ChainId for Base mainnet (eip155:8453)
@@ -110,73 +111,73 @@ pub trait KnownChainId {
     fn base_sepolia() -> ChainId;
     /// Returns the ChainId for Skale Base Sepolia (eip155:324705682)
     fn skale_base_sepolia() -> ChainId;
-    
+
     // Polygon
     /// Returns the ChainId for Polygon mainnet (eip155:137)
     fn polygon() -> ChainId;
     /// Returns the ChainId for Polygon Amoy testnet (eip155:80002)
     fn polygon_amoy() -> ChainId;
-    
+
     // Avalanche
     /// Returns the ChainId for Avalanche C-Chain mainnet (eip155:43114)
     fn avalanche() -> ChainId;
     /// Returns the ChainId for Avalanche Fuji testnet (eip155:43113)
     fn avalanche_fuji() -> ChainId;
-    
+
     // Sei
     /// Returns the ChainId for Sei mainnet (eip155:1329)
     fn sei() -> ChainId;
     /// Returns the ChainId for Sei testnet (eip155:1328)
     fn sei_testnet() -> ChainId;
-    
+
     // Abstract
     /// Returns the ChainId for Abstract mainnet (eip155:2741)
     fn abstract_network() -> ChainId;
     /// Returns the ChainId for Abstract testnet (eip155:11124)
     fn abstract_testnet() -> ChainId;
-    
+
     // XDC
     /// Returns the ChainId for XDC Network (eip155:50)
     fn xdc() -> ChainId;
-    
+
     // XRPL EVM
     /// Returns the ChainId for XRPL EVM (eip155:1440000)
     fn xrpl_evm() -> ChainId;
-    
+
     // Peaq
     /// Returns the ChainId for Peaq (eip155:3338)
     fn peaq() -> ChainId;
-    
+
     // IoTeX
     /// Returns the ChainId for IoTeX (eip155:4689)
     fn iotex() -> ChainId;
-    
+
     // Story
     /// Returns the ChainId for Story (eip155:1514)
     fn story() -> ChainId;
-    
+
     // Educhain
     /// Returns the ChainId for Educhain (eip155:41923)
     fn educhain() -> ChainId;
-    
+
     // Celo
     /// Returns the ChainId for Celo mainnet (eip155:42220)
     fn celo() -> ChainId;
     /// Returns the ChainId for Celo Alfajores testnet (eip155:44787)
     fn celo_alfajores() -> ChainId;
-    
+
     // BSC (Binance Smart Chain)
     /// Returns the ChainId for Binance Smart Chain mainnet (eip155:56)
     fn bsc() -> ChainId;
     /// Returns the ChainId for Binance Smart Chain testnet (eip155:97)
     fn bsc_testnet() -> ChainId;
-    
+
     // Monad
     /// Returns the ChainId for Monad (eip155:143)
     fn monad() -> ChainId;
     /// Returns the ChainId for Monad testnet (eip155:10143)
     fn monad_testnet() -> ChainId;
-    
+
     // Solana
     /// Returns the ChainId for Solana mainnet (solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp)
     fn solana() -> ChainId;
@@ -586,18 +587,18 @@ mod tests {
 
     #[test]
     fn test_chain_id_from_network_name() {
-        let chain_id = ChainId::from_network_name("base").unwrap();
+        let chain_id = chain_id_by_network_name("base").unwrap();
         assert_eq!(chain_id.namespace, "eip155");
         assert_eq!(chain_id.reference, "8453");
 
-        let solana_chain_id = ChainId::from_network_name("solana").unwrap();
+        let solana_chain_id = chain_id_by_network_name("solana").unwrap();
         assert_eq!(solana_chain_id.namespace, "solana");
         assert_eq!(
             solana_chain_id.reference,
             "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
         );
 
-        assert!(ChainId::from_network_name("unknown").is_none());
+        assert!(chain_id_by_network_name("unknown").is_none());
     }
 
     #[test]
