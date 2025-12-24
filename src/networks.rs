@@ -84,10 +84,11 @@
 //! assert_eq!(name, "solana");
 //! ```
 
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
-
+use crate::chain::solana::{SolanaChainReference, SolanaTokenDeployment};
 use crate::chain::{ChainId, solana};
+use once_cell::sync::Lazy;
+use solana_pubkey::pubkey;
+use std::collections::HashMap;
 
 /// A known network definition with its chain ID and human-readable name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -618,6 +619,23 @@ pub fn chain_id_by_network_name(name: &str) -> Option<&ChainId> {
 /// ```
 pub fn network_name_by_chain_id(chain_id: &ChainId) -> Option<&'static str> {
     CHAIN_ID_TO_NAME.get(chain_id).copied()
+}
+
+pub struct USDC;
+
+impl KnownNetworkSolana<SolanaTokenDeployment> for USDC {
+    fn solana() -> SolanaTokenDeployment {
+        let address = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+        SolanaTokenDeployment::new(SolanaChainReference::solana(), address.into(), 6)
+    }
+
+    fn solana_devnet() -> SolanaTokenDeployment {
+        SolanaTokenDeployment::new(
+            SolanaChainReference::solana_devnet(),
+            pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU").into(),
+            6,
+        )
+    }
 }
 
 #[cfg(test)]
