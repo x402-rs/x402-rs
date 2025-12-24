@@ -84,11 +84,11 @@
 //! assert_eq!(name, "solana");
 //! ```
 
-use crate::chain::solana::{SolanaChainReference, SolanaTokenDeployment};
-use crate::chain::{ChainId, solana};
 use once_cell::sync::Lazy;
 use solana_pubkey::pubkey;
 use std::collections::HashMap;
+
+use crate::chain::{ChainId, solana, eip155};
 
 /// A known network definition with its chain ID and human-readable name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -623,18 +623,117 @@ pub fn network_name_by_chain_id(chain_id: &ChainId) -> Option<&'static str> {
 
 pub struct USDC;
 
-impl KnownNetworkSolana<SolanaTokenDeployment> for USDC {
-    fn solana() -> SolanaTokenDeployment {
+impl KnownNetworkSolana<solana::SolanaTokenDeployment> for USDC {
+    fn solana() -> solana::SolanaTokenDeployment {
         let address = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
-        SolanaTokenDeployment::new(SolanaChainReference::solana(), address.into(), 6)
-    }
-
-    fn solana_devnet() -> SolanaTokenDeployment {
-        SolanaTokenDeployment::new(
-            SolanaChainReference::solana_devnet(),
-            pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU").into(),
+        solana::SolanaTokenDeployment::new(
+            solana::SolanaChainReference::solana(),
+            address.into(),
             6,
         )
+    }
+
+    fn solana_devnet() -> solana::SolanaTokenDeployment {
+        let address = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+        solana::SolanaTokenDeployment::new(
+            solana::SolanaChainReference::solana_devnet(),
+            address.into(),
+            6,
+        )
+    }
+}
+
+impl KnownNetworkEip155<eip155::Eip155TokenDeployment> for USDC {
+    fn base() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn base_sepolia() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn skale_base_sepolia() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn polygon() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn polygon_amoy() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn avalanche() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn avalanche_fuji() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn sei() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn sei_testnet() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn abstract_network() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn abstract_testnet() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn xdc() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn xrpl_evm() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn peaq() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn iotex() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn story() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn educhain() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn celo() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn celo_alfajores() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn bsc() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn bsc_testnet() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn monad() -> eip155::Eip155TokenDeployment {
+        todo!()
+    }
+
+    fn monad_testnet() -> eip155::Eip155TokenDeployment {
+        todo!()
     }
 }
 
