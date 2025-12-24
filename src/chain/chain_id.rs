@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::str::FromStr;
 
-use crate::known;
+use crate::networks;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ChainId {
@@ -29,12 +29,12 @@ impl ChainId {
 
     /// Create a ChainId from a network name using the known v1 networks list
     pub fn from_network_name(network_name: &str) -> Option<Self> {
-        known::chain_id_by_network_name(network_name).cloned()
+        networks::chain_id_by_network_name(network_name).cloned()
     }
 
     /// Get the network name for this chain ID using the known v1 networks list
     pub fn as_network_name(&self) -> Option<&'static str> {
-        known::network_name_by_chain_id(self)
+        networks::network_name_by_chain_id(self)
     }
 }
 

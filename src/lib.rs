@@ -21,7 +21,7 @@ pub mod config;
 pub mod facilitator;
 pub mod facilitator_local;
 pub mod handlers;
-pub mod known;
+pub mod networks;
 pub mod proto;
 pub mod scheme;
 pub mod timestamp;

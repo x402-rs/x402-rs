@@ -25,7 +25,7 @@ mod config;
 mod facilitator;
 mod facilitator_local;
 mod handlers;
-mod known;
+mod networks;
 mod proto;
 mod scheme;
 mod timestamp;
