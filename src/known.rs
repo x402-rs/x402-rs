@@ -1,3 +1,63 @@
+//! Known blockchain networks and CAIP-2 chain ID management.
+//!
+//! This module provides a comprehensive registry of well-known blockchain networks with their
+//! corresponding CAIP-2 (Chain Agnostic Improvement Proposal 2) chain identifiers. It is designed
+//! to improve developer experience (DX) when working with the x402 protocol, which operates on
+//! CAIP-2 chain IDs.
+//!
+//! # Purpose
+//!
+//! This module serves two main purposes:
+//! 1. **Compatibility with x402 protocol v1**: Maintains support for networks that were known in v1
+//! 2. **Better Developer Experience**: Provides convenient methods to work with well-known networks
+//!    without manually constructing CAIP-2 identifiers
+//!
+//! # CAIP-2 Standard
+//!
+//! CAIP-2 is a standard for identifying blockchain networks in a chain-agnostic way. A CAIP-2
+//! chain ID consists of two parts separated by a colon:
+//! - **Namespace**: The blockchain ecosystem (e.g., "eip155" for EVM, "solana" for Solana)
+//! - **Reference**: The chain-specific identifier (e.g., "8453" for Base, "137" for Polygon)
+//!
+//! For more information, see: https://chainagnostic.org/CAIPs/caip-2
+//!
+//! # Module Contents
+//!
+//! - [`NetworkInfo`]: A struct representing a known network with its name, namespace, and reference
+//! - [`KnownChainId`]: A trait providing convenient static methods to get ChainId instances
+//! - [`KNOWN_NETWORKS`]: A static array of all supported networks
+//! - [`chain_id_by_network_name`]: Lookup function to get ChainId by network name
+//! - [`network_name_by_chain_id`]: Reverse lookup function to get network name by ChainId
+//!
+//! # Supported Networks
+//!
+//! The module supports 31 blockchain networks:
+//! - **EVM Networks (23)**: Base, Polygon, Avalanche, Sei, Abstract, XDC, XRPL EVM, Peaq, IoTeX,
+//!   Story, Educhain, Celo, BSC, and Monad (with mainnet and testnet variants)
+//! - **Solana Networks (2)**: Solana mainnet and devnet
+//!
+//! # Examples
+//!
+//! ```ignore
+//! use x402_rs::chain::ChainId;
+//! use x402_rs::known::{KnownChainId, chain_id_by_network_name};
+//!
+//! // Using the trait methods for convenient access
+//! let base = ChainId::base();
+//! assert_eq!(base.namespace, "eip155");
+//! assert_eq!(base.reference, "8453");
+//!
+//! // Using lookup functions
+//! let polygon = chain_id_by_network_name("polygon").unwrap();
+//! assert_eq!(polygon.namespace, "eip155");
+//! assert_eq!(polygon.reference, "137");
+//!
+//! // Reverse lookup
+//! let chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+//! let name = x402_rs::known::network_name_by_chain_id(&chain_id).unwrap();
+//! assert_eq!(name, "solana");
+//! ```
+
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
@@ -21,6 +81,225 @@ impl NetworkInfo {
     }
 }
 
+/// Trait providing convenient methods to get ChainId instances for all known networks.
+///
+/// This trait is implemented for `ChainId` and provides static methods to create
+/// ChainId instances for all supported blockchain networks. Each method returns a
+/// properly configured ChainId with the correct namespace and reference values.
+///
+/// # Examples
+///
+/// ```ignore
+/// use x402_rs::chain::ChainId;
+/// use x402_rs::known::KnownChainId;
+///
+/// // Get Base mainnet chain ID
+/// let base = ChainId::base();
+/// assert_eq!(base.namespace, "eip155");
+/// assert_eq!(base.reference, "8453");
+///
+/// // Get Solana mainnet chain ID
+/// let solana = ChainId::solana();
+/// assert_eq!(solana.namespace, "solana");
+/// ```
+pub trait KnownChainId {
+    // Base
+    /// Returns the ChainId for Base mainnet (eip155:8453)
+    fn base() -> ChainId;
+    /// Returns the ChainId for Base Sepolia testnet (eip155:84532)
+    fn base_sepolia() -> ChainId;
+    /// Returns the ChainId for Skale Base Sepolia (eip155:324705682)
+    fn skale_base_sepolia() -> ChainId;
+    
+    // Polygon
+    /// Returns the ChainId for Polygon mainnet (eip155:137)
+    fn polygon() -> ChainId;
+    /// Returns the ChainId for Polygon Amoy testnet (eip155:80002)
+    fn polygon_amoy() -> ChainId;
+    
+    // Avalanche
+    /// Returns the ChainId for Avalanche C-Chain mainnet (eip155:43114)
+    fn avalanche() -> ChainId;
+    /// Returns the ChainId for Avalanche Fuji testnet (eip155:43113)
+    fn avalanche_fuji() -> ChainId;
+    
+    // Sei
+    /// Returns the ChainId for Sei mainnet (eip155:1329)
+    fn sei() -> ChainId;
+    /// Returns the ChainId for Sei testnet (eip155:1328)
+    fn sei_testnet() -> ChainId;
+    
+    // Abstract
+    /// Returns the ChainId for Abstract mainnet (eip155:2741)
+    fn abstract_network() -> ChainId;
+    /// Returns the ChainId for Abstract testnet (eip155:11124)
+    fn abstract_testnet() -> ChainId;
+    
+    // XDC
+    /// Returns the ChainId for XDC Network (eip155:50)
+    fn xdc() -> ChainId;
+    
+    // XRPL EVM
+    /// Returns the ChainId for XRPL EVM (eip155:1440000)
+    fn xrpl_evm() -> ChainId;
+    
+    // Peaq
+    /// Returns the ChainId for Peaq (eip155:3338)
+    fn peaq() -> ChainId;
+    
+    // IoTeX
+    /// Returns the ChainId for IoTeX (eip155:4689)
+    fn iotex() -> ChainId;
+    
+    // Story
+    /// Returns the ChainId for Story (eip155:1514)
+    fn story() -> ChainId;
+    
+    // Educhain
+    /// Returns the ChainId for Educhain (eip155:41923)
+    fn educhain() -> ChainId;
+    
+    // Celo
+    /// Returns the ChainId for Celo mainnet (eip155:42220)
+    fn celo() -> ChainId;
+    /// Returns the ChainId for Celo Alfajores testnet (eip155:44787)
+    fn celo_alfajores() -> ChainId;
+    
+    // BSC (Binance Smart Chain)
+    /// Returns the ChainId for Binance Smart Chain mainnet (eip155:56)
+    fn bsc() -> ChainId;
+    /// Returns the ChainId for Binance Smart Chain testnet (eip155:97)
+    fn bsc_testnet() -> ChainId;
+    
+    // Monad
+    /// Returns the ChainId for Monad (eip155:143)
+    fn monad() -> ChainId;
+    /// Returns the ChainId for Monad testnet (eip155:10143)
+    fn monad_testnet() -> ChainId;
+    
+    // Solana
+    /// Returns the ChainId for Solana mainnet (solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp)
+    fn solana() -> ChainId;
+    /// Returns the ChainId for Solana devnet (solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1)
+    fn solana_devnet() -> ChainId;
+}
+
+/// Implementation of KnownChainId for ChainId.
+///
+/// Provides convenient static methods to create ChainId instances for all
+/// supported blockchain networks. Each method returns a properly configured
+/// ChainId with the correct CAIP-2 namespace and reference values.
+impl KnownChainId for ChainId {
+    fn base() -> ChainId {
+        ChainId::new("eip155", "8453")
+    }
+
+    fn base_sepolia() -> ChainId {
+        ChainId::new("eip155", "84532")
+    }
+
+    fn skale_base_sepolia() -> ChainId {
+        ChainId::new("eip155", "324705682")
+    }
+
+    fn polygon() -> ChainId {
+        ChainId::new("eip155", "137")
+    }
+
+    fn polygon_amoy() -> ChainId {
+        ChainId::new("eip155", "80002")
+    }
+
+    fn avalanche() -> ChainId {
+        ChainId::new("eip155", "43114")
+    }
+
+    fn avalanche_fuji() -> ChainId {
+        ChainId::new("eip155", "43113")
+    }
+
+    fn sei() -> ChainId {
+        ChainId::new("eip155", "1329")
+    }
+
+    fn sei_testnet() -> ChainId {
+        ChainId::new("eip155", "1328")
+    }
+
+    fn abstract_network() -> ChainId {
+        ChainId::new("eip155", "2741")
+    }
+
+    fn abstract_testnet() -> ChainId {
+        ChainId::new("eip155", "11124")
+    }
+
+    fn xdc() -> ChainId {
+        ChainId::new("eip155", "50")
+    }
+
+    fn xrpl_evm() -> ChainId {
+        ChainId::new("eip155", "1440000")
+    }
+
+    fn peaq() -> ChainId {
+        ChainId::new("eip155", "3338")
+    }
+
+    fn iotex() -> ChainId {
+        ChainId::new("eip155", "4689")
+    }
+
+    fn story() -> ChainId {
+        ChainId::new("eip155", "1514")
+    }
+
+    fn educhain() -> ChainId {
+        ChainId::new("eip155", "41923")
+    }
+
+    fn celo() -> ChainId {
+        ChainId::new("eip155", "42220")
+    }
+
+    fn celo_alfajores() -> ChainId {
+        ChainId::new("eip155", "44787")
+    }
+
+    fn bsc() -> ChainId {
+        ChainId::new("eip155", "56")
+    }
+
+    fn bsc_testnet() -> ChainId {
+        ChainId::new("eip155", "97")
+    }
+
+    fn monad() -> ChainId {
+        ChainId::new("eip155", "143")
+    }
+
+    fn monad_testnet() -> ChainId {
+        ChainId::new("eip155", "10143")
+    }
+
+    fn solana() -> ChainId {
+        ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")
+    }
+
+    fn solana_devnet() -> ChainId {
+        ChainId::new("solana", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1")
+    }
+}
+
+/// A static array of all known blockchain networks.
+///
+/// This array contains the complete registry of supported blockchain networks,
+/// organized by ecosystem (EVM networks first, then Solana networks). Each entry
+/// includes the network's human-readable name, CAIP-2 namespace, and chain reference.
+///
+/// The array is used to populate the lazy-initialized lookup hashmaps:
+/// - [`NAME_TO_CHAIN_ID`] for name-based lookups
+/// - [`CHAIN_ID_TO_NAME`] for ChainId-based lookups
 static KNOWN_NETWORKS: &[NetworkInfo] = &[
     // EVM Networks
     // Base
@@ -165,7 +444,21 @@ static KNOWN_NETWORKS: &[NetworkInfo] = &[
     },
 ];
 
-/// Lazy hashmap: network name -> NetworkInfo
+/// Lazy-initialized hashmap for network name to ChainId lookups.
+///
+/// Maps human-readable network names (e.g., "base", "polygon", "solana") to their
+/// corresponding [`ChainId`] instances. This hashmap is populated once on first access
+/// from the [`KNOWN_NETWORKS`] array.
+///
+/// # Examples
+///
+/// ```ignore
+/// use x402_rs::known::chain_id_by_network_name;
+///
+/// let base = chain_id_by_network_name("base").unwrap();
+/// assert_eq!(base.namespace, "eip155");
+/// assert_eq!(base.reference, "8453");
+/// ```
 static NAME_TO_CHAIN_ID: Lazy<HashMap<&'static str, ChainId>> = Lazy::new(|| {
     KNOWN_NETWORKS
         .iter()
@@ -173,7 +466,22 @@ static NAME_TO_CHAIN_ID: Lazy<HashMap<&'static str, ChainId>> = Lazy::new(|| {
         .collect()
 });
 
-/// Lazy hashmap: ChainId -> NetworkInfo
+/// Lazy-initialized hashmap for ChainId to network name lookups.
+///
+/// Maps [`ChainId`] instances to their human-readable network names. This hashmap is
+/// populated once on first access from the [`KNOWN_NETWORKS`] array. Useful for
+/// reverse lookups when you have a ChainId and need to find its network name.
+///
+/// # Examples
+///
+/// ```ignore
+/// use x402_rs::chain::ChainId;
+/// use x402_rs::known::network_name_by_chain_id;
+///
+/// let chain_id = ChainId::new("eip155", "137");
+/// let name = network_name_by_chain_id(&chain_id).unwrap();
+/// assert_eq!(name, "polygon");
+/// ```
 static CHAIN_ID_TO_NAME: Lazy<HashMap<ChainId, &'static str>> = Lazy::new(|| {
     KNOWN_NETWORKS
         .iter()
@@ -181,10 +489,62 @@ static CHAIN_ID_TO_NAME: Lazy<HashMap<ChainId, &'static str>> = Lazy::new(|| {
         .collect()
 });
 
+/// Retrieves a ChainId by its network name.
+///
+/// Performs a lookup in the [`NAME_TO_CHAIN_ID`] hashmap to find the ChainId
+/// corresponding to the given network name. The lookup is case-sensitive.
+///
+/// # Arguments
+///
+/// * `name` - The human-readable network name (e.g., "base", "polygon-amoy", "solana")
+///
+/// # Returns
+///
+/// Returns `Some(&ChainId)` if the network name is found, or `None` if the name
+/// is not in the known networks registry.
+///
+/// # Examples
+///
+/// ```ignore
+/// use x402_rs::known::chain_id_by_network_name;
+///
+/// let base = chain_id_by_network_name("base").unwrap();
+/// assert_eq!(base.namespace, "eip155");
+/// assert_eq!(base.reference, "8453");
+///
+/// assert!(chain_id_by_network_name("unknown-network").is_none());
+/// ```
 pub fn chain_id_by_network_name(name: &str) -> Option<&ChainId> {
     NAME_TO_CHAIN_ID.get(name)
 }
 
+/// Retrieves a network name by its ChainId.
+///
+/// Performs a reverse lookup in the [`CHAIN_ID_TO_NAME`] hashmap to find the
+/// human-readable network name corresponding to the given ChainId.
+///
+/// # Arguments
+///
+/// * `chain_id` - A reference to the ChainId to look up
+///
+/// # Returns
+///
+/// Returns `Some(&'static str)` containing the network name if the ChainId is found,
+/// or `None` if the ChainId is not in the known networks registry.
+///
+/// # Examples
+///
+/// ```ignore
+/// use x402_rs::chain::ChainId;
+/// use x402_rs::known::network_name_by_chain_id;
+///
+/// let chain_id = ChainId::new("eip155", "8453");
+/// let name = network_name_by_chain_id(&chain_id).unwrap();
+/// assert_eq!(name, "base");
+///
+/// let unknown = ChainId::new("eip155", "999999");
+/// assert!(network_name_by_chain_id(&unknown).is_none());
+/// ```
 pub fn network_name_by_chain_id(chain_id: &ChainId) -> Option<&'static str> {
     CHAIN_ID_TO_NAME.get(chain_id).copied()
 }
