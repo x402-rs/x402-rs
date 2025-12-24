@@ -267,3 +267,26 @@ impl PaymentProblem {
         &self.details
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PaymentRequired {
+    #[serde(rename_all = "camelCase")]
+    V1 {
+        x402_version: v1::X402Version1,
+        accepts: Vec<PaymentRequiredAccepts>,
+    },
+    #[serde(rename_all = "camelCase")]
+    V2 {
+        x402_version: v2::X402Version2,
+        accepts: Vec<PaymentRequiredAccepts>,
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentRequiredAccepts {
+    pub scheme: String,
+    pub network: String,
+    pub asset: String,
+}

@@ -9188,12 +9188,15 @@ name = "x402-reqwest-example"
 version = "0.1.0"
 dependencies = [
  "alloy-signer-local",
+ "async-trait",
  "dotenvy",
+ "http 1.4.0",
  "reqwest",
+ "reqwest-middleware",
+ "serde_json",
  "solana-keypair 2.2.3",
  "solana-rpc-client 2.3.13",
  "tokio",
- "x402-reqwest",
  "x402-rs",
 ]
 
