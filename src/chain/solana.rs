@@ -30,7 +30,7 @@ pub const SOLANA_NAMESPACE: &str = "solana";
 
 /// A Solana chain reference consisting of 32 ASCII characters.
 /// The genesis hash is the first 32 characters of the base58-encoded genesis block hash.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SolanaChainReference([u8; 32]);
 
 impl SolanaChainReference {
@@ -141,11 +141,11 @@ pub enum SolanaChainReferenceFormatError {
     InvalidReference(String),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct SolanaTokenDeployment {
-    chain_reference: SolanaChainReference,
-    address: Address,
-    decimals: u8,
+    pub chain_reference: SolanaChainReference,
+    pub address: Address,
+    pub decimals: u8,
 }
 
 impl SolanaTokenDeployment {
@@ -155,18 +155,6 @@ impl SolanaTokenDeployment {
             address,
             decimals,
         }
-    }
-
-    pub fn chain_reference(&self) -> SolanaChainReference {
-        self.chain_reference
-    }
-
-    pub fn address(&self) -> &Address {
-        &self.address
-    }
-
-    pub fn decimals(&self) -> u8 {
-        self.decimals
     }
 }
 
