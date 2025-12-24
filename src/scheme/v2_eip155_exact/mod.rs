@@ -12,7 +12,7 @@ use crate::scheme::v1_eip155_exact::{
     assert_enough_value, assert_time, settle_payment, verify_payment,
 };
 use crate::scheme::{
-    X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
+    X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
@@ -22,29 +22,6 @@ use std::sync::Arc;
 use tracing::instrument;
 
 pub struct V2Eip155Exact;
-
-impl X402SchemeBlueprint for V2Eip155Exact {
-    fn namespace(&self) -> &str {
-        "eip155"
-    }
-
-    fn scheme(&self) -> &str {
-        types::ExactScheme.as_ref()
-    }
-
-    fn build(
-        &self,
-        provider: ChainProvider,
-        _config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
-        let provider = if let ChainProvider::Eip155(provider) = provider {
-            provider
-        } else {
-            return Err("V2Eip155Exact::build: provider must be an Eip155ChainProvider".into());
-        };
-        Ok(Box::new(V2Eip155ExactFacilitator { provider }))
-    }
-}
 
 impl X402SchemeId for V2Eip155Exact {
     fn namespace(&self) -> &str {
@@ -60,9 +37,14 @@ impl X402SchemeFacilitatorBuilder for V2Eip155Exact {
     fn build(
         &self,
         provider: ChainProvider,
-        config: Option<serde_json::Value>,
+        _config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
-        X402SchemeBlueprint::build(self, provider, config)
+        let provider = if let ChainProvider::Eip155(provider) = provider {
+            provider
+        } else {
+            return Err("V2Eip155Exact::build: provider must be an Eip155ChainProvider".into());
+        };
+        Ok(Box::new(V2Eip155ExactFacilitator { provider }))
     }
 }
 

@@ -20,40 +20,13 @@ use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::{
-    X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
+    X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 use crate::util::Base64Bytes;
 
 pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 pub struct V1SolanaExact;
-
-impl X402SchemeBlueprint for V1SolanaExact {
-    fn x402_version(&self) -> u8 {
-        1
-    }
-
-    fn namespace(&self) -> &str {
-        "solana"
-    }
-
-    fn scheme(&self) -> &str {
-        types::ExactScheme.as_ref()
-    }
-
-    fn build(
-        &self,
-        provider: ChainProvider,
-        _config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
-        let provider = if let ChainProvider::Solana(provider) = provider {
-            provider
-        } else {
-            return Err("V1SolanaExact::build: provider must be a SolanaChainProvider".into());
-        };
-        Ok(Box::new(V1SolanaExactFacilitator { provider }))
-    }
-}
 
 impl X402SchemeId for V1SolanaExact {
     fn x402_version(&self) -> u8 {
@@ -73,9 +46,14 @@ impl X402SchemeFacilitatorBuilder for V1SolanaExact {
     fn build(
         &self,
         provider: ChainProvider,
-        config: Option<serde_json::Value>,
+        _config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
-        X402SchemeBlueprint::build(self, provider, config)
+        let provider = if let ChainProvider::Solana(provider) = provider {
+            provider
+        } else {
+            return Err("V1SolanaExact::build: provider must be a SolanaChainProvider".into());
+        };
+        Ok(Box::new(V1SolanaExactFacilitator { provider }))
     }
 }
 

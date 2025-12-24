@@ -13,33 +13,10 @@ use crate::scheme::v1_solana_exact::{
     TransferRequirement, VerifyTransferResult, settle_transaction, verify_transaction,
 };
 use crate::scheme::{
-    X402SchemeBlueprint, X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
+    X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 
 pub struct V2SolanaExact;
-
-impl X402SchemeBlueprint for V2SolanaExact {
-    fn namespace(&self) -> &str {
-        "solana"
-    }
-
-    fn scheme(&self) -> &str {
-        types::ExactScheme.as_ref()
-    }
-
-    fn build(
-        &self,
-        provider: ChainProvider,
-        _config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
-        let provider = if let ChainProvider::Solana(provider) = provider {
-            provider
-        } else {
-            return Err("V2SolanaExact::build: provider must be a SolanaChainProvider".into());
-        };
-        Ok(Box::new(V2SolanaExactFacilitator { provider }))
-    }
-}
 
 impl X402SchemeId for V2SolanaExact {
     fn namespace(&self) -> &str {
@@ -55,9 +32,14 @@ impl X402SchemeFacilitatorBuilder for V2SolanaExact {
     fn build(
         &self,
         provider: ChainProvider,
-        config: Option<serde_json::Value>,
+        _config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
-        X402SchemeBlueprint::build(self, provider, config)
+        let provider = if let ChainProvider::Solana(provider) = provider {
+            provider
+        } else {
+            return Err("V2SolanaExact::build: provider must be a SolanaChainProvider".into());
+        };
+        Ok(Box::new(V2SolanaExactFacilitator { provider }))
     }
 }
 

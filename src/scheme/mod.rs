@@ -30,27 +30,8 @@ pub trait X402SchemeFacilitator: Send + Sync {
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError>;
 }
 
-pub trait X402SchemeBlueprint {
-    fn x402_version(&self) -> u8 {
-        2
-    }
-    fn namespace(&self) -> &str;
-    fn scheme(&self) -> &str;
-    fn id(&self) -> String {
-        format!(
-            "v{}-{}-{}",
-            self.x402_version(),
-            self.namespace(),
-            self.scheme()
-        )
-    }
-
-    fn build(
-        &self,
-        provider: ChainProvider,
-        config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>>;
-}
+pub trait X402SchemeBlueprint: X402SchemeId + X402SchemeFacilitatorBuilder {}
+impl<T> X402SchemeBlueprint for T where T: X402SchemeId + X402SchemeFacilitatorBuilder {}
 
 pub trait X402SchemeId {
     fn x402_version(&self) -> u8 {
