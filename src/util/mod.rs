@@ -1,5 +1,5 @@
 pub mod b64;
-mod lit_str;
+pub mod lit_str;
 pub mod sig_down;
 pub mod telemetry;
 
