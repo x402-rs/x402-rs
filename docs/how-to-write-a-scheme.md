@@ -1,6 +1,6 @@
 # How to Write a Scheme for x402-rs
 
-This guide explains how to create a custom payment scheme for the x402 facilitator.
+This guide explains how to create a custom payment scheme for the x402-rs facilitator.
 
 ## What is a Scheme?
 
@@ -26,7 +26,7 @@ For example, the `exact` scheme implements ERC-3009 `transferWithAuthorization` 
 ```mermaid
 flowchart TB
     subgraph Registration
-        SB[SchemeBlueprints] -->|by_slug| BP[X402SchemeBlueprint]
+        SB[SchemeBlueprints] -->|by id| BP[X402SchemeBlueprint]
         BP -->|build with ChainProvider| H[Box dyn X402SchemeHandler]
     end
     
@@ -40,35 +40,46 @@ flowchart TB
 
 ## Naming Convention
 
-Scheme types follow the pattern: `V{version}{ChainNamespace}{SchemeName}`
+Scheme IDs follow the pattern: `v{version}-{namespace}-{scheme}`
 
-| Slug | Struct Name | Directory |
+| ID | Struct Name | Directory |
 |------|-------------|-----------|
-| `v2:solana:exact` | `V2SolanaExact` | `v2_solana_exact/` |
-| `v1:eip155:exact` | `V1Eip155Exact` | `v1_eip155_exact/` |
-| `v2:solana:myscheme` | `V2SolanaMyscheme` | `v2_solana_myscheme/` |
+| `v2-solana-exact` | `V2SolanaExact` | `v2_solana_exact/` |
+| `v1-eip155-exact` | `V1Eip155Exact` | `v1_eip155_exact/` |
+| `v2-solana-myscheme` | `V2SolanaMyscheme` | `v2_solana_myscheme/` |
 
-This makes it easy to map between slugs, chain namespaces, and scheme names.
+This makes it easy to map between IDs, chain namespaces, scheme names, and code.
 
 ## Core Traits and Structs
 
-### SchemeSlug
-
-A scheme is identified internally by a slug: `v{version}:{namespace}:{name}`
-
-```rust
-SchemeSlug::new(2, "solana", "exact") // → "v2:solana:exact"
-```
-
-The slug uniquely identifies a registered scheme per x402 payload at runtime.
-
 ### X402SchemeBlueprint
 
-Factory for creating scheme handlers:
+Factory for creating scheme handlers. The trait provides methods to identify the scheme and build handlers:
 
 ```rust
 pub trait X402SchemeBlueprint {
-    fn slug(&self) -> SchemeSlug;
+    /// The x402 protocol version (1 or 2). Defaults to 2.
+    fn x402_version(&self) -> u8 {
+        2
+    }
+    
+    /// The chain namespace (e.g., "eip155", "solana")
+    fn namespace(&self) -> &str;
+    
+    /// The scheme name (e.g., "exact", "myscheme")
+    fn scheme(&self) -> &str;
+    
+    /// Computed ID: "v{version}-{namespace}-{scheme}"
+    fn id(&self) -> String {
+        format!(
+            "v{}-{}-{}",
+            self.x402_version(),
+            self.namespace(),
+            self.scheme()
+        )
+    }
+
+    /// Build a handler instance for a specific chain
     fn build(
         &self,
         provider: ChainProvider,
@@ -102,6 +113,20 @@ pub trait X402SchemeHandler: Send + Sync {
 | `settle`    | Execute the payment on-chain.                      |
 | `supported` | Advertise what payment kinds this scheme supports. |
 
+### SchemeHandlerSlug
+
+At runtime, handlers are identified by a slug combining chain ID, version, and scheme name:
+
+```rust
+pub struct SchemeHandlerSlug {
+    pub chain_id: ChainId,
+    pub x402_version: u8,
+    pub name: String,
+}
+```
+
+This allows the same scheme blueprint to create different handlers for different chains.
+
 ## Step-by-Step Guide
 
 ### Step 1: Define Types
@@ -123,8 +148,14 @@ pub type SettleRequest = VerifyRequest;
 pub struct V2SolanaMyscheme;
 
 impl X402SchemeBlueprint for V2SolanaMyscheme {
-    fn slug(&self) -> SchemeSlug {
-        SchemeSlug::new(2, "solana", "myscheme")
+    // x402_version() defaults to 2, no need to override
+
+    fn namespace(&self) -> &str {
+        "solana"
+    }
+
+    fn scheme(&self) -> &str {
+        "myscheme"
     }
 
     fn build(&self, provider: ChainProvider, config: Option<serde_json::Value>)
@@ -185,7 +216,7 @@ impl X402SchemeHandler for V2SolanaMyschemeHandler {
 ### Step 4: Register the Scheme
 
 For custom facilitators, register dynamically:
-```rust
+```rust,ignore
 let blueprints = SchemeBlueprints::new().and_register(V2SolanaMyscheme);
 ```
 
@@ -196,7 +227,7 @@ let blueprints = SchemeBlueprints::new().and_register(V2SolanaMyscheme);
   "schemes": [
     {
       "enabled": true,
-      "slug": "v2:solana:myscheme",
+      "id": "v2-solana-myscheme",
       "chains": "solana:*",
       "config": { "yourOption": "value" }
     }
@@ -204,8 +235,113 @@ let blueprints = SchemeBlueprints::new().and_register(V2SolanaMyscheme);
 }
 ```
 
-- `chains`: Pattern matching (`*` for all, `{a,b}` for specific)
+- `id`: The scheme blueprint ID (matches `X402SchemeBlueprint::id()`)
+- `chains`: Pattern matching (`*` for all, `{a,b}` for specific chain references)
 - `config`: Passed to your `build()` method
+
+## Per-Chain Custom Handlers
+
+A powerful feature of the scheme system is the ability to have **different handlers for the same scheme on different chains**. This is useful when:
+
+- A specific chain requires custom logic (e.g., different gas handling, chain-specific optimizations)
+- You want to override the default behavior for a particular chain
+- You need chain-specific configuration
+
+### How It Works
+
+1. **Create a custom scheme blueprint** that extends or modifies the base scheme behavior
+2. **Register it with a unique ID** (e.g., `v1-eip155-exact-custom`)
+3. **Enable it for specific chains** in your config
+
+### Example: Custom Handler for a Specific Chain
+
+Suppose you want `eip155:3` to use custom logic while all other EVM chains use the standard `v1-eip155-exact`:
+
+**Step 1: Create the custom scheme**
+
+```rust
+pub struct V1Eip155ExactCustom;
+
+impl X402SchemeBlueprint for V1Eip155ExactCustom {
+    fn x402_version(&self) -> u8 {
+        1
+    }
+
+    fn namespace(&self) -> &str {
+        "eip155"
+    }
+
+    fn scheme(&self) -> &str {
+        "exact"  // Same scheme name - will handle "exact" payments
+    }
+
+    // Override the default ID to distinguish from the standard scheme
+    fn id(&self) -> String {
+        "v1-eip155-exact-custom".to_string()
+    }
+
+    fn build(&self, provider: ChainProvider, config: Option<serde_json::Value>)
+        -> Result<Box<dyn X402SchemeHandler>, Box<dyn Error>>
+    {
+        let provider = match provider {
+            ChainProvider::Eip155(p) => p,
+            _ => return Err("Requires Eip155ChainProvider".into()),
+        };
+        // Your custom handler with chain-specific logic
+        Ok(Box::new(V1Eip155ExactCustomHandler { provider, config }))
+    }
+}
+```
+
+**Step 2: Register both schemes**
+
+```rust,ignore
+let blueprints = SchemeBlueprints::new()
+    .and_register(V1Eip155Exact)        // Standard handler
+    .and_register(V1Eip155ExactCustom); // Custom handler
+```
+
+**Step 3: Configure in JSON**
+
+```json,ignore
+{
+  "chains": {
+    "eip155:1": { ... },
+    "eip155:3": { ... },
+    "eip155:8453": { ... }
+  },
+  "schemes": [
+    {
+      "id": "v1-eip155-exact",
+      "chains": "eip155:*"
+    },
+    {
+      "id": "v1-eip155-exact-custom",
+      "chains": "eip155:3",
+      "config": { "customOption": "value" }
+    }
+  ]
+}
+```
+
+### Key Points
+
+- The **scheme name** (returned by `scheme()`) determines which payment requests the handler processes
+- The **ID** (returned by `id()`) is used to match config entries to blueprints
+- Multiple blueprints can have the same `scheme()` but different `id()` values
+- The `chains` pattern in config determines which chain(s) each blueprint instance handles
+- Each config entry creates a separate handler instance for matching chains
+
+### Chain Pattern Matching
+
+The `chains` field supports several patterns:
+
+| Pattern | Matches |
+|---------|---------|
+| `eip155:84532` | Exact chain ID |
+| `eip155:*` | All EVM chains |
+| `solana:*` | All Solana chains |
+| `eip155:{1,8453}` | Specific chain references |
 
 ## Contributing to Upstream x402-rs
 
@@ -217,14 +353,17 @@ If you want your scheme included in the default x402-rs distribution:
    pub mod v2_solana_myscheme;
    ```
 3. Register in `SchemeBlueprints::full()`:
-   ```rust
+   ```rust,ignore
    .and_register(V2SolanaMyscheme)
    ```
 
-## Summary Checklist
+## Checklist for creating a new scheme
 
-- [ ] Define types using proto v2 generics
-- [ ] Implement `X402SchemeBlueprint` with correct slug
-- [ ] Implement `X402SchemeHandler` (verify/settle/supported)
+- [ ] Declare a struct for your new scheme, for example, `V2SolanaMyscheme`
+- [ ] Declare a struct for the scheme handler, for example, `V2SolanaMyschemeHandler`
+- [ ] Implement `X402SchemeBlueprint` for `V2SolanaMyScheme` with correct `x402_version()`, `namespace()`, `scheme()`, and `build()`
+- [ ] Optionally override `id()` for custom scheme variants
+- [ ] Implement `X402SchemeHandler` (verify/settle/supported) for `V2SolanaMySchemeHandler`
+- [ ] Define concrete types for the scheme using proto v2 generics
 - [ ] Register in `SchemeBlueprints`
-- [ ] Configure in `config.json`
+- [ ] Configure in `config.json` with appropriate `id` and `chains` pattern, and update `config.json.example`

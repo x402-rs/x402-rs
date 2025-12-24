@@ -24,21 +24,21 @@
     }
   },
   "schemes": [
-    {
-      "slug": "v1:eip155:exact",
-      "chains": "eip155:*"
-    },
-    {
-      "slug": "v2:eip155:exact",
-      "chains": "eip155:*"
-    },
-    {
-      "slug": "v1:solana:exact",
-      "chains": "solana:*"
-    },
-    {
-      "slug": "v2:solana:exact",
-      "chains": "solana:*"
-    }
-  ]
+      {
+        "id": "v1-eip155-exact",
+        "chains": "eip155:*"
+      },
+      {
+        "id": "v2-eip155-exact",
+        "chains": "eip155:*"
+      },
+      {
+        "id": "v1-solana-exact",
+        "chains": "solana:*"
+      },
+      {
+        "id": "v2-solana-exact",
+        "chains": "solana:*"
+      }
+    ]
 }

@@ -2,20 +2,11 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
+use crate::lit_str;
 use crate::proto::v1;
 use crate::timestamp::UnixTimestamp;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-pub enum ExactScheme {
-    #[serde(rename = "exact")]
-    Exact, // serializes as "exact", deserializes only from "exact"
-}
-
-impl Display for ExactScheme {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "exact")
-    }
-}
+lit_str!(ExactScheme, "exact");
 
 pub type VerifyRequest = v1::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;

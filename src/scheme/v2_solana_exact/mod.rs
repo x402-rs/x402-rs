@@ -8,18 +8,21 @@ use crate::chain::solana::SolanaChainProvider;
 use crate::chain::{ChainProvider, ChainProviderOps};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
-use crate::scheme::v1_eip155_exact::EXACT_SCHEME;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::v1_solana_exact::{
     TransferRequirement, VerifyTransferResult, settle_transaction, verify_transaction,
 };
-use crate::scheme::{SchemeSlug, X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
+use crate::scheme::{X402SchemeBlueprint, X402SchemeHandler, X402SchemeHandlerError};
 
 pub struct V2SolanaExact;
 
 impl X402SchemeBlueprint for V2SolanaExact {
-    fn slug(&self) -> SchemeSlug {
-        SchemeSlug::new(2, "solana", EXACT_SCHEME.to_string())
+    fn namespace(&self) -> &str {
+        "solana"
+    }
+
+    fn scheme(&self) -> &str {
+        types::ExactScheme.as_ref()
     }
 
     fn build(
@@ -75,7 +78,7 @@ impl X402SchemeHandler for V2SolanaExactHandler {
                 Some(serde_json::to_value(SupportedPaymentKindExtra { fee_payer }).unwrap());
             vec![proto::SupportedPaymentKind {
                 x402_version: proto::v2::X402Version2.into(),
-                scheme: EXACT_SCHEME.to_string(),
+                scheme: types::ExactScheme.to_string(),
                 network: chain_id.to_string(),
                 extra,
             }]

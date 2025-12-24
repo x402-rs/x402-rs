@@ -5,11 +5,9 @@ pub mod v2_solana_exact;
 
 pub use v1_eip155_exact::V1Eip155Exact;
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
-use std::str::FromStr;
 
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
 use crate::config::SchemeConfig;
@@ -33,7 +31,20 @@ pub trait X402SchemeHandler: Send + Sync {
 }
 
 pub trait X402SchemeBlueprint {
-    fn slug(&self) -> SchemeSlug;
+    fn x402_version(&self) -> u8 {
+        2
+    }
+    fn namespace(&self) -> &str;
+    fn scheme(&self) -> &str;
+    fn id(&self) -> String {
+        format!(
+            "v{}-{}-{}",
+            self.x402_version(),
+            self.namespace(),
+            self.scheme()
+        )
+    }
+
     fn build(
         &self,
         provider: ChainProvider,
@@ -61,7 +72,7 @@ impl AsPaymentProblem for X402SchemeHandlerError {
 }
 
 #[derive(Default)]
-pub struct SchemeBlueprints(HashMap<SchemeSlug, Box<dyn X402SchemeBlueprint>>);
+pub struct SchemeBlueprints(HashMap<String, Box<dyn X402SchemeBlueprint>>);
 
 impl Debug for SchemeBlueprints {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -89,88 +100,11 @@ impl SchemeBlueprints {
     }
 
     pub fn register<B: X402SchemeBlueprint + 'static>(&mut self, blueprint: B) {
-        self.0.insert(blueprint.slug(), Box::new(blueprint));
+        self.0.insert(blueprint.id(), Box::new(blueprint));
     }
 
-    pub fn by_slug(&self, slug: &SchemeSlug) -> Option<&dyn X402SchemeBlueprint> {
-        self.0.get(slug).map(|v| v.deref())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SchemeSlug {
-    x402_version: u8,
-    namespace: String,
-    name: String,
-}
-
-impl SchemeSlug {
-    pub fn new<N: Into<String>, M: Into<String>>(x402_version: u8, namespace: N, name: M) -> Self {
-        Self {
-            x402_version,
-            namespace: namespace.into(),
-            name: name.into(),
-        }
-    }
-}
-
-impl std::fmt::Display for SchemeSlug {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "v{}:{}:{}", self.x402_version, self.namespace, self.name)
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum SchemeSlugError {
-    #[error("invalid scheme slug format: {0}")]
-    InvalidFormat(String),
-    #[error("invalid version format: expected 'v<number>', got: {0}")]
-    InvalidVersion(String),
-}
-
-impl FromStr for SchemeSlug {
-    type Err = SchemeSlugError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Expected format: v{version}:{namespace}:{name}
-        let parts: Vec<&str> = s.splitn(3, ':').collect();
-        if parts.len() != 3 {
-            return Err(SchemeSlugError::InvalidFormat(s.to_string()));
-        }
-
-        let version_str = parts[0];
-        if !version_str.starts_with('v') {
-            return Err(SchemeSlugError::InvalidVersion(version_str.to_string()));
-        }
-
-        let x402_version: u8 = version_str[1..]
-            .parse()
-            .map_err(|_| SchemeSlugError::InvalidVersion(version_str.to_string()))?;
-
-        Ok(SchemeSlug {
-            x402_version,
-            namespace: parts[1].to_string(),
-            name: parts[2].to_string(),
-        })
-    }
-}
-
-impl Serialize for SchemeSlug {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for SchemeSlug {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        SchemeSlug::from_str(&s).map_err(serde::de::Error::custom)
+    pub fn get(&self, id: &str) -> Option<&dyn X402SchemeBlueprint> {
+        self.0.get(id).map(|v| v.deref())
     }
 }
 
@@ -222,15 +156,15 @@ impl SchemeRegistry {
             if !config.enabled {
                 tracing::info!(
                     "Skipping disabled scheme {} for chains {}",
-                    config.slug,
+                    config.id,
                     config.chains
                 );
                 continue;
             }
-            let blueprint = match blueprints.by_slug(&config.slug) {
+            let blueprint = match blueprints.get(&config.id) {
                 Some(blueprint) => blueprint,
                 None => {
-                    tracing::warn!("No scheme registered: {}", config.slug);
+                    tracing::warn!("No scheme registered: {}", config.id);
                     continue;
                 }
             };
@@ -245,15 +179,16 @@ impl SchemeRegistry {
             let handler = match blueprint.build(chain_provider, config.config.clone()) {
                 Ok(handler) => handler,
                 Err(err) => {
-                    tracing::error!("Error building scheme handler for {}: {}", config.slug, err);
+                    tracing::error!("Error building scheme handler for {}: {}", config.id, err);
                     continue;
                 }
             };
             let slug = SchemeHandlerSlug::new(
-                chain_id,
-                config.slug.x402_version,
-                config.slug.name.clone(),
+                chain_id.clone(),
+                blueprint.x402_version(),
+                blueprint.scheme().to_string(),
             );
+            tracing::info!(chain_id = %chain_id, scheme = %blueprint.scheme(), id=blueprint.id(), "Registered scheme handler");
             handlers.insert(slug, handler);
         }
         Self(handlers)
