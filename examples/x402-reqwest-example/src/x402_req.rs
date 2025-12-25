@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
 use x402_rs::chain::{ChainId, ChainIdPattern};
+use x402_rs::chain::eip155::Eip155ChainReference;
 use x402_rs::proto::util::TokenAmount;
 use x402_rs::proto::v2;
 use x402_rs::scheme::v1_eip155_exact::ChecksummedAddress;
@@ -324,12 +325,10 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
             Some(extra) => (extra.name.clone(), extra.version.clone()),
         };
 
-        // Get chain ID for EIP-712 domain
-        let chain_id_num: u64 = candidate
-            .chain_id
-            .reference()
-            .parse()
-            .map_err(|e| X402Error::SigningError(format!("Invalid chain ID: {e}")))?;
+        // Get chain ID for EIP-712 domain using proper Eip155ChainReference
+        let chain_reference = Eip155ChainReference::try_from(candidate.chain_id.clone())
+            .map_err(|e| X402Error::SigningError(format!("Invalid EIP-155 chain reference: {e}")))?;
+        let chain_id_num = chain_reference.inner();
 
         // Build EIP-712 domain
         let domain = eip712_domain! {
