@@ -109,6 +109,6 @@ pub struct PaymentRequirements<TScheme, TAmount, TAddress, TExtra> {
 #[serde(rename_all = "camelCase")]
 pub struct PaymentRequired {
     pub x402_version: X402Version2,
-    pub resource: Option<ResourceInfo>,
+    pub resource: ResourceInfo,
     pub accepts: Vec<serde_json::Value>,
 }

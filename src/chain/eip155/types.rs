@@ -1,6 +1,6 @@
-use std::str::FromStr;
-use alloy_primitives::{hex, Address, U256};
+use alloy_primitives::{Address, U256, hex};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ChecksummedAddress(pub Address);

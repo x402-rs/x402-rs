@@ -105,7 +105,9 @@ pub enum ChainIdPattern {
 
 impl ChainIdPattern {
     pub fn wildcard<S: Into<String>>(namespace: S) -> Self {
-        Self::Wildcard { namespace: namespace.into() }
+        Self::Wildcard {
+            namespace: namespace.into(),
+        }
     }
 
     pub fn exact<N: Into<String>, R: Into<String>>(namespace: N, reference: R) -> Self {

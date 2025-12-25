@@ -136,7 +136,7 @@ pub struct PaymentCandidate {
     /// Raw proposal data for re-parsing during signing
     pub(crate) raw_proposal: serde_json::Value,
     /// Resource info (V2 only)
-    pub(crate) resource: Option<v2::ResourceInfo>,
+    pub(crate) resource: v2::ResourceInfo,
 }
 
 impl PaymentCandidateLike for PaymentCandidate {
@@ -180,7 +180,7 @@ pub trait X402SchemeClient: X402SchemeId + Send + Sync {
         &self,
         raw: &serde_json::Value,
         client: Arc<dyn X402SchemeClient>,
-        resource: Option<v2::ResourceInfo>,
+        resource: v2::ResourceInfo,
     ) -> Result<PaymentCandidate, X402Error>;
 
     /// Sign the payment for the selected candidate.
@@ -251,7 +251,7 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         &self,
         raw: &serde_json::Value,
         client: Arc<dyn X402SchemeClient>,
-        resource: Option<v2::ResourceInfo>,
+        resource: v2::ResourceInfo,
     ) -> Result<PaymentCandidate, X402Error> {
         // Parse into scheme-specific type
         let req: v2_eip155_types::PaymentRequirements = serde_json::from_value(raw.clone())?;
@@ -332,10 +332,7 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
             .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
 
         // Build the payment payload
-        let resource = candidate
-            .resource
-            .clone()
-            .ok_or_else(|| X402Error::SigningError("Missing resource info".into()))?;
+        let resource = candidate.resource.clone();
 
         let payload = LocalPaymentPayload {
             x402_version: v2::X402Version2,
@@ -457,7 +454,7 @@ impl<TSelector> X402Client<TSelector> {
         &self,
         accepts: &[serde_json::Value],
         version: u8,
-        resource: Option<v2::ResourceInfo>,
+        resource: v2::ResourceInfo,
     ) -> Result<(Vec<PaymentCandidate>, u8), X402Error> {
         let mut candidates = Vec::new();
 
