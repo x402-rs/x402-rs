@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use alloy_contract::SolCallBuilder;
 use alloy_primitives::{Address, B256, Bytes, Signature, TxHash, U256, address, hex};
 use alloy_provider::bindings::IMulticall3;
@@ -8,7 +6,9 @@ use alloy_provider::{
 };
 use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, sol};
 use alloy_transport::TransportError;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use tracing::Instrument;
 use tracing::instrument;
@@ -1031,5 +1031,36 @@ impl From<alloy_contract::Error> for Eip155ExactError {
             alloy_contract::Error::TransportError(e) => Self::Transport(e),
             alloy_contract::Error::PendingTransactionError(e) => Self::PendingTransaction(e),
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChecksummedAddress(pub Address);
+
+impl FromStr for ChecksummedAddress {
+    type Err = hex::FromHexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let address = Address::from_str(s)?;
+        Ok(Self(address))
+    }
+}
+
+impl Serialize for ChecksummedAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.0.to_checksum(None))
+    }
+}
+
+impl<'de> Deserialize<'de> for ChecksummedAddress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
     }
 }

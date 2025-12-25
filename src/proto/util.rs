@@ -42,6 +42,7 @@ impl<'de> Deserialize<'de> for U64String {
     }
 }
 
+/// U256 - serialized as decimal string
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TokenAmount(pub U256);
 
