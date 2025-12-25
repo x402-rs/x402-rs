@@ -22,6 +22,8 @@ use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 
+pub use types::*;
+
 pub struct V2Eip155Exact;
 
 impl X402SchemeId for V2Eip155Exact {

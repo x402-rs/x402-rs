@@ -14,12 +14,14 @@ use reqwest_middleware::{ClientWithMiddleware, Next};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
-use x402_rs::chain::{ChainId, ChainIdPattern};
 use x402_rs::chain::eip155::{ChecksummedAddress, Eip155ChainReference, TokenAmount};
+use x402_rs::chain::{ChainId, ChainIdPattern};
 use x402_rs::proto::v2;
-use x402_rs::scheme::v1_eip155_exact::{ExactEvmPayload, ExactEvmPayloadAuthorization, PaymentRequirementsExtra};
-use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;
 use x402_rs::scheme::X402SchemeId;
+use x402_rs::scheme::v1_eip155_exact::{
+    ExactEvmPayload, ExactEvmPayloadAuthorization, PaymentRequirementsExtra,
+};
+use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;
 use x402_rs::timestamp::UnixTimestamp;
 use x402_rs::util::b64::Base64Bytes;
 
@@ -108,16 +110,6 @@ impl From<X402Error> for rqm::Error {
     fn from(error: X402Error) -> Self {
         rqm::Error::Middleware(error.into())
     }
-}
-
-/// Structured representation of a V2 Payment-Required header.
-/// This provides proper typing for the payment required response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PaymentRequiredV2 {
-    pub x402_version: v2::X402Version2,
-    pub resource: Option<v2::ResourceInfo>,
-    pub accepts: Vec<serde_json::Value>,
 }
 
 // ============================================================================
@@ -307,8 +299,10 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         };
 
         // Get chain ID for EIP-712 domain using proper Eip155ChainReference
-        let chain_reference = Eip155ChainReference::try_from(candidate.chain_id.clone())
-            .map_err(|e| X402Error::SigningError(format!("Invalid EIP-155 chain reference: {e}")))?;
+        let chain_reference =
+            Eip155ChainReference::try_from(candidate.chain_id.clone()).map_err(|e| {
+                X402Error::SigningError(format!("Invalid EIP-155 chain reference: {e}"))
+            })?;
         let chain_id_num = chain_reference.inner();
 
         // Build EIP-712 domain
@@ -452,8 +446,10 @@ impl X402Client {
                 .map_err(|e| X402Error::ParseError(format!("Base64 decode failed: {e}")))?;
 
             // Parse directly into typed PaymentRequiredV2 struct
-            let payment_required: PaymentRequiredV2 = serde_json::from_slice(&bytes)
-                .map_err(|e| X402Error::ParseError(format!("Failed to parse PaymentRequiredV2: {e}")))?;
+            let payment_required: v2::PaymentRequired =
+                serde_json::from_slice(&bytes).map_err(|e| {
+                    X402Error::ParseError(format!("Failed to parse PaymentRequiredV2: {e}"))
+                })?;
 
             // Version is already validated by the X402Version2 deserializer
             return self.build_candidates_from_accepts(
@@ -491,11 +487,11 @@ impl X402Client {
             // Find matching registered client
             for registered in self.schemes.iter() {
                 if registered.matches(version, scheme, &chain_id) {
-                    if let Ok(candidate) =
-                        registered
-                            .client
-                            .to_candidate(raw, registered.client.clone(), resource.clone())
-                    {
+                    if let Ok(candidate) = registered.client.to_candidate(
+                        raw,
+                        registered.client.clone(),
+                        resource.clone(),
+                    ) {
                         candidates.push(candidate);
                         break; // First matching client wins for this entry
                     }
