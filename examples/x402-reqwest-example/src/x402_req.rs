@@ -38,6 +38,26 @@ sol! {
     }
 }
 
+/// Trait for types that can be used as payment candidates in selection.
+/// This allows the selector to work with any type that provides the necessary
+/// payment information, not just the concrete PaymentCandidate type.
+pub trait PaymentCandidateLike {
+    /// Get the chain ID for this payment candidate
+    fn chain_id(&self) -> &ChainId;
+
+    /// Get the asset address for this payment candidate
+    fn asset(&self) -> &str;
+
+    /// Get the payment amount for this payment candidate
+    fn amount(&self) -> U256;
+
+    /// Get the scheme name for this payment candidate
+    fn scheme(&self) -> &str;
+
+    /// Get the x402 protocol version for this payment candidate
+    fn x402_version(&self) -> u8;
+}
+
 // ============================================================================
 // Local PaymentRequirements with decimal amount serialization
 // ============================================================================
@@ -138,13 +158,35 @@ pub struct PaymentCandidate {
     pub(crate) resource: Option<v2::ResourceInfo>,
 }
 
+impl PaymentCandidateLike for PaymentCandidate {
+    fn chain_id(&self) -> &ChainId {
+        &self.chain_id
+    }
+
+    fn asset(&self) -> &str {
+        &self.asset
+    }
+
+    fn amount(&self) -> U256 {
+        self.amount
+    }
+
+    fn scheme(&self) -> &str {
+        &self.scheme
+    }
+
+    fn x402_version(&self) -> u8 {
+        self.x402_version
+    }
+}
+
 // ============================================================================
 // PaymentSelector - Selection strategy
 // ============================================================================
 
 /// Trait for selecting the best payment candidate from available options.
 pub trait PaymentSelector: Send + Sync {
-    fn select<'a>(&self, candidates: &'a [PaymentCandidate]) -> Option<&'a PaymentCandidate>;
+    fn select<'a, T: PaymentCandidateLike>(&self, candidates: &'a [T]) -> Option<&'a T>;
 }
 
 /// Default selector: returns the first matching candidate.
@@ -152,7 +194,7 @@ pub trait PaymentSelector: Send + Sync {
 pub struct FirstMatch;
 
 impl PaymentSelector for FirstMatch {
-    fn select<'a>(&self, candidates: &'a [PaymentCandidate]) -> Option<&'a PaymentCandidate> {
+    fn select<'a, T: PaymentCandidateLike>(&self, candidates: &'a [T]) -> Option<&'a T> {
         candidates.first()
     }
 }
@@ -162,10 +204,10 @@ impl PaymentSelector for FirstMatch {
 pub struct PreferChain(pub ChainId);
 
 impl PaymentSelector for PreferChain {
-    fn select<'a>(&self, candidates: &'a [PaymentCandidate]) -> Option<&'a PaymentCandidate> {
+    fn select<'a, T: PaymentCandidateLike>(&self, candidates: &'a [T]) -> Option<&'a T> {
         candidates
             .iter()
-            .find(|c| c.chain_id == self.0)
+            .find(|c| c.chain_id() == &self.0)
             .or_else(|| candidates.first())
     }
 }
@@ -175,8 +217,8 @@ impl PaymentSelector for PreferChain {
 pub struct MaxAmount(pub U256);
 
 impl PaymentSelector for MaxAmount {
-    fn select<'a>(&self, candidates: &'a [PaymentCandidate]) -> Option<&'a PaymentCandidate> {
-        candidates.iter().find(|c| c.amount <= self.0)
+    fn select<'a, T: PaymentCandidateLike>(&self, candidates: &'a [T]) -> Option<&'a T> {
+        candidates.iter().find(|c| c.amount() <= self.0)
     }
 }
 
@@ -381,20 +423,22 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
 // ============================================================================
 
 /// The main x402 client that orchestrates scheme clients and selection.
-pub struct X402Client {
+pub struct X402Client<TSelector> {
     /// Registered scheme clients with their chain patterns
     schemes: Vec<RegisteredSchemeClient>,
-    selector: Arc<dyn PaymentSelector>,
+    selector: TSelector,
 }
 
-impl X402Client {
+impl X402Client<FirstMatch> {
     pub fn new() -> Self {
         Self {
             schemes: vec![],
-            selector: Arc::new(FirstMatch),
+            selector: FirstMatch,
         }
     }
+}
 
+impl<TSelector> X402Client<TSelector> {
     /// Register a scheme client for specific chains.
     ///
     /// # Arguments
@@ -429,11 +473,15 @@ impl X402Client {
 
     /// Set a custom payment selector.
     #[allow(dead_code)]
-    pub fn with_selector<P: PaymentSelector + 'static>(mut self, selector: P) -> Self {
-        self.selector = Arc::new(selector);
-        self
+    pub fn with_selector<P: PaymentSelector + 'static>(self, selector: P) -> X402Client<P> {
+        X402Client {
+            selector,
+            schemes: self.schemes,
+        }
     }
+}
 
+impl<TSelector> X402Client<TSelector> {
     /// Parse a 402 response and build candidates from all registered scheme clients.
     fn build_candidates(
         &self,
@@ -503,18 +551,15 @@ impl X402Client {
     }
 }
 
-impl Default for X402Client {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 // ============================================================================
 // Middleware implementation
 // ============================================================================
 
 #[async_trait::async_trait]
-impl rqm::Middleware for X402Client {
+impl<TSelector> rqm::Middleware for X402Client<TSelector>
+where
+    TSelector: PaymentSelector + Sync + Send + 'static,
+{
     async fn handle(
         &self,
         req: Request,
@@ -580,12 +625,12 @@ impl rqm::Middleware for X402Client {
 // Builder traits for ergonomic API
 // ============================================================================
 
-pub trait ReqwestWithPayments<A> {
-    fn with_payments(self, x402_client: X402Client) -> ReqwestWithPaymentsBuilder<A>;
+pub trait ReqwestWithPayments<A, S> {
+    fn with_payments(self, x402_client: X402Client<S>) -> ReqwestWithPaymentsBuilder<A, S>;
 }
 
-impl ReqwestWithPayments<Client> for Client {
-    fn with_payments(self, x402_client: X402Client) -> ReqwestWithPaymentsBuilder<Client> {
+impl<S> ReqwestWithPayments<Client, S> for Client {
+    fn with_payments(self, x402_client: X402Client<S>) -> ReqwestWithPaymentsBuilder<Client, S> {
         ReqwestWithPaymentsBuilder {
             inner: self,
             x402_client,
@@ -593,8 +638,11 @@ impl ReqwestWithPayments<Client> for Client {
     }
 }
 
-impl ReqwestWithPayments<ClientBuilder> for ClientBuilder {
-    fn with_payments(self, x402_client: X402Client) -> ReqwestWithPaymentsBuilder<ClientBuilder> {
+impl<S> ReqwestWithPayments<ClientBuilder, S> for ClientBuilder {
+    fn with_payments(
+        self,
+        x402_client: X402Client<S>,
+    ) -> ReqwestWithPaymentsBuilder<ClientBuilder, S> {
         ReqwestWithPaymentsBuilder {
             inner: self,
             x402_client,
@@ -602,9 +650,9 @@ impl ReqwestWithPayments<ClientBuilder> for ClientBuilder {
     }
 }
 
-pub struct ReqwestWithPaymentsBuilder<A> {
+pub struct ReqwestWithPaymentsBuilder<A, S> {
     inner: A,
-    x402_client: X402Client,
+    x402_client: X402Client<S>,
 }
 
 pub trait ReqwestWithPaymentsBuild {
@@ -615,7 +663,10 @@ pub trait ReqwestWithPaymentsBuild {
     fn builder(self) -> Self::BuilderResult;
 }
 
-impl ReqwestWithPaymentsBuild for ReqwestWithPaymentsBuilder<Client> {
+impl<S> ReqwestWithPaymentsBuild for ReqwestWithPaymentsBuilder<Client, S>
+where
+    X402Client<S>: rqm::Middleware,
+{
     type BuildResult = ClientWithMiddleware;
     type BuilderResult = rqm::ClientBuilder;
 
@@ -628,7 +679,10 @@ impl ReqwestWithPaymentsBuild for ReqwestWithPaymentsBuilder<Client> {
     }
 }
 
-impl ReqwestWithPaymentsBuild for ReqwestWithPaymentsBuilder<ClientBuilder> {
+impl<S> ReqwestWithPaymentsBuild for ReqwestWithPaymentsBuilder<ClientBuilder, S>
+where
+    X402Client<S>: rqm::Middleware,
+{
     type BuildResult = Result<ClientWithMiddleware, reqwest::Error>;
     type BuilderResult = Result<rqm::ClientBuilder, reqwest::Error>;
 
