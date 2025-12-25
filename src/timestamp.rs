@@ -48,6 +48,10 @@ impl Add<u64> for UnixTimestamp {
 }
 
 impl UnixTimestamp {
+    pub fn from_secs(secs: u64) -> Self {
+        Self(secs)
+    }
+
     pub fn now() -> Self {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)

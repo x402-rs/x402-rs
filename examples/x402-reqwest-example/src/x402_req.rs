@@ -19,6 +19,7 @@ use x402_rs::proto::util::TokenAmount;
 use x402_rs::proto::v2;
 use x402_rs::scheme::v1_eip155_exact::ChecksummedAddress;
 use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;
+use x402_rs::timestamp::UnixTimestamp;
 use x402_rs::util::b64::Base64Bytes;
 
 // EIP-712 struct for TransferWithAuthorization (ERC-3009)
@@ -34,54 +35,6 @@ sol! {
     }
 }
 
-// ============================================================================
-// Local types for V2 EVM payload (matching x402-rs types)
-// ============================================================================
-
-/// Local UnixTimestamp that can be constructed from seconds
-/// (the library's UnixTimestamp doesn't expose a from_secs constructor)
-#[derive(Debug, Clone, Copy)]
-pub struct LocalUnixTimestamp(u64);
-
-impl LocalUnixTimestamp {
-    pub fn now() -> Self {
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("SystemTime before UNIX epoch?!?")
-            .as_secs();
-        Self(now)
-    }
-
-    pub fn from_secs(secs: u64) -> Self {
-        Self(secs)
-    }
-
-    pub fn as_secs(&self) -> u64 {
-        self.0
-    }
-}
-
-impl std::ops::Add<u64> for LocalUnixTimestamp {
-    type Output = Self;
-    fn add(self, rhs: u64) -> Self::Output {
-        Self(self.0 + rhs)
-    }
-}
-
-impl Serialize for LocalUnixTimestamp {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for LocalUnixTimestamp {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let s = String::deserialize(deserializer)?;
-        let ts = s.parse::<u64>().map_err(serde::de::Error::custom)?;
-        Ok(Self(ts))
-    }
-}
-
 /// EIP-712 structured data for ERC-3009-based authorization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,8 +42,8 @@ pub struct ExactEvmPayloadAuthorization {
     pub from: ChecksummedAddress,
     pub to: ChecksummedAddress,
     pub value: TokenAmount,
-    pub valid_after: LocalUnixTimestamp,
-    pub valid_before: LocalUnixTimestamp,
+    pub valid_after: UnixTimestamp,
+    pub valid_before: UnixTimestamp,
     pub nonce: FixedBytes<32>,
 }
 
@@ -350,10 +303,10 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         };
 
         // Build authorization
-        let now = LocalUnixTimestamp::now();
+        let now = UnixTimestamp::now();
         // valid_after should be in the past (10 minutes ago) to ensure the payment is immediately valid
         let valid_after_secs = now.as_secs().saturating_sub(10 * 60);
-        let valid_after = LocalUnixTimestamp::from_secs(valid_after_secs);
+        let valid_after = UnixTimestamp::from_secs(valid_after_secs);
         let valid_before = now + req.max_timeout_seconds;
         let nonce: [u8; 32] = rng().random();
 
