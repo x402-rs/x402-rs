@@ -1,4 +1,5 @@
 pub mod pending_nonce_manager;
+pub mod types;
 
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
 use alloy_primitives::{Address, B256, Bytes};
@@ -24,7 +25,8 @@ use tracing::Instrument;
 
 use crate::chain::{ChainId, ChainProviderOps};
 use crate::config::Eip155ChainConfig;
-use pending_nonce_manager::PendingNonceManager;
+pub use pending_nonce_manager::*;
+pub use types::*;
 
 /// Combined filler type for gas, blob gas, nonce, and chain ID.
 pub type InnerFiller = JoinFill<

@@ -29,7 +29,7 @@ use crate::scheme::{
 };
 use crate::timestamp::UnixTimestamp;
 
-pub use types::ExactScheme;
+pub use types::*;
 
 /// Signature verifier for EIP-6492, EIP-1271, EOA, universally deployed on the supported EVM chains
 /// If absent on a target chain, verification will fail; you should deploy the validator there.
@@ -1031,48 +1031,5 @@ impl From<alloy_contract::Error> for Eip155ExactError {
             alloy_contract::Error::TransportError(e) => Self::Transport(e),
             alloy_contract::Error::PendingTransactionError(e) => Self::PendingTransaction(e),
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ChecksummedAddress(pub Address);
-
-impl FromStr for ChecksummedAddress {
-    type Err = hex::FromHexError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let address = Address::from_str(s)?;
-        Ok(Self(address))
-    }
-}
-
-impl Serialize for ChecksummedAddress {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&self.0.to_checksum(None))
-    }
-}
-
-impl<'de> Deserialize<'de> for ChecksummedAddress {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        s.parse().map_err(serde::de::Error::custom)
-    }
-}
-
-impl Into<Address> for ChecksummedAddress {
-    fn into(self) -> Address {
-        self.0
-    }
-}
-
-impl From<Address> for ChecksummedAddress {
-    fn from(address: Address) -> Self {
-        Self(address)
     }
 }
