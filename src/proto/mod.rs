@@ -10,6 +10,7 @@ use crate::scheme::SchemeHandlerSlug;
 pub mod util;
 pub mod v1;
 pub mod v2;
+pub mod client;
 
 pub type SettleRequest = VerifyRequest;
 
