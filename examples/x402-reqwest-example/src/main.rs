@@ -9,6 +9,7 @@ use crate::x402_req::{ReqwestWithPayments, ReqwestWithPaymentsBuild, V2Eip155Exa
 
 async fn buy_evm() -> Result<(), Box<dyn std::error::Error>> {
     let signer: PrivateKeySigner = env::var("EVM_PRIVATE_KEY")?.parse()?;
+    println!("Signer address: {:?}", signer.address());
     let x402_client = X402Client::new().register(V2Eip155ExactClient::new(signer));
     let http_client = Client::new().with_payments(x402_client).build();
     // let sender = EvmSenderWallet::new(signer);

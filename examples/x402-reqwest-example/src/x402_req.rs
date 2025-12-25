@@ -12,12 +12,42 @@ use rand::{Rng, rng};
 use reqwest::{Client, ClientBuilder, Request, Response, StatusCode};
 use reqwest_middleware as rqm;
 use reqwest_middleware::{ClientWithMiddleware, Next};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use x402_rs::chain::ChainId;
 use x402_rs::proto::v2;
 use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;
 use x402_rs::timestamp::UnixTimestamp;
 use x402_rs::util::b64::Base64Bytes;
+
+// ============================================================================
+// U256 Decimal String Serialization
+// ============================================================================
+
+/// Serialize U256 as a decimal string (e.g., "10000" instead of "0x2710")
+fn serialize_u256_as_decimal<S: Serializer>(value: &U256, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(&value.to_string())
+}
+
+/// Deserialize U256 from a decimal string
+fn deserialize_u256_from_decimal<'de, D: Deserializer<'de>>(deserializer: D) -> Result<U256, D::Error> {
+    let s = String::deserialize(deserializer)?;
+    U256::from_str_radix(&s, 10).map_err(serde::de::Error::custom)
+}
+
+// ============================================================================
+// EIP-55 Checksummed Address Serialization
+// ============================================================================
+
+/// Serialize Address as EIP-55 checksummed string (e.g., "0x857b06519E91e3A54538791bDbb0E22373e36b66")
+fn serialize_address_checksummed<S: Serializer>(value: &Address, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(&value.to_checksum(None))
+}
+
+/// Deserialize Address from hex string (checksummed or not)
+fn deserialize_address<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Address, D::Error> {
+    let s = String::deserialize(deserializer)?;
+    s.parse().map_err(serde::de::Error::custom)
+}
 
 // EIP-712 struct for TransferWithAuthorization (ERC-3009)
 sol! {
@@ -40,8 +70,11 @@ sol! {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExactEvmPayloadAuthorization {
+    #[serde(serialize_with = "serialize_address_checksummed", deserialize_with = "deserialize_address")]
     pub from: Address,
+    #[serde(serialize_with = "serialize_address_checksummed", deserialize_with = "deserialize_address")]
     pub to: Address,
+    #[serde(serialize_with = "serialize_u256_as_decimal", deserialize_with = "deserialize_u256_from_decimal")]
     pub value: U256,
     pub valid_after: UnixTimestamp,
     pub valid_before: UnixTimestamp,
@@ -54,6 +87,63 @@ pub struct ExactEvmPayloadAuthorization {
 pub struct ExactEvmPayload {
     pub signature: Bytes,
     pub authorization: ExactEvmPayloadAuthorization,
+}
+
+// ============================================================================
+// Local PaymentRequirements with decimal amount serialization
+// ============================================================================
+
+/// Extra fields for EVM payment requirements
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalPaymentRequirementsExtra {
+    pub name: String,
+    pub version: String,
+}
+
+/// Local version of PaymentRequirements that serializes amount as decimal string
+/// and addresses as EIP-55 checksummed strings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalPaymentRequirements {
+    pub scheme: String,
+    pub network: ChainId,
+    #[serde(serialize_with = "serialize_u256_as_decimal", deserialize_with = "deserialize_u256_from_decimal")]
+    pub amount: U256,
+    #[serde(serialize_with = "serialize_address_checksummed", deserialize_with = "deserialize_address")]
+    pub pay_to: Address,
+    pub max_timeout_seconds: u64,
+    #[serde(serialize_with = "serialize_address_checksummed", deserialize_with = "deserialize_address")]
+    pub asset: Address,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra: Option<LocalPaymentRequirementsExtra>,
+}
+
+impl From<v2_eip155_types::PaymentRequirements> for LocalPaymentRequirements {
+    fn from(req: v2_eip155_types::PaymentRequirements) -> Self {
+        Self {
+            scheme: req.scheme.to_string(),
+            network: req.network,
+            amount: req.amount,
+            pay_to: req.pay_to,
+            max_timeout_seconds: req.max_timeout_seconds,
+            asset: req.asset,
+            extra: req.extra.map(|e| LocalPaymentRequirementsExtra {
+                name: e.name,
+                version: e.version,
+            }),
+        }
+    }
+}
+
+/// Local version of PaymentPayload that uses LocalPaymentRequirements
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalPaymentPayload {
+    pub x402_version: v2::X402Version2,
+    pub accepted: LocalPaymentRequirements,
+    pub resource: v2::ResourceInfo,
+    pub payload: ExactEvmPayload,
 }
 
 // ============================================================================
@@ -294,9 +384,9 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         let resource = candidate.resource.clone()
             .ok_or_else(|| X402Error::SigningError("Missing resource info".into()))?;
 
-        let payload = v2::PaymentPayload {
+        let payload = LocalPaymentPayload {
             x402_version: v2::X402Version2,
-            accepted: req,
+            accepted: req.into(),
             resource,
             payload: ExactEvmPayload {
                 signature: signature.as_bytes().to_vec().into(),
@@ -455,7 +545,7 @@ impl rqm::Middleware for X402Client {
         // Retry with payment
         let mut retry = retry_req.ok_or(X402Error::RequestNotCloneable)?;
         retry.headers_mut().insert(
-            "X-Payment",
+            "PAYMENT-SIGNATURE",
             payment_header.parse().map_err(|e| X402Error::SigningError(format!("{e}")))?
         );
 
