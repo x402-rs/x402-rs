@@ -3,8 +3,6 @@
 //! This module contains the experimental implementation of the x402 client
 //! with support for both V1 and V2 protocols, and a flexible scheme-based architecture.
 
-use std::sync::Arc;
-use std::time::SystemTime;
 use alloy_primitives::{Address, Bytes, FixedBytes, U256};
 use alloy_signer::Signer;
 use alloy_sol_types::{SolStruct, eip712_domain, sol};
@@ -14,6 +12,8 @@ use reqwest::{Client, ClientBuilder, Request, Response, StatusCode};
 use reqwest_middleware as rqm;
 use reqwest_middleware::{ClientWithMiddleware, Next};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::sync::Arc;
+use std::time::SystemTime;
 use x402_rs::chain::ChainId;
 use x402_rs::proto::v2;
 use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;
@@ -24,12 +24,17 @@ use x402_rs::util::b64::Base64Bytes;
 // ============================================================================
 
 /// Serialize U256 as a decimal string (e.g., "10000" instead of "0x2710")
-fn serialize_u256_as_decimal<S: Serializer>(value: &U256, serializer: S) -> Result<S::Ok, S::Error> {
+fn serialize_u256_as_decimal<S: Serializer>(
+    value: &U256,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(&value.to_string())
 }
 
 /// Deserialize U256 from a decimal string
-fn deserialize_u256_from_decimal<'de, D: Deserializer<'de>>(deserializer: D) -> Result<U256, D::Error> {
+fn deserialize_u256_from_decimal<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<U256, D::Error> {
     let s = String::deserialize(deserializer)?;
     U256::from_str_radix(&s, 10).map_err(serde::de::Error::custom)
 }
@@ -39,7 +44,10 @@ fn deserialize_u256_from_decimal<'de, D: Deserializer<'de>>(deserializer: D) -> 
 // ============================================================================
 
 /// Serialize Address as EIP-55 checksummed string (e.g., "0x857b06519E91e3A54538791bDbb0E22373e36b66")
-fn serialize_address_checksummed<S: Serializer>(value: &Address, serializer: S) -> Result<S::Ok, S::Error> {
+fn serialize_address_checksummed<S: Serializer>(
+    value: &Address,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(&value.to_checksum(None))
 }
 
@@ -114,11 +122,20 @@ impl<'de> Deserialize<'de> for LocalUnixTimestamp {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExactEvmPayloadAuthorization {
-    #[serde(serialize_with = "serialize_address_checksummed", deserialize_with = "deserialize_address")]
+    #[serde(
+        serialize_with = "serialize_address_checksummed",
+        deserialize_with = "deserialize_address"
+    )]
     pub from: Address,
-    #[serde(serialize_with = "serialize_address_checksummed", deserialize_with = "deserialize_address")]
+    #[serde(
+        serialize_with = "serialize_address_checksummed",
+        deserialize_with = "deserialize_address"
+    )]
     pub to: Address,
-    #[serde(serialize_with = "serialize_u256_as_decimal", deserialize_with = "deserialize_u256_from_decimal")]
+    #[serde(
+        serialize_with = "serialize_u256_as_decimal",
+        deserialize_with = "deserialize_u256_from_decimal"
+    )]
     pub value: U256,
     pub valid_after: LocalUnixTimestamp,
     pub valid_before: LocalUnixTimestamp,
@@ -152,12 +169,21 @@ pub struct LocalPaymentRequirementsExtra {
 pub struct LocalPaymentRequirements {
     pub scheme: String,
     pub network: ChainId,
-    #[serde(serialize_with = "serialize_u256_as_decimal", deserialize_with = "deserialize_u256_from_decimal")]
+    #[serde(
+        serialize_with = "serialize_u256_as_decimal",
+        deserialize_with = "deserialize_u256_from_decimal"
+    )]
     pub amount: U256,
-    #[serde(serialize_with = "serialize_address_checksummed", deserialize_with = "deserialize_address")]
+    #[serde(
+        serialize_with = "serialize_address_checksummed",
+        deserialize_with = "deserialize_address"
+    )]
     pub pay_to: Address,
     pub max_timeout_seconds: u64,
-    #[serde(serialize_with = "serialize_address_checksummed", deserialize_with = "deserialize_address")]
+    #[serde(
+        serialize_with = "serialize_address_checksummed",
+        deserialize_with = "deserialize_address"
+    )]
     pub asset: Address,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra: Option<LocalPaymentRequirementsExtra>,
@@ -310,10 +336,7 @@ pub trait X402SchemeClient: Send + Sync {
 
     /// Sign the payment for the selected candidate.
     /// Returns the value for the X-Payment header (base64 encoded).
-    async fn sign_payment(
-        &self,
-        candidate: &PaymentCandidate,
-    ) -> Result<String, X402Error>;
+    async fn sign_payment(&self, candidate: &PaymentCandidate) -> Result<String, X402Error>;
 }
 
 // ============================================================================
@@ -327,16 +350,16 @@ pub struct V2Eip155ExactClient<S> {
 
 impl<S> V2Eip155ExactClient<S> {
     pub fn new(signer: S) -> Self {
-        Self { signer: Arc::new(signer) }
+        Self {
+            signer: Arc::new(signer),
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
     fn can_handle(&self, version: u8, scheme: &str, network: &str) -> bool {
-        version == 2
-            && scheme == "exact"
-            && network.starts_with("eip155:")
+        version == 2 && scheme == "exact" && network.starts_with("eip155:")
     }
 
     fn to_candidate(
@@ -346,8 +369,7 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         resource: Option<v2::ResourceInfo>,
     ) -> Result<PaymentCandidate, X402Error> {
         // Parse into scheme-specific type
-        let req: v2_eip155_types::PaymentRequirements =
-            serde_json::from_value(raw.clone())?;
+        let req: v2_eip155_types::PaymentRequirements = serde_json::from_value(raw.clone())?;
 
         Ok(PaymentCandidate {
             chain_id: req.network.clone(),
@@ -361,10 +383,7 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         })
     }
 
-    async fn sign_payment(
-        &self,
-        candidate: &PaymentCandidate,
-    ) -> Result<String, X402Error> {
+    async fn sign_payment(&self, candidate: &PaymentCandidate) -> Result<String, X402Error> {
         // Re-parse to get full typed requirements
         let req: v2_eip155_types::PaymentRequirements =
             serde_json::from_value(candidate.raw_proposal.clone())?;
@@ -376,7 +395,9 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         };
 
         // Get chain ID for EIP-712 domain
-        let chain_id_num: u64 = candidate.chain_id.reference()
+        let chain_id_num: u64 = candidate
+            .chain_id
+            .reference()
             .parse()
             .map_err(|e| X402Error::SigningError(format!("Invalid chain ID: {e}")))?;
 
@@ -419,13 +440,16 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         };
 
         let eip712_hash = transfer_with_authorization.eip712_signing_hash(&domain);
-        let signature = self.signer
+        let signature = self
+            .signer
             .sign_hash(&eip712_hash)
             .await
             .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
 
         // Build the payment payload
-        let resource = candidate.resource.clone()
+        let resource = candidate
+            .resource
+            .clone()
             .ok_or_else(|| X402Error::SigningError("Missing resource info".into()))?;
 
         let payload = LocalPaymentPayload {
@@ -480,7 +504,10 @@ impl X402Client {
     }
 
     /// Parse a 402 response and build candidates from all registered scheme clients.
-    fn build_candidates(&self, response: &Response) -> Result<(Vec<PaymentCandidate>, u8), X402Error> {
+    fn build_candidates(
+        &self,
+        response: &Response,
+    ) -> Result<(Vec<PaymentCandidate>, u8), X402Error> {
         // Try V2 first (header-based)
         if let Some(header) = response.headers().get("Payment-Required") {
             let bytes = Base64Bytes::from(header.as_bytes())
@@ -489,16 +516,19 @@ impl X402Client {
 
             let json: serde_json::Value = serde_json::from_slice(&bytes)?;
 
-            let version = json.get("x402Version")
+            let version = json
+                .get("x402Version")
                 .and_then(|v| v.as_u64())
                 .ok_or_else(|| X402Error::ParseError("Missing x402Version".into()))?;
 
             if version == 2 {
-                let resource: Option<v2::ResourceInfo> = json.get("resource")
+                let resource: Option<v2::ResourceInfo> = json
+                    .get("resource")
                     .map(|r| serde_json::from_value(r.clone()))
                     .transpose()?;
 
-                let accepts = json.get("accepts")
+                let accepts = json
+                    .get("accepts")
                     .and_then(|a| a.as_array())
                     .ok_or_else(|| X402Error::ParseError("Missing accepts array".into()))?;
 
@@ -508,7 +538,9 @@ impl X402Client {
 
         // TODO: V1 fallback (body-based) - would need to consume response body
         // For now, return error
-        Err(X402Error::ParseError("V1 protocol not yet implemented".into()))
+        Err(X402Error::ParseError(
+            "V1 protocol not yet implemented".into(),
+        ))
     }
 
     fn build_candidates_from_accepts(
@@ -565,23 +597,34 @@ impl rqm::Middleware for X402Client {
         println!("Received 402 Payment Required");
 
         // Build candidates from the 402 response
-        let (candidates, _version) = self.build_candidates(&res)
+        let (candidates, _version) = self
+            .build_candidates(&res)
             .map_err(Into::<rqm::Error>::into)?;
 
         println!("Found {} candidates", candidates.len());
         for (i, c) in candidates.iter().enumerate() {
-            println!("  [{}] chain={}, asset={}, amount={}", i, c.chain_id, c.asset, c.amount);
+            println!(
+                "  [{}] chain={}, asset={}, amount={}",
+                i, c.chain_id, c.asset, c.amount
+            );
         }
 
         // Select the best candidate
-        let selected = self.selector.select(&candidates)
+        let selected = self
+            .selector
+            .select(&candidates)
             .ok_or(X402Error::NoMatchingPaymentOption)?;
 
-        println!("Selected candidate: chain={}, amount={}", selected.chain_id, selected.amount);
+        println!(
+            "Selected candidate: chain={}, amount={}",
+            selected.chain_id, selected.amount
+        );
 
         // Sign the payment
         let client = &self.schemes[selected.client_index];
-        let payment_header = client.sign_payment(selected).await
+        let payment_header = client
+            .sign_payment(selected)
+            .await
             .map_err(Into::<rqm::Error>::into)?;
 
         println!("Payment header length: {} bytes", payment_header.len());
@@ -590,7 +633,9 @@ impl rqm::Middleware for X402Client {
         let mut retry = retry_req.ok_or(X402Error::RequestNotCloneable)?;
         retry.headers_mut().insert(
             "PAYMENT-SIGNATURE",
-            payment_header.parse().map_err(|e| X402Error::SigningError(format!("{e}")))?
+            payment_header
+                .parse()
+                .map_err(|e| X402Error::SigningError(format!("{e}")))?,
         );
 
         next.run(retry, extensions).await

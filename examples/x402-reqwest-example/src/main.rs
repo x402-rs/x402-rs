@@ -5,7 +5,9 @@ use dotenvy::dotenv;
 use reqwest::Client;
 use std::env;
 
-use crate::x402_req::{ReqwestWithPayments, ReqwestWithPaymentsBuild, V2Eip155ExactClient, X402Client};
+use crate::x402_req::{
+    ReqwestWithPayments, ReqwestWithPaymentsBuild, V2Eip155ExactClient, X402Client,
+};
 
 async fn buy_evm() -> Result<(), Box<dyn std::error::Error>> {
     let signer: PrivateKeySigner = env::var("EVM_PRIVATE_KEY")?.parse()?;
