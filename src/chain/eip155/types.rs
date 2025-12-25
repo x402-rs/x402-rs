@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use alloy_primitives::{hex, Address};
+use alloy_primitives::{hex, Address, U256};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -42,5 +42,41 @@ impl Into<Address> for ChecksummedAddress {
 impl From<Address> for ChecksummedAddress {
     fn from(address: Address) -> Self {
         Self(address)
+    }
+}
+
+/// U256 - serialized as decimal string
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TokenAmount(pub U256);
+
+impl Serialize for TokenAmount {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for TokenAmount {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let u256 = U256::from_str_radix(&s, 10).map_err(serde::de::Error::custom)?;
+        Ok(TokenAmount(u256))
+    }
+}
+
+impl Into<U256> for TokenAmount {
+    fn into(self) -> U256 {
+        self.0
+    }
+}
+
+impl From<U256> for TokenAmount {
+    fn from(value: U256) -> Self {
+        Self(value)
     }
 }

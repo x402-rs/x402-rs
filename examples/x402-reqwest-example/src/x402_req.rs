@@ -3,7 +3,7 @@
 //! This module contains the experimental implementation of the x402 client
 //! with support for both V1 and V2 protocols, and a flexible scheme-based architecture.
 
-use alloy_primitives::{Bytes, FixedBytes, U256};
+use alloy_primitives::{FixedBytes, U256};
 use alloy_signer::Signer;
 use alloy_sol_types::{SolStruct, eip712_domain, sol};
 use http::Extensions;
@@ -15,8 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
 use x402_rs::chain::{ChainId, ChainIdPattern};
-use x402_rs::chain::eip155::{ChecksummedAddress, Eip155ChainReference};
-use x402_rs::proto::util::TokenAmount;
+use x402_rs::chain::eip155::{ChecksummedAddress, Eip155ChainReference, TokenAmount};
 use x402_rs::proto::v2;
 use x402_rs::scheme::v1_eip155_exact::{ExactEvmPayload, ExactEvmPayloadAuthorization, PaymentRequirementsExtra};
 use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;

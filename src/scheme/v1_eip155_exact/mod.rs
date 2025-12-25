@@ -6,9 +6,8 @@ use alloy_provider::{
 };
 use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, sol};
 use alloy_transport::TransportError;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::Arc;
 use tracing::Instrument;
 use tracing::instrument;
