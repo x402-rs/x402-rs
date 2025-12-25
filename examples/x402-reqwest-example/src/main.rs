@@ -5,11 +5,11 @@ use dotenvy::dotenv;
 use reqwest::Client;
 use std::env;
 
-use crate::x402_req::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
+use crate::x402_req::{ReqwestWithPayments, ReqwestWithPaymentsBuild, V1Eip155ExactClient, X402Client};
 
 async fn buy_evm() -> Result<(), Box<dyn std::error::Error>> {
     let signer: PrivateKeySigner = env::var("EVM_PRIVATE_KEY")?.parse()?;
-    let x402_client = X402Client::new();
+    let x402_client = X402Client::new().register(V1Eip155ExactClient::new(signer));
     let http_client = Client::new().with_payments(x402_client).build();
     // let sender = EvmSenderWallet::new(signer);
     //

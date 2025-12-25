@@ -1,34 +1,45 @@
-use http::{Extensions, StatusCode};
-use reqwest::{Client, ClientBuilder, Request, Response};
+use std::sync::Arc;
+use http::Extensions;
+use reqwest::{Client, ClientBuilder, Request, Response, StatusCode};
 use reqwest_middleware as rqm;
 use reqwest_middleware::{ClientWithMiddleware, Next};
-use x402_rs::util::b64::Base64Bytes;
+use x402_rs::chain::ChainId;
 use x402_rs::proto;
+use x402_rs::util::b64::Base64Bytes;
 
-pub struct X402Client {}
+pub struct X402Client {
+    schemes: Vec<Arc<dyn X402SchemeClient + Send + Sync>>,
+}
 
 impl X402Client {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            schemes: vec![],
+        }
+    }
+
+    pub fn register<S: X402SchemeClient + Send + Sync + 'static>(mut self, scheme: S) -> Self {
+        self.schemes.push(Arc::new(scheme));
+        self
     }
 }
 
 pub trait ReqwestWithPayments<A> {
-    fn with_payments(
-        self,
-        x402_client: X402Client
-    ) -> ReqwestWithPaymentsBuilder<A>;
+    fn with_payments(self, x402_client: X402Client) -> ReqwestWithPaymentsBuilder<A>;
 }
 
 impl ReqwestWithPayments<reqwest::Client> for reqwest::Client {
     fn with_payments(self, x402_client: X402Client) -> ReqwestWithPaymentsBuilder<reqwest::Client> {
-        ReqwestWithPaymentsBuilder { inner: self, x402_client }
+        ReqwestWithPaymentsBuilder {
+            inner: self,
+            x402_client,
+        }
     }
 }
 
 pub struct ReqwestWithPaymentsBuilder<A> {
     inner: A,
-    x402_client: X402Client
+    x402_client: X402Client,
 }
 
 pub trait ReqwestWithPaymentsBuild {
@@ -70,10 +81,41 @@ impl ReqwestWithPaymentsBuild for ReqwestWithPaymentsBuilder<ClientBuilder> {
     }
 }
 
+pub struct V1Eip155ExactClient<S> {
+    signer: S
+}
+
+impl<S> V1Eip155ExactClient<S> {
+    pub fn new(signer: S) -> Self {
+        Self { signer }
+    }
+}
+
+type Amount = ruint::Uint<256, 4>;
+
+pub struct PaymentProposal {
+    pub amount: Amount,
+    pub asset: String,
+    pub chain_id: ChainId,
+}
+
+pub trait X402SchemeClient {
+
+}
+
+impl<S> X402SchemeClient for V1Eip155ExactClient<S> {
+
+}
+
 #[async_trait::async_trait]
 impl rqm::Middleware for X402Client {
     /// Intercepts the response. If it's a 402, it constructs a payment and retries the request.
-    async fn handle(&self, req: Request, extensions: &mut Extensions, next: Next<'_>) -> reqwest_middleware::Result<Response> {
+    async fn handle(
+        &self,
+        req: Request,
+        extensions: &mut Extensions,
+        next: Next<'_>,
+    ) -> rqm::Result<Response> {
         let retry_req = req.try_clone(); // For retrying with payment later
 
         let res = next.clone().run(req, extensions).await?;
@@ -87,27 +129,36 @@ impl rqm::Middleware for X402Client {
 
         #[cfg(feature = "telemetry")]
         tracing::debug!("Received 402 Payment Required");
-        let k = res.headers().get("Payment-Required").and_then(|h| Base64Bytes::from(h.as_bytes()).decode().ok());
-        let k = k.and_then(|k| serde_json::from_slice::<proto::PaymentRequired>(&k).ok());
+        let bytes = res
+            .headers()
+            .get("Payment-Required")
+            .and_then(|h| Base64Bytes::from(h.as_bytes()).decode().ok());
+        let k = bytes.and_then(|k| serde_json::from_slice::<serde_json::Value>(&k).ok());
         println!("decoded {:?}", k);
+        if let Some(k) = k {
+            let version = k.get("x402Version").and_then(|v| serde_json::from_value::<proto::X402Version>(v.clone()).ok());
+            let accepts = k.get("accepts");
+            println!("version {:?}", version);
+            println!("accepts {:?}", accepts);
+        }
 
-    //     let payment_required_response = res.json::<PaymentRequiredResponse>().await?;
-    //
-    //     let retry_req = async {
-    //         let payment_header = self
-    //             .build_payment_header(&payment_required_response.accepts)
-    //             .await?;
-    //         let mut req = retry_req.ok_or(X402PaymentsError::RequestNotCloneable)?;
-    //         let headers = req.headers_mut();
-    //         headers.insert("X-Payment", payment_header);
-    //         headers.insert(
-    //             "Access-Control-Expose-Headers",
-    //             HeaderValue::from_static("X-Payment-Response"),
-    //         );
-    //         Ok::<Request, X402PaymentsError>(req)
-    //     }
-    //     .await
-    //     .map_err(Into::<rqm::Error>::into)?;
+        //     let payment_required_response = res.json::<PaymentRequiredResponse>().await?;
+        //
+        //     let retry_req = async {
+        //         let payment_header = self
+        //             .build_payment_header(&payment_required_response.accepts)
+        //             .await?;
+        //         let mut req = retry_req.ok_or(X402PaymentsError::RequestNotCloneable)?;
+        //         let headers = req.headers_mut();
+        //         headers.insert("X-Payment", payment_header);
+        //         headers.insert(
+        //             "Access-Control-Expose-Headers",
+        //             HeaderValue::from_static("X-Payment-Response"),
+        //         );
+        //         Ok::<Request, X402PaymentsError>(req)
+        //     }
+        //     .await
+        //     .map_err(Into::<rqm::Error>::into)?;
         next.run(retry_req.unwrap(), extensions).await
     }
 }
