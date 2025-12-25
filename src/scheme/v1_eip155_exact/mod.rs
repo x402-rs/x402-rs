@@ -23,7 +23,6 @@ use crate::chain::eip155::{
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::proto;
 use crate::proto::{PaymentVerificationError, v1};
-use crate::scheme::v1_eip155_exact::types::PaymentRequirementsExtra;
 use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };

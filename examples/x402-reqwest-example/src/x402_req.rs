@@ -18,6 +18,7 @@ use x402_rs::chain::{ChainId, ChainIdPattern};
 use x402_rs::chain::eip155::{ChecksummedAddress, Eip155ChainReference};
 use x402_rs::proto::util::TokenAmount;
 use x402_rs::proto::v2;
+use x402_rs::scheme::v1_eip155_exact::ExactEvmPayloadAuthorization;
 use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;
 use x402_rs::scheme::X402SchemeId;
 use x402_rs::timestamp::UnixTimestamp;
@@ -34,18 +35,6 @@ sol! {
         uint256 validBefore;
         bytes32 nonce;
     }
-}
-
-/// EIP-712 structured data for ERC-3009-based authorization.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExactEvmPayloadAuthorization {
-    pub from: ChecksummedAddress,
-    pub to: ChecksummedAddress,
-    pub value: TokenAmount,
-    pub valid_after: UnixTimestamp,
-    pub valid_before: UnixTimestamp,
-    pub nonce: FixedBytes<32>,
 }
 
 /// Full payload required to authorize an ERC-3009 transfer.

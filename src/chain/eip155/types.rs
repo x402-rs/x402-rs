@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ChecksummedAddress(pub Address);
 
-impl FromStr for crate::scheme::v1_eip155_exact::ChecksummedAddress {
+impl FromStr for ChecksummedAddress {
     type Err = hex::FromHexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -14,7 +14,7 @@ impl FromStr for crate::scheme::v1_eip155_exact::ChecksummedAddress {
     }
 }
 
-impl Serialize for crate::scheme::v1_eip155_exact::ChecksummedAddress {
+impl Serialize for ChecksummedAddress {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -23,7 +23,7 @@ impl Serialize for crate::scheme::v1_eip155_exact::ChecksummedAddress {
     }
 }
 
-impl<'de> Deserialize<'de> for crate::scheme::v1_eip155_exact::ChecksummedAddress {
+impl<'de> Deserialize<'de> for ChecksummedAddress {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -33,13 +33,13 @@ impl<'de> Deserialize<'de> for crate::scheme::v1_eip155_exact::ChecksummedAddres
     }
 }
 
-impl Into<Address> for crate::scheme::v1_eip155_exact::ChecksummedAddress {
+impl Into<Address> for ChecksummedAddress {
     fn into(self) -> Address {
         self.0
     }
 }
 
-impl From<Address> for crate::scheme::v1_eip155_exact::ChecksummedAddress {
+impl From<Address> for ChecksummedAddress {
     fn from(address: Address) -> Self {
         Self(address)
     }
