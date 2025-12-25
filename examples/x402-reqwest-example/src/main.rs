@@ -4,6 +4,7 @@ use alloy_signer_local::PrivateKeySigner;
 use dotenvy::dotenv;
 use reqwest::Client;
 use std::env;
+use x402_rs::chain::ChainIdPattern;
 
 use crate::x402_req::{
     ReqwestWithPayments, ReqwestWithPaymentsBuild, V2Eip155ExactClient, X402Client,
@@ -12,7 +13,12 @@ use crate::x402_req::{
 async fn buy_evm() -> Result<(), Box<dyn std::error::Error>> {
     let signer: PrivateKeySigner = env::var("EVM_PRIVATE_KEY")?.parse()?;
     println!("Signer address: {:?}", signer.address());
-    let x402_client = X402Client::new().register(V2Eip155ExactClient::new(signer));
+
+    // Register the EVM client with a wildcard pattern to handle all EIP-155 chains
+    let x402_client = X402Client::new().register(
+        ChainIdPattern::wildcard("eip155"),
+        V2Eip155ExactClient::new(signer),
+    );
     let http_client = Client::new().with_payments(x402_client).build();
     // let sender = EvmSenderWallet::new(signer);
     //

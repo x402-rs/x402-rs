@@ -104,14 +104,14 @@ pub enum ChainIdPattern {
 }
 
 impl ChainIdPattern {
-    pub fn wildcard(namespace: String) -> Self {
-        Self::Wildcard { namespace }
+    pub fn wildcard<S: Into<String>>(namespace: S) -> Self {
+        Self::Wildcard { namespace: namespace.into() }
     }
 
-    pub fn exact(namespace: String, reference: String) -> Self {
+    pub fn exact<N: Into<String>, R: Into<String>>(namespace: N, reference: R) -> Self {
         Self::Exact {
-            namespace,
-            reference,
+            namespace: namespace.into(),
+            reference: reference.into(),
         }
     }
 
@@ -183,7 +183,7 @@ impl FromStr for ChainIdPattern {
 
         // Wildcard: eip155:*
         if rest == "*" {
-            return Ok(ChainIdPattern::wildcard(namespace.into()));
+            return Ok(ChainIdPattern::wildcard(namespace));
         }
 
         // Set: eip155:{1,2,3}
@@ -210,7 +210,7 @@ impl FromStr for ChainIdPattern {
             return Err(ChainIdFormatError(s.into()));
         }
 
-        Ok(ChainIdPattern::exact(namespace.into(), rest.into()))
+        Ok(ChainIdPattern::exact(namespace, rest))
     }
 }
 
@@ -230,6 +230,12 @@ impl<'de> Deserialize<'de> for ChainIdPattern {
     {
         let s = String::deserialize(deserializer)?;
         ChainIdPattern::from_str(&s).map_err(de::Error::custom)
+    }
+}
+
+impl From<ChainId> for ChainIdPattern {
+    fn from(chain_id: ChainId) -> Self {
+        ChainIdPattern::exact(chain_id.namespace, chain_id.reference)
     }
 }
 

@@ -11,14 +11,15 @@ use rand::{Rng, rng};
 use reqwest::{Client, ClientBuilder, Request, Response, StatusCode};
 use reqwest_middleware as rqm;
 use reqwest_middleware::{ClientWithMiddleware, Next};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use std::sync::Arc;
-use std::time::SystemTime;
-use x402_rs::chain::ChainId;
+use x402_rs::chain::{ChainId, ChainIdPattern};
 use x402_rs::proto::util::TokenAmount;
 use x402_rs::proto::v2;
 use x402_rs::scheme::v1_eip155_exact::ChecksummedAddress;
 use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;
+use x402_rs::scheme::X402SchemeId;
 use x402_rs::timestamp::UnixTimestamp;
 use x402_rs::util::b64::Base64Bytes;
 
@@ -212,14 +213,14 @@ impl PaymentSelector for MaxAmount {
 /// Trait implemented by scheme-specific clients (e.g., V2Eip155ExactClient).
 /// Each implementation handles a specific combination of protocol version,
 /// chain namespace, and payment scheme.
+///
+/// Extends `X402SchemeId` which provides:
+/// - `x402_version()` - protocol version (1 or 2)
+/// - `namespace()` - chain namespace ("eip155", "solana")
+/// - `scheme()` - payment scheme name ("exact")
 #[async_trait::async_trait]
-pub trait X402SchemeClient: Send + Sync {
-    /// Check if this client can handle the given payment proposal.
-    /// Called for each entry in the accepts array.
-    fn can_handle(&self, version: u8, scheme: &str, network: &str) -> bool;
-
+pub trait X402SchemeClient: X402SchemeId + Send + Sync {
     /// Parse the raw accepts entry and extract common fields for selection.
-    /// Only called if can_handle returned true.
     fn to_candidate(
         &self,
         raw: &serde_json::Value,
@@ -230,6 +231,32 @@ pub trait X402SchemeClient: Send + Sync {
     /// Sign the payment for the selected candidate.
     /// Returns the value for the X-Payment header (base64 encoded).
     async fn sign_payment(&self, candidate: &PaymentCandidate) -> Result<String, X402Error>;
+}
+
+// ============================================================================
+// RegisteredSchemeClient - Internal wrapper for pattern-based matching
+// ============================================================================
+
+/// Internal wrapper that pairs a scheme client with its chain pattern.
+struct RegisteredSchemeClient {
+    pattern: ChainIdPattern,
+    client: Arc<dyn X402SchemeClient>,
+}
+
+impl RegisteredSchemeClient {
+    /// Check if this registered client can handle the given payment requirement.
+    ///
+    /// Matching logic:
+    /// 1. x402_version must match
+    /// 2. scheme name must match
+    /// 3. namespace from X402SchemeId must match chain_id namespace
+    /// 4. pattern must match the chain_id (for reference matching)
+    fn matches(&self, version: u8, scheme: &str, chain_id: &ChainId) -> bool {
+        self.client.x402_version() == version
+            && self.client.scheme() == scheme
+            && self.client.namespace() == chain_id.namespace()
+            && self.pattern.matches(chain_id)
+    }
 }
 
 // ============================================================================
@@ -249,12 +276,22 @@ impl<S> V2Eip155ExactClient<S> {
     }
 }
 
-#[async_trait::async_trait]
-impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
-    fn can_handle(&self, version: u8, scheme: &str, network: &str) -> bool {
-        version == 2 && scheme == "exact" && network.starts_with("eip155:")
+impl<S> X402SchemeId for V2Eip155ExactClient<S> {
+    fn x402_version(&self) -> u8 {
+        2
     }
 
+    fn namespace(&self) -> &str {
+        "eip155"
+    }
+
+    fn scheme(&self) -> &str {
+        "exact"
+    }
+}
+
+#[async_trait::async_trait]
+impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
     fn to_candidate(
         &self,
         raw: &serde_json::Value,
@@ -371,7 +408,8 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
 
 /// The main x402 client that orchestrates scheme clients and selection.
 pub struct X402Client {
-    schemes: Vec<Arc<dyn X402SchemeClient>>,
+    /// Registered scheme clients with their chain patterns
+    schemes: Vec<RegisteredSchemeClient>,
     selector: Arc<dyn PaymentSelector>,
 }
 
@@ -383,9 +421,35 @@ impl X402Client {
         }
     }
 
-    /// Register a scheme client. Order matters for FirstMatch selection.
-    pub fn register<S: X402SchemeClient + 'static>(mut self, scheme: S) -> Self {
-        self.schemes.push(Arc::new(scheme));
+    /// Register a scheme client for specific chains.
+    ///
+    /// # Arguments
+    /// * `pattern` - Chain pattern to match (can be exact, wildcard, or set)
+    /// * `scheme` - The scheme client implementation
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// // Register for all EIP-155 chains
+    /// let client = X402Client::new()
+    ///     .register(ChainIdPattern::wildcard("eip155".into()), V2Eip155ExactClient::new(signer));
+    ///
+    /// // Register for specific chain
+    /// let client = X402Client::new()
+    ///     .register(ChainId::new("eip155", "84532"), V2Eip155ExactClient::new(signer));
+    ///
+    /// // Register for multiple chains using pattern parsing
+    /// let client = X402Client::new()
+    ///     .register("eip155:{1,8453,84532}".parse::<ChainIdPattern>().unwrap(), V2Eip155ExactClient::new(signer));
+    /// ```
+    pub fn register<P, S>(mut self, pattern: P, scheme: S) -> Self
+    where
+        P: Into<ChainIdPattern>,
+        S: X402SchemeClient + 'static,
+    {
+        self.schemes.push(RegisteredSchemeClient {
+            pattern: pattern.into(),
+            client: Arc::new(scheme),
+        });
         self
     }
 
@@ -448,9 +512,20 @@ impl X402Client {
             let scheme = raw.get("scheme").and_then(|v| v.as_str()).unwrap_or("");
             let network = raw.get("network").and_then(|v| v.as_str()).unwrap_or("");
 
-            for (client_idx, client) in self.schemes.iter().enumerate() {
-                if client.can_handle(version, scheme, network) {
-                    if let Ok(candidate) = client.to_candidate(raw, client_idx, resource.clone()) {
+            // Parse network string into ChainId
+            let chain_id = match ChainId::from_str(network) {
+                Ok(id) => id,
+                Err(_) => continue, // Skip invalid network formats
+            };
+
+            // Find matching registered client
+            for (client_idx, registered) in self.schemes.iter().enumerate() {
+                if registered.matches(version, scheme, &chain_id) {
+                    if let Ok(candidate) =
+                        registered
+                            .client
+                            .to_candidate(raw, client_idx, resource.clone())
+                    {
                         candidates.push(candidate);
                         break; // First matching client wins for this entry
                     }
@@ -514,8 +589,9 @@ impl rqm::Middleware for X402Client {
         );
 
         // Sign the payment
-        let client = &self.schemes[selected.client_index];
-        let payment_header = client
+        let registered = &self.schemes[selected.client_index];
+        let payment_header = registered
+            .client
             .sign_payment(selected)
             .await
             .map_err(Into::<rqm::Error>::into)?;
