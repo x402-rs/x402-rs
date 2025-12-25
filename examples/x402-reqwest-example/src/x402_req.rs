@@ -17,7 +17,7 @@ use std::sync::Arc;
 use x402_rs::chain::{ChainId, ChainIdPattern};
 use x402_rs::chain::eip155::Eip155ChainReference;
 use x402_rs::proto::util::TokenAmount;
-use x402_rs::proto::v2;
+use x402_rs::proto::v2::{ResourceInfo, X402Version2};
 use x402_rs::scheme::v1_eip155_exact::ChecksummedAddress;
 use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;
 use x402_rs::scheme::X402SchemeId;
@@ -105,9 +105,9 @@ impl From<v2_eip155_types::PaymentRequirements> for LocalPaymentRequirements {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalPaymentPayload {
-    pub x402_version: v2::X402Version2,
+    pub x402_version: X402Version2,
     pub accepted: LocalPaymentRequirements,
-    pub resource: v2::ResourceInfo,
+    pub resource: ResourceInfo,
     pub payload: ExactEvmPayload,
 }
 
@@ -139,6 +139,16 @@ impl From<X402Error> for rqm::Error {
     }
 }
 
+/// Structured representation of a V2 Payment-Required header.
+/// This provides proper typing for the payment required response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PaymentRequiredV2 {
+    pub x402_version: X402Version2,
+    pub resource: Option<ResourceInfo>,
+    pub accepts: Vec<serde_json::Value>,
+}
+
 // ============================================================================
 // PaymentCandidate - Common intermediate type for selection
 // ============================================================================
@@ -162,7 +172,7 @@ pub struct PaymentCandidate {
     /// Raw proposal data for re-parsing during signing
     pub(crate) raw_proposal: serde_json::Value,
     /// Resource info (V2 only)
-    pub(crate) resource: Option<v2::ResourceInfo>,
+    pub(crate) resource: Option<ResourceInfo>,
 }
 
 // ============================================================================
@@ -226,7 +236,7 @@ pub trait X402SchemeClient: X402SchemeId + Send + Sync {
         &self,
         raw: &serde_json::Value,
         client: Arc<dyn X402SchemeClient>,
-        resource: Option<v2::ResourceInfo>,
+        resource: Option<ResourceInfo>,
     ) -> Result<PaymentCandidate, X402Error>;
 
     /// Sign the payment for the selected candidate.
@@ -297,7 +307,7 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         &self,
         raw: &serde_json::Value,
         client: Arc<dyn X402SchemeClient>,
-        resource: Option<v2::ResourceInfo>,
+        resource: Option<ResourceInfo>,
     ) -> Result<PaymentCandidate, X402Error> {
         // Parse into scheme-specific type
         let req: v2_eip155_types::PaymentRequirements = serde_json::from_value(raw.clone())?;
@@ -382,7 +392,7 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
             .ok_or_else(|| X402Error::SigningError("Missing resource info".into()))?;
 
         let payload = LocalPaymentPayload {
-            x402_version: v2::X402Version2,
+            x402_version: X402Version2,
             accepted: req.into(),
             resource,
             payload: ExactEvmPayload {
@@ -470,26 +480,16 @@ impl X402Client {
                 .decode()
                 .map_err(|e| X402Error::ParseError(format!("Base64 decode failed: {e}")))?;
 
-            let json: serde_json::Value = serde_json::from_slice(&bytes)?;
+            // Parse directly into typed PaymentRequiredV2 struct
+            let payment_required: PaymentRequiredV2 = serde_json::from_slice(&bytes)
+                .map_err(|e| X402Error::ParseError(format!("Failed to parse PaymentRequiredV2: {e}")))?;
 
-            let version = json
-                .get("x402Version")
-                .and_then(|v| v.as_u64())
-                .ok_or_else(|| X402Error::ParseError("Missing x402Version".into()))?;
-
-            if version == 2 {
-                let resource: Option<v2::ResourceInfo> = json
-                    .get("resource")
-                    .map(|r| serde_json::from_value(r.clone()))
-                    .transpose()?;
-
-                let accepts = json
-                    .get("accepts")
-                    .and_then(|a| a.as_array())
-                    .ok_or_else(|| X402Error::ParseError("Missing accepts array".into()))?;
-
-                return self.build_candidates_from_accepts(accepts, 2, resource);
-            }
+            // Version is already validated by the X402Version2 deserializer
+            return self.build_candidates_from_accepts(
+                &payment_required.accepts,
+                payment_required.x402_version.into(),
+                payment_required.resource,
+            );
         }
 
         // TODO: V1 fallback (body-based) - would need to consume response body
@@ -503,7 +503,7 @@ impl X402Client {
         &self,
         accepts: &[serde_json::Value],
         version: u8,
-        resource: Option<v2::ResourceInfo>,
+        resource: Option<ResourceInfo>,
     ) -> Result<(Vec<PaymentCandidate>, u8), X402Error> {
         let mut candidates = Vec::new();
 
