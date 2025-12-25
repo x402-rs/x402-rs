@@ -144,7 +144,7 @@ impl From<X402Error> for rqm::Error {
 
 /// Represents a parsed payment option that can be compared across different schemes.
 /// This is the common type used for selection before signing.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PaymentCandidate {
     /// The chain ID (e.g., "eip155:84532" for Base Sepolia)
     pub chain_id: ChainId,
@@ -156,8 +156,8 @@ pub struct PaymentCandidate {
     pub scheme: String,
     /// Protocol version (1 or 2)
     pub x402_version: u8,
-    /// Index of the scheme client that can handle this
-    pub(crate) client_index: usize,
+    /// Reference to the scheme client that can handle this
+    pub(crate) client: Arc<dyn X402SchemeClient>,
     /// Raw proposal data for re-parsing during signing
     pub(crate) raw_proposal: serde_json::Value,
     /// Resource info (V2 only)
@@ -224,7 +224,7 @@ pub trait X402SchemeClient: X402SchemeId + Send + Sync {
     fn to_candidate(
         &self,
         raw: &serde_json::Value,
-        client_index: usize,
+        client: Arc<dyn X402SchemeClient>,
         resource: Option<v2::ResourceInfo>,
     ) -> Result<PaymentCandidate, X402Error>;
 
@@ -295,7 +295,7 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
     fn to_candidate(
         &self,
         raw: &serde_json::Value,
-        client_index: usize,
+        client: Arc<dyn X402SchemeClient>,
         resource: Option<v2::ResourceInfo>,
     ) -> Result<PaymentCandidate, X402Error> {
         // Parse into scheme-specific type
@@ -307,7 +307,7 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
             amount: req.amount,
             scheme: "exact".into(),
             x402_version: 2,
-            client_index,
+            client,
             raw_proposal: raw.clone(),
             resource,
         })
@@ -519,12 +519,12 @@ impl X402Client {
             };
 
             // Find matching registered client
-            for (client_idx, registered) in self.schemes.iter().enumerate() {
+            for registered in self.schemes.iter() {
                 if registered.matches(version, scheme, &chain_id) {
                     if let Ok(candidate) =
                         registered
                             .client
-                            .to_candidate(raw, client_idx, resource.clone())
+                            .to_candidate(raw, registered.client.clone(), resource.clone())
                     {
                         candidates.push(candidate);
                         break; // First matching client wins for this entry
@@ -588,9 +588,8 @@ impl rqm::Middleware for X402Client {
             selected.chain_id, selected.amount
         );
 
-        // Sign the payment
-        let registered = &self.schemes[selected.client_index];
-        let payment_header = registered
+        // Sign the payment using the client reference stored in the candidate
+        let payment_header = selected
             .client
             .sign_payment(selected)
             .await
