@@ -18,7 +18,7 @@ use x402_rs::chain::{ChainId, ChainIdPattern};
 use x402_rs::chain::eip155::{ChecksummedAddress, Eip155ChainReference};
 use x402_rs::proto::util::TokenAmount;
 use x402_rs::proto::v2;
-use x402_rs::scheme::v1_eip155_exact::ExactEvmPayloadAuthorization;
+use x402_rs::scheme::v1_eip155_exact::{ExactEvmPayload, ExactEvmPayloadAuthorization, PaymentRequirementsExtra};
 use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;
 use x402_rs::scheme::X402SchemeId;
 use x402_rs::timestamp::UnixTimestamp;
@@ -37,25 +37,9 @@ sol! {
     }
 }
 
-/// Full payload required to authorize an ERC-3009 transfer.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExactEvmPayload {
-    pub signature: Bytes,
-    pub authorization: ExactEvmPayloadAuthorization,
-}
-
 // ============================================================================
 // Local PaymentRequirements with decimal amount serialization
 // ============================================================================
-
-/// Extra fields for EVM payment requirements
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LocalPaymentRequirementsExtra {
-    pub name: String,
-    pub version: String,
-}
 
 /// Local version of PaymentRequirements that serializes amount as decimal string
 /// and addresses as EIP-55 checksummed strings
@@ -69,7 +53,7 @@ pub struct LocalPaymentRequirements {
     pub max_timeout_seconds: u64,
     pub asset: ChecksummedAddress,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra: Option<LocalPaymentRequirementsExtra>,
+    pub extra: Option<PaymentRequirementsExtra>,
 }
 
 impl From<v2_eip155_types::PaymentRequirements> for LocalPaymentRequirements {
@@ -81,7 +65,7 @@ impl From<v2_eip155_types::PaymentRequirements> for LocalPaymentRequirements {
             pay_to: req.pay_to.into(),
             max_timeout_seconds: req.max_timeout_seconds,
             asset: req.asset.into(),
-            extra: req.extra.map(|e| LocalPaymentRequirementsExtra {
+            extra: req.extra.map(|e| PaymentRequirementsExtra {
                 name: e.name,
                 version: e.version,
             }),
