@@ -1064,3 +1064,15 @@ impl<'de> Deserialize<'de> for ChecksummedAddress {
         s.parse().map_err(serde::de::Error::custom)
     }
 }
+
+impl Into<Address> for ChecksummedAddress {
+    fn into(self) -> Address {
+        self.0
+    }
+}
+
+impl From<Address> for ChecksummedAddress {
+    fn from(address: Address) -> Self {
+        Self(address)
+    }
+}

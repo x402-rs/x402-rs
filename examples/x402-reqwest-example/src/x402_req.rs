@@ -3,7 +3,7 @@
 //! This module contains the experimental implementation of the x402 client
 //! with support for both V1 and V2 protocols, and a flexible scheme-based architecture.
 
-use alloy_primitives::{Address, Bytes, FixedBytes, U256};
+use alloy_primitives::{Bytes, FixedBytes, U256};
 use alloy_signer::Signer;
 use alloy_sol_types::{SolStruct, eip712_domain, sol};
 use http::Extensions;
@@ -17,26 +17,9 @@ use std::time::SystemTime;
 use x402_rs::chain::ChainId;
 use x402_rs::proto::util::TokenAmount;
 use x402_rs::proto::v2;
+use x402_rs::scheme::v1_eip155_exact::ChecksummedAddress;
 use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;
 use x402_rs::util::b64::Base64Bytes;
-
-// ============================================================================
-// EIP-55 Checksummed Address Serialization
-// ============================================================================
-
-/// Serialize Address as EIP-55 checksummed string (e.g., "0x857b06519E91e3A54538791bDbb0E22373e36b66")
-fn serialize_address_checksummed<S: Serializer>(
-    value: &Address,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    serializer.serialize_str(&value.to_checksum(None))
-}
-
-/// Deserialize Address from hex string (checksummed or not)
-fn deserialize_address<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Address, D::Error> {
-    let s = String::deserialize(deserializer)?;
-    s.parse().map_err(serde::de::Error::custom)
-}
 
 // EIP-712 struct for TransferWithAuthorization (ERC-3009)
 sol! {
@@ -103,16 +86,8 @@ impl<'de> Deserialize<'de> for LocalUnixTimestamp {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExactEvmPayloadAuthorization {
-    #[serde(
-        serialize_with = "serialize_address_checksummed",
-        deserialize_with = "deserialize_address"
-    )]
-    pub from: Address,
-    #[serde(
-        serialize_with = "serialize_address_checksummed",
-        deserialize_with = "deserialize_address"
-    )]
-    pub to: Address,
+    pub from: ChecksummedAddress,
+    pub to: ChecksummedAddress,
     pub value: TokenAmount,
     pub valid_after: LocalUnixTimestamp,
     pub valid_before: LocalUnixTimestamp,
@@ -147,17 +122,9 @@ pub struct LocalPaymentRequirements {
     pub scheme: String,
     pub network: ChainId,
     pub amount: TokenAmount,
-    #[serde(
-        serialize_with = "serialize_address_checksummed",
-        deserialize_with = "deserialize_address"
-    )]
-    pub pay_to: Address,
+    pub pay_to: ChecksummedAddress,
     pub max_timeout_seconds: u64,
-    #[serde(
-        serialize_with = "serialize_address_checksummed",
-        deserialize_with = "deserialize_address"
-    )]
-    pub asset: Address,
+    pub asset: ChecksummedAddress,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra: Option<LocalPaymentRequirementsExtra>,
 }
@@ -168,9 +135,9 @@ impl From<v2_eip155_types::PaymentRequirements> for LocalPaymentRequirements {
             scheme: req.scheme.to_string(),
             network: req.network,
             amount: req.amount.into(),
-            pay_to: req.pay_to,
+            pay_to: req.pay_to.into(),
             max_timeout_seconds: req.max_timeout_seconds,
-            asset: req.asset,
+            asset: req.asset.into(),
             extra: req.extra.map(|e| LocalPaymentRequirementsExtra {
                 name: e.name,
                 version: e.version,
@@ -391,8 +358,8 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         let nonce: [u8; 32] = rng().random();
 
         let authorization = ExactEvmPayloadAuthorization {
-            from: self.signer.address(),
-            to: req.pay_to,
+            from: self.signer.address().into(),
+            to: req.pay_to.into(),
             value: req.amount.into(),
             valid_after,
             valid_before,
@@ -404,8 +371,8 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         // as the facilitator will reconstruct this struct from the authorization
         // to verify the signature.
         let transfer_with_authorization = TransferWithAuthorization {
-            from: authorization.from,
-            to: authorization.to,
+            from: authorization.from.into(),
+            to: authorization.to.into(),
             value: authorization.value.into(),
             validAfter: U256::from(authorization.valid_after.as_secs()),
             validBefore: U256::from(authorization.valid_before.as_secs()),
