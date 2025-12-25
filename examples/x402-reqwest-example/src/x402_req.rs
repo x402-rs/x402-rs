@@ -4,6 +4,7 @@
 //! with support for both V1 and V2 protocols, and a flexible scheme-based architecture.
 
 use std::sync::Arc;
+use std::time::SystemTime;
 use alloy_primitives::{Address, Bytes, FixedBytes, U256};
 use alloy_signer::Signer;
 use alloy_sol_types::{SolStruct, eip712_domain, sol};
@@ -16,7 +17,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use x402_rs::chain::ChainId;
 use x402_rs::proto::v2;
 use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;
-use x402_rs::timestamp::UnixTimestamp;
 use x402_rs::util::b64::Base64Bytes;
 
 // ============================================================================
@@ -66,6 +66,50 @@ sol! {
 // Local types for V2 EVM payload (matching x402-rs types)
 // ============================================================================
 
+/// Local UnixTimestamp that can be constructed from seconds
+/// (the library's UnixTimestamp doesn't expose a from_secs constructor)
+#[derive(Debug, Clone, Copy)]
+pub struct LocalUnixTimestamp(u64);
+
+impl LocalUnixTimestamp {
+    pub fn now() -> Self {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("SystemTime before UNIX epoch?!?")
+            .as_secs();
+        Self(now)
+    }
+
+    pub fn from_secs(secs: u64) -> Self {
+        Self(secs)
+    }
+
+    pub fn as_secs(&self) -> u64 {
+        self.0
+    }
+}
+
+impl std::ops::Add<u64> for LocalUnixTimestamp {
+    type Output = Self;
+    fn add(self, rhs: u64) -> Self::Output {
+        Self(self.0 + rhs)
+    }
+}
+
+impl Serialize for LocalUnixTimestamp {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for LocalUnixTimestamp {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        let ts = s.parse::<u64>().map_err(serde::de::Error::custom)?;
+        Ok(Self(ts))
+    }
+}
+
 /// EIP-712 structured data for ERC-3009-based authorization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,8 +120,8 @@ pub struct ExactEvmPayloadAuthorization {
     pub to: Address,
     #[serde(serialize_with = "serialize_u256_as_decimal", deserialize_with = "deserialize_u256_from_decimal")]
     pub value: U256,
-    pub valid_after: UnixTimestamp,
-    pub valid_before: UnixTimestamp,
+    pub valid_after: LocalUnixTimestamp,
+    pub valid_before: LocalUnixTimestamp,
     pub nonce: FixedBytes<32>,
 }
 
@@ -345,15 +389,12 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         };
 
         // Build authorization
-        let now = UnixTimestamp::now();
-        let valid_after = UnixTimestamp::now(); // We'll adjust this below
+        let now = LocalUnixTimestamp::now();
+        // valid_after should be in the past (10 minutes ago) to ensure the payment is immediately valid
+        let valid_after_secs = now.as_secs().saturating_sub(10 * 60);
+        let valid_after = LocalUnixTimestamp::from_secs(valid_after_secs);
         let valid_before = now + req.max_timeout_seconds;
         let nonce: [u8; 32] = rng().random();
-
-        // For valid_after, we want 10 minutes before now
-        // Since UnixTimestamp doesn't expose the inner value directly for subtraction,
-        // we'll use as_secs() and create a new timestamp
-        let valid_after_secs = now.as_secs().saturating_sub(10 * 60);
 
         let authorization = ExactEvmPayloadAuthorization {
             from: self.signer.address(),
@@ -365,12 +406,15 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         };
 
         // Create the EIP-712 struct for signing
+        // IMPORTANT: The values here MUST match the authorization struct exactly,
+        // as the facilitator will reconstruct this struct from the authorization
+        // to verify the signature.
         let transfer_with_authorization = TransferWithAuthorization {
             from: authorization.from,
             to: authorization.to,
             value: authorization.value,
-            validAfter: U256::from(valid_after_secs),
-            validBefore: U256::from(valid_before.as_secs()),
+            validAfter: U256::from(authorization.valid_after.as_secs()),
+            validBefore: U256::from(authorization.valid_before.as_secs()),
             nonce: FixedBytes(nonce),
         };
 
