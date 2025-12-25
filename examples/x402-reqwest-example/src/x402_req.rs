@@ -81,11 +81,11 @@ impl ReqwestWithPaymentsBuild for ReqwestWithPaymentsBuilder<ClientBuilder> {
     }
 }
 
-pub struct V1Eip155ExactClient<S> {
+pub struct V2Eip155ExactClient<S> {
     signer: S
 }
 
-impl<S> V1Eip155ExactClient<S> {
+impl<S> V2Eip155ExactClient<S> {
     pub fn new(signer: S) -> Self {
         Self { signer }
     }
@@ -103,7 +103,7 @@ pub trait X402SchemeClient {
 
 }
 
-impl<S> X402SchemeClient for V1Eip155ExactClient<S> {
+impl<S> X402SchemeClient for V2Eip155ExactClient<S> {
 
 }
 

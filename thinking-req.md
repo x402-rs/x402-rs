@@ -74,3 +74,27 @@ which is decoded to:
 On the requestor side we should be able to register schemes. One scheme handles a combination of protocol scheme, chain namespace, and scheme per se.
 Like, "v1-eip155-exact" is for protocol v1, any eip155 chain, and "exact" scheme.
 
+We can do trait X402SchemeClient with common methods for all schemes. Not sure what methods we'd need though. Each scheme client is individually instantiated,
+probably using chain-namespace-specific wallets. We then register the schemes on X402Client instance. For starters, we could use just Vec<Box<dyn X402SchemeClient>>.
+
+Let's focus on v2 first. I'd rather avoid cloning full 402 response. We can pass `&[u8]` to each X402SchemeClient.
+
+One aspect to be dealt with later is how to select the best/most appropriate proposed payment (the one in accepts array). We could prefer chain, and we could prefer asset on chain, or something else via hook. What hook? Have no idea yet.
+
+For funsies, let's parse payment proposal for V2Eip155Exact scheme. We'd need something like.
+
+```rust
+pub struct PaymentProposalV2<A> {
+  pub x402_version: v2::X402Version2,
+  pub resource: ResourceInfo,
+  pub accepts: Vec<A>
+}
+
+pub type V2Eip155ExactPaymentProposal = PaymentProposalV2<PaymentRequirements>;
+```
+
+Here `PaymentRequirements` come from v2_eip155_exact/types.rs.
+
+If inside the X402SchemeClient, this works fully all right. But, what if we have two X402SchemeClient instances in our disposal?
+
+What kind of hook would we need to provide to select the best payment proposal? What could be its API?
