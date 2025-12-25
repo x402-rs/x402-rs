@@ -180,16 +180,31 @@ impl PaymentSelector for FirstMatch {
     }
 }
 
-/// Selector that prefers a specific chain, falling back to first match.
+/// Selector that prefers chains matching patterns in priority order.
+/// The first pattern in the vector has the highest priority, the last has the lowest.
 #[allow(dead_code)]
-pub struct PreferChain(pub ChainId);
+pub struct PreferChain(Vec<ChainIdPattern>);
+
+impl PreferChain {
+    pub fn new<P: Into<Vec<ChainIdPattern>>>(patterns: P) -> Self {
+        Self(patterns.into())
+    }
+
+    pub fn chain<P: Into<Vec<ChainIdPattern>>>(mut self, patterns: P) -> PreferChain {
+        PreferChain(self.0.into_iter().chain(patterns.into()).collect())
+    }
+}
 
 impl PaymentSelector for PreferChain {
     fn select<'a, T: PaymentCandidateLike>(&self, candidates: &'a [T]) -> Option<&'a T> {
-        candidates
-            .iter()
-            .find(|c| c.chain_id() == &self.0)
-            .or_else(|| candidates.first())
+        // Try each pattern in priority order
+        for pattern in &self.0 {
+            if let Some(candidate) = candidates.iter().find(|c| pattern.matches(c.chain_id())) {
+                return Some(candidate);
+            }
+        }
+        // Fall back to first match if no patterns matched
+        candidates.first()
     }
 }
 

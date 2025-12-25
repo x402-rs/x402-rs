@@ -239,6 +239,18 @@ impl From<ChainId> for ChainIdPattern {
     }
 }
 
+impl Into<Vec<ChainIdPattern>> for ChainIdPattern {
+    fn into(self) -> Vec<ChainIdPattern> {
+        vec![self]
+    }
+}
+
+impl Into<Vec<ChainIdPattern>> for ChainId {
+    fn into(self) -> Vec<ChainIdPattern> {
+        vec![self.into()]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
