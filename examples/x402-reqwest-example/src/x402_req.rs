@@ -15,29 +15,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::sync::Arc;
 use std::time::SystemTime;
 use x402_rs::chain::ChainId;
+use x402_rs::proto::util::TokenAmount;
 use x402_rs::proto::v2;
 use x402_rs::scheme::v2_eip155_exact::types as v2_eip155_types;
 use x402_rs::util::b64::Base64Bytes;
-
-// ============================================================================
-// U256 Decimal String Serialization
-// ============================================================================
-
-/// Serialize U256 as a decimal string (e.g., "10000" instead of "0x2710")
-fn serialize_u256_as_decimal<S: Serializer>(
-    value: &U256,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    serializer.serialize_str(&value.to_string())
-}
-
-/// Deserialize U256 from a decimal string
-fn deserialize_u256_from_decimal<'de, D: Deserializer<'de>>(
-    deserializer: D,
-) -> Result<U256, D::Error> {
-    let s = String::deserialize(deserializer)?;
-    U256::from_str_radix(&s, 10).map_err(serde::de::Error::custom)
-}
 
 // ============================================================================
 // EIP-55 Checksummed Address Serialization
@@ -132,11 +113,7 @@ pub struct ExactEvmPayloadAuthorization {
         deserialize_with = "deserialize_address"
     )]
     pub to: Address,
-    #[serde(
-        serialize_with = "serialize_u256_as_decimal",
-        deserialize_with = "deserialize_u256_from_decimal"
-    )]
-    pub value: U256,
+    pub value: TokenAmount,
     pub valid_after: LocalUnixTimestamp,
     pub valid_before: LocalUnixTimestamp,
     pub nonce: FixedBytes<32>,
@@ -169,11 +146,7 @@ pub struct LocalPaymentRequirementsExtra {
 pub struct LocalPaymentRequirements {
     pub scheme: String,
     pub network: ChainId,
-    #[serde(
-        serialize_with = "serialize_u256_as_decimal",
-        deserialize_with = "deserialize_u256_from_decimal"
-    )]
-    pub amount: U256,
+    pub amount: TokenAmount,
     #[serde(
         serialize_with = "serialize_address_checksummed",
         deserialize_with = "deserialize_address"
@@ -194,7 +167,7 @@ impl From<v2_eip155_types::PaymentRequirements> for LocalPaymentRequirements {
         Self {
             scheme: req.scheme.to_string(),
             network: req.network,
-            amount: req.amount,
+            amount: req.amount.into(),
             pay_to: req.pay_to,
             max_timeout_seconds: req.max_timeout_seconds,
             asset: req.asset,
@@ -420,7 +393,7 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         let authorization = ExactEvmPayloadAuthorization {
             from: self.signer.address(),
             to: req.pay_to,
-            value: req.amount,
+            value: req.amount.into(),
             valid_after,
             valid_before,
             nonce: FixedBytes(nonce),
@@ -433,7 +406,7 @@ impl<S: Signer + Send + Sync> X402SchemeClient for V2Eip155ExactClient<S> {
         let transfer_with_authorization = TransferWithAuthorization {
             from: authorization.from,
             to: authorization.to,
-            value: authorization.value,
+            value: authorization.value.into(),
             validAfter: U256::from(authorization.valid_after.as_secs()),
             validBefore: U256::from(authorization.valid_before.as_secs()),
             nonce: FixedBytes(nonce),

@@ -42,7 +42,7 @@ impl<'de> Deserialize<'de> for U64String {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TokenAmount(pub U256);
 
 impl Serialize for TokenAmount {
@@ -62,5 +62,17 @@ impl<'de> Deserialize<'de> for TokenAmount {
         let s = String::deserialize(deserializer)?;
         let u256 = U256::from_str_radix(&s, 10).map_err(serde::de::Error::custom)?;
         Ok(TokenAmount(u256))
+    }
+}
+
+impl Into<U256> for TokenAmount {
+    fn into(self) -> U256 {
+        self.0
+    }
+}
+
+impl From<U256> for TokenAmount {
+    fn from(value: U256) -> Self {
+        Self(value)
     }
 }
