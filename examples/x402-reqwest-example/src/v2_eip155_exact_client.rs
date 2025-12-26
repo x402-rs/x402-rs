@@ -5,7 +5,7 @@ use x402_rs::proto::{PaymentRequired, v2};
 use x402_rs::scheme::X402SchemeId;
 use x402_rs::scheme::v2_eip155_exact;
 
-use crate::client::{PaymentCandidate, AcceptedRequest, X402SchemeClient, AcceptedRequestLike};
+use crate::client::{PaymentCandidate, X402SchemeClient, AcceptedRequestLike};
 
 #[derive(Debug)]
 pub struct V2Eip155ExactClient<S> {
@@ -37,11 +37,13 @@ where
     }
 }
 
-struct Accepted {
-
+struct Accepted<'a, S> {
+    payment_required: &'a v2::PaymentRequired,
+    accepts: Vec<v2_eip155_exact::PaymentRequirements>,
+    client: &'a V2Eip155ExactClient<S>,
 }
 
-impl<'a> AcceptedRequestLike<'a> for Accepted {
+impl<'a, S> AcceptedRequestLike<'a> for Accepted<'a, S> {
     fn candidates(&self) -> Vec<PaymentCandidate<'a>> {
         vec![]
     }
@@ -51,7 +53,7 @@ impl<S> X402SchemeClient for V2Eip155ExactClient<S>
 where
     S: Signer + Send + Sync,
 {
-    fn accept<'a>(&'a self, payment_required: &'a PaymentRequired) -> AcceptedRequest<'a> {
+    fn accept<'a>(&'a self, payment_required: &'a PaymentRequired) -> Box<dyn AcceptedRequestLike<'a> + 'a> {
         let payment_required = match payment_required {
             PaymentRequired::V2(payment_required) => payment_required,
             PaymentRequired::V1(_) => {
@@ -64,11 +66,10 @@ where
             .filter_map(|v| v2_eip155_exact::PaymentRequirements::deserialize(v).ok())
             .collect::<Vec<_>>();
         println!("Accepts: {:?}", accepts);
-        // accepts.into_iter().map(|r| {
-        //     PaymentCandidate {
-        //         chain_id: &r.network
-        //     }
-        // }).collect()
-        AcceptedRequest::new(Accepted {})
+        Box::new(Accepted {
+            payment_required,
+            accepts,
+            client: self,
+        })
     }
 }

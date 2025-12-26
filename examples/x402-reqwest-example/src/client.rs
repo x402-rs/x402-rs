@@ -83,7 +83,7 @@ impl ClientSchemes {
         let mut candidates: Vec<PaymentCandidate<'a>> = vec![];
         for scheme_client in self.0.iter() {
             let client = scheme_client.client();
-            client.accept(payment_quote.into());
+            let k = client.accept(payment_quote.into());
         }
     }
 }
@@ -124,14 +124,7 @@ pub trait X402SchemeClient: X402SchemeId + Send + Sync {
     fn accept<'a>(
         &'a self,
         payment_required: &'a proto::PaymentRequired,
-    ) -> AcceptedRequest<'a>;
-}
-
-pub struct AcceptedRequest<'a>(Box<dyn AcceptedRequestLike<'a>>);
-impl <'a> AcceptedRequest<'a> {
-    pub fn new<A: AcceptedRequestLike<'a> + 'static>(accepted_request: A) -> AcceptedRequest<'a> {
-        Self(Box::new(accepted_request))
-    }
+    ) -> Box<dyn AcceptedRequestLike<'a> + 'a>;
 }
 
 pub trait AcceptedRequestLike<'a> {
