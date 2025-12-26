@@ -1,8 +1,8 @@
-use std::str::FromStr;
 use alloy_primitives::U256;
+use std::str::FromStr;
 use x402_rs::chain::ChainId;
-use x402_rs::proto::{v1, v2};
 use x402_rs::proto::client::PaymentCandidateLike;
+use x402_rs::proto::{v1, v2};
 use x402_rs::util::Base64Bytes;
 
 use crate::client::ClientSchemes;
@@ -22,11 +22,21 @@ pub struct PaymentCandidateB<'a> {
 }
 
 impl PaymentCandidateLike for PaymentCandidateB<'_> {
-    fn chain_id(&self) -> &ChainId { &self.chain_id }
-    fn asset(&self) -> &str { self.asset }
-    fn amount(&self) -> U256 { self.amount }
-    fn scheme(&self) -> &str { self.scheme }
-    fn x402_version(&self) -> u8 { self.x402_version }
+    fn chain_id(&self) -> &ChainId {
+        &self.chain_id
+    }
+    fn asset(&self) -> &str {
+        self.asset
+    }
+    fn amount(&self) -> U256 {
+        self.amount
+    }
+    fn scheme(&self) -> &str {
+        self.scheme
+    }
+    fn x402_version(&self) -> u8 {
+        self.x402_version
+    }
 }
 
 impl PaymentRequired {

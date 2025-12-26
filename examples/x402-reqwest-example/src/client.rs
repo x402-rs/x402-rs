@@ -3,11 +3,11 @@ use reqwest::{Client, ClientBuilder, Request, Response, StatusCode};
 use reqwest_middleware as rqm;
 use std::sync::Arc;
 use x402_rs::chain::{ChainId, ChainIdPattern};
+use x402_rs::proto;
 use x402_rs::proto::client::{FirstMatch, PaymentSelector};
-use x402_rs::proto::v2::ResourceInfo;
 use x402_rs::scheme::X402SchemeId;
-use crate::http_transport::PaymentQuote;
-use crate::payment_required::PaymentRequired;
+
+use crate::http_transport::HttpPaymentRequired;
 
 /// The main x402 client that orchestrates scheme clients and selection.
 pub struct X402Client<TSelector> {
@@ -75,8 +75,15 @@ impl ClientSchemes {
         self.0.push(client);
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=&RegisteredSchemeClient> {
+    pub fn iter(&self) -> impl Iterator<Item = &RegisteredSchemeClient> {
         self.0.iter()
+    }
+
+    pub fn candidates<'a>(&'a self, payment_quote: &'a HttpPaymentRequired) {
+        for scheme_client in self.0.iter() {
+            let client = scheme_client.client();
+            client.accept(payment_quote.into());
+        }
     }
 }
 
@@ -108,6 +115,7 @@ impl RegisteredSchemeClient {
 
 #[async_trait::async_trait]
 pub trait X402SchemeClient: X402SchemeId + Send + Sync {
+    fn accept(&self, payment_required: &proto::PaymentRequired);
 }
 
 pub trait ReqwestWithPayments<A, S> {
@@ -223,7 +231,10 @@ where
             return Ok(res);
         }
 
-        let payment_quote = PaymentQuote::from_response(res).await.ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
+        let payment_quote = HttpPaymentRequired::from_response(res)
+            .await
+            .ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
+        let candidates = self.schemes.candidates(&payment_quote);
 
         // // Build candidates from the 402 response
         // let (candidates, _version) = self

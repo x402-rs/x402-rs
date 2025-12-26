@@ -268,3 +268,9 @@ impl PaymentProblem {
         &self.details
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum PaymentRequired {
+    V1(v1::PaymentRequired),
+    V2(v2::PaymentRequired),
+}

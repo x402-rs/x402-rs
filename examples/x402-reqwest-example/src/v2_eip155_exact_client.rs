@@ -1,7 +1,9 @@
 use alloy_signer::Signer;
-use serde_json::Value;
+use serde::Deserialize;
 use x402_rs::proto::v2::ResourceInfo;
+use x402_rs::proto::{PaymentRequired, v2};
 use x402_rs::scheme::X402SchemeId;
+use x402_rs::scheme::v2_eip155_exact;
 
 use crate::client::X402SchemeClient;
 
@@ -34,5 +36,22 @@ where
     }
 }
 
-impl<S> X402SchemeClient for V2Eip155ExactClient<S> where S: Signer + Send + Sync {
+impl<S> X402SchemeClient for V2Eip155ExactClient<S>
+where
+    S: Signer + Send + Sync,
+{
+    fn accept(&self, payment_required: &PaymentRequired) {
+        let payment_required = match payment_required {
+            PaymentRequired::V2(payment_required) => payment_required,
+            PaymentRequired::V1(_) => {
+                todo!("Reject V1 requests for v2 EIP-155 exact scheme")
+            }
+        };
+        let accepts = payment_required
+            .accepts
+            .iter()
+            .filter_map(|v| v2_eip155_exact::PaymentRequirements::deserialize(v).ok())
+            .collect::<Vec<_>>();
+        println!("Accepts: {:?}", accepts);
+    }
 }
