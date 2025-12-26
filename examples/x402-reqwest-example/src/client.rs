@@ -6,6 +6,7 @@ use x402_rs::chain::{ChainId, ChainIdPattern};
 use x402_rs::proto::client::{FirstMatch, PaymentSelector};
 use x402_rs::proto::v2::ResourceInfo;
 use x402_rs::scheme::X402SchemeId;
+use crate::http_transport::PaymentQuote;
 use crate::payment_required::PaymentRequired;
 
 /// The main x402 client that orchestrates scheme clients and selection.
@@ -223,14 +224,7 @@ where
             return Ok(res);
         }
 
-        let payment_required =
-            PaymentRequired::from_response(res)
-                .await
-                .ok_or(X402Error::ParseError(
-                    "No x402 payment information provided".into(),
-                ))?;
-        println!("payment_required {:?}", payment_required);
-        let candidates = payment_required.candidates(&self.schemes);
+        let payment_quote = PaymentQuote::from_response(res).await.ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
 
         // // Build candidates from the 402 response
         // let (candidates, _version) = self

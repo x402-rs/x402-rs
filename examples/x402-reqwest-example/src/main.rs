@@ -1,6 +1,7 @@
 mod client;
 mod v2_eip155_exact_client;
 mod payment_required;
+mod http_transport;
 
 use alloy_signer_local::PrivateKeySigner;
 use dotenvy::dotenv;
