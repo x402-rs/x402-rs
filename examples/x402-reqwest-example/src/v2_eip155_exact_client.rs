@@ -41,8 +41,9 @@ where
     }
 }
 
-struct Accepted {
-    payment_requirements: v2_eip155_exact::PaymentRequirements,
+struct Candidate {
+    requirements_json: serde_json::Value,
+    requirements: v2_eip155_exact::PaymentRequirements,
     chain_id: ChainId,
     asset: String,
     amount: U256,
@@ -51,7 +52,7 @@ struct Accepted {
     pay_to: String,
 }
 
-impl PaymentCandidateLike for Accepted {
+impl PaymentCandidateLike for Candidate {
     fn chain_id(&self) -> &ChainId {
         &self.chain_id
     }
@@ -81,10 +82,7 @@ impl<S> X402SchemeClient for V2Eip155ExactClient<S>
 where
     S: Signer + Send + Sync,
 {
-    fn accept(
-        &self,
-        payment_required: &PaymentRequired,
-    ) -> Vec<Box<dyn PaymentCandidateLike>> {
+    fn accept(&self, payment_required: &PaymentRequired) -> Vec<Box<dyn PaymentCandidateLike>> {
         let payment_required = match payment_required {
             PaymentRequired::V2(payment_required) => payment_required,
             PaymentRequired::V1(_) => {
@@ -94,18 +92,20 @@ where
         payment_required
             .accepts
             .iter()
-            .filter_map(|v| v2_eip155_exact::PaymentRequirements::deserialize(v).ok())
-            .map(|requirements| {
-                let accepted = Accepted {
+            .filter_map(|v| {
+                let requirements = v2_eip155_exact::PaymentRequirements::deserialize(v).ok()?;
+                let candidate = Candidate {
                     chain_id: requirements.network.clone(),
                     asset: requirements.asset.to_string(),
                     amount: requirements.amount,
                     scheme: requirements.scheme.to_string(),
                     x402_version: self.x402_version(),
                     pay_to: requirements.pay_to.to_string(),
-                    payment_requirements: requirements,
+                    requirements_json: v.clone(),
+                    requirements,
                 };
-                Box::new(accepted) as Box<dyn PaymentCandidateLike>
+                let boxed = Box::new(candidate) as Box<dyn PaymentCandidateLike>;
+                Some(boxed)
             })
             .collect::<Vec<_>>()
     }

@@ -79,7 +79,10 @@ impl ClientSchemes {
         self.0.iter()
     }
 
-    pub fn candidates(&self, payment_quote: &HttpPaymentRequired) -> Vec<Box<dyn PaymentCandidateLike>> {
+    pub fn candidates(
+        &self,
+        payment_quote: &HttpPaymentRequired,
+    ) -> Vec<Box<dyn PaymentCandidateLike>> {
         let mut candidates = vec![];
         for scheme_client in self.0.iter() {
             let client = scheme_client.client();
@@ -253,7 +256,10 @@ where
             for (i, c) in candidates.iter().enumerate() {
                 println!(
                     "  [{}] chain={}, asset={}, amount={}",
-                    i, c.chain_id(), c.asset(), c.amount()
+                    i,
+                    c.chain_id(),
+                    c.asset(),
+                    c.amount()
                 );
             }
 
