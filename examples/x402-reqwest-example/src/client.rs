@@ -4,6 +4,7 @@ use reqwest_middleware as rqm;
 use std::sync::Arc;
 use x402_rs::chain::{ChainId, ChainIdPattern};
 use x402_rs::proto::client::{FirstMatch, PaymentSelector};
+use x402_rs::proto::v2::ResourceInfo;
 use x402_rs::scheme::X402SchemeId;
 use crate::payment_required::PaymentRequired;
 
@@ -98,10 +99,16 @@ impl RegisteredSchemeClient {
             && self.client.namespace() == chain_id.namespace()
             && self.pattern.matches(chain_id)
     }
+
+    pub fn client(&self) -> &dyn X402SchemeClient {
+        self.client.as_ref()
+    }
 }
 
 #[async_trait::async_trait]
-pub trait X402SchemeClient: X402SchemeId + Send + Sync {}
+pub trait X402SchemeClient: X402SchemeId + Send + Sync {
+    fn build_candidate(&self, raw: &serde_json::Value, resource: &ResourceInfo);
+}
 
 pub trait ReqwestWithPayments<A, S> {
     fn with_payments(self, x402_client: X402Client<S>) -> ReqwestWithPaymentsBuilder<A, S>;

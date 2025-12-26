@@ -1,4 +1,6 @@
 use alloy_signer::Signer;
+use serde_json::Value;
+use x402_rs::proto::v2::ResourceInfo;
 use x402_rs::scheme::X402SchemeId;
 
 use crate::client::X402SchemeClient;
@@ -32,4 +34,8 @@ where
     }
 }
 
-impl<S> X402SchemeClient for V2Eip155ExactClient<S> where S: Signer + Send + Sync {}
+impl<S> X402SchemeClient for V2Eip155ExactClient<S> where S: Signer + Send + Sync {
+    fn build_candidate(&self, raw: &Value, resource: &ResourceInfo) {
+        todo!("X402SchemeClient for V2Eip155ExactClient - build candidate")
+    }
+}
