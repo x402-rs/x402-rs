@@ -2,7 +2,6 @@ use http::{Extensions, HeaderMap};
 use reqwest::{Client, ClientBuilder, Request, Response, StatusCode};
 use reqwest_middleware as rqm;
 use std::sync::Arc;
-use x402_rs::chain::ChainIdPattern;
 use x402_rs::proto::client::{FirstMatch, PaymentCandidate, PaymentSelector, X402Error, X402SchemeClient};
 
 use crate::http_transport::{HttpPaymentRequired, HttpTransport};
@@ -43,9 +42,8 @@ impl<TSelector> X402Client<TSelector> {
     /// let client = X402Client::new()
     ///     .register("eip155:{1,8453,84532}".parse::<ChainIdPattern>().unwrap(), V2Eip155ExactClient::new(signer));
     /// ```
-    pub fn register<P, S>(mut self, pattern: P, scheme: S) -> Self
+    pub fn register<S>(mut self, scheme: S) -> Self
     where
-        P: Into<ChainIdPattern>,
         S: X402SchemeClient + 'static,
     {
         self.schemes.push(scheme);
