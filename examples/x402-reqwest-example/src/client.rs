@@ -4,7 +4,7 @@ use reqwest_middleware as rqm;
 use std::sync::Arc;
 use x402_rs::chain::{ChainId, ChainIdPattern};
 use x402_rs::proto;
-use x402_rs::proto::client::{FirstMatch, PaymentCandidateLike, PaymentSelector};
+use x402_rs::proto::client::{FirstMatch, PaymentCandidate, PaymentSelector};
 use x402_rs::scheme::X402SchemeId;
 
 use crate::http_transport::HttpPaymentRequired;
@@ -82,7 +82,7 @@ impl ClientSchemes {
     pub fn candidates(
         &self,
         payment_quote: &HttpPaymentRequired,
-    ) -> Vec<Box<dyn PaymentCandidateLike>> {
+    ) -> Vec<PaymentCandidate> {
         let mut candidates = vec![];
         for scheme_client in self.0.iter() {
             let client = scheme_client.client();
@@ -92,11 +92,6 @@ impl ClientSchemes {
         }
         candidates
     }
-}
-
-#[derive(Debug)]
-pub struct PaymentCandidate<'a> {
-    pub chain_id: &'a ChainId,
 }
 
 /// Internal wrapper that pairs a scheme client with its chain pattern.
@@ -130,7 +125,7 @@ pub trait X402SchemeClient: X402SchemeId + Send + Sync {
     fn accept(
         &self,
         payment_required: &proto::PaymentRequired,
-    ) -> Vec<Box<dyn PaymentCandidateLike>>;
+    ) -> Vec<PaymentCandidate>;
 }
 
 pub trait ReqwestWithPayments<A, S> {
@@ -257,9 +252,9 @@ where
                 println!(
                     "  [{}] chain={}, asset={}, amount={}",
                     i,
-                    c.chain_id(),
-                    c.asset(),
-                    c.amount()
+                    c.chain_id,
+                    c.asset,
+                    c.amount
                 );
             }
 
@@ -269,7 +264,7 @@ where
                 .select(&candidates)
                 .ok_or(X402Error::NoMatchingPaymentOption)?;
 
-            println!("selected {:?} {:?}", selected.chain_id(), selected.amount());
+            println!("selected {:?} {:?}", selected.chain_id, selected.amount);
         }
 
         // // Build candidates from the 402 response

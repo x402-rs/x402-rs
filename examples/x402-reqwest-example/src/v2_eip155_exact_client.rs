@@ -1,15 +1,14 @@
 use alloy_primitives::{Address, U256};
 use alloy_signer::Signer;
+use async_trait::async_trait;
 use serde::Deserialize;
 use x402_rs::chain::ChainId;
-use x402_rs::chain::eip155::ChecksummedAddress;
-use x402_rs::proto::client::PaymentCandidateLike;
-use x402_rs::proto::v2::ResourceInfo;
-use x402_rs::proto::{PaymentRequired, v2};
+use x402_rs::proto::{PaymentRequired};
+use x402_rs::proto::client::{ PaymentCandidate};
 use x402_rs::scheme::X402SchemeId;
 use x402_rs::scheme::v2_eip155_exact;
-
-use crate::client::{PaymentCandidate, X402SchemeClient};
+use x402_rs::util::Base64Bytes;
+use crate::client::{ X402SchemeClient};
 
 #[derive(Debug)]
 pub struct V2Eip155ExactClient<S> {
@@ -42,7 +41,6 @@ where
 }
 
 struct Candidate {
-    requirements_json: serde_json::Value,
     requirements: v2_eip155_exact::PaymentRequirements,
     chain_id: ChainId,
     asset: String,
@@ -52,37 +50,11 @@ struct Candidate {
     pay_to: String,
 }
 
-impl PaymentCandidateLike for Candidate {
-    fn chain_id(&self) -> &ChainId {
-        &self.chain_id
-    }
-
-    fn asset(&self) -> &str {
-        &self.asset
-    }
-
-    fn amount(&self) -> U256 {
-        self.amount
-    }
-
-    fn scheme(&self) -> &str {
-        &self.scheme
-    }
-
-    fn x402_version(&self) -> u8 {
-        self.x402_version
-    }
-
-    fn pay_to(&self) -> &str {
-        &self.pay_to
-    }
-}
-
 impl<S> X402SchemeClient for V2Eip155ExactClient<S>
 where
     S: Signer + Send + Sync,
 {
-    fn accept(&self, payment_required: &PaymentRequired) -> Vec<Box<dyn PaymentCandidateLike>> {
+    fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
             PaymentRequired::V2(payment_required) => payment_required,
             PaymentRequired::V1(_) => {
@@ -94,18 +66,15 @@ where
             .iter()
             .filter_map(|v| {
                 let requirements = v2_eip155_exact::PaymentRequirements::deserialize(v).ok()?;
-                let candidate = Candidate {
+                let candidate = PaymentCandidate {
                     chain_id: requirements.network.clone(),
                     asset: requirements.asset.to_string(),
                     amount: requirements.amount,
-                    scheme: requirements.scheme.to_string(),
+                    scheme: self.scheme().to_string(),
                     x402_version: self.x402_version(),
                     pay_to: requirements.pay_to.to_string(),
-                    requirements_json: v.clone(),
-                    requirements,
                 };
-                let boxed = Box::new(candidate) as Box<dyn PaymentCandidateLike>;
-                Some(boxed)
+                Some(candidate)
             })
             .collect::<Vec<_>>()
     }
