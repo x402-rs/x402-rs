@@ -82,6 +82,22 @@ impl TryFrom<ChainId> for Eip155ChainReference {
     }
 }
 
+impl TryFrom<&ChainId> for Eip155ChainReference {
+    type Error = Eip155ChainReferenceFormatError;
+
+    fn try_from(value: &ChainId) -> Result<Self, Self::Error> {
+        if value.namespace != EIP155_NAMESPACE {
+            return Err(Eip155ChainReferenceFormatError::InvalidNamespace(
+                value.namespace.clone(),
+            ));
+        }
+        let chain_id: u64 = value.reference.parse().map_err(|_| {
+            Eip155ChainReferenceFormatError::InvalidReference(value.reference.clone())
+        })?;
+        Ok(Eip155ChainReference(chain_id))
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Eip155ChainReferenceFormatError {
     #[error("Invalid namespace {0}, expected eip155")]

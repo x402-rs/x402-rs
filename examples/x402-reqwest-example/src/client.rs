@@ -1,10 +1,11 @@
+use std::error::Error;
 use http::Extensions;
 use reqwest::{Client, ClientBuilder, Request, Response, StatusCode};
 use reqwest_middleware as rqm;
 use std::sync::Arc;
 use x402_rs::chain::{ChainId, ChainIdPattern};
 use x402_rs::proto;
-use x402_rs::proto::client::{FirstMatch, PaymentCandidate, PaymentSelector};
+use x402_rs::proto::client::{FirstMatch, PaymentCandidate, PaymentSelector, X402Error};
 use x402_rs::scheme::X402SchemeId;
 
 use crate::http_transport::HttpPaymentRequired;
@@ -64,6 +65,38 @@ impl<TSelector> X402Client<TSelector> {
             selector,
             schemes: self.schemes,
         }
+    }
+}
+
+impl<TSelector> X402Client<TSelector> where TSelector: PaymentSelector {
+    pub async fn make_payment_header(&self, res: Response) -> Result<(), X402Error> {
+        let payment_quote = HttpPaymentRequired::from_response(res)
+                .await
+                .ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
+            let candidates = self.schemes.candidates(&payment_quote);
+
+            println!("Found {} candidates", candidates.len());
+            for (i, c) in candidates.iter().enumerate() {
+                println!(
+                    "  [{}] chain={}, asset={}, amount={}",
+                    i,
+                    c.chain_id,
+                    c.asset,
+                    c.amount
+                );
+            }
+
+            // Select the best candidate
+            let selected = self
+                .selector
+                .select(&candidates)
+                .ok_or(X402Error::NoMatchingPaymentOption)?;
+
+            println!("selected {:?} {:?}", selected.chain_id, selected.amount);
+            let s = selected.sign().await;
+            println!("signed {:?}", s);
+
+        Ok(())
     }
 }
 
@@ -200,30 +233,6 @@ where
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum X402Error {
-    #[error("No matching payment option found")]
-    NoMatchingPaymentOption,
-
-    #[error("Request is not cloneable (streaming body?)")]
-    RequestNotCloneable,
-
-    #[error("Failed to parse 402 response: {0}")]
-    ParseError(String),
-
-    #[error("Failed to sign payment: {0}")]
-    SigningError(String),
-
-    #[error("JSON error: {0}")]
-    JsonError(#[from] serde_json::Error),
-}
-
-impl From<X402Error> for rqm::Error {
-    fn from(error: X402Error) -> Self {
-        rqm::Error::Middleware(error.into())
-    }
-}
-
 #[async_trait::async_trait]
 impl<TSelector> rqm::Middleware for X402Client<TSelector>
 where
@@ -241,31 +250,7 @@ where
             return Ok(res);
         }
 
-        {
-            let payment_quote = HttpPaymentRequired::from_response(res)
-                .await
-                .ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
-            let candidates = self.schemes.candidates(&payment_quote);
-
-            println!("Found {} candidates", candidates.len());
-            for (i, c) in candidates.iter().enumerate() {
-                println!(
-                    "  [{}] chain={}, asset={}, amount={}",
-                    i,
-                    c.chain_id,
-                    c.asset,
-                    c.amount
-                );
-            }
-
-            // Select the best candidate
-            let selected = self
-                .selector
-                .select(&candidates)
-                .ok_or(X402Error::NoMatchingPaymentOption)?;
-
-            println!("selected {:?} {:?}", selected.chain_id, selected.amount);
-        }
+        self.make_payment_header(res).await.map_err(|e| rqm::Error::Middleware(e.into()))?;
 
         // // Build candidates from the 402 response
         // let (candidates, _version) = self
@@ -301,7 +286,7 @@ where
         // println!("Payment header length: {} bytes", payment_header.len());
         //
         // // Retry with payment
-        let mut retry = retry_req.ok_or(X402Error::RequestNotCloneable)?;
+        let mut retry = retry_req.ok_or(rqm::Error::Middleware(X402Error::RequestNotCloneable.into()))?;
         // retry.headers_mut().insert(
         //     "PAYMENT-SIGNATURE",
         //     payment_header

@@ -1,4 +1,5 @@
 use alloy_primitives::U256;
+use async_trait::async_trait;
 use crate::chain::ChainId;
 
 pub struct PaymentCandidate {
@@ -8,6 +9,37 @@ pub struct PaymentCandidate {
     pub scheme: String,
     pub x402_version: u8,
     pub pay_to: String,
+    pub signer: Box<dyn PaymentCandidateSigner + Send + Sync>,
+}
+
+impl PaymentCandidate {
+    pub async fn sign(&self) -> Result<String, X402Error> {
+        self.signer.sign_payment().await
+    }
+}
+
+
+#[async_trait]
+pub trait PaymentCandidateSigner {
+    async fn sign_payment(&self) -> Result<String, X402Error>;
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum X402Error {
+    #[error("No matching payment option found")]
+    NoMatchingPaymentOption,
+
+    #[error("Request is not cloneable (streaming body?)")]
+    RequestNotCloneable,
+
+    #[error("Failed to parse 402 response: {0}")]
+    ParseError(String),
+
+    #[error("Failed to sign payment: {0}")]
+    SigningError(String),
+
+    #[error("JSON error: {0}")]
+    JsonError(#[from] serde_json::Error),
 }
 
 // ============================================================================
