@@ -1,6 +1,6 @@
-use std::fmt::{Display, Formatter};
 use alloy_primitives::{Address, U256, hex};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

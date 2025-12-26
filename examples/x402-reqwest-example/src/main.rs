@@ -18,9 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Signer address: {:?}", signer.address());
 
     // Register the EVM client with a wildcard pattern to handle all EIP-155 chains
-    let x402_client = X402Client::new().register(
-        V2Eip155ExactClient::from(signer),
-    );
+    let x402_client = X402Client::new().register(V2Eip155ExactClient::from(signer));
     let http_client = Client::new().with_payments(x402_client).build();
 
     let response = http_client

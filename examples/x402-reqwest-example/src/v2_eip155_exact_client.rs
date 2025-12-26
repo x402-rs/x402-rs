@@ -5,7 +5,9 @@ use async_trait::async_trait;
 use rand::{Rng, rng};
 use serde::{Deserialize, Serialize};
 use x402_rs::chain::eip155::Eip155ChainReference;
-use x402_rs::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient};
+use x402_rs::proto::client::{
+    PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
+};
 use x402_rs::proto::v2::ResourceInfo;
 use x402_rs::proto::{PaymentRequired, v2};
 use x402_rs::scheme::X402SchemeId;
