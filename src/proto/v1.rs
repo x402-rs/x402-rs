@@ -289,3 +289,11 @@ pub struct PaymentRequirements<TScheme, TAmount, TAddress, TExtra> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra: Option<TExtra>,
 }
+
+/// Structured representation of a V1 Payment-Required body.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentRequired {
+    pub x402_version: X402Version1,
+    pub accepts: Vec<serde_json::Value>,
+}

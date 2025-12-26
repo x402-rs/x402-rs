@@ -3,6 +3,7 @@
 //! This module contains the experimental implementation of the x402 client
 //! with support for both V1 and V2 protocols, and a flexible scheme-based architecture.
 
+use crate::http_transport::PaymentRequired;
 use alloy_primitives::{FixedBytes, U256};
 use alloy_signer::Signer;
 use alloy_sol_types::{SolStruct, eip712_domain, sol};
@@ -193,7 +194,7 @@ pub trait X402SchemeClient: X402SchemeId + Send + Sync {
 // ============================================================================
 
 /// Internal wrapper that pairs a scheme client with its chain pattern.
-struct RegisteredSchemeClient {
+pub struct RegisteredSchemeClient {
     pattern: ChainIdPattern,
     client: Arc<dyn X402SchemeClient>,
 }
@@ -206,7 +207,7 @@ impl RegisteredSchemeClient {
     /// 2. scheme name must match
     /// 3. namespace from X402SchemeId must match chain_id namespace
     /// 4. pattern must match the chain_id (for reference matching)
-    fn matches(&self, version: u8, scheme: &str, chain_id: &ChainId) -> bool {
+    pub fn matches(&self, version: u8, scheme: &str, chain_id: &ChainId) -> bool {
         self.client.x402_version() == version
             && self.client.scheme() == scheme
             && self.client.namespace() == chain_id.namespace()
@@ -231,15 +232,11 @@ impl<S> V2Eip155ExactClient<S> {
     }
 }
 
+// TODO Macro for X402SchemeId impl?
 impl<S> X402SchemeId for V2Eip155ExactClient<S> {
-    fn x402_version(&self) -> u8 {
-        2
-    }
-
     fn namespace(&self) -> &str {
         "eip155"
     }
-
     fn scheme(&self) -> &str {
         "exact"
     }
@@ -418,73 +415,73 @@ impl<TSelector> X402Client<TSelector> {
 }
 
 impl<TSelector> X402Client<TSelector> {
-    /// Parse a 402 response and build candidates from all registered scheme clients.
-    fn build_candidates(
-        &self,
-        response: &Response,
-    ) -> Result<(Vec<PaymentCandidate>, u8), X402Error> {
-        // Try V2 first (header-based)
-        if let Some(header) = response.headers().get("Payment-Required") {
-            let bytes = Base64Bytes::from(header.as_bytes())
-                .decode()
-                .map_err(|e| X402Error::ParseError(format!("Base64 decode failed: {e}")))?;
+    // Parse a 402 response and build candidates from all registered scheme clients.
+    // async fn build_candidates(
+    //     &self,
+    //     response: Response,
+    // ) -> Result<(Vec<PaymentCandidate>, u8), X402Error> {
+    //     // Try V2 first (header-based)
+    //     if let Some(header) = response.headers().get("Payment-Required") {
+    //         let bytes = Base64Bytes::from(header.as_bytes())
+    //             .decode()
+    //             .map_err(|e| X402Error::ParseError(format!("Base64 decode failed: {e}")))?;
+    //
+    //         // Parse directly into typed PaymentRequiredV2 struct
+    //         let payment_required: v2::PaymentRequired =
+    //             serde_json::from_slice(&bytes).map_err(|e| {
+    //                 X402Error::ParseError(format!("Failed to parse PaymentRequiredV2: {e}"))
+    //             })?;
+    //
+    //         // Version is already validated by the X402Version2 deserializer
+    //         return self.build_candidates_from_accepts(
+    //             &payment_required.accepts,
+    //             payment_required.x402_version.into(),
+    //             payment_required.resource,
+    //         );
+    //     }
+    //
+    //     // TODO: V1 fallback (body-based) - would need to consume response body
+    //     // For now, return error
+    //     Err(X402Error::ParseError(
+    //         "V1 protocol not yet implemented".into(),
+    //     ))
+    // }
 
-            // Parse directly into typed PaymentRequiredV2 struct
-            let payment_required: v2::PaymentRequired =
-                serde_json::from_slice(&bytes).map_err(|e| {
-                    X402Error::ParseError(format!("Failed to parse PaymentRequiredV2: {e}"))
-                })?;
-
-            // Version is already validated by the X402Version2 deserializer
-            return self.build_candidates_from_accepts(
-                &payment_required.accepts,
-                payment_required.x402_version.into(),
-                payment_required.resource,
-            );
-        }
-
-        // TODO: V1 fallback (body-based) - would need to consume response body
-        // For now, return error
-        Err(X402Error::ParseError(
-            "V1 protocol not yet implemented".into(),
-        ))
-    }
-
-    fn build_candidates_from_accepts(
-        &self,
-        accepts: &[serde_json::Value],
-        version: u8,
-        resource: v2::ResourceInfo,
-    ) -> Result<(Vec<PaymentCandidate>, u8), X402Error> {
-        let mut candidates = Vec::new();
-
-        for raw in accepts {
-            let scheme = raw.get("scheme").and_then(|v| v.as_str()).unwrap_or("");
-            let network = raw.get("network").and_then(|v| v.as_str()).unwrap_or("");
-
-            // Parse network string into ChainId
-            let chain_id = match ChainId::from_str(network) {
-                Ok(id) => id,
-                Err(_) => continue, // Skip invalid network formats
-            };
-
-            // Find matching registered client
-            for registered in self.schemes.iter() {
-                if registered.matches(version, scheme, &chain_id) {
-                    if let Ok(candidate) = registered.client.to_candidate(
-                        raw,
-                        registered.client.clone(),
-                        resource.clone(),
-                    ) {
-                        candidates.push(candidate);
-                        break; // First matching client wins for this entry
-                    }
-                }
-            }
-        }
-
-        Ok((candidates, version))
-    }
+    // fn build_candidates_from_accepts(
+    //     &self,
+    //     accepts: &[serde_json::Value],
+    //     version: u8,
+    //     resource: v2::ResourceInfo,
+    // ) -> Result<(Vec<PaymentCandidate>, u8), X402Error> {
+    //     let mut candidates = Vec::new();
+    //
+    //     for raw in accepts {
+    //         let scheme = raw.get("scheme").and_then(|v| v.as_str()).unwrap_or("");
+    //         let network = raw.get("network").and_then(|v| v.as_str()).unwrap_or("");
+    //
+    //         // Parse network string into ChainId
+    //         let chain_id = match ChainId::from_str(network) {
+    //             Ok(id) => id,
+    //             Err(_) => continue, // Skip invalid network formats
+    //         };
+    //
+    //         // Find matching registered client
+    //         for registered in self.schemes.iter() {
+    //             if registered.matches(version, scheme, &chain_id) {
+    //                 if let Ok(candidate) = registered.client.to_candidate(
+    //                     raw,
+    //                     registered.client.clone(),
+    //                     resource.clone(),
+    //                 ) {
+    //                     candidates.push(candidate);
+    //                     break; // First matching client wins for this entry
+    //                 }
+    //             }
+    //         }
+    //     }
+    //
+    //     Ok((candidates, version))
+    // }
 }
 
 // ============================================================================
@@ -504,54 +501,60 @@ where
     ) -> rqm::Result<Response> {
         let retry_req = req.try_clone();
         let res = next.clone().run(req, extensions).await?;
-
         if res.status() != StatusCode::PAYMENT_REQUIRED {
             return Ok(res);
         }
 
-        println!("Received 402 Payment Required");
+        let payment_required =
+            PaymentRequired::from_response(res)
+                .await
+                .ok_or(X402Error::ParseError(
+                    "No x402 payment information provided".into(),
+                ))?;
+        println!("payment_required {:?}", payment_required);
+        let candidates = payment_required.candidates(&self.schemes);
 
-        // Build candidates from the 402 response
-        let (candidates, _version) = self
-            .build_candidates(&res)
-            .map_err(Into::<rqm::Error>::into)?;
-
-        println!("Found {} candidates", candidates.len());
-        for (i, c) in candidates.iter().enumerate() {
-            println!(
-                "  [{}] chain={}, asset={}, amount={}",
-                i, c.chain_id, c.asset, c.amount
-            );
-        }
-
-        // Select the best candidate
-        let selected = self
-            .selector
-            .select(&candidates)
-            .ok_or(X402Error::NoMatchingPaymentOption)?;
-
-        println!(
-            "Selected candidate: chain={}, amount={}",
-            selected.chain_id, selected.amount
-        );
-
-        // Sign the payment using the client reference stored in the candidate
-        let payment_header = selected
-            .client
-            .sign_payment(selected)
-            .await
-            .map_err(Into::<rqm::Error>::into)?;
-
-        println!("Payment header length: {} bytes", payment_header.len());
-
-        // Retry with payment
+        // // Build candidates from the 402 response
+        // let (candidates, _version) = self
+        //     .build_candidates(res).await
+        //     .map_err(Into::<rqm::Error>::into)?;
+        //
+        // println!("Found {} candidates", candidates.len());
+        // for (i, c) in candidates.iter().enumerate() {
+        //     println!(
+        //         "  [{}] chain={}, asset={}, amount={}",
+        //         i, c.chain_id, c.asset, c.amount
+        //     );
+        // }
+        //
+        // // Select the best candidate
+        // let selected = self
+        //     .selector
+        //     .select(&candidates)
+        //     .ok_or(X402Error::NoMatchingPaymentOption)?;
+        //
+        // println!(
+        //     "Selected candidate: chain={}, amount={}",
+        //     selected.chain_id, selected.amount
+        // );
+        //
+        // // Sign the payment using the client reference stored in the candidate
+        // let payment_header = selected
+        //     .client
+        //     .sign_payment(selected)
+        //     .await
+        //     .map_err(Into::<rqm::Error>::into)?;
+        //
+        // println!("Payment header length: {} bytes", payment_header.len());
+        //
+        // // Retry with payment
         let mut retry = retry_req.ok_or(X402Error::RequestNotCloneable)?;
-        retry.headers_mut().insert(
-            "PAYMENT-SIGNATURE",
-            payment_header
-                .parse()
-                .map_err(|e| X402Error::SigningError(format!("{e}")))?,
-        );
+        // retry.headers_mut().insert(
+        //     "PAYMENT-SIGNATURE",
+        //     payment_header
+        //         .parse()
+        //         .map_err(|e| X402Error::SigningError(format!("{e}")))?,
+        // );
 
         next.run(retry, extensions).await
     }

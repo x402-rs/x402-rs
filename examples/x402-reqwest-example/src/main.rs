@@ -1,3 +1,4 @@
+mod http_transport;
 mod x402_req;
 
 use alloy_signer_local::PrivateKeySigner;
