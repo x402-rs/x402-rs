@@ -80,11 +80,17 @@ impl ClientSchemes {
     }
 
     pub fn candidates<'a>(&'a self, payment_quote: &'a HttpPaymentRequired) {
+        let mut candidates: Vec<PaymentCandidate<'a>> = vec![];
         for scheme_client in self.0.iter() {
             let client = scheme_client.client();
             client.accept(payment_quote.into());
         }
     }
+}
+
+#[derive(Debug)]
+pub struct PaymentCandidate<'a> {
+    pub chain_id: &'a ChainId,
 }
 
 /// Internal wrapper that pairs a scheme client with its chain pattern.
@@ -115,7 +121,21 @@ impl RegisteredSchemeClient {
 
 #[async_trait::async_trait]
 pub trait X402SchemeClient: X402SchemeId + Send + Sync {
-    fn accept(&self, payment_required: &proto::PaymentRequired);
+    fn accept<'a>(
+        &'a self,
+        payment_required: &'a proto::PaymentRequired,
+    ) -> AcceptedRequest<'a>;
+}
+
+pub struct AcceptedRequest<'a>(Box<dyn AcceptedRequestLike<'a>>);
+impl <'a> AcceptedRequest<'a> {
+    pub fn new<A: AcceptedRequestLike<'a> + 'static>(accepted_request: A) -> AcceptedRequest<'a> {
+        Self(Box::new(accepted_request))
+    }
+}
+
+pub trait AcceptedRequestLike<'a> {
+    fn candidates(&self) -> Vec<PaymentCandidate<'a>>;
 }
 
 pub trait ReqwestWithPayments<A, S> {
