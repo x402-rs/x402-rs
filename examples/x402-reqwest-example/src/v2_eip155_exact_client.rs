@@ -42,6 +42,7 @@ where
 }
 
 struct Accepted {
+    payment_requirements: v2_eip155_exact::PaymentRequirements,
     chain_id: ChainId,
     asset: String,
     amount: U256,
@@ -96,12 +97,13 @@ where
             .filter_map(|v| v2_eip155_exact::PaymentRequirements::deserialize(v).ok())
             .map(|requirements| {
                 let accepted = Accepted {
-                    chain_id: requirements.network,
+                    chain_id: requirements.network.clone(),
                     asset: requirements.asset.to_string(),
                     amount: requirements.amount,
                     scheme: requirements.scheme.to_string(),
                     x402_version: self.x402_version(),
                     pay_to: requirements.pay_to.to_string(),
+                    payment_requirements: requirements,
                 };
                 Box::new(accepted) as Box<dyn PaymentCandidateLike>
             })
