@@ -20,6 +20,34 @@ pub trait PaymentCandidateLike {
 
     /// Get the x402 protocol version for this payment candidate
     fn x402_version(&self) -> u8;
+
+    fn pay_to(&self) -> &str;
+}
+
+impl PaymentCandidateLike for Box<dyn PaymentCandidateLike> {
+    fn chain_id(&self) -> &ChainId {
+        self.as_ref().chain_id()
+    }
+
+    fn asset(&self) -> &str {
+        self.as_ref().asset()
+    }
+
+    fn amount(&self) -> U256 {
+        self.as_ref().amount()
+    }
+
+    fn scheme(&self) -> &str {
+        self.as_ref().scheme()
+    }
+
+    fn x402_version(&self) -> u8 {
+        self.as_ref().x402_version()
+    }
+
+    fn pay_to(&self) -> &str {
+        self.as_ref().pay_to()
+    }
 }
 
 // ============================================================================

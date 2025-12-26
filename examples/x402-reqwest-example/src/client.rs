@@ -4,7 +4,7 @@ use reqwest_middleware as rqm;
 use std::sync::Arc;
 use x402_rs::chain::{ChainId, ChainIdPattern};
 use x402_rs::proto;
-use x402_rs::proto::client::{FirstMatch, PaymentSelector};
+use x402_rs::proto::client::{FirstMatch, PaymentCandidateLike, PaymentSelector};
 use x402_rs::scheme::X402SchemeId;
 
 use crate::http_transport::HttpPaymentRequired;
@@ -79,12 +79,15 @@ impl ClientSchemes {
         self.0.iter()
     }
 
-    pub fn candidates<'a>(&'a self, payment_quote: &'a HttpPaymentRequired) {
-        let mut candidates: Vec<PaymentCandidate<'a>> = vec![];
+    pub fn candidates(&self, payment_quote: &HttpPaymentRequired) -> Vec<Box<dyn PaymentCandidateLike>> {
+        let mut candidates = vec![];
         for scheme_client in self.0.iter() {
             let client = scheme_client.client();
-            let k = client.accept(payment_quote.into());
+            let req = payment_quote.as_payment_required();
+            let accepted = client.accept(req);
+            candidates.extend(accepted);
         }
+        candidates
     }
 }
 
@@ -121,14 +124,10 @@ impl RegisteredSchemeClient {
 
 #[async_trait::async_trait]
 pub trait X402SchemeClient: X402SchemeId + Send + Sync {
-    fn accept<'a>(
-        &'a self,
-        payment_required: &'a proto::PaymentRequired,
-    ) -> Box<dyn AcceptedRequestLike<'a> + 'a>;
-}
-
-pub trait AcceptedRequestLike<'a> {
-    fn candidates(&self) -> Vec<PaymentCandidate<'a>>;
+    fn accept(
+        &self,
+        payment_required: &proto::PaymentRequired,
+    ) -> Vec<Box<dyn PaymentCandidateLike>>;
 }
 
 pub trait ReqwestWithPayments<A, S> {
@@ -230,7 +229,7 @@ impl From<X402Error> for rqm::Error {
 #[async_trait::async_trait]
 impl<TSelector> rqm::Middleware for X402Client<TSelector>
 where
-    TSelector: Send + Sync + 'static,
+    TSelector: PaymentSelector + Send + Sync + 'static,
 {
     async fn handle(
         &self,
@@ -244,10 +243,28 @@ where
             return Ok(res);
         }
 
-        let payment_quote = HttpPaymentRequired::from_response(res)
-            .await
-            .ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
-        let candidates = self.schemes.candidates(&payment_quote);
+        {
+            let payment_quote = HttpPaymentRequired::from_response(res)
+                .await
+                .ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
+            let candidates = self.schemes.candidates(&payment_quote);
+
+            println!("Found {} candidates", candidates.len());
+            for (i, c) in candidates.iter().enumerate() {
+                println!(
+                    "  [{}] chain={}, asset={}, amount={}",
+                    i, c.chain_id(), c.asset(), c.amount()
+                );
+            }
+
+            // Select the best candidate
+            let selected = self
+                .selector
+                .select(&candidates)
+                .ok_or(X402Error::NoMatchingPaymentOption)?;
+
+            println!("selected {:?} {:?}", selected.chain_id(), selected.amount());
+        }
 
         // // Build candidates from the 402 response
         // let (candidates, _version) = self

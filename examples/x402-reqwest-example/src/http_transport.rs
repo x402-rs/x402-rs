@@ -36,21 +36,8 @@ impl HttpPaymentRequired {
         }
         None
     }
-}
 
-impl Into<proto::PaymentRequired> for HttpPaymentRequired {
-    fn into(self) -> proto::PaymentRequired {
-        match self {
-            HttpPaymentRequired::V1 { body } => body,
-            HttpPaymentRequired::V2 {
-                payment_required_header,
-            } => payment_required_header,
-        }
-    }
-}
-
-impl<'a> Into<&'a proto::PaymentRequired> for &'a HttpPaymentRequired {
-    fn into(self) -> &'a proto::PaymentRequired {
+    pub fn as_payment_required(&self) -> &proto::PaymentRequired {
         match self {
             HttpPaymentRequired::V1 { body } => body,
             HttpPaymentRequired::V2 {

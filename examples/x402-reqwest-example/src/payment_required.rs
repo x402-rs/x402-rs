@@ -13,32 +13,6 @@ pub enum PaymentRequired {
     V2(v2::PaymentRequired),
 }
 
-pub struct PaymentCandidateB<'a> {
-    chain_id: ChainId,
-    asset: &'a str,
-    amount: U256,
-    scheme: &'a str,
-    x402_version: u8,
-}
-
-impl PaymentCandidateLike for PaymentCandidateB<'_> {
-    fn chain_id(&self) -> &ChainId {
-        &self.chain_id
-    }
-    fn asset(&self) -> &str {
-        self.asset
-    }
-    fn amount(&self) -> U256 {
-        self.amount
-    }
-    fn scheme(&self) -> &str {
-        self.scheme
-    }
-    fn x402_version(&self) -> u8 {
-        self.x402_version
-    }
-}
-
 impl PaymentRequired {
     pub async fn from_response(response: reqwest::Response) -> Option<Self> {
         let headers = response.headers();
