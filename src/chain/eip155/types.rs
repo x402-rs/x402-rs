@@ -40,9 +40,9 @@ impl<'de> Deserialize<'de> for ChecksummedAddress {
     }
 }
 
-impl Into<Address> for ChecksummedAddress {
-    fn into(self) -> Address {
-        self.0
+impl From<ChecksummedAddress> for Address {
+    fn from(value: ChecksummedAddress) -> Self {
+        value.0
     }
 }
 
@@ -82,9 +82,9 @@ impl<'de> Deserialize<'de> for TokenAmount {
     }
 }
 
-impl Into<U256> for TokenAmount {
-    fn into(self) -> U256 {
-        self.0
+impl From<TokenAmount> for U256 {
+    fn from(value: TokenAmount) -> Self {
+        value.0
     }
 }
 

@@ -241,15 +241,15 @@ impl From<ChainId> for ChainIdPattern {
     }
 }
 
-impl Into<Vec<ChainIdPattern>> for ChainIdPattern {
-    fn into(self) -> Vec<ChainIdPattern> {
-        vec![self]
+impl From<ChainIdPattern> for Vec<ChainIdPattern> {
+    fn from(value: ChainIdPattern) -> Self {
+        vec![value]
     }
 }
 
-impl Into<Vec<ChainIdPattern>> for ChainId {
-    fn into(self) -> Vec<ChainIdPattern> {
-        vec![self.into()]
+impl From<ChainId> for Vec<ChainId> {
+    fn from(value: ChainId) -> Self {
+        vec![value]
     }
 }
 

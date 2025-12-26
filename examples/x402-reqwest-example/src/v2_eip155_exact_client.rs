@@ -79,7 +79,7 @@ where
         let nonce: [u8; 32] = rng().random();
 
         let authorization = ExactEvmPayloadAuthorization {
-            from: self.signer.address().into(),
+            from: self.signer.address(),
             to: self.requirements.pay_to.into(),
             value: self.requirements.amount.into(),
             valid_after,
@@ -117,7 +117,7 @@ where
                 authorization,
             },
         };
-        let json = serde_json::to_vec(&payload).map_err(|e| X402Error::JsonError(e))?;
+        let json = serde_json::to_vec(&payload)?;
         let b64 = Base64Bytes::encode(&json);
 
         Ok(b64.to_string())
