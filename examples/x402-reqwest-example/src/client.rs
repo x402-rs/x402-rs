@@ -108,7 +108,6 @@ impl RegisteredSchemeClient {
 
 #[async_trait::async_trait]
 pub trait X402SchemeClient: X402SchemeId + Send + Sync {
-    fn build_candidate(&self, raw: &serde_json::Value, resource: &ResourceInfo);
 }
 
 pub trait ReqwestWithPayments<A, S> {

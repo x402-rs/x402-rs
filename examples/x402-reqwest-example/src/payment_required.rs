@@ -46,37 +46,37 @@ impl PaymentRequired {
         None
     }
 
-    pub fn candidates(&self, schemes: &ClientSchemes) {
-        match self {
-            PaymentRequired::V1(_) => {
-                todo!()
-            }
-            PaymentRequired::V2(payment_required) => {
-                for raw in &payment_required.accepts {
-                    let scheme = raw.get("scheme").and_then(|v| v.as_str()).unwrap_or("");
-                    let chain_id = raw.get("network").and_then(|v| v.as_str()).and_then(|s| ChainId::from_str(s).ok());
-                    let chain_id = match chain_id {
-                        Some(chain_id) => chain_id,
-                        None => continue, // Skip invalid network formats
-                    };
-                    let resource = &payment_required.resource;
-                    for registered in schemes.iter() {
-                        if registered.matches(2, scheme, &chain_id) {
-                            let candidate = registered.client().build_candidate(raw, resource);
-                            println!("Found candidate: scheme={}, network={:?}", scheme, chain_id);
-                            println!("candidate {:?}", candidate);
-                            // let candidate = PaymentCandidateB {
-                            //     chain_id,
-                            //     asset: "",
-                            //     amount: U256::zero(),
-                            //     scheme,
-                            //     x402_version: 2,
-                            // };
-                        }
-                    }
-                    println!("Found candidate: scheme={}, network={:?}", scheme, chain_id);
-                }
-            }
-        }
-    }
+    // pub fn candidates(&self, schemes: &ClientSchemes) {
+    //     match self {
+    //         PaymentRequired::V1(_) => {
+    //             todo!()
+    //         }
+    //         PaymentRequired::V2(payment_required) => {
+    //             for raw in &payment_required.accepts {
+    //                 let scheme = raw.get("scheme").and_then(|v| v.as_str()).unwrap_or("");
+    //                 let chain_id = raw.get("network").and_then(|v| v.as_str()).and_then(|s| ChainId::from_str(s).ok());
+    //                 let chain_id = match chain_id {
+    //                     Some(chain_id) => chain_id,
+    //                     None => continue, // Skip invalid network formats
+    //                 };
+    //                 let resource = &payment_required.resource;
+    //                 for registered in schemes.iter() {
+    //                     if registered.matches(2, scheme, &chain_id) {
+    //                         let candidate = registered.client().build_candidate(raw, resource);
+    //                         println!("Found candidate: scheme={}, network={:?}", scheme, chain_id);
+    //                         println!("candidate {:?}", candidate);
+    //                         // let candidate = PaymentCandidateB {
+    //                         //     chain_id,
+    //                         //     asset: "",
+    //                         //     amount: U256::zero(),
+    //                         //     scheme,
+    //                         //     x402_version: 2,
+    //                         // };
+    //                     }
+    //                 }
+    //                 println!("Found candidate: scheme={}, network={:?}", scheme, chain_id);
+    //             }
+    //         }
+    //     }
+    // }
 }

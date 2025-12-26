@@ -35,7 +35,4 @@ where
 }
 
 impl<S> X402SchemeClient for V2Eip155ExactClient<S> where S: Signer + Send + Sync {
-    fn build_candidate(&self, raw: &Value, resource: &ResourceInfo) {
-        todo!("X402SchemeClient for V2Eip155ExactClient - build candidate")
-    }
 }
