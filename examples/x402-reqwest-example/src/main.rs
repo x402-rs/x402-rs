@@ -1,14 +1,13 @@
 mod client;
 mod http_transport;
-mod v2_eip155_exact_client;
 
 use alloy_signer_local::PrivateKeySigner;
 use dotenvy::dotenv;
 use reqwest::Client;
 use std::env;
+use x402_rs::scheme::v2_eip155_exact::client::V2Eip155ExactClient;
 
 use crate::client::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
-use crate::v2_eip155_exact_client::V2Eip155ExactClient;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

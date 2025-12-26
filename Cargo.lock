@@ -9239,6 +9239,7 @@ dependencies = [
  "opentelemetry-semantic-conventions",
  "opentelemetry-stdout",
  "opentelemetry_sdk",
+ "rand 0.9.2",
  "regex",
  "rust_decimal",
  "serde",
