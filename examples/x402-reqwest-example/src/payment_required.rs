@@ -1,10 +1,5 @@
-use alloy_primitives::U256;
-use std::str::FromStr;
-use x402_rs::chain::ChainId;
 use x402_rs::proto::{v1, v2};
 use x402_rs::util::Base64Bytes;
-
-use crate::client::ClientSchemes;
 
 #[derive(Debug)]
 pub enum PaymentRequired {

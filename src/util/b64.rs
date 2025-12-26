@@ -1,6 +1,7 @@
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as b64;
 use std::borrow::Cow;
+use std::fmt::Display;
 
 /// Contains bytes of base64 encoded some other bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,5 +29,11 @@ impl AsRef<[u8]> for Base64Bytes<'_> {
 impl<'a> From<&'a [u8]> for Base64Bytes<'a> {
     fn from(slice: &'a [u8]) -> Self {
         Base64Bytes(Cow::Borrowed(slice))
+    }
+}
+
+impl Display for Base64Bytes<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", String::from_utf8_lossy(self.0.as_ref()))
     }
 }

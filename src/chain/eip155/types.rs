@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use alloy_primitives::{Address, U256, hex};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::str::FromStr;
@@ -11,6 +12,12 @@ impl FromStr for ChecksummedAddress {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let address = Address::from_str(s)?;
         Ok(Self(address))
+    }
+}
+
+impl Display for ChecksummedAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.to_checksum(None))
     }
 }
 
@@ -42,6 +49,12 @@ impl Into<Address> for ChecksummedAddress {
 impl From<Address> for ChecksummedAddress {
     fn from(address: Address) -> Self {
         Self(address)
+    }
+}
+
+impl PartialEq<ChecksummedAddress> for Address {
+    fn eq(&self, other: &ChecksummedAddress) -> bool {
+        self.eq(&other.0)
     }
 }
 

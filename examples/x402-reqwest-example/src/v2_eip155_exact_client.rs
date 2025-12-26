@@ -1,20 +1,19 @@
-use alloy_primitives::{Address, FixedBytes, U256};
+use alloy_primitives::{FixedBytes, U256};
 use alloy_signer::Signer;
-use alloy_sol_types::{eip712_domain, SolStruct};
+use alloy_sol_types::{SolStruct, eip712_domain, sol};
 use async_trait::async_trait;
-use rand::{rng, Rng};
-use serde::Deserialize;
-use x402_rs::chain::ChainId;
+use rand::{Rng, rng};
+use serde::{Deserialize, Serialize};
 use x402_rs::chain::eip155::Eip155ChainReference;
-use x402_rs::proto::{PaymentRequired};
-use x402_rs::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error};
+use x402_rs::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient};
 use x402_rs::proto::v2::ResourceInfo;
-use x402_rs::scheme::v1_eip155_exact::{ExactEvmPayloadAuthorization, TransferWithAuthorization};
+use x402_rs::proto::{PaymentRequired, v2};
 use x402_rs::scheme::X402SchemeId;
+use x402_rs::scheme::v1_eip155_exact::{ExactEvmPayload, ExactEvmPayloadAuthorization};
 use x402_rs::scheme::v2_eip155_exact;
+use x402_rs::scheme::v2_eip155_exact::PaymentPayload;
 use x402_rs::timestamp::UnixTimestamp;
 use x402_rs::util::Base64Bytes;
-use crate::client::{X402SchemeClient};
 
 #[derive(Debug)]
 pub struct V2Eip155ExactClient<S> {
@@ -54,7 +53,10 @@ struct PayloadSigner<S> {
 }
 
 #[async_trait]
-impl<S> PaymentCandidateSigner for PayloadSigner<S> where S: Sync + Signer {
+impl<S> PaymentCandidateSigner for PayloadSigner<S>
+where
+    S: Sync + Signer,
+{
     async fn sign_payment(&self) -> Result<String, X402Error> {
         let (name, version) = match &self.requirements.extra {
             None => ("".to_string(), "".to_string()),
@@ -66,7 +68,7 @@ impl<S> PaymentCandidateSigner for PayloadSigner<S> where S: Sync + Signer {
             name: name,
             version: version,
             chain_id: chain_id_num,
-            verifying_contract: self.requirements.asset,
+            verifying_contract: self.requirements.asset.0,
         };
         // Build authorization
         let now = UnixTimestamp::now();
@@ -78,8 +80,8 @@ impl<S> PaymentCandidateSigner for PayloadSigner<S> where S: Sync + Signer {
 
         let authorization = ExactEvmPayloadAuthorization {
             from: self.signer.address().into(),
-            to: self.requirements.pay_to,
-            value: self.requirements.amount,
+            to: self.requirements.pay_to.into(),
+            value: self.requirements.amount.into(),
             valid_after,
             valid_before,
             nonce: FixedBytes(nonce),
@@ -105,9 +107,43 @@ impl<S> PaymentCandidateSigner for PayloadSigner<S> where S: Sync + Signer {
             .await
             .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
 
-        todo!("Sign payload using signer")
+        // Build the payment payload
+        let payload = PaymentPayload {
+            x402_version: v2::X402Version2,
+            accepted: self.requirements.clone(),
+            resource: self.resource_info.clone(),
+            payload: ExactEvmPayload {
+                signature: signature.as_bytes().into(),
+                authorization,
+            },
+        };
+        let json = serde_json::to_vec(&payload).map_err(|e| X402Error::JsonError(e))?;
+        let b64 = Base64Bytes::encode(&json);
+
+        Ok(b64.to_string())
     }
 }
+
+sol!(
+    /// Solidity-compatible struct definition for ERC-3009 `transferWithAuthorization`.
+    ///
+    /// This matches the EIP-3009 format used in EIP-712 typed data:
+    /// it defines the authorization to transfer tokens from `from` to `to`
+    /// for a specific `value`, valid only between `validAfter` and `validBefore`
+    /// and identified by a unique `nonce`.
+    ///
+    /// This struct is primarily used to reconstruct the typed data domain/message
+    /// when verifying a client's signature.
+    #[derive(Serialize, Deserialize)]
+    struct TransferWithAuthorization {
+        address from;
+        address to;
+        uint256 value;
+        uint256 validAfter;
+        uint256 validBefore;
+        bytes32 nonce;
+    }
+);
 
 impl<S> X402SchemeClient for V2Eip155ExactClient<S>
 where
@@ -117,7 +153,7 @@ where
         let payment_required = match payment_required {
             PaymentRequired::V2(payment_required) => payment_required,
             PaymentRequired::V1(_) => {
-                todo!("Reject V1 requests for v2 EIP-155 exact scheme")
+                return vec![];
             }
         };
         payment_required
@@ -129,7 +165,7 @@ where
                 let candidate = PaymentCandidate {
                     chain_id: requirements.network.clone(),
                     asset: requirements.asset.to_string(),
-                    amount: requirements.amount,
+                    amount: requirements.amount.into(),
                     scheme: self.scheme().to_string(),
                     x402_version: self.x402_version(),
                     pay_to: requirements.pay_to.to_string(),
@@ -137,7 +173,7 @@ where
                         resource_info: payment_required.resource.clone(),
                         signer: self.signer.clone(),
                         chain_reference,
-                        requirements
+                        requirements,
                     }),
                 };
                 Some(candidate)

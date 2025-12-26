@@ -1,14 +1,11 @@
-use std::error::Error;
-use http::Extensions;
+use http::{Extensions, HeaderMap};
 use reqwest::{Client, ClientBuilder, Request, Response, StatusCode};
 use reqwest_middleware as rqm;
 use std::sync::Arc;
-use x402_rs::chain::{ChainId, ChainIdPattern};
-use x402_rs::proto;
-use x402_rs::proto::client::{FirstMatch, PaymentCandidate, PaymentSelector, X402Error};
-use x402_rs::scheme::X402SchemeId;
+use x402_rs::chain::ChainIdPattern;
+use x402_rs::proto::client::{FirstMatch, PaymentCandidate, PaymentSelector, X402Error, X402SchemeClient};
 
-use crate::http_transport::HttpPaymentRequired;
+use crate::http_transport::{HttpPaymentRequired, HttpTransport};
 
 /// The main x402 client that orchestrates scheme clients and selection.
 pub struct X402Client<TSelector> {
@@ -51,10 +48,7 @@ impl<TSelector> X402Client<TSelector> {
         P: Into<ChainIdPattern>,
         S: X402SchemeClient + 'static,
     {
-        self.schemes.push(RegisteredSchemeClient {
-            pattern: pattern.into(),
-            client: Arc::new(scheme),
-        });
+        self.schemes.push(scheme);
         self
     }
 
@@ -68,97 +62,63 @@ impl<TSelector> X402Client<TSelector> {
     }
 }
 
-impl<TSelector> X402Client<TSelector> where TSelector: PaymentSelector {
-    pub async fn make_payment_header(&self, res: Response) -> Result<(), X402Error> {
+impl<TSelector> X402Client<TSelector>
+where
+    TSelector: PaymentSelector,
+{
+    pub async fn make_payment_headers(&self, res: Response) -> Result<HeaderMap, X402Error> {
         let payment_quote = HttpPaymentRequired::from_response(res)
-                .await
-                .ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
-            let candidates = self.schemes.candidates(&payment_quote);
+            .await
+            .ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
+        let candidates = self.schemes.candidates(&payment_quote);
 
-            println!("Found {} candidates", candidates.len());
-            for (i, c) in candidates.iter().enumerate() {
-                println!(
-                    "  [{}] chain={}, asset={}, amount={}",
-                    i,
-                    c.chain_id,
-                    c.asset,
-                    c.amount
-                );
-            }
+        println!("Found {} candidates", candidates.len());
+        for (i, c) in candidates.iter().enumerate() {
+            println!(
+                "  [{}] chain={}, asset={}, amount={}",
+                i, c.chain_id, c.asset, c.amount
+            );
+        }
 
-            // Select the best candidate
-            let selected = self
-                .selector
-                .select(&candidates)
-                .ok_or(X402Error::NoMatchingPaymentOption)?;
+        // Select the best candidate
+        let selected = self
+            .selector
+            .select(&candidates)
+            .ok_or(X402Error::NoMatchingPaymentOption)?;
 
-            println!("selected {:?} {:?}", selected.chain_id, selected.amount);
-            let s = selected.sign().await;
-            println!("signed {:?}", s);
+        println!("selected {:?} {:?}", selected.chain_id, selected.amount);
+        let signed_payload = selected.sign().await?;
+        let header_name = match payment_quote.inner() {
+            HttpTransport::V1(_) => "X-Payment",
+            HttpTransport::V2(_) => "Payment-Signature",
+        };
+        let headers = {
+            let mut headers = HeaderMap::new();
+            headers.insert(header_name, signed_payload.parse().unwrap());
+            headers
+        };
 
-        Ok(())
+        Ok(headers)
     }
 }
 
 #[derive(Default)]
-pub struct ClientSchemes(Vec<RegisteredSchemeClient>);
+pub struct ClientSchemes(Vec<Arc<dyn X402SchemeClient>>);
 
 impl ClientSchemes {
-    pub fn push(&mut self, client: RegisteredSchemeClient) {
-        self.0.push(client);
+    pub fn push<T: X402SchemeClient + 'static>(&mut self, client: T) {
+        self.0.push(Arc::new(client));
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &RegisteredSchemeClient> {
-        self.0.iter()
-    }
-
-    pub fn candidates(
-        &self,
-        payment_quote: &HttpPaymentRequired,
-    ) -> Vec<PaymentCandidate> {
+    pub fn candidates(&self, payment_quote: &HttpPaymentRequired) -> Vec<PaymentCandidate> {
         let mut candidates = vec![];
-        for scheme_client in self.0.iter() {
-            let client = scheme_client.client();
+        for client in self.0.iter() {
             let req = payment_quote.as_payment_required();
             let accepted = client.accept(req);
             candidates.extend(accepted);
         }
         candidates
     }
-}
-
-/// Internal wrapper that pairs a scheme client with its chain pattern.
-pub struct RegisteredSchemeClient {
-    pattern: ChainIdPattern,
-    client: Arc<dyn X402SchemeClient>,
-}
-
-impl RegisteredSchemeClient {
-    /// Check if this registered client can handle the given payment requirement.
-    ///
-    /// Matching logic:
-    /// 1. x402_version must match
-    /// 2. scheme name must match
-    /// 3. namespace from X402SchemeId must match chain_id namespace
-    /// 4. pattern must match the chain_id (for reference matching)
-    pub fn matches(&self, version: u8, scheme: &str, chain_id: &ChainId) -> bool {
-        self.client.x402_version() == version
-            && self.client.scheme() == scheme
-            && self.client.namespace() == chain_id.namespace()
-            && self.pattern.matches(chain_id)
-    }
-
-    pub fn client(&self) -> &dyn X402SchemeClient {
-        self.client.as_ref()
-    }
-}
-
-#[async_trait::async_trait]
-pub trait X402SchemeClient: X402SchemeId + Send + Sync {
-    fn accept(
-        &self,
-        payment_required: &proto::PaymentRequired,
-    ) -> Vec<PaymentCandidate>;
 }
 
 pub trait ReqwestWithPayments<A, S> {
@@ -250,7 +210,10 @@ where
             return Ok(res);
         }
 
-        self.make_payment_header(res).await.map_err(|e| rqm::Error::Middleware(e.into()))?;
+        let headers = self
+            .make_payment_headers(res)
+            .await
+            .map_err(|e| rqm::Error::Middleware(e.into()))?;
 
         // // Build candidates from the 402 response
         // let (candidates, _version) = self
@@ -286,7 +249,10 @@ where
         // println!("Payment header length: {} bytes", payment_header.len());
         //
         // // Retry with payment
-        let mut retry = retry_req.ok_or(rqm::Error::Middleware(X402Error::RequestNotCloneable.into()))?;
+        let mut retry = retry_req.ok_or(rqm::Error::Middleware(
+            X402Error::RequestNotCloneable.into(),
+        ))?;
+        retry.headers_mut().extend(headers);
         // retry.headers_mut().insert(
         //     "PAYMENT-SIGNATURE",
         //     payment_header

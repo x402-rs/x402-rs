@@ -156,13 +156,13 @@ async fn assert_valid_payment<P: Provider>(
     let valid_before = authorization.valid_before;
     assert_time(valid_after, valid_before)?;
     let asset_address = accepted.asset;
-    let contract = IEIP3009::new(asset_address, provider);
+    let contract = IEIP3009::new(asset_address.into(), provider);
 
-    let domain = assert_domain(chain, &contract, &asset_address, &accepted.extra).await?;
+    let domain = assert_domain(chain, &contract, &asset_address.into(), &accepted.extra).await?;
 
     let amount_required = accepted.amount;
-    assert_enough_balance(&contract, &authorization.from, amount_required).await?;
-    assert_enough_value(&authorization.value, &amount_required)?;
+    assert_enough_balance(&contract, &authorization.from, amount_required.into()).await?;
+    assert_enough_value(&authorization.value, &amount_required.into())?;
 
     let payment = ExactEvmPayment {
         from: authorization.from,

@@ -1,6 +1,9 @@
 use alloy_primitives::U256;
 use async_trait::async_trait;
+
 use crate::chain::ChainId;
+use crate::proto;
+use crate::scheme::X402SchemeId;
 
 pub struct PaymentCandidate {
     pub chain_id: ChainId,
@@ -18,6 +21,10 @@ impl PaymentCandidate {
     }
 }
 
+#[async_trait::async_trait]
+pub trait X402SchemeClient: X402SchemeId + Send + Sync {
+    fn accept(&self, payment_required: &proto::PaymentRequired) -> Vec<PaymentCandidate>;
+}
 
 #[async_trait]
 pub trait PaymentCandidateSigner {
