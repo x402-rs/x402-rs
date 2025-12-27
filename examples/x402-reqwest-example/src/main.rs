@@ -27,9 +27,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Register the EVM client with a wildcard pattern to handle all EIP-155 chains
     let x402_client = X402Client::new()
-        .register(V1SolanaExactClient::new(keypair.clone(), Arc::clone(&rpc_client)))
+        .register(V1SolanaExactClient::new(
+            keypair.clone(),
+            Arc::clone(&rpc_client),
+        ))
         .register(V2SolanaExactClient::new(keypair, Arc::clone(&rpc_client)))
-        .register(V1Eip155ExactClient::from(signer));
+        .register(V1Eip155ExactClient::new(signer));
     let http_client = Client::new().with_payments(x402_client).build();
 
     let response = http_client

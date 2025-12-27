@@ -24,11 +24,8 @@ pub struct V1Eip155ExactClient<S> {
     signer: S,
 }
 
-impl<S> From<S> for V1Eip155ExactClient<S>
-where
-    S: Signer + Send + Sync,
-{
-    fn from(signer: S) -> Self {
+impl<S> V1Eip155ExactClient<S> {
+    pub fn new(signer: S) -> Self {
         Self { signer }
     }
 }
@@ -176,7 +173,7 @@ struct PayloadSigner<S> {
 #[async_trait]
 impl<S> PaymentCandidateSigner for PayloadSigner<S>
 where
-    S: Sync + Signer,
+    S: Signer + Sync,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
         let params = Eip3009SigningParams {
