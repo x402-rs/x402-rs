@@ -43,9 +43,9 @@ impl Mint {
 }
 
 /// Fetch mint information from the blockchain.
-pub async fn fetch_mint(mint_address: &Address, rpc: &RpcClient) -> Result<Mint, X402Error> {
+pub async fn fetch_mint(mint_address: &Address, rpc_client: &RpcClient) -> Result<Mint, X402Error> {
     let mint_pubkey = mint_address.pubkey();
-    let account = rpc
+    let account = rpc_client
         .get_account(mint_pubkey)
         .await
         .map_err(|e| X402Error::SigningError(format!("failed to fetch mint {mint_pubkey}: {e}")))?;
@@ -97,7 +97,7 @@ pub fn build_message_to_simulate(
 
 /// Estimate compute units by simulating the unsigned/signed tx.
 pub async fn estimate_compute_units(
-    rpc: &RpcClient,
+    rpc_client: &RpcClient,
     message: &MessageV0,
 ) -> Result<u32, X402Error> {
     let message = VersionedMessage::V0(message.clone());
@@ -107,7 +107,7 @@ pub async fn estimate_compute_units(
         message,
     };
 
-    let sim = rpc
+    let sim = rpc_client
         .simulate_transaction_with_config(
             &tx,
             RpcSimulateTransactionConfig {
@@ -126,10 +126,10 @@ pub async fn estimate_compute_units(
 
 /// Get the priority fee in micro-lamports.
 pub async fn get_priority_fee_micro_lamports(
-    rpc: &RpcClient,
+    rpc_client: &RpcClient,
     writeable_accounts: &[Pubkey],
 ) -> Result<u64, X402Error> {
-    let recent_fees = rpc
+    let recent_fees = rpc_client
         .get_recent_prioritization_fees(writeable_accounts)
         .await
         .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
@@ -166,13 +166,13 @@ pub fn update_or_append_set_compute_unit_limit(ixs: &mut Vec<Instruction>, units
 /// Returns the base64-encoded signed transaction.
 pub async fn build_signed_transfer_transaction<S: Signer>(
     signer: &S,
-    rpc: &RpcClient,
+    rpc_client: &RpcClient,
     fee_payer: &Pubkey,
     pay_to: &Address,
     asset: &Address,
     amount: u64,
 ) -> Result<String, X402Error> {
-    let mint = fetch_mint(asset, rpc).await?;
+    let mint = fetch_mint(asset, rpc_client).await?;
 
     let (ata, _) = Pubkey::find_program_address(
         &[
@@ -225,18 +225,19 @@ pub async fn build_signed_transfer_transaction<S: Signer>(
         .map_err(|e| X402Error::SigningError(format!("{e}")))?,
     };
 
-    let recent_blockhash = rpc
+    let recent_blockhash = rpc_client
         .get_latest_blockhash()
         .await
         .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
 
     let fee =
-        get_priority_fee_micro_lamports(rpc, &[*fee_payer, destination_ata, source_ata]).await?;
+        get_priority_fee_micro_lamports(rpc_client, &[*fee_payer, destination_ata, source_ata])
+            .await?;
 
     let (msg_to_sim, instructions) =
         build_message_to_simulate(*fee_payer, &[transfer_instruction], fee, recent_blockhash)?;
 
-    let estimated_cu = estimate_compute_units(rpc, &msg_to_sim).await?;
+    let estimated_cu = estimate_compute_units(rpc_client, &msg_to_sim).await?;
 
     let cu_ix = ComputeBudgetInstruction::set_compute_unit_limit(estimated_cu);
     let msg = {
