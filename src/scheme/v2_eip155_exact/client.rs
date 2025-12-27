@@ -1,14 +1,16 @@
-use async_trait::async_trait;
-use serde::Deserialize;
 use crate::chain::eip155::Eip155ChainReference;
 use crate::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient};
 use crate::proto::v2::ResourceInfo;
 use crate::proto::{PaymentRequired, v2};
 use crate::scheme::X402SchemeId;
-use crate::scheme::v1_eip155_exact::client::{Eip3009SigningParams, SignerLike, sign_erc3009_authorization};
+use crate::scheme::v1_eip155_exact::client::{
+    Eip3009SigningParams, SignerLike, sign_erc3009_authorization,
+};
 use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_eip155_exact::types;
 use crate::util::Base64Bytes;
+use async_trait::async_trait;
+use serde::Deserialize;
 
 #[derive(Debug)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
@@ -16,11 +18,9 @@ pub struct V2Eip155ExactClient<S> {
     signer: S,
 }
 
-impl<S> From<S> for V2Eip155ExactClient<S>
-where
-    S: SignerLike + Send + Sync,
-{
-    fn from(signer: S) -> Self {
+#[allow(dead_code)] // Public for consumption by downstream crates.
+impl<S> V2Eip155ExactClient<S> {
+    pub fn new(signer: S) -> Self {
         Self { signer }
     }
 }

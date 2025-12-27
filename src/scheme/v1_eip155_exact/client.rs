@@ -1,10 +1,11 @@
-use std::sync::Arc;
 use alloy_primitives::{Address, FixedBytes, Signature, U256};
 use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
 use rand::{Rng, rng};
 use serde::Deserialize;
+use std::sync::Arc;
+
 use crate::chain::ChainId;
 use crate::chain::eip155::Eip155ChainReference;
 use crate::proto::PaymentRequired;
@@ -228,31 +229,23 @@ pub trait SignerLike {
 }
 
 #[async_trait]
-impl SignerLike for PrivateKeySigner
-{
+impl SignerLike for PrivateKeySigner {
     fn address(&self) -> Address {
         PrivateKeySigner::address(self)
     }
 
-    async fn sign_hash(
-        &self,
-        hash: &FixedBytes<32>,
-    ) -> Result<Signature, alloy_signer::Error> {
+    async fn sign_hash(&self, hash: &FixedBytes<32>) -> Result<Signature, alloy_signer::Error> {
         alloy_signer::Signer::sign_hash(self, hash).await
     }
 }
 
 #[async_trait]
-impl SignerLike for Arc<PrivateKeySigner>
-{
+impl SignerLike for Arc<PrivateKeySigner> {
     fn address(&self) -> Address {
         PrivateKeySigner::address(self.as_ref())
     }
 
-    async fn sign_hash(
-        &self,
-        hash: &FixedBytes<32>,
-    ) -> Result<Signature, alloy_signer::Error> {
+    async fn sign_hash(&self, hash: &FixedBytes<32>) -> Result<Signature, alloy_signer::Error> {
         alloy_signer::Signer::sign_hash(self.as_ref(), hash).await
     }
 }
