@@ -72,21 +72,12 @@ where
             .ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
         let candidates = self.schemes.candidates(&payment_quote);
 
-        println!("Found {} candidates", candidates.len());
-        for (i, c) in candidates.iter().enumerate() {
-            println!(
-                "  [{}] chain={}, asset={}, amount={}",
-                i, c.chain_id, c.asset, c.amount
-            );
-        }
-
         // Select the best candidate
         let selected = self
             .selector
             .select(&candidates)
             .ok_or(X402Error::NoMatchingPaymentOption)?;
 
-        println!("selected {:?} {:?}", selected.chain_id, selected.amount);
         let signed_payload = selected.sign().await?;
         let header_name = match payment_quote.inner() {
             HttpTransport::V1(_) => "X-Payment",
@@ -215,51 +206,11 @@ where
             .await
             .map_err(|e| rqm::Error::Middleware(e.into()))?;
 
-        // // Build candidates from the 402 response
-        // let (candidates, _version) = self
-        //     .build_candidates(res).await
-        //     .map_err(Into::<rqm::Error>::into)?;
-        //
-        // println!("Found {} candidates", candidates.len());
-        // for (i, c) in candidates.iter().enumerate() {
-        //     println!(
-        //         "  [{}] chain={}, asset={}, amount={}",
-        //         i, c.chain_id, c.asset, c.amount
-        //     );
-        // }
-        //
-        // // Select the best candidate
-        // let selected = self
-        //     .selector
-        //     .select(&candidates)
-        //     .ok_or(X402Error::NoMatchingPaymentOption)?;
-        //
-        // println!(
-        //     "Selected candidate: chain={}, amount={}",
-        //     selected.chain_id, selected.amount
-        // );
-        //
-        // // Sign the payment using the client reference stored in the candidate
-        // let payment_header = selected
-        //     .client
-        //     .sign_payment(selected)
-        //     .await
-        //     .map_err(Into::<rqm::Error>::into)?;
-        //
-        // println!("Payment header length: {} bytes", payment_header.len());
-        //
-        // // Retry with payment
+        // Retry with payment
         let mut retry = retry_req.ok_or(rqm::Error::Middleware(
             X402Error::RequestNotCloneable.into(),
         ))?;
         retry.headers_mut().extend(headers);
-        // retry.headers_mut().insert(
-        //     "PAYMENT-SIGNATURE",
-        //     payment_header
-        //         .parse()
-        //         .map_err(|e| X402Error::SigningError(format!("{e}")))?,
-        // );
-
         next.run(retry, extensions).await
     }
 }

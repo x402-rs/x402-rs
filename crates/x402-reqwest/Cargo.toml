@@ -13,7 +13,7 @@ categories = ["web-programming::http-client", "authentication", "cryptography", 
 readme = "README.md"
 
 [dependencies]
-x402-rs = { version = "0.10.0", default-features = false }
+x402-rs = { version = "0.11", default-features = false }
 reqwest = { version = "0.12.15" }
 http = { version = "1.4.0" }
 reqwest-middleware = { version = "0.4.2" }
