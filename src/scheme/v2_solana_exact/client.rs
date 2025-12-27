@@ -1,10 +1,8 @@
 use alloy_primitives::U256;
 use async_trait::async_trait;
 use serde::Deserialize;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_pubkey::Pubkey;
 use solana_signer::Signer;
-use std::sync::Arc;
 
 use crate::proto::PaymentRequired;
 use crate::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient};
@@ -12,7 +10,7 @@ use crate::proto::v2;
 use crate::proto::v2::ResourceInfo;
 use crate::proto::v2::X402Version2;
 use crate::scheme::X402SchemeId;
-use crate::scheme::v1_solana_exact::client::build_signed_transfer_transaction;
+use crate::scheme::v1_solana_exact::client::{RpcClientLike, build_signed_transfer_transaction};
 use crate::scheme::v1_solana_exact::types::ExactSolanaPayload;
 use crate::scheme::v2_solana_exact::V2SolanaExact;
 use crate::scheme::v2_solana_exact::types::{PaymentPayload, PaymentRequirements};
@@ -21,22 +19,23 @@ use crate::util::Base64Bytes;
 /// Client for creating Solana payment payloads for the v2 exact scheme.
 #[derive(Clone)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct V2SolanaExactClient<S> {
+pub struct V2SolanaExactClient<S, R> {
     signer: S,
-    rpc_client: Arc<RpcClient>,
+    rpc_client: R,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
-impl<S> V2SolanaExactClient<S> {
-    pub fn new(signer: S, rpc_client: RpcClient) -> Self {
-        Self {
-            signer,
-            rpc_client: Arc::new(rpc_client),
-        }
+impl<S, R> V2SolanaExactClient<S, R> {
+    pub fn new(signer: S, rpc_client: R) -> Self {
+        Self { signer, rpc_client }
     }
 }
 
-impl<S> X402SchemeId for V2SolanaExactClient<S> {
+impl<S, R> X402SchemeId for V2SolanaExactClient<S, R> {
+    fn x402_version(&self) -> u8 {
+        V2SolanaExact.x402_version()
+    }
+
     fn namespace(&self) -> &str {
         V2SolanaExact.namespace()
     }
@@ -46,7 +45,11 @@ impl<S> X402SchemeId for V2SolanaExactClient<S> {
     }
 }
 
-impl<S: Signer + Send + Sync + Clone + 'static> X402SchemeClient for V2SolanaExactClient<S> {
+impl<S, R> X402SchemeClient for V2SolanaExactClient<S, R>
+where
+    S: Signer + Send + Sync + Clone + 'static,
+    R: RpcClientLike + Send + Sync + Clone + 'static,
+{
     fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
             PaymentRequired::V2(payment_required) => payment_required,
@@ -73,7 +76,7 @@ impl<S: Signer + Send + Sync + Clone + 'static> X402SchemeClient for V2SolanaExa
                     pay_to: requirements.pay_to.to_string(),
                     signer: Box::new(PayloadSigner {
                         signer: self.signer.clone(),
-                        rpc_client: Arc::clone(&self.rpc_client),
+                        rpc_client: self.rpc_client.clone(),
                         requirements,
                         resource: payment_required.resource.clone(),
                     }),
@@ -86,16 +89,16 @@ impl<S: Signer + Send + Sync + Clone + 'static> X402SchemeClient for V2SolanaExa
 
 /// V2 PayloadSigner that uses shared transaction building logic.
 #[allow(dead_code)] // Public for consumption by downstream crates.
-struct PayloadSigner<S> {
+struct PayloadSigner<S, R> {
     signer: S,
-    rpc_client: Arc<RpcClient>,
+    rpc_client: R,
     requirements: PaymentRequirements,
     resource: ResourceInfo,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
 #[async_trait]
-impl<S: Signer + Sync> PaymentCandidateSigner for PayloadSigner<S> {
+impl<S: Signer + Sync, R: RpcClientLike + Sync> PaymentCandidateSigner for PayloadSigner<S, R> {
     async fn sign_payment(&self) -> Result<String, X402Error> {
         let fee_payer = self
             .requirements
