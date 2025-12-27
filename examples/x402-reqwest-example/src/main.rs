@@ -14,6 +14,8 @@ use x402_rs::scheme::v2_solana_exact::client::V2SolanaExactClient;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
+    let mut x402_client = X402Client::new();
+
     let signer: PrivateKeySigner = env::var("EVM_PRIVATE_KEY")?.parse()?;
     let signer = Arc::new(signer);
     println!("Signer address: {:?}", signer.address());
@@ -26,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rpc_client = Arc::new(RpcClient::new(solana_rpc_url.clone()));
 
     // Register the EVM client with a wildcard pattern to handle all EIP-155 chains
-    let x402_client = X402Client::new()
+    let x402_client = x402_client
         .register(V1SolanaExactClient::new(
             keypair.clone(),
             Arc::clone(&rpc_client),
