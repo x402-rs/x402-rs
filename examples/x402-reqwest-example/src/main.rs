@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let http_client = Client::new().with_payments(x402_client).build();
 
     let response = http_client
-        .get("http://localhost:3001/protected-route")
+        .get("http://localhost:3000/protected-route")
         .send()
         .await?;
 
