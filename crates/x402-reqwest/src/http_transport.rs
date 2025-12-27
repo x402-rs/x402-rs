@@ -1,11 +1,7 @@
 use x402_rs::proto;
+use x402_rs::proto::client::HttpTransport;
 use x402_rs::proto::{v1, v2};
 use x402_rs::util::Base64Bytes;
-
-pub enum HttpTransport<A> {
-    V1(A),
-    V2(A),
-}
 
 pub struct HttpPaymentRequired(HttpTransport<proto::PaymentRequired>);
 

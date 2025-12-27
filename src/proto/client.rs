@@ -1,7 +1,7 @@
 use alloy_primitives::U256;
 use async_trait::async_trait;
 
-use crate::chain::ChainId;
+use crate::chain::{ChainId, ChainIdPattern};
 use crate::proto;
 use crate::scheme::X402SchemeId;
 
@@ -49,6 +49,11 @@ pub enum X402Error {
     JsonError(#[from] serde_json::Error),
 }
 
+pub enum HttpTransport<A> {
+    V1(A),
+    V2(A),
+}
+
 // ============================================================================
 // PaymentSelector - Selection strategy
 // ============================================================================
@@ -68,40 +73,40 @@ impl PaymentSelector for FirstMatch {
     }
 }
 
-// /// Selector that prefers chains matching patterns in priority order.
-// /// The first pattern in the vector has the highest priority, the last has the lowest.
-// #[allow(dead_code)]
-// pub struct PreferChain(Vec<ChainIdPattern>);
-//
-// impl PreferChain {
-//     pub fn new<P: Into<Vec<ChainIdPattern>>>(patterns: P) -> Self {
-//         Self(patterns.into())
-//     }
-//
-//     pub fn chain<P: Into<Vec<ChainIdPattern>>>(mut self, patterns: P) -> PreferChain {
-//         PreferChain(self.0.into_iter().chain(patterns.into()).collect())
-//     }
-// }
-//
-// impl PaymentSelector for PreferChain {
-//     fn select<T: PaymentCandidateLike>(&self, candidates: &[T]) -> Option<&T> {
-//         // Try each pattern in priority order
-//         for pattern in &self.0 {
-//             if let Some(candidate) = candidates.iter().find(|c| pattern.matches(c.chain_id())) {
-//                 return Some(candidate);
-//             }
-//         }
-//         // Fall back to first match if no patterns matched
-//         candidates.first()
-//     }
-// }
-//
-// /// Selector that only accepts payments up to a maximum amount.
-// #[allow(dead_code)]
-// pub struct MaxAmount(pub U256);
-//
-// impl PaymentSelector for MaxAmount {
-//     fn select<T: PaymentCandidateLike>(&self, candidates: &[T]) -> Option<&T> {
-//         candidates.iter().find(|c| c.amount() <= self.0)
-//     }
-// }
+/// Selector that prefers chains matching patterns in priority order.
+/// The first pattern in the vector has the highest priority, the last has the lowest.
+#[allow(dead_code)]
+pub struct PreferChain(Vec<ChainIdPattern>);
+
+impl PreferChain {
+    pub fn new<P: Into<Vec<ChainIdPattern>>>(patterns: P) -> Self {
+        Self(patterns.into())
+    }
+
+    pub fn or_chain<P: Into<Vec<ChainIdPattern>>>(self, patterns: P) -> PreferChain {
+        PreferChain(self.0.into_iter().chain(patterns.into()).collect())
+    }
+}
+
+impl PaymentSelector for PreferChain {
+    fn select<'a>(&self, candidates: &'a [PaymentCandidate]) -> Option<&'a PaymentCandidate> {
+        // Try each pattern in priority order
+        for pattern in &self.0 {
+            if let Some(candidate) = candidates.iter().find(|c| pattern.matches(&c.chain_id)) {
+                return Some(candidate);
+            }
+        }
+        // Fall back to first match if no patterns matched
+        candidates.first()
+    }
+}
+
+/// Selector that only accepts payments up to a maximum amount.
+#[allow(dead_code)]
+pub struct MaxAmount(pub U256);
+
+impl PaymentSelector for MaxAmount {
+    fn select<'a>(&self, candidates: &'a [PaymentCandidate]) -> Option<&'a PaymentCandidate> {
+        candidates.iter().find(|c| c.amount <= self.0)
+    }
+}

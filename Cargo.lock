@@ -11241,6 +11241,7 @@ dependencies = [
  "solana-rpc-client 2.3.13",
  "thiserror 2.0.17",
  "tokio",
+ "x402-reqwest",
  "x402-rs 0.11.0",
 ]
 

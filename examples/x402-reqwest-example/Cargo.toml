@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 x402-rs = { path = "../../" }
+x402-reqwest = { path = "../../crates/x402-reqwest" }
 reqwest = { version = "0.12.25" }
 tokio = { version = "1.45.1" }
 dotenvy = { version = "0.15.7" }

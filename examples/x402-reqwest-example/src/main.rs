@@ -1,5 +1,4 @@
 mod client;
-mod http_transport;
 
 use alloy_signer_local::PrivateKeySigner;
 use dotenvy::dotenv;
