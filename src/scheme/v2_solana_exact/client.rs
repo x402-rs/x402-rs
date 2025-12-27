@@ -2,45 +2,44 @@ use alloy_primitives::U256;
 use async_trait::async_trait;
 use serde::Deserialize;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_client::rpc_config::RpcSimulateTransactionConfig;
 use solana_compute_budget_interface::ComputeBudgetInstruction;
 use solana_keypair::Keypair;
-use solana_message::v0::Message as MessageV0;
-use solana_message::{Hash, VersionedMessage};
 use solana_pubkey::Pubkey;
-use solana_signature::Signature;
 use solana_signer::Signer;
-use solana_transaction::Instruction;
-use solana_transaction::versioned::VersionedTransaction;
-use spl_token::solana_program::program_pack::Pack;
 use std::sync::Arc;
+use solana_message::VersionedMessage;
+use solana_transaction::versioned::VersionedTransaction;
 
-use crate::chain::ChainId;
-use crate::chain::solana::Address;
-use crate::proto::PaymentRequired;
+use crate::proto::v2::ResourceInfo;
+use crate::proto::v2::X402Version2;
 use crate::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient};
-use crate::proto::v1::X402Version1;
+use crate::proto::PaymentRequired;
+use crate::proto::v2;
 use crate::scheme::X402SchemeId;
-use crate::scheme::v1_solana_exact::types::{
-    ExactScheme, ExactSolanaPayload, PaymentPayload, PaymentRequirements,
+use crate::scheme::v1_solana_exact::client::{
+    build_message_to_simulate, estimate_compute_units, fetch_mint,
+    get_priority_fee_micro_lamports, Mint,
 };
-use crate::scheme::v1_solana_exact::{ATA_PROGRAM_PUBKEY, TransactionInt, V1SolanaExact};
+use crate::scheme::v2_solana_exact::types::{PaymentPayload, PaymentRequirements};
+use crate::scheme::v2_solana_exact::V2SolanaExact;
+use crate::scheme::v1_solana_exact::{TransactionInt, ATA_PROGRAM_PUBKEY};
+use crate::scheme::v1_solana_exact::types::ExactSolanaPayload;
 use crate::util::Base64Bytes;
 
-/// Client for creating Solana payment payloads for the v1 exact scheme.
+/// Client for creating Solana payment payloads for the v2 exact scheme.
 ///
 /// This client handles the creation of SPL Token transfer transactions
 /// that can be used to pay for x402-protected resources.
 #[derive(Clone)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct V1SolanaExactClient {
+pub struct V2SolanaExactClient {
     keypair: Arc<Keypair>,
     rpc_client: Arc<RpcClient>,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
-impl V1SolanaExactClient {
-    /// Creates a new V1SolanaExactClient with the given keypair and RPC client.
+impl V2SolanaExactClient {
+    /// Creates a new V2SolanaExactClient with the given keypair and RPC client.
     ///
     /// # Arguments
     /// * `keypair` - The Solana keypair used to sign transactions
@@ -53,25 +52,25 @@ impl V1SolanaExactClient {
     }
 }
 
-impl X402SchemeId for V1SolanaExactClient {
+impl X402SchemeId for V2SolanaExactClient {
     fn x402_version(&self) -> u8 {
-        V1SolanaExact.x402_version()
+        2
     }
 
     fn namespace(&self) -> &str {
-        V1SolanaExact.namespace()
+        V2SolanaExact.namespace()
     }
 
     fn scheme(&self) -> &str {
-        V1SolanaExact.scheme()
+        V2SolanaExact.scheme()
     }
 }
 
-impl X402SchemeClient for V1SolanaExactClient {
+impl X402SchemeClient for V2SolanaExactClient {
     fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
-            PaymentRequired::V1(payment_required) => payment_required,
-            PaymentRequired::V2(_) => {
+            PaymentRequired::V2(payment_required) => payment_required,
+            PaymentRequired::V1(_) => {
                 return vec![];
             }
         };
@@ -79,16 +78,16 @@ impl X402SchemeClient for V1SolanaExactClient {
             .accepts
             .iter()
             .filter_map(|v| {
-                let requirements = PaymentRequirements::deserialize(v).ok()?;
+                let requirements: PaymentRequirements = v2::PaymentRequirements::deserialize(v).ok()?;
                 // Check if this is a Solana network
-                let chain_id = ChainId::from_network_name(&requirements.network)?;
+                let chain_id = requirements.network.clone();
                 if chain_id.namespace != "solana" {
                     return None;
                 }
                 let candidate = PaymentCandidate {
                     chain_id,
                     asset: requirements.asset.to_string(),
-                    amount: U256::from(requirements.max_amount_required.inner()),
+                    amount: U256::from(requirements.amount.inner()),
                     scheme: self.scheme().to_string(),
                     x402_version: self.x402_version(),
                     pay_to: requirements.pay_to.to_string(),
@@ -96,6 +95,7 @@ impl X402SchemeClient for V1SolanaExactClient {
                         keypair: self.keypair.clone(),
                         rpc_client: self.rpc_client.clone(),
                         requirements,
+                        resource: payment_required.resource.clone(),
                     }),
                 };
                 Some(candidate)
@@ -104,68 +104,18 @@ impl X402SchemeClient for V1SolanaExactClient {
     }
 }
 
-#[derive(Debug)]
-pub enum Mint {
-    Token { decimals: u8, token_program: Pubkey },
-    Token2022 { decimals: u8, token_program: Pubkey },
-}
-
-impl Mint {
-    pub fn token_program(&self) -> &Pubkey {
-        match self {
-            Mint::Token { token_program, .. } => token_program,
-            Mint::Token2022 { token_program, .. } => token_program,
-        }
-    }
-}
-
-/// Fetch mint information from the blockchain.
+/// V2 PayloadSigner that uses shared utilities from v1
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub async fn fetch_mint(
-    mint_address: &Address,
-    rpc: &RpcClient,
-) -> Result<Mint, X402Error> {
-    let mint_pubkey = mint_address.pubkey();
-    let account = rpc
-        .get_account(mint_pubkey)
-        .await
-        .map_err(|e| {
-            X402Error::SigningError(format!("failed to fetch mint {mint_pubkey}: {e}"))
-        })?;
-    if account.owner == spl_token::id() {
-        let mint = spl_token::state::Mint::unpack(&account.data).map_err(|e| {
-            X402Error::SigningError(format!("failed to unpack mint {mint_pubkey}: {e}"))
-        })?;
-        Ok(Mint::Token {
-            decimals: mint.decimals,
-            token_program: spl_token::id(),
-        })
-    } else if account.owner == spl_token_2022::id() {
-        let mint = spl_token_2022::state::Mint::unpack(&account.data).map_err(|e| {
-            X402Error::SigningError(format!("failed to unpack mint {mint_pubkey}: {e}",))
-        })?;
-        Ok(Mint::Token2022 {
-            decimals: mint.decimals,
-            token_program: spl_token_2022::id(),
-        })
-    } else {
-        Err(X402Error::SigningError(format!(
-            "failed to unpack mint {mint_pubkey}: unknown owner"
-        )))
-    }
-}
-
-#[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct PayloadSigner {
+struct PayloadSigner {
     keypair: Arc<Keypair>,
     rpc_client: Arc<RpcClient>,
     requirements: PaymentRequirements,
+    resource: ResourceInfo,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
-#[async_trait]
-impl PaymentCandidateSigner for PayloadSigner {
-    async fn sign_payment(&self) -> Result<String, X402Error> {
+impl PayloadSigner {
+    async fn build_transaction(&self) -> Result<String, X402Error> {
         let asset = &self.requirements.asset;
         let mint = fetch_mint(asset, &self.rpc_client).await?;
 
@@ -203,7 +153,7 @@ impl PaymentCandidateSigner for PayloadSigner {
             &ATA_PROGRAM_PUBKEY,
         );
         let destination_ata = ata;
-        let amount: u64 = self.requirements.max_amount_required.inner();
+        let amount: u64 = self.requirements.amount.inner();
 
         let transfer_instruction = match mint {
             Mint::Token {
@@ -267,7 +217,7 @@ impl PaymentCandidateSigner for PayloadSigner {
             let mut final_instructions = Vec::with_capacity(instructions.len() + 1);
             final_instructions.push(cu_ix);
             final_instructions.extend(instructions);
-            MessageV0::try_compile(
+            solana_message::v0::Message::try_compile(
                 &fee_payer_pubkey,
                 &final_instructions,
                 &[],
@@ -289,11 +239,21 @@ impl PaymentCandidateSigner for PayloadSigner {
             .as_base64()
             .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
 
-        // Build the payment payload
+        Ok(tx_b64)
+    }
+}
+
+#[allow(dead_code)] // Public for consumption by downstream crates.
+#[async_trait]
+impl PaymentCandidateSigner for PayloadSigner {
+    async fn sign_payment(&self) -> Result<String, X402Error> {
+        let tx_b64 = self.build_transaction().await?;
+
+        // Build the v2 payment payload
         let payload = PaymentPayload {
-            x402_version: X402Version1,
-            scheme: ExactScheme,
-            network: self.requirements.network.clone(),
+            x402_version: X402Version2,
+            accepted: self.requirements.clone(),
+            resource: self.resource.clone(),
             payload: ExactSolanaPayload {
                 transaction: tx_b64,
             },
@@ -302,95 +262,5 @@ impl PaymentCandidateSigner for PayloadSigner {
         let b64 = Base64Bytes::encode(&json);
 
         Ok(b64.to_string())
-    }
-}
-
-/// Build the message we want to simulate (priority fee + transfer Ixs).
-pub fn build_message_to_simulate(
-    fee_payer: Pubkey,
-    transfer_instructions: &[Instruction],
-    priority_micro_lamports: u64,
-    recent_blockhash: Hash,
-) -> Result<(MessageV0, Vec<Instruction>), X402Error> {
-    let set_price = ComputeBudgetInstruction::set_compute_unit_price(priority_micro_lamports);
-
-    let mut ixs = Vec::with_capacity(1 + transfer_instructions.len());
-    ixs.push(set_price);
-    ixs.extend(transfer_instructions.to_owned());
-
-    let with_cu_limit = {
-        let mut ixs_mod = ixs.clone();
-        update_or_append_set_compute_unit_limit(&mut ixs_mod, 1e5 as u32);
-        ixs_mod
-    };
-    let message = MessageV0::try_compile(&fee_payer, &with_cu_limit, &[], recent_blockhash)
-        .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
-    Ok((message, ixs))
-}
-
-/// Estimate compute units by simulating the unsigned/signed tx.
-pub async fn estimate_compute_units(
-    rpc: &RpcClient,
-    message: &MessageV0,
-) -> Result<u32, X402Error> {
-    let message = VersionedMessage::V0(message.clone());
-    let num_required_signatures = message.header().num_required_signatures;
-    let tx = VersionedTransaction {
-        signatures: vec![Signature::default(); num_required_signatures as usize],
-        message,
-    };
-
-    let sim = rpc
-        .simulate_transaction_with_config(
-            &tx,
-            RpcSimulateTransactionConfig {
-                sig_verify: false,
-                replace_recent_blockhash: true,
-                ..RpcSimulateTransactionConfig::default()
-            },
-        )
-        .await
-        .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
-    let units = sim.value.units_consumed.ok_or(X402Error::SigningError(
-        "simulation returned no units_consumed".to_string(),
-    ))?;
-    Ok(units as u32)
-}
-
-/// Get the priority fee in micro-lamports.
-pub async fn get_priority_fee_micro_lamports(
-    rpc: &RpcClient,
-    writeable_accounts: &[Pubkey],
-) -> Result<u64, X402Error> {
-    let recent_fees = rpc
-        .get_recent_prioritization_fees(writeable_accounts)
-        .await
-        .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
-    let fee = recent_fees
-        .iter()
-        .filter_map(|e| {
-            if e.prioritization_fee > 0 {
-                Some(e.prioritization_fee)
-            } else {
-                None
-            }
-        })
-        .min_by(|a, b| a.cmp(b))
-        .unwrap_or(1);
-    Ok(fee)
-}
-
-/// Update the first set_compute_unit_limit ix if it exists, else append a new one.
-pub fn update_or_append_set_compute_unit_limit(ixs: &mut Vec<Instruction>, units: u32) {
-    let target_program = solana_compute_budget_interface::ID;
-    let new_ix = ComputeBudgetInstruction::set_compute_unit_limit(units);
-
-    let ix = ixs
-        .iter_mut()
-        .find(|ix| ix.program_id == target_program && ix.data.is_empty());
-    if let Some(ix) = ix {
-        *ix = new_ix;
-    } else {
-        ixs.push(new_ix);
     }
 }

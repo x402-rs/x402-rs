@@ -7,6 +7,7 @@ use std::env;
 use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
 use x402_rs::scheme::v1_eip155_exact::client::V1Eip155ExactClient;
 use x402_rs::scheme::v1_solana_exact::client::V1SolanaExactClient;
+use x402_rs::scheme::v2_solana_exact::client::V2SolanaExactClient;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,12 +25,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Register the EVM client with a wildcard pattern to handle all EIP-155 chains
     let x402_client = X402Client::new()
-        .register(V1SolanaExactClient::new(keypair, rpc_client))
+        .register(V2SolanaExactClient::new(keypair, rpc_client))
         .register(V1Eip155ExactClient::from(signer));
     let http_client = Client::new().with_payments(x402_client).build();
 
     let response = http_client
-        .get("http://localhost:3001/protected-route")
+        .get("http://localhost:3000/protected-route")
         .send()
         .await?;
 
