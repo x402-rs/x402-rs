@@ -1,8 +1,11 @@
 use alloy_primitives::U256;
 use async_trait::async_trait;
 use serde::Deserialize;
+use solana_account::Account;
+use solana_client::client_error::ClientError;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
+use solana_client::rpc_response::{RpcPrioritizationFee, RpcResult, RpcSimulateTransactionResult};
 use solana_compute_budget_interface::ComputeBudgetInstruction;
 use solana_message::v0::Message as MessageV0;
 use solana_message::{Hash, VersionedMessage};
@@ -43,7 +46,10 @@ impl Mint {
 }
 
 /// Fetch mint information from the blockchain.
-pub async fn fetch_mint(mint_address: &Address, rpc_client: &RpcClient) -> Result<Mint, X402Error> {
+pub async fn fetch_mint<R: RpcClientLike>(
+    mint_address: &Address,
+    rpc_client: &R,
+) -> Result<Mint, X402Error> {
     let mint_pubkey = mint_address.pubkey();
     let account = rpc_client
         .get_account(mint_pubkey)
@@ -96,8 +102,8 @@ pub fn build_message_to_simulate(
 }
 
 /// Estimate compute units by simulating the unsigned/signed tx.
-pub async fn estimate_compute_units(
-    rpc_client: &RpcClient,
+pub async fn estimate_compute_units<S: RpcClientLike>(
+    rpc_client: &S,
     message: &MessageV0,
 ) -> Result<u32, X402Error> {
     let message = VersionedMessage::V0(message.clone());
@@ -125,8 +131,8 @@ pub async fn estimate_compute_units(
 }
 
 /// Get the priority fee in micro-lamports.
-pub async fn get_priority_fee_micro_lamports(
-    rpc_client: &RpcClient,
+pub async fn get_priority_fee_micro_lamports<S: RpcClientLike>(
+    rpc_client: &S,
     writeable_accounts: &[Pubkey],
 ) -> Result<u64, X402Error> {
     let recent_fees = rpc_client
@@ -164,9 +170,9 @@ pub fn update_or_append_set_compute_unit_limit(ixs: &mut Vec<Instruction>, units
 
 /// Build and sign a Solana token transfer transaction.
 /// Returns the base64-encoded signed transaction.
-pub async fn build_signed_transfer_transaction<S: Signer>(
+pub async fn build_signed_transfer_transaction<S: Signer, R: RpcClientLike>(
     signer: &S,
-    rpc_client: &RpcClient,
+    rpc_client: &R,
     fee_payer: &Pubkey,
     pay_to: &Address,
     asset: &Address,
@@ -337,15 +343,15 @@ impl<S: Signer + Send + Sync + Clone + 'static> X402SchemeClient for V1SolanaExa
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct PayloadSigner<S> {
+pub struct PayloadSigner<S, R> {
     signer: S,
-    rpc_client: Arc<RpcClient>,
+    rpc_client: R,
     requirements: PaymentRequirements,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
 #[async_trait]
-impl<S: Signer + Sync> PaymentCandidateSigner for PayloadSigner<S> {
+impl<S: Signer + Sync, R: RpcClientLike + Sync> PaymentCandidateSigner for PayloadSigner<S, R> {
     async fn sign_payment(&self) -> Result<String, X402Error> {
         let fee_payer = self
             .requirements
@@ -380,5 +386,47 @@ impl<S: Signer + Sync> PaymentCandidateSigner for PayloadSigner<S> {
         let b64 = Base64Bytes::encode(&json);
 
         Ok(b64.to_string())
+    }
+}
+
+pub trait RpcClientLike {
+    fn get_account(
+        &self,
+        pubkey: &Pubkey,
+    ) -> impl Future<Output = Result<Account, ClientError>> + Send;
+    fn simulate_transaction_with_config(
+        &self,
+        transaction: &VersionedTransaction,
+        config: RpcSimulateTransactionConfig,
+    ) -> impl Future<Output = RpcResult<RpcSimulateTransactionResult>> + Send;
+    fn get_recent_prioritization_fees(
+        &self,
+        addresses: &[Pubkey],
+    ) -> impl Future<Output = Result<Vec<RpcPrioritizationFee>, ClientError>> + Send;
+    fn get_latest_blockhash(&self) -> impl Future<Output = Result<Hash, ClientError>> + Send;
+}
+
+impl<Container: AsRef<RpcClient>> RpcClientLike for Container {
+    fn get_account(
+        &self,
+        pubkey: &Pubkey,
+    ) -> impl Future<Output = Result<Account, ClientError>> + Send {
+        RpcClient::get_account(self.as_ref(), pubkey)
+    }
+    fn simulate_transaction_with_config(
+        &self,
+        transaction: &VersionedTransaction,
+        config: RpcSimulateTransactionConfig,
+    ) -> impl Future<Output = RpcResult<RpcSimulateTransactionResult>> + Send {
+        RpcClient::simulate_transaction_with_config(self.as_ref(), transaction, config)
+    }
+    fn get_recent_prioritization_fees(
+        &self,
+        addresses: &[Pubkey],
+    ) -> impl Future<Output = Result<Vec<RpcPrioritizationFee>, ClientError>> + Send {
+        RpcClient::get_recent_prioritization_fees(self.as_ref(), addresses)
+    }
+    fn get_latest_blockhash(&self) -> impl Future<Output = Result<Hash, ClientError>> + Send {
+        RpcClient::get_latest_blockhash(self.as_ref())
     }
 }
