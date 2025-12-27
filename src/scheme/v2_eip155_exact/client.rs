@@ -1,13 +1,11 @@
-use alloy_signer::Signer;
 use async_trait::async_trait;
 use serde::Deserialize;
-
 use crate::chain::eip155::Eip155ChainReference;
 use crate::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient};
 use crate::proto::v2::ResourceInfo;
 use crate::proto::{PaymentRequired, v2};
 use crate::scheme::X402SchemeId;
-use crate::scheme::v1_eip155_exact::client::{Eip3009SigningParams, sign_erc3009_authorization};
+use crate::scheme::v1_eip155_exact::client::{Eip3009SigningParams, SignerLike, sign_erc3009_authorization};
 use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_eip155_exact::types;
 use crate::util::Base64Bytes;
@@ -20,7 +18,7 @@ pub struct V2Eip155ExactClient<S> {
 
 impl<S> From<S> for V2Eip155ExactClient<S>
 where
-    S: Signer + Send + Sync,
+    S: SignerLike + Send + Sync,
 {
     fn from(signer: S) -> Self {
         Self { signer }
@@ -39,7 +37,7 @@ impl<S> X402SchemeId for V2Eip155ExactClient<S> {
 
 impl<S> X402SchemeClient for V2Eip155ExactClient<S>
 where
-    S: Signer + Clone + Send + Sync + 'static,
+    S: SignerLike + Clone + Send + Sync + 'static,
 {
     fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
@@ -85,7 +83,7 @@ struct PayloadSigner<S> {
 #[async_trait]
 impl<S> PaymentCandidateSigner for PayloadSigner<S>
 where
-    S: Sync + Signer,
+    S: Sync + SignerLike,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
         let params = Eip3009SigningParams {

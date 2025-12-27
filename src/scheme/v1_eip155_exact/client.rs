@@ -1,10 +1,10 @@
-use alloy_primitives::{Address, FixedBytes, U256};
-use alloy_signer::Signer;
+use std::sync::Arc;
+use alloy_primitives::{Address, FixedBytes, Signature, U256};
+use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
 use rand::{Rng, rng};
 use serde::Deserialize;
-
 use crate::chain::ChainId;
 use crate::chain::eip155::Eip155ChainReference;
 use crate::proto::PaymentRequired;
@@ -24,6 +24,7 @@ pub struct V1Eip155ExactClient<S> {
     signer: S,
 }
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 impl<S> V1Eip155ExactClient<S> {
     pub fn new(signer: S) -> Self {
         Self { signer }
@@ -42,7 +43,7 @@ impl<S> X402SchemeId for V1Eip155ExactClient<S> {
 
 impl<S> X402SchemeClient for V1Eip155ExactClient<S>
 where
-    S: Signer + Clone + Send + Sync + 'static,
+    S: SignerLike + Clone + Send + Sync + 'static,
 {
     fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
@@ -102,7 +103,7 @@ pub struct Eip3009SigningParams {
 /// It constructs the EIP-712 domain, builds the authorization struct with appropriate
 /// timing parameters, and signs the resulting hash.
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub async fn sign_erc3009_authorization<S: Signer + Sync>(
+pub async fn sign_erc3009_authorization<S: SignerLike + Sync>(
     signer: &S,
     params: &Eip3009SigningParams,
 ) -> Result<ExactEvmPayload, X402Error> {
@@ -173,7 +174,7 @@ struct PayloadSigner<S> {
 #[async_trait]
 impl<S> PaymentCandidateSigner for PayloadSigner<S>
 where
-    S: Signer + Sync,
+    S: SignerLike + Sync,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
         let params = Eip3009SigningParams {
@@ -198,5 +199,60 @@ where
         let b64 = Base64Bytes::encode(&json);
 
         Ok(b64.to_string())
+    }
+}
+
+/// A trait that abstracts signing operations, allowing both owned signers and Arc-wrapped signers.
+///
+/// This is necessary because Alloy's `Signer` trait is not implemented for `Arc<T>`,
+/// but users may want to share signers via `Arc` (especially when `PrivateKeySigner` doesn't implement `Clone`).
+///
+/// # Example
+///
+/// ```ignore
+/// use std::sync::Arc;
+/// use alloy_signer_local::PrivateKeySigner;
+/// use x402_rs::scheme::v1_eip155_exact::SignerLike;
+///
+/// let signer: PrivateKeySigner = ...;
+/// let signer = Arc::new(signer);
+/// // Now you can use `signer` anywhere `SignerLike` is expected
+/// ```
+#[async_trait]
+pub trait SignerLike {
+    /// Returns the address of the signer.
+    fn address(&self) -> Address;
+
+    /// Signs the given hash.
+    async fn sign_hash(&self, hash: &FixedBytes<32>) -> Result<Signature, alloy_signer::Error>;
+}
+
+#[async_trait]
+impl SignerLike for PrivateKeySigner
+{
+    fn address(&self) -> Address {
+        PrivateKeySigner::address(self)
+    }
+
+    async fn sign_hash(
+        &self,
+        hash: &FixedBytes<32>,
+    ) -> Result<Signature, alloy_signer::Error> {
+        alloy_signer::Signer::sign_hash(self, hash).await
+    }
+}
+
+#[async_trait]
+impl SignerLike for Arc<PrivateKeySigner>
+{
+    fn address(&self) -> Address {
+        PrivateKeySigner::address(self.as_ref())
+    }
+
+    async fn sign_hash(
+        &self,
+        hash: &FixedBytes<32>,
+    ) -> Result<Signature, alloy_signer::Error> {
+        alloy_signer::Signer::sign_hash(self.as_ref(), hash).await
     }
 }

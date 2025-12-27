@@ -15,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
     let signer: PrivateKeySigner = env::var("EVM_PRIVATE_KEY")?.parse()?;
-    // let signer = Arc::new(signer); TODO
+    let signer = Arc::new(signer);
     println!("Signer address: {:?}", signer.address());
 
     let solana_private_key = env::var("SOLANA_PRIVATE_KEY")?;
@@ -44,5 +44,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-// TODO Solana and other schemes
