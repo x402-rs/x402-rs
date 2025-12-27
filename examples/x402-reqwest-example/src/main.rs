@@ -23,18 +23,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Solana address: {:?}", keypair.pubkey());
     let keypair = Arc::new(keypair);
     let solana_rpc_url = env::var("SOLANA_RPC_URL")?;
-    let rpc_client_1 = RpcClient::new(solana_rpc_url.clone());
+    let rpc_client_1 = Arc::new(RpcClient::new(solana_rpc_url.clone()));
     let rpc_client_2 = RpcClient::new(solana_rpc_url);
 
     // Register the EVM client with a wildcard pattern to handle all EIP-155 chains
     let x402_client = X402Client::new()
-        .register(V1SolanaExactClient::new(Arc::clone(&keypair), rpc_client_1))
-        .register(V2SolanaExactClient::new(keypair, rpc_client_2))
+        .register(V1SolanaExactClient::new(keypair, Arc::clone(&rpc_client_1)))
+        // .register(V2SolanaExactClient::new(keypair, rpc_client_2))
         .register(V1Eip155ExactClient::from(signer));
     let http_client = Client::new().with_payments(x402_client).build();
 
     let response = http_client
-        .get("http://localhost:3000/protected-route")
+        .get("http://localhost:3001/protected-route")
         .send()
         .await?;
 

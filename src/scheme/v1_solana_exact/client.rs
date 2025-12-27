@@ -15,7 +15,6 @@ use solana_signer::Signer;
 use solana_transaction::Instruction;
 use solana_transaction::versioned::VersionedTransaction;
 use spl_token::solana_program::program_pack::Pack;
-use std::sync::Arc;
 
 use crate::chain::ChainId;
 use crate::chain::solana::Address;
@@ -277,22 +276,19 @@ pub async fn build_signed_transfer_transaction<S: Signer, R: RpcClientLike>(
 /// Client for creating Solana payment payloads for the v1 exact scheme.
 #[derive(Clone)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct V1SolanaExactClient<S> {
+pub struct V1SolanaExactClient<S, R> {
     signer: S,
-    rpc_client: Arc<RpcClient>,
+    rpc_client: R,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
-impl<S> V1SolanaExactClient<S> {
-    pub fn new(signer: S, rpc_client: RpcClient) -> Self {
-        Self {
-            signer,
-            rpc_client: Arc::new(rpc_client),
-        }
+impl<S, R> V1SolanaExactClient<S, R> {
+    pub fn new(signer: S, rpc_client: R) -> Self {
+        Self { signer, rpc_client }
     }
 }
 
-impl<S> X402SchemeId for V1SolanaExactClient<S> {
+impl<S, R> X402SchemeId for V1SolanaExactClient<S, R> {
     fn x402_version(&self) -> u8 {
         V1SolanaExact.x402_version()
     }
@@ -306,7 +302,11 @@ impl<S> X402SchemeId for V1SolanaExactClient<S> {
     }
 }
 
-impl<S: Signer + Send + Sync + Clone + 'static> X402SchemeClient for V1SolanaExactClient<S> {
+impl<S, R> X402SchemeClient for V1SolanaExactClient<S, R>
+where
+    S: Signer + Send + Sync + Clone + 'static,
+    R: RpcClientLike + Send + Sync + Clone + 'static,
+{
     fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
             PaymentRequired::V1(payment_required) => payment_required,
@@ -332,7 +332,7 @@ impl<S: Signer + Send + Sync + Clone + 'static> X402SchemeClient for V1SolanaExa
                     pay_to: requirements.pay_to.to_string(),
                     signer: Box::new(PayloadSigner {
                         signer: self.signer.clone(),
-                        rpc_client: Arc::clone(&self.rpc_client),
+                        rpc_client: self.rpc_client.clone(),
                         requirements,
                     }),
                 };
