@@ -1,12 +1,9 @@
-mod client;
-
 use alloy_signer_local::PrivateKeySigner;
 use dotenvy::dotenv;
 use reqwest::Client;
 use std::env;
+use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
 use x402_rs::scheme::v2_eip155_exact::client::V2Eip155ExactClient;
-
-use crate::client::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
