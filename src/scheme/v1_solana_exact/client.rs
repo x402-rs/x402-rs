@@ -325,8 +325,8 @@ impl X402SchemeClient for V1SolanaExactClient {
                     x402_version: self.x402_version(),
                     pay_to: requirements.pay_to.to_string(),
                     signer: Box::new(PayloadSigner {
-                        keypair: self.keypair.clone(),
-                        rpc_client: self.rpc_client.clone(),
+                        keypair: Arc::clone(&self.keypair),
+                        rpc_client: Arc::clone(&self.rpc_client),
                         requirements,
                     }),
                 };
