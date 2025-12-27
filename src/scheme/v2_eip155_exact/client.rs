@@ -1,8 +1,5 @@
-use alloy_primitives::{FixedBytes, U256};
 use alloy_signer::Signer;
-use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
-use rand::{Rng, rng};
 use serde::Deserialize;
 
 use crate::chain::eip155::Eip155ChainReference;
@@ -10,15 +7,13 @@ use crate::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, 
 use crate::proto::v2::ResourceInfo;
 use crate::proto::{PaymentRequired, v2};
 use crate::scheme::X402SchemeId;
-use crate::scheme::v1_eip155_exact::{
-    ExactEvmPayload, ExactEvmPayloadAuthorization, TransferWithAuthorization,
-};
+use crate::scheme::v1_eip155_exact::client::{Eip3009SigningParams, sign_erc3009_authorization};
 use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_eip155_exact::types;
-use crate::timestamp::UnixTimestamp;
 use crate::util::Base64Bytes;
 
 #[derive(Debug)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct V2Eip155ExactClient<S> {
     signer: S,
 }
@@ -79,6 +74,7 @@ where
     }
 }
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 struct PayloadSigner<S> {
     signer: S,
     resource_info: ResourceInfo,
@@ -92,65 +88,23 @@ where
     S: Sync + Signer,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
-        let (name, version) = match &self.requirements.extra {
-            None => ("".to_string(), "".to_string()),
-            Some(extra) => (extra.name.clone(), extra.version.clone()),
-        };
-        let chain_id_num = self.chain_reference.inner();
-        // Build EIP-712 domain
-        let domain = eip712_domain! {
-            name: name,
-            version: version,
-            chain_id: chain_id_num,
-            verifying_contract: self.requirements.asset.0,
-        };
-        // Build authorization
-        let now = UnixTimestamp::now();
-        // valid_after should be in the past (10 minutes ago) to ensure the payment is immediately valid
-        let valid_after_secs = now.as_secs().saturating_sub(10 * 60);
-        let valid_after = UnixTimestamp::from_secs(valid_after_secs);
-        let valid_before = now + self.requirements.max_timeout_seconds;
-        let nonce: [u8; 32] = rng().random();
-        let nonce = FixedBytes(nonce);
-
-        let authorization = ExactEvmPayloadAuthorization {
-            from: self.signer.address(),
-            to: self.requirements.pay_to.into(),
-            value: self.requirements.amount.into(),
-            valid_after,
-            valid_before,
-            nonce,
+        let params = Eip3009SigningParams {
+            chain_id: self.chain_reference.inner(),
+            asset_address: self.requirements.asset.0,
+            pay_to: self.requirements.pay_to.into(),
+            amount: self.requirements.amount.into(),
+            max_timeout_seconds: self.requirements.max_timeout_seconds,
+            extra: self.requirements.extra.clone(),
         };
 
-        // Create the EIP-712 struct for signing
-        // IMPORTANT: The values here MUST match the authorization struct exactly,
-        // as the facilitator will reconstruct this struct from the authorization
-        // to verify the signature.
-        let transfer_with_authorization = TransferWithAuthorization {
-            from: authorization.from,
-            to: authorization.to,
-            value: authorization.value,
-            validAfter: U256::from(authorization.valid_after.as_secs()),
-            validBefore: U256::from(authorization.valid_before.as_secs()),
-            nonce: authorization.nonce,
-        };
-
-        let eip712_hash = transfer_with_authorization.eip712_signing_hash(&domain);
-        let signature = self
-            .signer
-            .sign_hash(&eip712_hash)
-            .await
-            .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
+        let evm_payload = sign_erc3009_authorization(&self.signer, &params).await?;
 
         // Build the payment payload
         let payload = types::PaymentPayload {
             x402_version: v2::X402Version2,
             accepted: self.requirements.clone(),
             resource: self.resource_info.clone(),
-            payload: ExactEvmPayload {
-                signature: signature.as_bytes().into(),
-                authorization,
-            },
+            payload: evm_payload,
         };
         let json = serde_json::to_vec(&payload)?;
         let b64 = Base64Bytes::encode(&json);

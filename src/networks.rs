@@ -484,6 +484,7 @@ pub fn network_name_by_chain_id(chain_id: &ChainId) -> Option<&'static str> {
     CHAIN_ID_TO_NAME.get(chain_id).copied()
 }
 
+#[allow(dead_code, clippy::upper_case_acronyms)] // Public for consumption by downstream crates.
 pub struct USDC;
 
 impl KnownNetworkSolana<solana::SolanaTokenDeployment> for USDC {

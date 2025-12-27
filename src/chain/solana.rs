@@ -142,6 +142,7 @@ pub enum SolanaChainReferenceFormatError {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct SolanaTokenDeployment {
     pub chain_reference: SolanaChainReference,
     pub address: Address,
@@ -149,6 +150,7 @@ pub struct SolanaTokenDeployment {
 }
 
 impl SolanaTokenDeployment {
+    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn new(chain_reference: SolanaChainReference, address: Address, decimals: u8) -> Self {
         Self {
             chain_reference,

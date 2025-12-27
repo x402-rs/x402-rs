@@ -270,6 +270,7 @@ impl PaymentProblem {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub enum PaymentRequired {
     V1(v1::PaymentRequired),
     V2(v2::PaymentRequired),

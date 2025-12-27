@@ -5,6 +5,7 @@ use crate::chain::{ChainId, ChainIdPattern};
 use crate::proto;
 use crate::scheme::X402SchemeId;
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct PaymentCandidate {
     pub chain_id: ChainId,
     pub asset: String,
@@ -16,22 +17,26 @@ pub struct PaymentCandidate {
 }
 
 impl PaymentCandidate {
+    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub async fn sign(&self) -> Result<String, X402Error> {
         self.signer.sign_payment().await
     }
 }
 
 #[async_trait::async_trait]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub trait X402SchemeClient: X402SchemeId + Send + Sync {
     fn accept(&self, payment_required: &proto::PaymentRequired) -> Vec<PaymentCandidate>;
 }
 
 #[async_trait]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub trait PaymentCandidateSigner {
     async fn sign_payment(&self) -> Result<String, X402Error>;
 }
 
 #[derive(Debug, thiserror::Error)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub enum X402Error {
     #[error("No matching payment option found")]
     NoMatchingPaymentOption,
@@ -49,6 +54,7 @@ pub enum X402Error {
     JsonError(#[from] serde_json::Error),
 }
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub enum HttpTransport<A> {
     V1(A),
     V2(A),
@@ -59,12 +65,14 @@ pub enum HttpTransport<A> {
 // ============================================================================
 
 /// Trait for selecting the best payment candidate from available options.
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub trait PaymentSelector: Send + Sync {
     fn select<'a>(&self, candidates: &'a [PaymentCandidate]) -> Option<&'a PaymentCandidate>;
 }
 
 /// Default selector: returns the first matching candidate.
 /// Order is determined by registration order of scheme clients.
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct FirstMatch;
 
 impl PaymentSelector for FirstMatch {
@@ -75,9 +83,10 @@ impl PaymentSelector for FirstMatch {
 
 /// Selector that prefers chains matching patterns in priority order.
 /// The first pattern in the vector has the highest priority, the last has the lowest.
-#[allow(dead_code)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct PreferChain(Vec<ChainIdPattern>);
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 impl PreferChain {
     pub fn new<P: Into<Vec<ChainIdPattern>>>(patterns: P) -> Self {
         Self(patterns.into())

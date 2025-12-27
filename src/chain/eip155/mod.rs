@@ -122,6 +122,7 @@ impl Display for Eip155ChainReference {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct Eip155TokenDeployment {
     pub chain_reference: Eip155ChainReference,
     pub address: Address,
@@ -130,6 +131,7 @@ pub struct Eip155TokenDeployment {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct TokenDeploymentEip712 {
     pub name: String,
     pub version: String,
