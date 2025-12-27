@@ -336,15 +336,15 @@ impl<S: Signer + Send + Sync + 'static> X402SchemeClient for V1SolanaExactClient
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct PayloadSigner<S: Signer + Send + Sync> {
-    signer: Arc<S>,
+pub struct PayloadSigner<S> {
+    signer: S,
     rpc_client: Arc<RpcClient>,
     requirements: PaymentRequirements,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
 #[async_trait]
-impl<S: Signer + Send + Sync> PaymentCandidateSigner for PayloadSigner<S> {
+impl<S: Signer + Sync> PaymentCandidateSigner for PayloadSigner<S> {
     async fn sign_payment(&self) -> Result<String, X402Error> {
         let fee_payer = self
             .requirements
@@ -358,7 +358,7 @@ impl<S: Signer + Send + Sync> PaymentCandidateSigner for PayloadSigner<S> {
 
         let amount = self.requirements.max_amount_required.inner();
         let tx_b64 = build_signed_transfer_transaction(
-            self.signer.as_ref(),
+            &self.signer,
             &self.rpc_client,
             &fee_payer_pubkey,
             &self.requirements.pay_to,
