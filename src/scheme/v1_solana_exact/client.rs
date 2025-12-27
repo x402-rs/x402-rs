@@ -4,7 +4,6 @@ use serde::Deserialize;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
 use solana_compute_budget_interface::ComputeBudgetInstruction;
-use solana_keypair::Keypair;
 use solana_message::v0::Message as MessageV0;
 use solana_message::{Hash, VersionedMessage};
 use solana_pubkey::Pubkey;
@@ -271,7 +270,7 @@ pub async fn build_signed_transfer_transaction<S: Signer>(
 /// Client for creating Solana payment payloads for the v1 exact scheme.
 #[derive(Clone)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct V1SolanaExactClient<S: Signer + Send + Sync> {
+pub struct V1SolanaExactClient<S> {
     signer: Arc<S>,
     rpc_client: Arc<RpcClient>,
 }
@@ -286,7 +285,7 @@ impl<S: Signer + Send + Sync> V1SolanaExactClient<S> {
     }
 }
 
-impl<S: Signer + Send + Sync> X402SchemeId for V1SolanaExactClient<S> {
+impl<S> X402SchemeId for V1SolanaExactClient<S> {
     fn x402_version(&self) -> u8 {
         V1SolanaExact.x402_version()
     }

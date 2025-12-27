@@ -214,10 +214,7 @@ impl TransactionInt {
     /// Sign the transaction with any Signer.
     /// This is used by the client to sign transactions before sending to the facilitator.
     #[allow(dead_code)] // Public for consumption by downstream crates.
-    pub fn sign_with_keypair<S: Signer>(
-        self,
-        signer: &S,
-    ) -> Result<Self, TransactionSignError> {
+    pub fn sign_with_keypair<S: Signer>(self, signer: &S) -> Result<Self, TransactionSignError> {
         let mut tx = self.inner;
         let msg_bytes = tx.message.serialize();
         let signature = signer
