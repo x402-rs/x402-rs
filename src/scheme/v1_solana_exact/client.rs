@@ -271,15 +271,15 @@ pub async fn build_signed_transfer_transaction<S: Signer>(
 #[derive(Clone)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct V1SolanaExactClient<S> {
-    signer: Arc<S>,
+    signer: S,
     rpc_client: Arc<RpcClient>,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
-impl<S: Signer + Send + Sync> V1SolanaExactClient<S> {
+impl<S> V1SolanaExactClient<S> {
     pub fn new(signer: S, rpc_client: RpcClient) -> Self {
         Self {
-            signer: Arc::new(signer),
+            signer,
             rpc_client: Arc::new(rpc_client),
         }
     }
@@ -299,7 +299,7 @@ impl<S> X402SchemeId for V1SolanaExactClient<S> {
     }
 }
 
-impl<S: Signer + Send + Sync + 'static> X402SchemeClient for V1SolanaExactClient<S> {
+impl<S: Signer + Send + Sync + Clone + 'static> X402SchemeClient for V1SolanaExactClient<S> {
     fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
             PaymentRequired::V1(payment_required) => payment_required,
@@ -324,7 +324,7 @@ impl<S: Signer + Send + Sync + 'static> X402SchemeClient for V1SolanaExactClient
                     x402_version: self.x402_version(),
                     pay_to: requirements.pay_to.to_string(),
                     signer: Box::new(PayloadSigner {
-                        signer: Arc::clone(&self.signer),
+                        signer: self.signer.clone(),
                         rpc_client: Arc::clone(&self.rpc_client),
                         requirements,
                     }),
