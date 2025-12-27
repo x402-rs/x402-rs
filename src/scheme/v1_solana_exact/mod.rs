@@ -8,6 +8,7 @@ use solana_compute_budget_interface::ID as ComputeBudgetInstructionId;
 use solana_message::compiled_instruction::CompiledInstruction;
 use solana_pubkey::{Pubkey, pubkey};
 use solana_signature::Signature;
+use solana_signer::Signer;
 use solana_transaction::TransactionError;
 use solana_transaction::versioned::VersionedTransaction;
 use std::collections::HashMap;
@@ -210,18 +211,16 @@ impl TransactionInt {
         Ok(Self { inner: tx })
     }
 
-    /// Sign the transaction with a keypair directly.
+    /// Sign the transaction with any Signer.
     /// This is used by the client to sign transactions before sending to the facilitator.
     #[allow(dead_code)] // Public for consumption by downstream crates.
-    pub fn sign_with_keypair(
+    pub fn sign_with_keypair<S: Signer>(
         self,
-        keypair: &solana_keypair::Keypair,
+        signer: &S,
     ) -> Result<Self, TransactionSignError> {
-        use solana_signer::Signer;
-
         let mut tx = self.inner;
         let msg_bytes = tx.message.serialize();
-        let signature = keypair
+        let signature = signer
             .try_sign_message(msg_bytes.as_slice())
             .map_err(|e| TransactionSignError(format!("{e}")))?;
 
@@ -232,7 +231,7 @@ impl TransactionInt {
         // Find signer's position
         let pos = static_keys[..num_required]
             .iter()
-            .position(|k| *k == keypair.pubkey())
+            .position(|k| *k == signer.pubkey())
             .ok_or(TransactionSignError(
                 "Signer not found in required signers".to_string(),
             ))?;

@@ -165,8 +165,8 @@ pub fn update_or_append_set_compute_unit_limit(ixs: &mut Vec<Instruction>, units
 
 /// Build and sign a Solana token transfer transaction.
 /// Returns the base64-encoded signed transaction.
-pub async fn build_signed_transfer_transaction(
-    keypair: &Keypair,
+pub async fn build_signed_transfer_transaction<S: Signer>(
+    signer: &S,
     rpc: &RpcClient,
     fee_payer: &Pubkey,
     pay_to: &Address,
@@ -184,7 +184,7 @@ pub async fn build_signed_transfer_transaction(
         &ATA_PROGRAM_PUBKEY,
     );
 
-    let client_pubkey = keypair.pubkey();
+    let client_pubkey = signer.pubkey();
     let (source_ata, _) = Pubkey::find_program_address(
         &[
             client_pubkey.as_ref(),
@@ -255,7 +255,7 @@ pub async fn build_signed_transfer_transaction(
 
     let tx = TransactionInt::new(tx);
     let signed = tx
-        .sign_with_keypair(keypair)
+        .sign_with_keypair(signer)
         .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
     let tx_b64 = signed
         .as_base64()
@@ -271,22 +271,22 @@ pub async fn build_signed_transfer_transaction(
 /// Client for creating Solana payment payloads for the v1 exact scheme.
 #[derive(Clone)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct V1SolanaExactClient {
-    keypair: Arc<Keypair>,
+pub struct V1SolanaExactClient<S: Signer + Send + Sync> {
+    signer: Arc<S>,
     rpc_client: Arc<RpcClient>,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
-impl V1SolanaExactClient {
-    pub fn new(keypair: Keypair, rpc_client: RpcClient) -> Self {
+impl<S: Signer + Send + Sync> V1SolanaExactClient<S> {
+    pub fn new(signer: S, rpc_client: RpcClient) -> Self {
         Self {
-            keypair: Arc::new(keypair),
+            signer: Arc::new(signer),
             rpc_client: Arc::new(rpc_client),
         }
     }
 }
 
-impl X402SchemeId for V1SolanaExactClient {
+impl<S: Signer + Send + Sync> X402SchemeId for V1SolanaExactClient<S> {
     fn x402_version(&self) -> u8 {
         V1SolanaExact.x402_version()
     }
@@ -300,7 +300,7 @@ impl X402SchemeId for V1SolanaExactClient {
     }
 }
 
-impl X402SchemeClient for V1SolanaExactClient {
+impl<S: Signer + Send + Sync + 'static> X402SchemeClient for V1SolanaExactClient<S> {
     fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
             PaymentRequired::V1(payment_required) => payment_required,
@@ -325,7 +325,7 @@ impl X402SchemeClient for V1SolanaExactClient {
                     x402_version: self.x402_version(),
                     pay_to: requirements.pay_to.to_string(),
                     signer: Box::new(PayloadSigner {
-                        keypair: Arc::clone(&self.keypair),
+                        signer: Arc::clone(&self.signer),
                         rpc_client: Arc::clone(&self.rpc_client),
                         requirements,
                     }),
@@ -337,15 +337,15 @@ impl X402SchemeClient for V1SolanaExactClient {
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct PayloadSigner {
-    keypair: Arc<Keypair>,
+pub struct PayloadSigner<S: Signer + Send + Sync> {
+    signer: Arc<S>,
     rpc_client: Arc<RpcClient>,
     requirements: PaymentRequirements,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
 #[async_trait]
-impl PaymentCandidateSigner for PayloadSigner {
+impl<S: Signer + Send + Sync> PaymentCandidateSigner for PayloadSigner<S> {
     async fn sign_payment(&self) -> Result<String, X402Error> {
         let fee_payer = self
             .requirements
@@ -359,7 +359,7 @@ impl PaymentCandidateSigner for PayloadSigner {
 
         let amount = self.requirements.max_amount_required.inner();
         let tx_b64 = build_signed_transfer_transaction(
-            &self.keypair,
+            self.signer.as_ref(),
             &self.rpc_client,
             &fee_payer_pubkey,
             &self.requirements.pay_to,
