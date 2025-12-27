@@ -32,11 +32,13 @@ use crate::util::Base64Bytes;
 /// This client handles the creation of SPL Token transfer transactions
 /// that can be used to pay for x402-protected resources.
 #[derive(Clone)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct V1SolanaExactClient {
     keypair: Arc<Keypair>,
     rpc_client: Arc<RpcClient>,
 }
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 impl V1SolanaExactClient {
     /// Creates a new V1SolanaExactClient with the given keypair and RPC client.
     ///
@@ -117,6 +119,7 @@ impl Mint {
     }
 }
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 struct PayloadSigner {
     keypair: Arc<Keypair>,
     rpc_client: Arc<RpcClient>,
@@ -125,10 +128,10 @@ struct PayloadSigner {
 
 impl PayloadSigner {
     async fn fetch_mint(&self, mint_address: &Address) -> Result<Mint, X402Error> {
-        let mint_pubkey: Pubkey = mint_address.clone().into();
+        let mint_pubkey = mint_address.pubkey();
         let account = self
             .rpc_client
-            .get_account(&mint_pubkey)
+            .get_account(mint_pubkey)
             .await
             .map_err(|e| {
                 X402Error::SigningError(format!("failed to fetch mint {mint_pubkey}: {e}"))
@@ -157,6 +160,7 @@ impl PayloadSigner {
     }
 }
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 #[async_trait]
 impl PaymentCandidateSigner for PayloadSigner {
     async fn sign_payment(&self) -> Result<String, X402Error> {
@@ -175,11 +179,11 @@ impl PaymentCandidateSigner for PayloadSigner {
         let fee_payer_pubkey: Pubkey = fee_payer.into();
 
         // Get the expected receiver's ATA
-        let pay_to_pubkey: Pubkey = self.requirements.pay_to.clone().into();
+        let pay_to = &self.requirements.pay_to;
 
         let (ata, _) = Pubkey::find_program_address(
             &[
-                pay_to_pubkey.as_ref(),
+                pay_to.as_ref(),
                 mint.token_program().as_ref(),
                 asset.as_ref(),
             ],
