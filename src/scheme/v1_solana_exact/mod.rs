@@ -1,4 +1,5 @@
 pub mod types;
+pub mod client;
 
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
 use solana_client::rpc_response::UiTransactionError;
