@@ -28,6 +28,6 @@ alloy-sol-types = { version = "1.4.1" }
 
 
 # Solana
-solana-rpc-client = { version = "2.3.13" }
-solana-keypair = { version = "2.2.3" }
+solana-client = { version = "3.1.4" }
+solana-keypair = { version = "3.1.0" }
 serde = { version = "1.0.228", features = ["derive"] }

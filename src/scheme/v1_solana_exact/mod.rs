@@ -210,6 +210,41 @@ impl TransactionInt {
         Ok(Self { inner: tx })
     }
 
+    /// Sign the transaction with a keypair directly.
+    /// This is used by the client to sign transactions before sending to the facilitator.
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn sign_with_keypair(
+        self,
+        keypair: &solana_keypair::Keypair,
+    ) -> Result<Self, TransactionSignError> {
+        use solana_signer::Signer;
+
+        let mut tx = self.inner;
+        let msg_bytes = tx.message.serialize();
+        let signature = keypair
+            .try_sign_message(msg_bytes.as_slice())
+            .map_err(|e| TransactionSignError(format!("{e}")))?;
+
+        // Required signatures are the first N account keys
+        let num_required = tx.message.header().num_required_signatures as usize;
+        let static_keys = tx.message.static_account_keys();
+
+        // Find signer's position
+        let pos = static_keys[..num_required]
+            .iter()
+            .position(|k| *k == keypair.pubkey())
+            .ok_or(TransactionSignError(
+                "Signer not found in required signers".to_string(),
+            ))?;
+
+        // Ensure signature vector is large enough, then place the signature
+        if tx.signatures.len() < num_required {
+            tx.signatures.resize(num_required, Signature::default());
+        }
+        tx.signatures[pos] = signature;
+        Ok(Self { inner: tx })
+    }
+
     pub async fn send_and_confirm(
         &self,
         provider: &SolanaChainProvider,
@@ -234,6 +269,10 @@ impl TransactionInt {
 #[derive(Debug, thiserror::Error)]
 #[error("Can not encode transaction to base64: {0}")]
 pub struct TransactionToB64Error(String);
+
+#[derive(Debug, thiserror::Error)]
+#[error("Can not sign transaction: {0}")]
+pub struct TransactionSignError(pub String);
 
 pub struct VerifyTransferResult {
     pub payer: Address,
