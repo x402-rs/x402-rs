@@ -417,6 +417,10 @@ impl Address {
     pub const fn new(pubkey: Pubkey) -> Self {
         Self(pubkey)
     }
+
+    pub fn pubkey(&self) -> &Pubkey {
+        &self.0
+    }
 }
 
 impl From<Pubkey> for Address {

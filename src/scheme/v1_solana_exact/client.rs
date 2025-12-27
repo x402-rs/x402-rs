@@ -1,3 +1,4 @@
+use alloy_primitives::U256;
 use async_trait::async_trait;
 use serde::Deserialize;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -9,21 +10,21 @@ use solana_message::{Hash, VersionedMessage};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 use solana_signer::Signer;
+use solana_transaction::Instruction;
 use solana_transaction::versioned::VersionedTransaction;
 use spl_token::solana_program::program_pack::Pack;
 use std::sync::Arc;
-use alloy_primitives::U256;
-use solana_transaction::Instruction;
-use crate::chain::solana::Address;
+
 use crate::chain::ChainId;
+use crate::chain::solana::Address;
+use crate::proto::PaymentRequired;
 use crate::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient};
 use crate::proto::v1::X402Version1;
-use crate::proto::PaymentRequired;
+use crate::scheme::X402SchemeId;
 use crate::scheme::v1_solana_exact::types::{
     ExactScheme, ExactSolanaPayload, PaymentPayload, PaymentRequirements,
 };
-use crate::scheme::v1_solana_exact::{TransactionInt, V1SolanaExact, ATA_PROGRAM_PUBKEY};
-use crate::scheme::X402SchemeId;
+use crate::scheme::v1_solana_exact::{ATA_PROGRAM_PUBKEY, TransactionInt, V1SolanaExact};
 use crate::util::Base64Bytes;
 
 /// Client for creating Solana payment payloads for the v1 exact scheme.
@@ -125,9 +126,13 @@ struct PayloadSigner {
 impl PayloadSigner {
     async fn fetch_mint(&self, mint_address: &Address) -> Result<Mint, X402Error> {
         let mint_pubkey: Pubkey = mint_address.clone().into();
-        let account = self.rpc_client.get_account(&mint_pubkey).await.map_err(|e| {
-            X402Error::SigningError(format!("failed to fetch mint {mint_pubkey}: {e}"))
-        })?;
+        let account = self
+            .rpc_client
+            .get_account(&mint_pubkey)
+            .await
+            .map_err(|e| {
+                X402Error::SigningError(format!("failed to fetch mint {mint_pubkey}: {e}"))
+            })?;
         if account.owner == spl_token::id() {
             let mint = spl_token::state::Mint::unpack(&account.data).map_err(|e| {
                 X402Error::SigningError(format!("failed to unpack mint {mint_pubkey}: {e}"))
@@ -155,8 +160,8 @@ impl PayloadSigner {
 #[async_trait]
 impl PaymentCandidateSigner for PayloadSigner {
     async fn sign_payment(&self) -> Result<String, X402Error> {
-        let asset: Address = self.requirements.asset.clone();
-        let mint = self.fetch_mint(&asset).await?;
+        let asset = &self.requirements.asset;
+        let mint = self.fetch_mint(asset).await?;
 
         // Get the fee payer from the extra field
         let fee_payer = self
@@ -170,14 +175,13 @@ impl PaymentCandidateSigner for PayloadSigner {
         let fee_payer_pubkey: Pubkey = fee_payer.into();
 
         // Get the expected receiver's ATA
-        let asset_pubkey: Pubkey = asset.clone().into();
         let pay_to_pubkey: Pubkey = self.requirements.pay_to.clone().into();
 
         let (ata, _) = Pubkey::find_program_address(
             &[
                 pay_to_pubkey.as_ref(),
                 mint.token_program().as_ref(),
-                asset_pubkey.as_ref(),
+                asset.as_ref(),
             ],
             &ATA_PROGRAM_PUBKEY,
         );
@@ -188,7 +192,7 @@ impl PaymentCandidateSigner for PayloadSigner {
             &[
                 client_pubkey.as_ref(),
                 mint.token_program().as_ref(),
-                asset_pubkey.as_ref(),
+                asset.as_ref(),
             ],
             &ATA_PROGRAM_PUBKEY,
         );
@@ -202,7 +206,7 @@ impl PaymentCandidateSigner for PayloadSigner {
             } => spl_token::instruction::transfer_checked(
                 &token_program,
                 &source_ata,
-                &asset_pubkey,
+                asset.pubkey(),
                 &destination_ata,
                 &client_pubkey,
                 &[],
@@ -216,7 +220,7 @@ impl PaymentCandidateSigner for PayloadSigner {
             } => spl_token_2022::instruction::transfer_checked(
                 &token_program,
                 &source_ata,
-                &asset_pubkey,
+                asset.pubkey(),
                 &destination_ata,
                 &client_pubkey,
                 &[],
@@ -257,8 +261,13 @@ impl PaymentCandidateSigner for PayloadSigner {
             let mut final_instructions = Vec::with_capacity(instructions.len() + 1);
             final_instructions.push(cu_ix);
             final_instructions.extend(instructions);
-            MessageV0::try_compile(&fee_payer_pubkey, &final_instructions, &[], recent_blockhash)
-                .map_err(|e| X402Error::SigningError(format!("{e:?}")))?
+            MessageV0::try_compile(
+                &fee_payer_pubkey,
+                &final_instructions,
+                &[],
+                recent_blockhash,
+            )
+            .map_err(|e| X402Error::SigningError(format!("{e:?}")))?
         };
 
         let tx = VersionedTransaction {
@@ -279,7 +288,9 @@ impl PaymentCandidateSigner for PayloadSigner {
             x402_version: X402Version1,
             scheme: ExactScheme,
             network: self.requirements.network.clone(),
-            payload: ExactSolanaPayload { transaction: tx_b64 },
+            payload: ExactSolanaPayload {
+                transaction: tx_b64,
+            },
         };
         let json = serde_json::to_vec(&payload)?;
         let b64 = Base64Bytes::encode(&json);
@@ -312,7 +323,10 @@ pub fn build_message_to_simulate(
 }
 
 /// Estimate compute units by simulating the unsigned/signed tx.
-pub async fn estimate_compute_units(rpc: &RpcClient, message: &MessageV0) -> Result<u32, X402Error> {
+pub async fn estimate_compute_units(
+    rpc: &RpcClient,
+    message: &MessageV0,
+) -> Result<u32, X402Error> {
     let message = VersionedMessage::V0(message.clone());
     let num_required_signatures = message.header().num_required_signatures;
     let tx = VersionedTransaction {
@@ -342,31 +356,33 @@ pub async fn get_priority_fee_micro_lamports(
     rpc: &RpcClient,
     writeable_accounts: &[Pubkey],
 ) -> Result<u64, X402Error> {
-    let fee = rpc
+    let recent_fees = rpc
         .get_recent_prioritization_fees(writeable_accounts)
         .await
-        .map_err(|e| X402Error::SigningError(format!("{e:?}")))?
+        .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
+    let fee = recent_fees
         .iter()
-        .filter(|e| e.prioritization_fee > 0)
-        .map(|e| e.prioritization_fee)
+        .filter_map(|e| {
+            if e.prioritization_fee > 0 {
+                Some(e.prioritization_fee)
+            } else {
+                None
+            }
+        })
         .min_by(|a, b| a.cmp(b))
         .unwrap_or(1);
-
     Ok(fee)
 }
 
 /// Update the first set_compute_unit_limit ix if it exists, else append a new one.
-pub fn update_or_append_set_compute_unit_limit(
-    ixs: &mut Vec<solana_transaction::Instruction>,
-    units: u32,
-) {
+pub fn update_or_append_set_compute_unit_limit(ixs: &mut Vec<Instruction>, units: u32) {
     let target_program = solana_compute_budget_interface::ID;
     let new_ix = ComputeBudgetInstruction::set_compute_unit_limit(units);
 
-    if let Some(ix) = ixs
+    let ix = ixs
         .iter_mut()
-        .find(|ix| ix.program_id == target_program && !ix.data.is_empty() && ix.data[0] == 2)
-    {
+        .find(|ix| ix.program_id == target_program && ix.data.is_empty());
+    if let Some(ix) = ix {
         *ix = new_ix;
     } else {
         ixs.push(new_ix);

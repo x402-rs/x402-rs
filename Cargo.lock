@@ -9060,22 +9060,6 @@ dependencies = [
 
 [[package]]
 name = "spl-associated-token-account"
-version = "7.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae179d4a26b3c7a20c839898e6aed84cb4477adf108a366c95532f058aea041b"
-dependencies = [
- "borsh 1.6.0",
- "num-derive",
- "num-traits",
- "solana-program",
- "spl-associated-token-account-client",
- "spl-token 8.0.0",
- "spl-token-2022 8.0.1",
- "thiserror 2.0.17",
-]
-
-[[package]]
-name = "spl-associated-token-account"
 version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0242277e290c023de8826f504abcf9206b3cd4e18d9ace4ec59a698b2828e88b"
@@ -9098,16 +9082,6 @@ dependencies = [
  "spl-token-2022-interface",
  "spl-token-interface",
  "thiserror 2.0.17",
-]
-
-[[package]]
-name = "spl-associated-token-account-client"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6f8349dbcbe575f354f9a533a21f272f3eb3808a49e2fdc1c34393b88ba76cb"
-dependencies = [
- "solana-instruction 2.3.3",
- "solana-pubkey 2.4.0",
 ]
 
 [[package]]
@@ -9167,29 +9141,6 @@ dependencies = [
  "sha2 0.10.9",
  "syn 2.0.111",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "spl-elgamal-registry"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65edfeed09cd4231e595616aa96022214f9c9d2be02dea62c2b30d5695a6833a"
-dependencies = [
- "bytemuck",
- "solana-account-info 2.3.0",
- "solana-cpi 2.2.1",
- "solana-instruction 2.3.3",
- "solana-msg 2.2.1",
- "solana-program-entrypoint 2.3.0",
- "solana-program-error 2.2.2",
- "solana-pubkey 2.4.0",
- "solana-rent 2.2.1",
- "solana-sdk-ids 2.2.1",
- "solana-system-interface 1.0.0",
- "solana-sysvar 2.3.0",
- "solana-zk-sdk 2.3.13",
- "spl-pod 0.5.1",
- "spl-token-confidential-transfer-proof-extraction 0.3.0",
 ]
 
 [[package]]
@@ -9469,50 +9420,6 @@ dependencies = [
 
 [[package]]
 name = "spl-token-2022"
-version = "8.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31f0dfbb079eebaee55e793e92ca5f433744f4b71ee04880bfd6beefba5973e5"
-dependencies = [
- "arrayref",
- "bytemuck",
- "num-derive",
- "num-traits",
- "num_enum",
- "solana-account-info 2.3.0",
- "solana-clock 2.2.2",
- "solana-cpi 2.2.1",
- "solana-decode-error",
- "solana-instruction 2.3.3",
- "solana-msg 2.2.1",
- "solana-native-token",
- "solana-program-entrypoint 2.3.0",
- "solana-program-error 2.2.2",
- "solana-program-memory 2.3.1",
- "solana-program-option 2.2.1",
- "solana-program-pack 2.2.1",
- "solana-pubkey 2.4.0",
- "solana-rent 2.2.1",
- "solana-sdk-ids 2.2.1",
- "solana-security-txt",
- "solana-system-interface 1.0.0",
- "solana-sysvar 2.3.0",
- "solana-zk-sdk 2.3.13",
- "spl-elgamal-registry 0.2.0",
- "spl-memo",
- "spl-pod 0.5.1",
- "spl-token 8.0.0",
- "spl-token-confidential-transfer-ciphertext-arithmetic 0.3.1",
- "spl-token-confidential-transfer-proof-extraction 0.3.0",
- "spl-token-confidential-transfer-proof-generation 0.4.1",
- "spl-token-group-interface 0.6.0",
- "spl-token-metadata-interface 0.7.0",
- "spl-transfer-hook-interface 0.10.0",
- "spl-type-length-value 0.8.0",
- "thiserror 2.0.17",
-]
-
-[[package]]
-name = "spl-token-2022"
 version = "9.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "707d8237d17d857246b189d0fb278797dcd7cf6219374547791b231fd35a8cc8"
@@ -9541,7 +9448,7 @@ dependencies = [
  "solana-system-interface 1.0.0",
  "solana-sysvar 2.3.0",
  "solana-zk-sdk 2.3.13",
- "spl-elgamal-registry 0.3.0",
+ "spl-elgamal-registry",
  "spl-memo",
  "spl-pod 0.5.1",
  "spl-token 8.0.0",
@@ -9646,26 +9553,6 @@ dependencies = [
  "bytemuck",
  "solana-curve25519 3.1.4",
  "solana-zk-sdk 4.0.0",
-]
-
-[[package]]
-name = "spl-token-confidential-transfer-proof-extraction"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe2629860ff04c17bafa9ba4bed8850a404ecac81074113e1f840dbd0ebb7bd6"
-dependencies = [
- "bytemuck",
- "solana-account-info 2.3.0",
- "solana-curve25519 2.3.13",
- "solana-instruction 2.3.3",
- "solana-instructions-sysvar 2.2.2",
- "solana-msg 2.2.1",
- "solana-program-error 2.2.2",
- "solana-pubkey 2.4.0",
- "solana-sdk-ids 2.2.1",
- "solana-zk-sdk 2.3.13",
- "spl-pod 0.5.1",
- "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -11323,7 +11210,7 @@ dependencies = [
  "solana-signature 3.1.0",
  "solana-signer 3.0.0",
  "solana-transaction 3.0.2",
- "spl-associated-token-account 8.0.0",
+ "spl-associated-token-account",
  "spl-token 9.0.0",
  "spl-token-2022 10.0.0",
  "thiserror 2.0.17",
@@ -11336,23 +11223,11 @@ dependencies = [
 name = "x402-reqwest-example"
 version = "0.1.0"
 dependencies = [
- "alloy-primitives",
- "alloy-signer",
  "alloy-signer-local",
- "alloy-sol-types",
- "async-trait",
- "bytes",
  "dotenvy",
- "http 1.4.0",
- "rand 0.9.2",
  "reqwest",
- "reqwest-middleware",
- "ruint",
- "serde",
- "serde_json",
  "solana-client 3.1.4",
  "solana-keypair 3.1.0",
- "thiserror 2.0.17",
  "tokio",
  "x402-reqwest",
  "x402-rs 0.11.0",
@@ -11412,7 +11287,6 @@ dependencies = [
  "alloy-sol-types",
  "alloy-transport",
  "alloy-transport-http",
- "anyhow",
  "async-trait",
  "axum",
  "base64 0.22.1",
@@ -11429,12 +11303,9 @@ dependencies = [
  "opentelemetry-stdout",
  "opentelemetry_sdk",
  "rand 0.9.2",
- "regex",
- "rust_decimal",
  "serde",
  "serde_json",
  "solana-account 3.2.0",
- "solana-address 2.0.0",
  "solana-client 3.1.4",
  "solana-commitment-config 3.1.0",
  "solana-compute-budget-interface 3.0.0",
@@ -11444,12 +11315,10 @@ dependencies = [
  "solana-signature 3.1.0",
  "solana-signer 3.0.0",
  "solana-transaction 3.0.2",
- "spl-associated-token-account 7.0.0",
  "spl-token 9.0.0",
  "spl-token-2022 10.0.0",
  "thiserror 2.0.17",
  "tokio",
- "tokio-stream",
  "tokio-util",
  "tower",
  "tower-http",
