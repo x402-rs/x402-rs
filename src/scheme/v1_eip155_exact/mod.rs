@@ -13,6 +13,7 @@ use tracing::Instrument;
 use tracing::instrument;
 use tracing_core::Level;
 
+pub mod client;
 pub mod types;
 
 use crate::chain::eip155::{

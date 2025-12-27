@@ -1,5 +1,5 @@
-pub mod types;
 pub mod client;
+pub mod types;
 
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;

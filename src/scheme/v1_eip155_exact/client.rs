@@ -5,25 +5,25 @@ use async_trait::async_trait;
 use rand::{Rng, rng};
 use serde::Deserialize;
 
+use crate::chain::ChainId;
 use crate::chain::eip155::Eip155ChainReference;
+use crate::proto::PaymentRequired;
 use crate::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient};
+use crate::proto::v1::X402Version1;
 use crate::proto::v2::ResourceInfo;
-use crate::proto::{PaymentRequired, v2};
-use crate::scheme::X402SchemeId;
 use crate::scheme::v1_eip155_exact::{
-    ExactEvmPayload, ExactEvmPayloadAuthorization, TransferWithAuthorization,
+    ExactEvmPayload, ExactEvmPayloadAuthorization, ExactScheme, TransferWithAuthorization, types,
 };
-use crate::scheme::v2_eip155_exact::V2Eip155Exact;
-use crate::scheme::v2_eip155_exact::types;
+use crate::scheme::{V1Eip155Exact, X402SchemeId};
 use crate::timestamp::UnixTimestamp;
 use crate::util::Base64Bytes;
 
 #[derive(Debug)]
-pub struct V2Eip155ExactClient<S> {
+pub struct V1Eip155ExactClient<S> {
     signer: S,
 }
 
-impl<S> From<S> for V2Eip155ExactClient<S>
+impl<S> From<S> for V1Eip155ExactClient<S>
 where
     S: Signer + Send + Sync,
 {
@@ -32,24 +32,24 @@ where
     }
 }
 
-impl<S> X402SchemeId for V2Eip155ExactClient<S> {
+impl<S> X402SchemeId for V1Eip155ExactClient<S> {
     fn namespace(&self) -> &str {
-        V2Eip155Exact.namespace()
+        V1Eip155Exact.namespace()
     }
 
     fn scheme(&self) -> &str {
-        V2Eip155Exact.scheme()
+        V1Eip155Exact.scheme()
     }
 }
 
-impl<S> X402SchemeClient for V2Eip155ExactClient<S>
+impl<S> X402SchemeClient for V1Eip155ExactClient<S>
 where
     S: Signer + Clone + Send + Sync + 'static,
 {
     fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
-            PaymentRequired::V2(payment_required) => payment_required,
-            PaymentRequired::V1(_) => {
+            PaymentRequired::V1(payment_required) => payment_required,
+            PaymentRequired::V2(_) => {
                 return vec![];
             }
         };
@@ -58,16 +58,22 @@ where
             .iter()
             .filter_map(|v| {
                 let requirements = types::PaymentRequirements::deserialize(v).ok()?;
-                let chain_reference = Eip155ChainReference::try_from(&requirements.network).ok()?;
+                let chain_id = ChainId::from_network_name(&requirements.network)?;
+                let chain_reference = Eip155ChainReference::try_from(chain_id.clone()).ok()?;
+                let resource_info = ResourceInfo {
+                    description: requirements.description.clone(),
+                    mime_type: requirements.mime_type.clone(),
+                    url: requirements.resource.clone(),
+                };
                 let candidate = PaymentCandidate {
-                    chain_id: requirements.network.clone(),
+                    chain_id,
                     asset: requirements.asset.to_string(),
-                    amount: requirements.amount.into(),
+                    amount: requirements.max_amount_required,
                     scheme: self.scheme().to_string(),
                     x402_version: self.x402_version(),
                     pay_to: requirements.pay_to.to_string(),
                     signer: Box::new(PayloadSigner {
-                        resource_info: payment_required.resource.clone(),
+                        resource_info,
                         signer: self.signer.clone(),
                         chain_reference,
                         requirements,
@@ -102,7 +108,7 @@ where
             name: name,
             version: version,
             chain_id: chain_id_num,
-            verifying_contract: self.requirements.asset.0,
+            verifying_contract: self.requirements.asset,
         };
         // Build authorization
         let now = UnixTimestamp::now();
@@ -116,7 +122,7 @@ where
         let authorization = ExactEvmPayloadAuthorization {
             from: self.signer.address(),
             to: self.requirements.pay_to.into(),
-            value: self.requirements.amount.into(),
+            value: self.requirements.max_amount_required,
             valid_after,
             valid_before,
             nonce,
@@ -144,9 +150,9 @@ where
 
         // Build the payment payload
         let payload = types::PaymentPayload {
-            x402_version: v2::X402Version2,
-            accepted: self.requirements.clone(),
-            resource: self.resource_info.clone(),
+            x402_version: X402Version1,
+            scheme: ExactScheme,
+            network: self.requirements.network.clone(),
             payload: ExactEvmPayload {
                 signature: signature.as_bytes().into(),
                 authorization,
