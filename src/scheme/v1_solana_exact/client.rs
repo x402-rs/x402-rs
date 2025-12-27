@@ -27,83 +27,7 @@ use crate::scheme::v1_solana_exact::types::{
 use crate::scheme::v1_solana_exact::{ATA_PROGRAM_PUBKEY, TransactionInt, V1SolanaExact};
 use crate::util::Base64Bytes;
 
-/// Client for creating Solana payment payloads for the v1 exact scheme.
-///
-/// This client handles the creation of SPL Token transfer transactions
-/// that can be used to pay for x402-protected resources.
-#[derive(Clone)]
-#[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct V1SolanaExactClient {
-    keypair: Arc<Keypair>,
-    rpc_client: Arc<RpcClient>,
-}
-
-#[allow(dead_code)] // Public for consumption by downstream crates.
-impl V1SolanaExactClient {
-    /// Creates a new V1SolanaExactClient with the given keypair and RPC client.
-    ///
-    /// # Arguments
-    /// * `keypair` - The Solana keypair used to sign transactions
-    /// * `rpc_client` - The RPC client used to interact with the Solana network
-    pub fn new(keypair: Keypair, rpc_client: RpcClient) -> Self {
-        Self {
-            keypair: Arc::new(keypair),
-            rpc_client: Arc::new(rpc_client),
-        }
-    }
-}
-
-impl X402SchemeId for V1SolanaExactClient {
-    fn x402_version(&self) -> u8 {
-        V1SolanaExact.x402_version()
-    }
-
-    fn namespace(&self) -> &str {
-        V1SolanaExact.namespace()
-    }
-
-    fn scheme(&self) -> &str {
-        V1SolanaExact.scheme()
-    }
-}
-
-impl X402SchemeClient for V1SolanaExactClient {
-    fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
-        let payment_required = match payment_required {
-            PaymentRequired::V1(payment_required) => payment_required,
-            PaymentRequired::V2(_) => {
-                return vec![];
-            }
-        };
-        payment_required
-            .accepts
-            .iter()
-            .filter_map(|v| {
-                let requirements = PaymentRequirements::deserialize(v).ok()?;
-                // Check if this is a Solana network
-                let chain_id = ChainId::from_network_name(&requirements.network)?;
-                if chain_id.namespace != "solana" {
-                    return None;
-                }
-                let candidate = PaymentCandidate {
-                    chain_id,
-                    asset: requirements.asset.to_string(),
-                    amount: U256::from(requirements.max_amount_required.inner()),
-                    scheme: self.scheme().to_string(),
-                    x402_version: self.x402_version(),
-                    pay_to: requirements.pay_to.to_string(),
-                    signer: Box::new(PayloadSigner {
-                        keypair: self.keypair.clone(),
-                        rpc_client: self.rpc_client.clone(),
-                        requirements,
-                    }),
-                };
-                Some(candidate)
-            })
-            .collect::<Vec<_>>()
-    }
-}
-
+/// Mint information for SPL tokens
 #[derive(Debug)]
 pub enum Mint {
     Token { decimals: u8, token_program: Pubkey },
@@ -120,18 +44,12 @@ impl Mint {
 }
 
 /// Fetch mint information from the blockchain.
-#[allow(dead_code)] // Public for consumption by downstream crates.
-pub async fn fetch_mint(
-    mint_address: &Address,
-    rpc: &RpcClient,
-) -> Result<Mint, X402Error> {
+pub async fn fetch_mint(mint_address: &Address, rpc: &RpcClient) -> Result<Mint, X402Error> {
     let mint_pubkey = mint_address.pubkey();
     let account = rpc
         .get_account(mint_pubkey)
         .await
-        .map_err(|e| {
-            X402Error::SigningError(format!("failed to fetch mint {mint_pubkey}: {e}"))
-        })?;
+        .map_err(|e| X402Error::SigningError(format!("failed to fetch mint {mint_pubkey}: {e}")))?;
     if account.owner == spl_token::id() {
         let mint = spl_token::state::Mint::unpack(&account.data).map_err(|e| {
             X402Error::SigningError(format!("failed to unpack mint {mint_pubkey}: {e}"))
@@ -152,156 +70,6 @@ pub async fn fetch_mint(
         Err(X402Error::SigningError(format!(
             "failed to unpack mint {mint_pubkey}: unknown owner"
         )))
-    }
-}
-
-#[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct PayloadSigner {
-    keypair: Arc<Keypair>,
-    rpc_client: Arc<RpcClient>,
-    requirements: PaymentRequirements,
-}
-
-#[allow(dead_code)] // Public for consumption by downstream crates.
-#[async_trait]
-impl PaymentCandidateSigner for PayloadSigner {
-    async fn sign_payment(&self) -> Result<String, X402Error> {
-        let asset = &self.requirements.asset;
-        let mint = fetch_mint(asset, &self.rpc_client).await?;
-
-        // Get the fee payer from the extra field
-        let fee_payer = self
-            .requirements
-            .extra
-            .as_ref()
-            .map(|extra| extra.fee_payer.clone())
-            .ok_or(X402Error::SigningError(
-                "missing fee_payer in extra".to_string(),
-            ))?;
-        let fee_payer_pubkey: Pubkey = fee_payer.into();
-
-        // Get the expected receiver's ATA
-        let pay_to = &self.requirements.pay_to;
-
-        let (ata, _) = Pubkey::find_program_address(
-            &[
-                pay_to.as_ref(),
-                mint.token_program().as_ref(),
-                asset.as_ref(),
-            ],
-            &ATA_PROGRAM_PUBKEY,
-        );
-
-        // Create transfer instruction
-        let client_pubkey = self.keypair.pubkey();
-        let (source_ata, _) = Pubkey::find_program_address(
-            &[
-                client_pubkey.as_ref(),
-                mint.token_program().as_ref(),
-                asset.as_ref(),
-            ],
-            &ATA_PROGRAM_PUBKEY,
-        );
-        let destination_ata = ata;
-        let amount: u64 = self.requirements.max_amount_required.inner();
-
-        let transfer_instruction = match mint {
-            Mint::Token {
-                decimals,
-                token_program,
-            } => spl_token::instruction::transfer_checked(
-                &token_program,
-                &source_ata,
-                asset.pubkey(),
-                &destination_ata,
-                &client_pubkey,
-                &[],
-                amount,
-                decimals,
-            )
-            .map_err(|e| X402Error::SigningError(format!("{e}")))?,
-            Mint::Token2022 {
-                decimals,
-                token_program,
-            } => spl_token_2022::instruction::transfer_checked(
-                &token_program,
-                &source_ata,
-                asset.pubkey(),
-                &destination_ata,
-                &client_pubkey,
-                &[],
-                amount,
-                decimals,
-            )
-            .map_err(|e| X402Error::SigningError(format!("{e}")))?,
-        };
-
-        let transfer_instructions = vec![transfer_instruction];
-
-        // Build the transaction message
-        let recent_blockhash = self
-            .rpc_client
-            .get_latest_blockhash()
-            .await
-            .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
-
-        let fee = get_priority_fee_micro_lamports(
-            self.rpc_client.as_ref(),
-            &[fee_payer_pubkey, destination_ata, source_ata],
-        )
-        .await?;
-
-        let (msg_to_sim, instructions) = build_message_to_simulate(
-            fee_payer_pubkey,
-            &transfer_instructions,
-            fee,
-            recent_blockhash,
-        )?;
-
-        // Estimate compute units via simulation
-        let estimated_cu = estimate_compute_units(self.rpc_client.as_ref(), &msg_to_sim).await?;
-
-        // Build final message with CU limit
-        let cu_ix = ComputeBudgetInstruction::set_compute_unit_limit(estimated_cu);
-        let msg = {
-            let mut final_instructions = Vec::with_capacity(instructions.len() + 1);
-            final_instructions.push(cu_ix);
-            final_instructions.extend(instructions);
-            MessageV0::try_compile(
-                &fee_payer_pubkey,
-                &final_instructions,
-                &[],
-                recent_blockhash,
-            )
-            .map_err(|e| X402Error::SigningError(format!("{e:?}")))?
-        };
-
-        let tx = VersionedTransaction {
-            signatures: vec![],
-            message: VersionedMessage::V0(msg),
-        };
-
-        let tx = TransactionInt::new(tx);
-        let signed = tx
-            .sign_with_keypair(self.keypair.as_ref())
-            .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
-        let tx_b64 = signed
-            .as_base64()
-            .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
-
-        // Build the payment payload
-        let payload = PaymentPayload {
-            x402_version: X402Version1,
-            scheme: ExactScheme,
-            network: self.requirements.network.clone(),
-            payload: ExactSolanaPayload {
-                transaction: tx_b64,
-            },
-        };
-        let json = serde_json::to_vec(&payload)?;
-        let b64 = Base64Bytes::encode(&json);
-
-        Ok(b64.to_string())
     }
 }
 
@@ -392,5 +160,225 @@ pub fn update_or_append_set_compute_unit_limit(ixs: &mut Vec<Instruction>, units
         *ix = new_ix;
     } else {
         ixs.push(new_ix);
+    }
+}
+
+/// Build and sign a Solana token transfer transaction.
+/// Returns the base64-encoded signed transaction.
+pub async fn build_signed_transfer_transaction(
+    keypair: &Keypair,
+    rpc: &RpcClient,
+    fee_payer: &Pubkey,
+    pay_to: &Address,
+    asset: &Address,
+    amount: u64,
+) -> Result<String, X402Error> {
+    let mint = fetch_mint(asset, rpc).await?;
+
+    let (ata, _) = Pubkey::find_program_address(
+        &[
+            pay_to.as_ref(),
+            mint.token_program().as_ref(),
+            asset.as_ref(),
+        ],
+        &ATA_PROGRAM_PUBKEY,
+    );
+
+    let client_pubkey = keypair.pubkey();
+    let (source_ata, _) = Pubkey::find_program_address(
+        &[
+            client_pubkey.as_ref(),
+            mint.token_program().as_ref(),
+            asset.as_ref(),
+        ],
+        &ATA_PROGRAM_PUBKEY,
+    );
+    let destination_ata = ata;
+
+    let transfer_instruction = match mint {
+        Mint::Token {
+            decimals,
+            token_program,
+        } => spl_token::instruction::transfer_checked(
+            &token_program,
+            &source_ata,
+            asset.pubkey(),
+            &destination_ata,
+            &client_pubkey,
+            &[],
+            amount,
+            decimals,
+        )
+        .map_err(|e| X402Error::SigningError(format!("{e}")))?,
+        Mint::Token2022 {
+            decimals,
+            token_program,
+        } => spl_token_2022::instruction::transfer_checked(
+            &token_program,
+            &source_ata,
+            asset.pubkey(),
+            &destination_ata,
+            &client_pubkey,
+            &[],
+            amount,
+            decimals,
+        )
+        .map_err(|e| X402Error::SigningError(format!("{e}")))?,
+    };
+
+    let recent_blockhash = rpc
+        .get_latest_blockhash()
+        .await
+        .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
+
+    let fee =
+        get_priority_fee_micro_lamports(rpc, &[*fee_payer, destination_ata, source_ata]).await?;
+
+    let (msg_to_sim, instructions) =
+        build_message_to_simulate(*fee_payer, &[transfer_instruction], fee, recent_blockhash)?;
+
+    let estimated_cu = estimate_compute_units(rpc, &msg_to_sim).await?;
+
+    let cu_ix = ComputeBudgetInstruction::set_compute_unit_limit(estimated_cu);
+    let msg = {
+        let mut final_instructions = Vec::with_capacity(instructions.len() + 1);
+        final_instructions.push(cu_ix);
+        final_instructions.extend(instructions);
+        MessageV0::try_compile(fee_payer, &final_instructions, &[], recent_blockhash)
+            .map_err(|e| X402Error::SigningError(format!("{e:?}")))?
+    };
+
+    let tx = VersionedTransaction {
+        signatures: vec![],
+        message: VersionedMessage::V0(msg),
+    };
+
+    let tx = TransactionInt::new(tx);
+    let signed = tx
+        .sign_with_keypair(keypair)
+        .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
+    let tx_b64 = signed
+        .as_base64()
+        .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
+
+    Ok(tx_b64)
+}
+
+// ============================================================================
+// V1 Client
+// ============================================================================
+
+/// Client for creating Solana payment payloads for the v1 exact scheme.
+#[derive(Clone)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
+pub struct V1SolanaExactClient {
+    keypair: Arc<Keypair>,
+    rpc_client: Arc<RpcClient>,
+}
+
+#[allow(dead_code)] // Public for consumption by downstream crates.
+impl V1SolanaExactClient {
+    pub fn new(keypair: Keypair, rpc_client: RpcClient) -> Self {
+        Self {
+            keypair: Arc::new(keypair),
+            rpc_client: Arc::new(rpc_client),
+        }
+    }
+}
+
+impl X402SchemeId for V1SolanaExactClient {
+    fn x402_version(&self) -> u8 {
+        V1SolanaExact.x402_version()
+    }
+
+    fn namespace(&self) -> &str {
+        V1SolanaExact.namespace()
+    }
+
+    fn scheme(&self) -> &str {
+        V1SolanaExact.scheme()
+    }
+}
+
+impl X402SchemeClient for V1SolanaExactClient {
+    fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
+        let payment_required = match payment_required {
+            PaymentRequired::V1(payment_required) => payment_required,
+            PaymentRequired::V2(_) => {
+                return vec![];
+            }
+        };
+        payment_required
+            .accepts
+            .iter()
+            .filter_map(|v| {
+                let requirements = PaymentRequirements::deserialize(v).ok()?;
+                let chain_id = ChainId::from_network_name(&requirements.network)?;
+                if chain_id.namespace != "solana" {
+                    return None;
+                }
+                let candidate = PaymentCandidate {
+                    chain_id,
+                    asset: requirements.asset.to_string(),
+                    amount: U256::from(requirements.max_amount_required.inner()),
+                    scheme: self.scheme().to_string(),
+                    x402_version: self.x402_version(),
+                    pay_to: requirements.pay_to.to_string(),
+                    signer: Box::new(PayloadSigner {
+                        keypair: self.keypair.clone(),
+                        rpc_client: self.rpc_client.clone(),
+                        requirements,
+                    }),
+                };
+                Some(candidate)
+            })
+            .collect::<Vec<_>>()
+    }
+}
+
+#[allow(dead_code)] // Public for consumption by downstream crates.
+pub struct PayloadSigner {
+    keypair: Arc<Keypair>,
+    rpc_client: Arc<RpcClient>,
+    requirements: PaymentRequirements,
+}
+
+#[allow(dead_code)] // Public for consumption by downstream crates.
+#[async_trait]
+impl PaymentCandidateSigner for PayloadSigner {
+    async fn sign_payment(&self) -> Result<String, X402Error> {
+        let fee_payer = self
+            .requirements
+            .extra
+            .as_ref()
+            .map(|extra| extra.fee_payer.clone())
+            .ok_or(X402Error::SigningError(
+                "missing fee_payer in extra".to_string(),
+            ))?;
+        let fee_payer_pubkey: Pubkey = fee_payer.into();
+
+        let amount = self.requirements.max_amount_required.inner();
+        let tx_b64 = build_signed_transfer_transaction(
+            &self.keypair,
+            &self.rpc_client,
+            &fee_payer_pubkey,
+            &self.requirements.pay_to,
+            &self.requirements.asset,
+            amount,
+        )
+        .await?;
+
+        let payload = PaymentPayload {
+            x402_version: X402Version1,
+            scheme: ExactScheme,
+            network: self.requirements.network.clone(),
+            payload: ExactSolanaPayload {
+                transaction: tx_b64,
+            },
+        };
+        let json = serde_json::to_vec(&payload)?;
+        let b64 = Base64Bytes::encode(&json);
+
+        Ok(b64.to_string())
     }
 }
