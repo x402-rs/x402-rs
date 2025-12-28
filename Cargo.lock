@@ -11181,8 +11181,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "url",
- "x402-axum",
- "x402-rs 0.10.0",
+ "x402-rs 0.11.0",
 ]
 
 [[package]]
