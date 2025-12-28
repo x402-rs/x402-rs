@@ -6,9 +6,13 @@ publish = false
 
 [dependencies]
 x402-rs = { version = "0.11", path = "../../" }
+http = { version = "1.4.0" }
+reqwest = { version = "0.12.25" }
+thiserror = { version = "2.0.17" }
+serde = { version = "1.0.228", features = ["derive"] }
 
-axum = { version = "0.8.4" }
-tokio = { version = "1.45.0" }
+axum = { version = "0.8.7" }
+tokio = { version = "1.48.0" }
 dotenvy = { version = "0.15.7" }
 serde_json = { version = "1.0" }
 

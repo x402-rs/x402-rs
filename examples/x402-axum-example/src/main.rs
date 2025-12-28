@@ -10,6 +10,7 @@ use tower_http::trace::TraceLayer;
 use tracing::instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use x402_rs::util::Telemetry;
+mod x402;
 
 #[tokio::main]
 async fn main() {

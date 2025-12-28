@@ -11174,8 +11174,12 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "dotenvy",
+ "http 1.4.0",
  "opentelemetry",
+ "reqwest",
+ "serde",
  "serde_json",
+ "thiserror 2.0.17",
  "tokio",
  "tower-http",
  "tracing",
