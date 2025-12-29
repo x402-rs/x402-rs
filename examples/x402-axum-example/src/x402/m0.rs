@@ -11,6 +11,7 @@ use x402_rs::chain::{ChainId, DeployedTokenAmount, eip155};
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto;
 use x402_rs::proto::{SettleRequest, SettleResponse, VerifyRequest, VerifyResponse, v1, v2};
+use x402_rs::proto::client::Transport;
 use x402_rs::util::Base64Bytes;
 
 use crate::x402::price::IntoPriceTag;
@@ -262,6 +263,24 @@ where
         &self,
         headers: &HeaderMap,
     ) -> Result<v1::PaymentPayload<String, serde_json::Value>, X402Error> {
+        let payment_header = extract_payment_header(headers);
+        match payment_header {
+            None => {
+                println!("No Payment Header");
+            }
+            Some(payment_header) => {
+                match payment_header {
+                    Transport::V1(bytes) => {
+                        println!("payment header v1")
+                    }
+                    Transport::V2(bytes) => {
+                        println!("payment header v2")
+                    }
+                }
+            }
+        }
+
+
         let payment_header = headers.get("X-Payment");
         let supported = self.facilitator.supported().await.map_err(|e| {
             X402Error(v1::PaymentRequired {
@@ -508,4 +527,16 @@ impl IntoResponse for X402Error {
             .body(body)
             .expect("Fail to construct response")
     }
+}
+
+fn extract_payment_header(header_map: &HeaderMap) -> Option<Transport<&[u8]>> {
+    let x_payment = header_map.get("X-Payment");
+    if let Some(x_payment) = x_payment {
+        return Some(Transport::V1(x_payment.as_bytes()))
+    }
+    let payment_signature = header_map.get("Payment-Signature");
+    if let Some(payment_signature) = payment_signature {
+        return Some(Transport::V2(payment_signature.as_bytes()))
+    }
+    None
 }
