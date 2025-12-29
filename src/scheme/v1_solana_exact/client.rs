@@ -1,6 +1,5 @@
 use alloy_primitives::U256;
 use async_trait::async_trait;
-use serde::Deserialize;
 use solana_account::Account;
 use solana_client::client_error::ClientError;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -318,7 +317,7 @@ where
             .accepts
             .iter()
             .filter_map(|v| {
-                let requirements = PaymentRequirements::deserialize(v).ok()?;
+                let requirements: PaymentRequirements = v.as_concrete()?;
                 let chain_id = ChainId::from_network_name(&requirements.network)?;
                 if chain_id.namespace != "solana" {
                     return None;

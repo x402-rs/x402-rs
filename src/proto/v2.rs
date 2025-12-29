@@ -93,7 +93,12 @@ pub struct PaymentPayload<TAccepted, TPayload> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct PaymentRequirements<TScheme = String, TAmount = String, TAddress = String, TExtra = Box<serde_json::value::RawValue>> {
+pub struct PaymentRequirements<
+    TScheme = String,
+    TAmount = String,
+    TAddress = String,
+    TExtra = Box<serde_json::value::RawValue>,
+> {
     pub scheme: TScheme,
     pub network: ChainId,
     pub amount: TAmount,
@@ -106,13 +111,32 @@ pub struct PaymentRequirements<TScheme = String, TAmount = String, TAddress = St
 
 impl PaymentRequirements {
     #[allow(dead_code)] // Public for consumption by downstream crates.
-    pub fn as_concrete<'a, TScheme: FromStr, TAmount: FromStr, TAddress: FromStr, TExtra: Deserialize<'a>>(&'a self) -> Option<PaymentRequirements<TScheme, TAmount, TAddress, TExtra>> {
+    pub fn as_concrete<
+        'a,
+        TScheme: FromStr,
+        TAmount: FromStr,
+        TAddress: FromStr,
+        TExtra: Deserialize<'a>,
+    >(
+        &'a self,
+    ) -> Option<PaymentRequirements<TScheme, TAmount, TAddress, TExtra>> {
         let scheme = self.scheme.parse::<TScheme>().ok()?;
         let amount = self.amount.parse::<TAmount>().ok()?;
         let pay_to = self.pay_to.parse::<TAddress>().ok()?;
         let asset = self.asset.parse::<TAddress>().ok()?;
-        let extra = self.extra.as_ref().and_then(|v| serde_json::from_str::<TExtra>(v.get()).ok());
-        Some(PaymentRequirements { scheme, network: self.network.clone(), amount, pay_to, max_timeout_seconds: self.max_timeout_seconds, asset, extra })
+        let extra = self
+            .extra
+            .as_ref()
+            .and_then(|v| serde_json::from_str::<TExtra>(v.get()).ok());
+        Some(PaymentRequirements {
+            scheme,
+            network: self.network.clone(),
+            amount,
+            pay_to,
+            max_timeout_seconds: self.max_timeout_seconds,
+            asset,
+            extra,
+        })
     }
 }
 

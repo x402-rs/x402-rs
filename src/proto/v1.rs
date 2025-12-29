@@ -4,6 +4,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::Display;
+use std::str::FromStr;
 
 /// Version 1 of the x402 protocol.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
@@ -274,7 +275,12 @@ pub struct PaymentPayload<TScheme, TPayload> {
 /// This includes min/max amounts, recipient, asset, network, and metadata.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PaymentRequirements<TScheme, TAmount, TAddress, TExtra> {
+pub struct PaymentRequirements<
+    TScheme = String,
+    TAmount = String,
+    TAddress = String,
+    TExtra = Box<serde_json::value::RawValue>,
+> {
     pub scheme: TScheme,
     pub network: String,
     pub max_amount_required: TAmount,
@@ -290,11 +296,46 @@ pub struct PaymentRequirements<TScheme, TAmount, TAddress, TExtra> {
     pub extra: Option<TExtra>,
 }
 
+impl PaymentRequirements {
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn as_concrete<
+        'a,
+        TScheme: FromStr,
+        TAmount: FromStr,
+        TAddress: FromStr,
+        TExtra: Deserialize<'a>,
+    >(
+        &'a self,
+    ) -> Option<PaymentRequirements<TScheme, TAmount, TAddress, TExtra>> {
+        let scheme = self.scheme.parse::<TScheme>().ok()?;
+        let max_amount_required = self.max_amount_required.parse::<TAmount>().ok()?;
+        let pay_to = self.pay_to.parse::<TAddress>().ok()?;
+        let asset = self.asset.parse::<TAddress>().ok()?;
+        let extra = self
+            .extra
+            .as_ref()
+            .and_then(|v| serde_json::from_str::<TExtra>(v.get()).ok());
+        Some(PaymentRequirements {
+            scheme,
+            network: self.network.clone(),
+            max_amount_required,
+            resource: self.resource.clone(),
+            description: self.description.clone(),
+            mime_type: self.mime_type.clone(),
+            output_schema: self.output_schema.clone(),
+            pay_to,
+            max_timeout_seconds: self.max_timeout_seconds,
+            asset,
+            extra,
+        })
+    }
+}
+
 /// Structured representation of a V1 Payment-Required body.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentRequired {
     pub x402_version: X402Version1,
-    pub accepts: Vec<serde_json::Value>,
+    pub accepts: Vec<PaymentRequirements>,
     pub error: Option<String>,
 }

@@ -3,7 +3,6 @@ use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
 use rand::{Rng, rng};
-use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::chain::ChainId;
@@ -57,7 +56,7 @@ where
             .accepts
             .iter()
             .filter_map(|v| {
-                let requirements = types::PaymentRequirements::deserialize(v).ok()?;
+                let requirements: types::PaymentRequirements = v.as_concrete()?;
                 let chain_id = ChainId::from_network_name(&requirements.network)?;
                 let chain_reference = Eip155ChainReference::try_from(chain_id.clone()).ok()?;
                 let candidate = PaymentCandidate {

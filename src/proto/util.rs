@@ -1,6 +1,6 @@
-use std::str::FromStr;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::str::FromStr;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct U64String(u64);
