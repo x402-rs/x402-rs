@@ -38,10 +38,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route(
             "/protected-route",
-            get(my_handler).layer(
-                x402.with_description("Premium API - Discoverable")
-                    .with_mime_type("application/json")
-                    .with_price_tag()
+            get(my_handler)//.layer(
+                // x402.with_description("Premium API - Discoverable")
+                //     .with_mime_type("application/json")
+                //     .with_price_tag()
                 //     .accept()
                     // .with_input_schema(serde_json::json!({
                     //     "type": "http",
@@ -55,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // }))
                     // .with_price_tag(usdc_solana.amount(0.0025).unwrap())
                     // .or_price_tag(usdc_base_sepolia.amount(0.0025).unwrap()),
-            ),
+            //),
         )
         // .route(
         //     "/api/weather",

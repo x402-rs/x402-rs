@@ -18,12 +18,12 @@ use crate::x402::facilitator_client::FacilitatorClient;
 /// unbundled into the `x402-axum` library at a later stage.
 #[derive(Clone, Debug)]
 pub struct X402<F> {
-    facilitator: Arc<F>,
+    facilitator: F,
     description: Option<String>,
     mime_type: Option<String>,
 }
 
-impl X402<FacilitatorClient> {
+impl X402<Arc<FacilitatorClient>> {
     pub fn new(url: &str) -> Self {
         let facilitator = FacilitatorClient::try_from(url)
             .expect("Invalid facilitator URL");
@@ -48,7 +48,7 @@ impl X402<FacilitatorClient> {
     }
 }
 
-impl TryFrom<&str> for X402<FacilitatorClient> {
+impl TryFrom<&str> for X402<Arc<FacilitatorClient>> {
     type Error = Box<dyn std::error::Error>;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -56,7 +56,7 @@ impl TryFrom<&str> for X402<FacilitatorClient> {
     }
 }
 
-impl TryFrom<String> for X402<FacilitatorClient> {
+impl TryFrom<String> for X402<Arc<FacilitatorClient>> {
     type Error = Box<dyn std::error::Error>;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
@@ -82,30 +82,30 @@ where F: Clone{
     }
 }
 
-pub trait Acceptable {
-    type Requirements;
-    fn into_requirements(self) -> Self::Requirements;
+pub trait IntoPriceTag {
+    type PriceTag;
+    fn into_price_tag(self) -> Self::PriceTag;
 }
 
-impl<TScheme, TAmount, TAddress, TExtra> Acceptable for v1::PaymentRequirements<TScheme, TAmount, TAddress, TExtra>
-where TScheme: ToString, TAmount: ToString, TAddress: ToString, TExtra: serde::Serialize{
-    type Requirements = v1::PaymentRequirements<String, String, String, serde_json::Value>;
-    fn into_requirements(self) -> Self::Requirements {
-        v1::PaymentRequirements {
-            scheme: self.scheme.to_string(),
-            network: self.network,
-    max_amount_required: self.max_amount_required.to_string(),
-    resource: self.resource,
-    description: self.description,
-    mime_type: self.mime_type,
-    output_schema: self.output_schema,
-    pay_to: self.pay_to.to_string(),
-    max_timeout_seconds: self.max_timeout_seconds,
-    asset: self.asset.to_string(),
-    extra: serde_json::to_value(self.extra).ok(),
-        }
-    }
-}
+// impl<TScheme, TAmount, TAddress, TExtra> IntoPriceTag for v1::PaymentRequirements<TScheme, TAmount, TAddress, TExtra>
+// where TScheme: ToString, TAmount: ToString, TAddress: ToString, TExtra: serde::Serialize{
+//     type PriceTag = v1::PaymentRequirements<String, String, String, serde_json::Value>;
+//     fn into_price_tag(self) -> Self::PriceTag {
+//         v1::PaymentRequirements {
+//             scheme: self.scheme.to_string(),
+//             network: self.network,
+//     max_amount_required: self.max_amount_required.to_string(),
+//     resource: self.resource,
+//     description: self.description,
+//     mime_type: self.mime_type,
+//     output_schema: self.output_schema,
+//     pay_to: self.pay_to.to_string(),
+//     max_timeout_seconds: self.max_timeout_seconds,
+//     asset: self.asset.to_string(),
+//     extra: serde_json::to_value(self.extra).ok(),
+//         }
+//     }
+// }
 
 // impl Acceptable for V2PaymentRequirements {
 //     type Requirements = V2PaymentRequirements;
@@ -116,13 +116,13 @@ impl<TFacilitator> X402<TFacilitator>
 where
     TFacilitator: Clone,
 {
-    pub fn with_price_tag<A: Acceptable>(
+    pub fn with_price_tag<A: IntoPriceTag>(
         &self,
         req: A,
-    ) -> X402LayerBuilder<A::Requirements, TFacilitator> {
+    ) -> X402LayerBuilder<A::PriceTag, TFacilitator> {
         X402LayerBuilder {
             facilitator: self.facilitator.clone(),
-            accepts: vec![req.into_requirements()],
+            accepts: vec![req.into_price_tag()],
             description: None,
             mime_type: None,
         }
