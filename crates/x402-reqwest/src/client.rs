@@ -2,9 +2,12 @@ use http::{Extensions, HeaderMap, StatusCode};
 use reqwest::{Request, Response};
 use reqwest_middleware as rqm;
 use std::sync::Arc;
-use x402_rs::proto::client::{FirstMatch, PaymentCandidate, PaymentSelector, Transport, X402Error, X402SchemeClient};
+use x402_rs::proto::client::{
+    FirstMatch, PaymentCandidate, PaymentSelector, Transport, X402Error, X402SchemeClient,
+};
 
-use crate::http_transport::HttpPaymentRequired;
+use crate::HttpPaymentRequired;
+use crate::http_transport::http_payment_required_from_response;
 
 /// The main x402 client that orchestrates scheme clients and selection.
 pub struct X402Client<TSelector> {
@@ -71,7 +74,7 @@ where
     TSelector: PaymentSelector,
 {
     pub async fn make_payment_headers(&self, res: Response) -> Result<HeaderMap, X402Error> {
-        let payment_quote = HttpPaymentRequired::from_response(res)
+        let payment_quote = http_payment_required_from_response(res)
             .await
             .ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
         let candidates = self.schemes.candidates(&payment_quote);
@@ -83,7 +86,7 @@ where
             .ok_or(X402Error::NoMatchingPaymentOption)?;
 
         let signed_payload = selected.sign().await?;
-        let header_name = match payment_quote.inner() {
+        let header_name = match &payment_quote {
             Transport::V1(_) => "X-Payment",
             Transport::V2(_) => "Payment-Signature",
         };
@@ -106,10 +109,10 @@ impl ClientSchemes {
     }
 
     pub fn candidates(&self, payment_quote: &HttpPaymentRequired) -> Vec<PaymentCandidate> {
+        let payment_required = payment_quote.inner();
         let mut candidates = vec![];
         for client in self.0.iter() {
-            let req = payment_quote.as_payment_required();
-            let accepted = client.accept(req);
+            let accepted = client.accept(payment_required);
             candidates.extend(accepted);
         }
         candidates
