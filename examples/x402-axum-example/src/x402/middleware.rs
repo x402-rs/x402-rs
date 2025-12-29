@@ -136,7 +136,7 @@ where
 /// - Subsequent `.accept()` calls must convert to the same `V`
 /// - Mixing v1 and v2 schemes fails at compile time
 pub struct X402LayerBuilder<TAccept, TFacilitator> {
-    facilitator: Arc<TFacilitator>,
+    facilitator: TFacilitator,
     accepts: Vec<TAccept>,
     description: Option<String>,
     mime_type: Option<String>,
