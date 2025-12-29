@@ -5,6 +5,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
 /// Version 2 of the x402 protocol.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
@@ -92,7 +93,7 @@ pub struct PaymentPayload<TAccepted, TPayload> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct PaymentRequirements<TScheme, TAmount, TAddress, TExtra> {
+pub struct PaymentRequirements<TScheme = String, TAmount = String, TAddress = String, TExtra = Box<serde_json::value::RawValue>> {
     pub scheme: TScheme,
     pub network: ChainId,
     pub amount: TAmount,
@@ -103,6 +104,18 @@ pub struct PaymentRequirements<TScheme, TAmount, TAddress, TExtra> {
     pub extra: Option<TExtra>,
 }
 
+impl PaymentRequirements {
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn as_concrete<'a, TScheme: FromStr, TAmount: FromStr, TAddress: FromStr, TExtra: Deserialize<'a>>(&'a self) -> Option<PaymentRequirements<TScheme, TAmount, TAddress, TExtra>> {
+        let scheme = self.scheme.parse::<TScheme>().ok()?;
+        let amount = self.amount.parse::<TAmount>().ok()?;
+        let pay_to = self.pay_to.parse::<TAddress>().ok()?;
+        let asset = self.asset.parse::<TAddress>().ok()?;
+        let extra = self.extra.as_ref().and_then(|v| serde_json::from_str::<TExtra>(v.get()).ok());
+        Some(PaymentRequirements { scheme, network: self.network.clone(), amount, pay_to, max_timeout_seconds: self.max_timeout_seconds, asset, extra })
+    }
+}
+
 /// Structured representation of a V2 Payment-Required header.
 /// This provides proper typing for the payment required response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,5 +123,5 @@ pub struct PaymentRequirements<TScheme, TAmount, TAddress, TExtra> {
 pub struct PaymentRequired {
     pub x402_version: X402Version2,
     pub resource: ResourceInfo,
-    pub accepts: Vec<serde_json::Value>,
+    pub accepts: Vec<PaymentRequirements>,
 }

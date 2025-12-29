@@ -60,6 +60,7 @@ pub enum Transport<A> {
     V2(A),
 }
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 impl<A> Transport<A> {
     pub fn inner(&self) -> &A {
         match self {

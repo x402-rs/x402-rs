@@ -10,7 +10,6 @@ use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_eip155_exact::types;
 use crate::util::Base64Bytes;
 use async_trait::async_trait;
-use serde::Deserialize;
 
 #[derive(Debug)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
@@ -50,7 +49,7 @@ where
             .accepts
             .iter()
             .filter_map(|v| {
-                let requirements = types::PaymentRequirements::deserialize(v).ok()?;
+                let requirements: types::PaymentRequirements = v.as_concrete()?;
                 let chain_reference = Eip155ChainReference::try_from(&requirements.network).ok()?;
                 let candidate = PaymentCandidate {
                     chain_id: requirements.network.clone(),

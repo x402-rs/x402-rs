@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -7,6 +8,14 @@ pub struct U64String(u64);
 impl U64String {
     pub fn inner(&self) -> u64 {
         self.0
+    }
+}
+
+impl FromStr for U64String {
+    type Err = <u64 as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<u64>().map(Self)
     }
 }
 

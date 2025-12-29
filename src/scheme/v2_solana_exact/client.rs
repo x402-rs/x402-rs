@@ -1,12 +1,10 @@
 use alloy_primitives::U256;
 use async_trait::async_trait;
-use serde::Deserialize;
 use solana_pubkey::Pubkey;
 use solana_signer::Signer;
 
 use crate::proto::PaymentRequired;
 use crate::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient};
-use crate::proto::v2;
 use crate::proto::v2::ResourceInfo;
 use crate::proto::v2::X402Version2;
 use crate::scheme::X402SchemeId;
@@ -61,8 +59,7 @@ where
             .accepts
             .iter()
             .filter_map(|v| {
-                let requirements: PaymentRequirements =
-                    v2::PaymentRequirements::deserialize(v).ok()?;
+                let requirements: PaymentRequirements = v.as_concrete()?;
                 let chain_id = requirements.network.clone();
                 if chain_id.namespace != "solana" {
                     return None;
