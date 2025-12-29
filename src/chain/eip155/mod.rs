@@ -134,7 +134,10 @@ pub struct Eip155TokenDeployment {
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
 impl Eip155TokenDeployment {
-    pub fn amount<V: Into<TokenAmount>>(&self, v: V) -> DeployedTokenAmount<U256, Eip155TokenDeployment> {
+    pub fn amount<V: Into<TokenAmount>>(
+        &self,
+        v: V,
+    ) -> DeployedTokenAmount<U256, Eip155TokenDeployment> {
         DeployedTokenAmount {
             amount: v.into().0,
             token: self.clone(),

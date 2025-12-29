@@ -123,6 +123,12 @@ impl<'de> Deserialize<'de> for X402Version {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifyRequest(serde_json::Value);
 
+impl From<serde_json::Value> for VerifyRequest {
+    fn from(value: serde_json::Value) -> Self {
+        Self(value)
+    }
+}
+
 impl VerifyRequest {
     pub fn into_json(self) -> serde_json::Value {
         self.0
@@ -161,12 +167,12 @@ impl VerifyRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VerifyResponse(serde_json::Value);
+pub struct VerifyResponse(pub serde_json::Value);
 
 /// Wrapper for a payment payload and requirements sent by the client to a facilitator
 /// to be verified.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SettleResponse(serde_json::Value);
+pub struct SettleResponse(pub serde_json::Value);
 
 #[derive(Debug, thiserror::Error)]
 pub enum PaymentVerificationError {
@@ -269,7 +275,8 @@ impl PaymentProblem {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub enum PaymentRequired {
     V1(v1::PaymentRequired),

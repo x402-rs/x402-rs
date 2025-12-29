@@ -296,4 +296,5 @@ pub struct PaymentRequirements<TScheme, TAmount, TAddress, TExtra> {
 pub struct PaymentRequired {
     pub x402_version: X402Version1,
     pub accepts: Vec<serde_json::Value>,
+    pub error: Option<String>,
 }

@@ -11175,6 +11175,7 @@ dependencies = [
  "axum",
  "dotenvy",
  "http 1.4.0",
+ "once_cell",
  "opentelemetry",
  "reqwest",
  "serde",
