@@ -339,3 +339,13 @@ pub struct PaymentRequired {
     pub accepts: Vec<PaymentRequirements>,
     pub error: Option<String>,
 }
+
+#[derive(Debug, Clone)]
+pub struct V1PriceTag {
+    pub scheme: String,
+    pub pay_to: String,
+    pub asset: String,
+    pub network: String,
+    pub amount: String,
+    pub extra: Option<serde_json::Value>,
+}

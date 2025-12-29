@@ -1,4 +1,3 @@
-use crate::x402::m0::V1Eip155ExactSchemePriceTag;
 use crate::x402::middleware::X402Middleware;
 use axum::Router;
 use axum::http::StatusCode;
@@ -14,6 +13,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 use x402_rs::__reexports::alloy_primitives::address;
 use x402_rs::networks::{KnownNetworkEip155, USDC};
 use x402_rs::util::Telemetry;
+use crate::x402::v1_eip155_exact::V1Eip155ExactSchemePriceTag;
 
 mod x402;
 

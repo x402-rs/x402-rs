@@ -1,6 +1,3 @@
-use crate::x402::facilitator_client::FacilitatorClient;
-use crate::x402::m0::X402Paygate;
-use crate::x402::price::IntoPriceTag;
 use axum::extract::Request;
 use axum::response::Response;
 use std::convert::Infallible;
@@ -11,6 +8,10 @@ use tower::util::BoxCloneSyncService;
 use tower::{Layer, Service};
 use url::Url;
 use x402_rs::facilitator::Facilitator;
+use x402_rs::proto::server::IntoPriceTag;
+use x402_rs::proto::v1::V1PriceTag;
+use crate::x402::facilitator_client::FacilitatorClient;
+use crate::x402::m0::X402Paygate;
 
 /// The main X402 middleware instance for enforcing x402 payments on routes.
 ///
@@ -207,10 +208,9 @@ pub struct X402MiddlewareService<TPriceTag, TFacilitator> {
     inner: BoxCloneSyncService<Request, Response, Infallible>,
 }
 
-impl<TPriceTag, TFacilitator> Service<Request> for X402MiddlewareService<TPriceTag, TFacilitator>
+impl<TFacilitator> Service<Request> for X402MiddlewareService<V1PriceTag, TFacilitator>
 where
     TFacilitator: Facilitator + Clone + Send + Sync + 'static,
-    TPriceTag: Clone + Send + Sync + 'static,
 {
     type Response = Response;
     type Error = Infallible;
