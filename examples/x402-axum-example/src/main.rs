@@ -1,4 +1,5 @@
-use crate::x402::m0::{V1Eip155ExactSchemePriceTag, X402Middleware};
+use crate::x402::m0::V1Eip155ExactSchemePriceTag;
+use crate::x402::middleware::X402Middleware;
 use axum::Router;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
