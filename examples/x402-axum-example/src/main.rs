@@ -1,4 +1,4 @@
-use crate::x402::middleware::X402;
+use crate::x402::middleware::{V1Eip155ExactSchemePriceTag, X402};
 use axum::Router;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -10,6 +10,8 @@ use std::env;
 use tower_http::trace::TraceLayer;
 use tracing::instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
+use x402_rs::__reexports::alloy_primitives::address;
+use x402_rs::networks::{USDC, KnownNetworkEip155};
 use x402_rs::util::Telemetry;
 
 mod x402;
@@ -39,7 +41,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route(
             "/protected-route",
-            get(my_handler), //.layer(
+            get(my_handler).layer(x402.with_price_tag(V1Eip155ExactSchemePriceTag {
+                pay_to: address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07").into(),
+                asset: USDC::base_sepolia().amount(10)
+            })), //.layer(
                              // x402.with_description("Premium API - Discoverable")
                              //     .with_mime_type("application/json")
                              //     .with_price_tag()
