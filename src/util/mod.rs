@@ -1,5 +1,6 @@
 pub mod b64;
 pub mod lit_str;
+pub mod money_amount;
 pub mod sig_down;
 pub mod telemetry;
 

@@ -32,9 +32,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let usdc_solana = USDCDeployment::by_network(Network::Solana)
     //     .pay_to(address_sol!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV"));
 
-    let k = x402
-        .with_description("Premium API - Discoverable")
-        .with_mime_type("application/json");
+    let k = x402.clone();
+    // .with_description("Premium API - Discoverable")
+    // .with_mime_type("application/json");
 
     let app = Router::new()
         .route(

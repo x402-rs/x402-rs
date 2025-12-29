@@ -6,8 +6,12 @@ use std::sync::Arc;
 use tower::util::BoxCloneSyncService;
 use tower::{Layer, Service};
 use url::Url;
+use x402_rs::__reexports::alloy_primitives::U256;
+use x402_rs::chain::eip155::Eip155TokenDeployment;
+use x402_rs::chain::{DeployedTokenAmount, eip155};
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto::{v1, v2};
+use x402_rs::scheme::v1_eip155_exact;
 
 /// The main X402 middleware instance for enforcing x402 payments on routes.
 ///
@@ -19,8 +23,8 @@ use x402_rs::proto::{v1, v2};
 #[derive(Clone, Debug)]
 pub struct X402<F> {
     facilitator: F,
-    description: Option<String>,
-    mime_type: Option<String>,
+    // description: Option<String>,
+    // mime_type: Option<String>,
 }
 
 impl X402<Arc<FacilitatorClient>> {
@@ -28,8 +32,8 @@ impl X402<Arc<FacilitatorClient>> {
         let facilitator = FacilitatorClient::try_from(url).expect("Invalid facilitator URL");
         Self {
             facilitator: Arc::new(facilitator),
-            description: None,
-            mime_type: None,
+            // description: None,
+            // mime_type: None,
         }
     }
 
@@ -37,8 +41,8 @@ impl X402<Arc<FacilitatorClient>> {
         let facilitator = FacilitatorClient::try_from(url)?;
         Ok(Self {
             facilitator: Arc::new(facilitator),
-            description: None,
-            mime_type: None,
+            // description: None,
+            // mime_type: None,
         })
     }
 
@@ -63,25 +67,25 @@ impl TryFrom<String> for X402<Arc<FacilitatorClient>> {
     }
 }
 
-impl<F> X402<F>
-where
-    F: Clone,
-{
-    /// Sets the description field on all generated payment requirements.
-    pub fn with_description(&self, description: &str) -> Self {
-        let mut this = self.clone();
-        this.description = Some(description.to_string());
-        this
-    }
-
-    /// Sets the MIME type of the protected resource.
-    /// This is exposed as a part of [`PaymentRequirements`] passed to the client.
-    pub fn with_mime_type(&self, mime: &str) -> Self {
-        let mut this = self.clone();
-        this.mime_type = Some(mime.to_string());
-        this
-    }
-}
+// impl<F> X402<F>
+// where
+//     F: Clone,
+// {
+//     /// Sets the description field on all generated payment requirements.
+//     pub fn with_description(&self, description: &str) -> Self {
+//         let mut this = self.clone();
+//         this.description = Some(description.to_string());
+//         this
+//     }
+//
+//     /// Sets the MIME type of the protected resource.
+//     /// This is exposed as a part of [`PaymentRequirements`] passed to the client.
+//     pub fn with_mime_type(&self, mime: &str) -> Self {
+//         let mut this = self.clone();
+//         this.mime_type = Some(mime.to_string());
+//         this
+//     }
+// }
 
 pub trait IntoPriceTag {
     type PriceTag;
@@ -156,22 +160,22 @@ impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
         self.accepts.push(req.into());
         self
     }
-
-    /// Set a description of what the payment grants access to.
-    ///
-    /// This is included in 402 responses to inform clients what they're paying for.
-    pub fn with_description(mut self, desc: impl Into<String>) -> Self {
-        self.description = Some(desc.into());
-        self
-    }
-
-    /// Set the MIME type of the protected resource.
-    ///
-    /// Defaults to "application/json" if not specified.
-    pub fn with_mime_type(mut self, mime: impl Into<String>) -> Self {
-        self.mime_type = Some(mime.into());
-        self
-    }
+    //
+    // /// Set a description of what the payment grants access to.
+    // ///
+    // /// This is included in 402 responses to inform clients what they're paying for.
+    // pub fn with_description(mut self, desc: impl Into<String>) -> Self {
+    //     self.description = Some(desc.into());
+    //     self
+    // }
+    //
+    // /// Set the MIME type of the protected resource.
+    // ///
+    // /// Defaults to "application/json" if not specified.
+    // pub fn with_mime_type(mut self, mime: impl Into<String>) -> Self {
+    //     self.mime_type = Some(mime.into());
+    //     self
+    // }
 }
 
 impl<S, TPriceTag, TFacilitator> Layer<S> for X402LayerBuilder<TPriceTag, TFacilitator>
@@ -207,4 +211,17 @@ pub struct X402MiddlewareService<F> {
     settle_before_execution: bool,
     /// The inner Axum service being wrapped
     inner: BoxCloneSyncService<Request, Response, Infallible>,
+}
+
+#[derive(Debug, Clone)]
+pub struct V1Eip155ExactSchemePriceTag {
+    pub pay_to: eip155::ChecksummedAddress,
+    pub amount: DeployedTokenAmount<U256, Eip155TokenDeployment>,
+}
+
+
+impl V1Eip155ExactSchemePriceTag {
+    pub fn address() {
+
+    }
 }

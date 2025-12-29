@@ -2,7 +2,7 @@ pub mod pending_nonce_manager;
 pub mod types;
 
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
-use alloy_primitives::{Address, B256, Bytes};
+use alloy_primitives::{Address, B256, Bytes, U256};
 use alloy_provider::fillers::{
     BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
 };
@@ -18,13 +18,15 @@ use alloy_transport::layers::{FallbackLayer, ThrottleLayer};
 use alloy_transport_http::Http;
 use std::fmt::{Display, Formatter};
 use std::num::NonZeroUsize;
+use std::ops::Mul;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
 use tracing::Instrument;
 
-use crate::chain::{ChainId, ChainProviderOps};
+use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::config::Eip155ChainConfig;
+use crate::util::money_amount::{MoneyAmount, MoneyAmountParseError};
 pub use pending_nonce_manager::*;
 pub use types::*;
 
@@ -128,6 +130,43 @@ pub struct Eip155TokenDeployment {
     pub address: Address,
     pub decimals: u8,
     pub eip712: Option<TokenDeploymentEip712>,
+}
+
+#[allow(dead_code)] // Public for consumption by downstream crates.
+impl Eip155TokenDeployment {
+    pub fn amount<V: Into<U256>>(&self, v: V) -> DeployedTokenAmount<U256, Eip155TokenDeployment> {
+        DeployedTokenAmount {
+            amount: v.into(),
+            token: self.clone(),
+        }
+    }
+
+    pub fn parse<V>(
+        &self,
+        v: V,
+    ) -> Result<DeployedTokenAmount<U256, Eip155TokenDeployment>, MoneyAmountParseError>
+    where
+        V: TryInto<MoneyAmount>,
+        MoneyAmountParseError: From<<V as TryInto<MoneyAmount>>::Error>,
+    {
+        let money_amount = v.try_into()?;
+        let scale = money_amount.scale();
+        let token_scale = self.decimals as u32;
+        if scale > token_scale {
+            return Err(MoneyAmountParseError::WrongPrecision {
+                money: scale,
+                token: token_scale,
+            });
+        }
+        let scale_diff = token_scale - scale;
+        let multiplier = U256::from(10).pow(U256::from(scale_diff));
+        let digits = money_amount.mantissa();
+        let value = U256::from(digits).mul(multiplier);
+        Ok(DeployedTokenAmount {
+            amount: value,
+            token: self.clone(),
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
