@@ -1,4 +1,4 @@
-use crate::x402::middleware::{V1Eip155ExactSchemePriceTag, X402};
+use crate::x402::m0::{V1Eip155ExactSchemePriceTag, X402Middleware};
 use axum::Router;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let facilitator_url =
         env::var("FACILITATOR_URL").unwrap_or_else(|_| "https://facilitator.x402.rs".to_string());
 
-    let x402 = X402::try_from(facilitator_url)?; //.with_base_url(url::Url::parse("https://localhost:3000/").unwrap());
+    let x402 = X402Middleware::try_from(facilitator_url)?; //.with_base_url(url::Url::parse("https://localhost:3000/").unwrap());
     // let usdc_base_sepolia = USDCDeployment::by_network(Network::BaseSepolia)
     //     .pay_to(address_evm!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"));
     // let usdc_solana = USDCDeployment::by_network(Network::Solana)
