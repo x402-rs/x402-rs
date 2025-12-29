@@ -55,10 +55,20 @@ pub enum X402Error {
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub enum HttpTransport<A> {
+pub enum Transport<A> {
     V1(A),
     V2(A),
 }
+
+impl<A> Transport<A> {
+    pub fn inner(&self) -> &A {
+        match self {
+            Transport::V1(a) => a,
+            Transport::V2(a) => a,
+        }
+    }
+}
+
 
 // ============================================================================
 // PaymentSelector - Selection strategy

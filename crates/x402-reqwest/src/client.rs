@@ -2,9 +2,7 @@ use http::{Extensions, HeaderMap, StatusCode};
 use reqwest::{Request, Response};
 use reqwest_middleware as rqm;
 use std::sync::Arc;
-use x402_rs::proto::client::{
-    FirstMatch, HttpTransport, PaymentCandidate, PaymentSelector, X402Error, X402SchemeClient,
-};
+use x402_rs::proto::client::{FirstMatch, PaymentCandidate, PaymentSelector, Transport, X402Error, X402SchemeClient};
 
 use crate::http_transport::HttpPaymentRequired;
 
@@ -86,8 +84,8 @@ where
 
         let signed_payload = selected.sign().await?;
         let header_name = match payment_quote.inner() {
-            HttpTransport::V1(_) => "X-Payment",
-            HttpTransport::V2(_) => "Payment-Signature",
+            Transport::V1(_) => "X-Payment",
+            Transport::V2(_) => "Payment-Signature",
         };
         let headers = {
             let mut headers = HeaderMap::new();

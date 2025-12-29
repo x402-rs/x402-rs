@@ -1,9 +1,9 @@
 use x402_rs::proto;
-use x402_rs::proto::client::HttpTransport;
+use x402_rs::proto::client::Transport;
 use x402_rs::proto::{v1, v2};
 use x402_rs::util::Base64Bytes;
 
-pub struct HttpPaymentRequired(HttpTransport<proto::PaymentRequired>);
+pub struct HttpPaymentRequired(Transport<proto::PaymentRequired>);
 
 impl HttpPaymentRequired {
     pub async fn from_response(response: reqwest::Response) -> Option<Self> {
@@ -13,7 +13,7 @@ impl HttpPaymentRequired {
             .and_then(|h| Base64Bytes::from(h.as_bytes()).decode().ok())
             .and_then(|b| serde_json::from_slice::<v2::PaymentRequired>(&b).ok());
         if let Some(v2_payment_required) = v2_payment_required {
-            return Some(Self(HttpTransport::V2(proto::PaymentRequired::V2(
+            return Some(Self(Transport::V2(proto::PaymentRequired::V2(
                 v2_payment_required,
             ))));
         }
@@ -23,21 +23,18 @@ impl HttpPaymentRequired {
             .ok()
             .and_then(|b| serde_json::from_slice::<v1::PaymentRequired>(&b).ok());
         if let Some(v1_payment_required) = v1_payment_required {
-            return Some(Self(HttpTransport::V1(proto::PaymentRequired::V1(
+            return Some(Self(Transport::V1(proto::PaymentRequired::V1(
                 v1_payment_required,
             ))));
         }
         None
     }
 
-    pub fn inner(&self) -> &HttpTransport<proto::PaymentRequired> {
+    pub fn inner(&self) -> &Transport<proto::PaymentRequired> {
         &self.0
     }
 
     pub fn as_payment_required(&self) -> &proto::PaymentRequired {
-        match &self.0 {
-            HttpTransport::V1(body) => body,
-            HttpTransport::V2(payment_required_header) => payment_required_header,
-        }
+        self.0.inner()
     }
 }
