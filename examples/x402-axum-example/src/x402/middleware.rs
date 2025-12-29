@@ -1,13 +1,13 @@
-use std::convert::Infallible;
-use std::sync::Arc;
+use crate::x402::facilitator_client::FacilitatorClient;
 use axum::extract::Request;
 use axum::response::Response;
-use tower::{Layer, Service};
+use std::convert::Infallible;
+use std::sync::Arc;
 use tower::util::BoxCloneSyncService;
+use tower::{Layer, Service};
 use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto::{v1, v2};
-use crate::x402::facilitator_client::FacilitatorClient;
 
 /// The main X402 middleware instance for enforcing x402 payments on routes.
 ///
@@ -25,8 +25,7 @@ pub struct X402<F> {
 
 impl X402<Arc<FacilitatorClient>> {
     pub fn new(url: &str) -> Self {
-        let facilitator = FacilitatorClient::try_from(url)
-            .expect("Invalid facilitator URL");
+        let facilitator = FacilitatorClient::try_from(url).expect("Invalid facilitator URL");
         Self {
             facilitator: Arc::new(facilitator),
             description: None,
@@ -65,7 +64,9 @@ impl TryFrom<String> for X402<Arc<FacilitatorClient>> {
 }
 
 impl<F> X402<F>
-where F: Clone{
+where
+    F: Clone,
+{
     /// Sets the description field on all generated payment requirements.
     pub fn with_description(&self, description: &str) -> Self {
         let mut this = self.clone();
@@ -135,14 +136,14 @@ where
 /// - First `.accept()` determines `V`
 /// - Subsequent `.accept()` calls must convert to the same `V`
 /// - Mixing v1 and v2 schemes fails at compile time
-pub struct X402LayerBuilder<TAccept, TFacilitator> {
+pub struct X402LayerBuilder<TPriceTag, TFacilitator> {
     facilitator: TFacilitator,
-    accepts: Vec<TAccept>,
+    accepts: Vec<TPriceTag>,
     description: Option<String>,
     mime_type: Option<String>,
 }
 
-impl<TAccept, TFacilitator> X402LayerBuilder<TAccept, TFacilitator> {
+impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
     /// Add another payment option.
     ///
     /// The requirement must convert to the same type `V` as the first `.accept()`.
@@ -151,7 +152,7 @@ impl<TAccept, TFacilitator> X402LayerBuilder<TAccept, TFacilitator> {
     /// # Arguments
     ///
     /// * `req` - A payment requirement that implements `Into<V>`
-    pub fn accept<R: Into<TAccept>>(mut self, req: R) -> Self {
+    pub fn with_price_tag<R: Into<TPriceTag>>(mut self, req: R) -> Self {
         self.accepts.push(req.into());
         self
     }
@@ -159,7 +160,7 @@ impl<TAccept, TFacilitator> X402LayerBuilder<TAccept, TFacilitator> {
     /// Set a description of what the payment grants access to.
     ///
     /// This is included in 402 responses to inform clients what they're paying for.
-    pub fn description(mut self, desc: impl Into<String>) -> Self {
+    pub fn with_description(mut self, desc: impl Into<String>) -> Self {
         self.description = Some(desc.into());
         self
     }
@@ -167,13 +168,13 @@ impl<TAccept, TFacilitator> X402LayerBuilder<TAccept, TFacilitator> {
     /// Set the MIME type of the protected resource.
     ///
     /// Defaults to "application/json" if not specified.
-    pub fn mime_type(mut self, mime: impl Into<String>) -> Self {
+    pub fn with_mime_type(mut self, mime: impl Into<String>) -> Self {
         self.mime_type = Some(mime.into());
         self
     }
 }
 
-impl<S, TAccept, TFacilitator> Layer<S> for X402LayerBuilder<TAccept, TFacilitator>
+impl<S, TPriceTag, TFacilitator> Layer<S> for X402LayerBuilder<TPriceTag, TFacilitator>
 where
     S: Service<Request, Response = Response, Error = Infallible> + Clone + Send + Sync + 'static,
     S::Future: Send + 'static,

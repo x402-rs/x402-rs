@@ -37,7 +37,9 @@ use x402_rs::facilitator::Facilitator;
 
 #[cfg(feature = "telemetry")]
 use tracing::{Instrument, Span};
-use x402_rs::proto::{SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse};
+use x402_rs::proto::{
+    SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse,
+};
 
 /// A client for communicating with a remote x402 facilitator.
 ///
