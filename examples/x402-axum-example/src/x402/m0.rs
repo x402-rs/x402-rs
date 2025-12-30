@@ -8,8 +8,7 @@ use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto;
 use x402_rs::proto::client::Transport;
-use x402_rs::proto::v1::V1PriceTag;
-use x402_rs::proto::{SettleRequest, SettleResponse, VerifyRequest, v1};
+use x402_rs::proto::v1;
 use x402_rs::util::Base64Bytes;
 
 /// A service-level helper struct responsible for verifying and settling
@@ -610,7 +609,8 @@ where
             return Ok(response.into_response());
         }
         // Convert verify request to settle request
-        let settle_request = SettleRequest::from(serde_json::to_value(verify_request).unwrap());
+        let settle_request =
+            proto::SettleRequest::from(serde_json::to_value(verify_request).unwrap());
         // Attempt settlement
         let settlement = self.settle_payment(&settle_request).await?;
         // Convert settlement to header value
@@ -694,7 +694,7 @@ where
     pub async fn verify_payment(
         &self,
         payment_payload: v1::PaymentPayload<String, serde_json::Value>,
-    ) -> Result<VerifyRequest, X402Error> {
+    ) -> Result<proto::VerifyRequest, X402Error> {
         let selected = self
             .find_matching_payment_requirements(&payment_payload)
             .ok_or(X402Error::no_payment_matching(
@@ -735,8 +735,8 @@ where
     )]
     pub async fn settle_payment(
         &self,
-        settle_request: &SettleRequest,
-    ) -> Result<SettleResponse, X402Error> {
+        settle_request: &proto::SettleRequest,
+    ) -> Result<proto::SettleResponse, X402Error> {
         let settle_response: proto::SettleResponse = self
             .facilitator
             .settle(settle_request)
@@ -754,7 +754,10 @@ where
     /// Converts a [`SettleResponse`] into an HTTP header value.
     ///
     /// Returns an error response if conversion fails.
-    fn settlement_to_header(&self, settlement: SettleResponse) -> Result<HeaderValue, X402Error> {
+    fn settlement_to_header(
+        &self,
+        settlement: proto::SettleResponse,
+    ) -> Result<HeaderValue, X402Error> {
         let json =
             serde_json::to_vec(&settlement).map_err(|err| X402Error::settlement_failed(err))?;
         let payment_header = Base64Bytes::encode(json);
