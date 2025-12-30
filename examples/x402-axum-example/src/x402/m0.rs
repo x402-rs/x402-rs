@@ -593,59 +593,22 @@ where
         &self,
         headers: &HeaderMap,
     ) -> Result<v1::PaymentPayload<String, serde_json::Value>, X402Error> {
-        println!("  [extract_payment_payload] Checking for X-Payment header...");
-        println!("  [extract_payment_payload] Available headers: {:?}", headers.keys().collect::<Vec<_>>());
-
         let payment_header = headers.get("X-Payment");
-        println!("  [extract_payment_payload] X-Payment header present: {}", payment_header.is_some());
-
         match payment_header {
             None => {
-                println!("  [extract_payment_payload] ❌ No X-Payment header found");
-                println!("  [extract_payment_payload] Returning payment requirements for 402 response");
-
-                // Get supported schemes from facilitator to enrich payment requirements with extra data
-                println!("  [extract_payment_payload] Getting supported schemes from facilitator...");
-                let supported = self.facilitator.supported().await.map_err(|e| {
-                    println!("  [extract_payment_payload] ❌ Failed to get supported schemes: {}", e);
-                    X402Error(v1::PaymentRequired {
-                        x402_version: v1::X402Version1,
-                        error: Some(format!("Unable to retrieve supported payment schemes: {e}")),
-                        accepts: vec![],
-                    })
-                })?;
-
-                println!("  [extract_payment_payload] ✅ Got supported schemes: {:?}", supported);
                 Err(X402Error::payment_header_required(self.payment_requirements.clone()))
             }
             Some(payment_header) => {
-                println!("  [extract_payment_payload] ✅ X-Payment header found");
-                println!("  [extract_payment_payload] Header value: {:?}", payment_header);
-
                 let base64_result = Base64Bytes::from(payment_header.as_bytes()).decode();
-                println!("  [extract_payment_payload] Base64 decode attempt...");
-
                 let base64 = base64_result.map_err(|err| {
-                    println!("  [extract_payment_payload] ❌ Base64 decode failed: {}", err);
                     X402Error::invalid_payment_header(self.payment_requirements.clone())
                 })?;
-
-                println!("  [extract_payment_payload] ✅ Base64 decoded successfully");
-                println!("  [extract_payment_payload] Decoded bytes length: {}", base64.len());
 
                 let payment_payload_result: Result<v1::PaymentPayload<String, serde_json::Value>, _> =
                     serde_json::from_slice(base64.as_ref());
-                println!("  [extract_payment_payload] JSON deserialization attempt...");
-
                 let payment_payload = payment_payload_result.map_err(|e| {
-                    println!("  [extract_payment_payload] ❌ JSON deserialization failed: {}", e);
                     X402Error::invalid_payment_header(self.payment_requirements.clone())
                 })?;
-
-                println!("  [extract_payment_payload] ✅ Payment payload extracted successfully");
-                println!("  [extract_payment_payload] Payload scheme: {}", payment_payload.scheme);
-                println!("  [extract_payment_payload] Payload network: {}", payment_payload.network);
-                println!("  [extract_payment_payload] Payload data: {:?}", payment_payload.payload);
                 Ok(payment_payload)
             }
         }
@@ -656,31 +619,20 @@ where
         &self,
         payment_payload: &v1::PaymentPayload<String, serde_json::Value>,
     ) -> Option<serde_json::Value> {
-        println!("  [find_matching_payment_requirements] Looking for matching requirement...");
-        println!("  [find_matching_payment_requirements] Payload scheme: {}", payment_payload.scheme);
-        println!("  [find_matching_payment_requirements] Payload network: {}", payment_payload.network);
-        println!("  [find_matching_payment_requirements] Available requirements: {}", self.payment_requirements.len());
-
         // Convert payment requirements to serde_json::Value for comparison
         let matched = self.payment_requirements
             .iter()
             .find(|requirement| {
-                let matches = requirement.scheme == payment_payload.scheme
-                    && requirement.network == payment_payload.network;
-                println!("  [find_matching_payment_requirements] Checking requirement: scheme={}, network={}, matches={}",
-                    requirement.scheme, requirement.network, matches);
-                matches
+                requirement.scheme == payment_payload.scheme
+                    && requirement.network == payment_payload.network
             });
 
         match matched {
             Some(matched_requirement) => {
-                println!("  [find_matching_payment_requirements] ✅ Found matching requirement");
                 let json_value = serde_json::to_value(matched_requirement).ok();
-                println!("  [find_matching_payment_requirements] Converted to JSON: {}", json_value.is_some());
                 json_value
             }
             None => {
-                println!("  [find_matching_payment_requirements] ❌ No matching requirement found");
                 None
             }
         }
@@ -691,16 +643,9 @@ where
         &self,
         payment_payload: v1::PaymentPayload<String, serde_json::Value>,
     ) -> Result<VerifyRequest, X402Error> {
-        println!("  [verify_payment] Starting payment verification...");
-        println!("  [verify_payment] Payment payload scheme: {}", payment_payload.scheme);
-        println!("  [verify_payment] Payment payload network: {}", payment_payload.network);
-
         let selected = self
             .find_matching_payment_requirements(&payment_payload)
             .ok_or(X402Error::no_payment_matching(vec![]))?;
-
-        println!("  [verify_payment] ✅ Found matching payment requirements");
-        println!("  [verify_payment] Selected requirements: {:?}", selected);
 
         let verify_request = v1::VerifyRequest {
             x402_version: v1::X402Version1,
@@ -708,39 +653,26 @@ where
             payment_requirements: selected.clone(),
         };
 
-        println!("  [verify_payment] Created verify request");
-
         let verify_request_json = serde_json::to_value(verify_request.clone()).unwrap();
-        println!("  [verify_payment] Verify request JSON: {:?}", verify_request_json);
-
         let verify_request_proto =
             proto::VerifyRequest::from(verify_request_json);
 
-        println!("  [verify_payment] Sending request to facilitator...");
         let verify_response = self
             .facilitator
             .verify(&verify_request_proto)
             .await
             .map_err(|e| {
-                println!("  [verify_payment] ❌ Facilitator verification failed: {}", e);
                 X402Error::verification_failed(e, vec![])
             })?;
-
-        println!("  [verify_payment] ✅ Received response from facilitator");
-        println!("  [verify_payment] Facilitator response: {:?}", verify_response);
 
         let verify_response_v1: v1::VerifyResponse =
             serde_json::from_value(verify_response.0.clone()).unwrap();
 
-        println!("  [verify_payment] Parsed facilitator response");
-
         match verify_response_v1 {
             v1::VerifyResponse::Valid { .. } => {
-                println!("  [verify_payment] ✅ Payment verified successfully by facilitator");
                 Ok(verify_request_proto)
             }
             v1::VerifyResponse::Invalid { reason, .. } => {
-                println!("  [verify_payment] ❌ Payment verification failed: {}", reason);
                 Err(X402Error::verification_failed(reason, vec![]))
             }
         }
@@ -798,86 +730,63 @@ where
         S::Error: IntoResponse,
         S::Future: Send,
     {
-        println!("\n=== X402 PAYMENT GATEWAY FLOW START ===");
-        println!("Request URI: {:?}", req.uri());
-        println!("Request method: {:?}", req.method());
-        println!("Payment requirements configured: {:?}", self.payment_requirements);
-
         // Extract payment payload from headers
-        println!("\n--- STEP 1: Extracting payment payload ---");
         let payment_payload = match self.extract_payment_payload(req.headers()).await {
             Ok(payment_payload) => {
-                println!("✓ Successfully extracted payment payload");
                 payment_payload
             }
             Err(err) => {
-                println!("✗ Failed to extract payment payload, returning error");
                 return Ok(err.into_response());
             }
         };
 
         // Verify the payment meets requirements
-        println!("\n--- STEP 2: Verifying payment ---");
         let verify_request = match self.verify_payment(payment_payload).await {
             Ok(verify_request) => {
-                println!("✓ Payment verification successful");
                 verify_request
             }
             Err(err) => {
-                println!("✗ Payment verification failed, returning error");
                 return Ok(err.into_response());
             }
         };
 
-        println!("\n--- STEP 3: Calling inner service ---");
         // FIXME: Implement settle_before_execution logic later
         // For now, always settle after successful execution
 
         // Call inner service first
         let response = match Self::call_inner(inner, req).await {
             Ok(response) => {
-                println!("✓ Inner service completed successfully");
-                println!("Response status: {}", response.status());
                 response
             }
             Err(err) => {
-                println!("✗ Inner service failed");
                 return Ok(err.into_response());
             }
         };
 
         // Only settle if request was successful
         if response.status().is_client_error() || response.status().is_server_error() {
-            println!("⚠️  Request failed with status {}, skipping settlement", response.status());
             return Ok(response.into_response());
         }
 
-        println!("\n--- STEP 4: Settling payment ---");
         // Convert verify request to settle request
         let settle_request = SettleRequest::from(serde_json::to_value(verify_request).unwrap());
-        println!("Settle request created");
 
         // Attempt settlement
         let settlement = match self.settle_payment(&settle_request).await {
             Ok(settlement) => {
-                println!("✓ Payment settlement successful");
                 settlement
             }
             Err(err) => {
-                println!("✗ Payment settlement failed");
                 return Ok(err.into_response());
             }
         };
 
-        println!("\n--- STEP 5: Finalizing response ---");
         // Convert settlement to header value
         let header_value = match self.settlement_to_header(settlement) {
             Ok(header) => {
-                println!("✓ Settlement header created");
                 header
             }
             Err(response) => {
-                println!("✗ Failed to create settlement header");
                 return Ok(*response);
             }
         };
@@ -885,8 +794,6 @@ where
         // Add payment response header and return
         let mut res = response;
         res.headers_mut().insert("X-Payment-Response", header_value);
-        println!("✓ Added X-Payment-Response header to response");
-        println!("=== X402 PAYMENT GATEWAY FLOW COMPLETE ===\n");
         Ok(res.into_response())
     }
 }
