@@ -704,8 +704,10 @@ where
             payment_requirements: selected,
         };
 
-        let verify_request_json = serde_json::to_value(verify_request).unwrap();
-        let verify_request_proto = proto::VerifyRequest::from(verify_request_json);
+        // let verify_request_json = serde_json::to_value(verify_request).unwrap();
+        let verify_request_proto = verify_request
+            .try_into()
+            .map_err(|e| X402Error::verification_failed(e, self.payment_requirements.clone()))?;
 
         let verify_response = self
             .facilitator

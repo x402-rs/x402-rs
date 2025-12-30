@@ -260,6 +260,16 @@ where
     }
 }
 
+impl<TPayload, TRequirements> TryInto<proto::VerifyRequest> for VerifyRequest<TPayload, TRequirements>
+where TPayload: Serialize, TRequirements: Serialize
+{
+    type Error = serde_json::Error;
+    fn try_into(self) -> Result<proto::VerifyRequest, Self::Error> {
+        let json = serde_json::to_value(self)?;
+        Ok(proto::VerifyRequest(json))
+    }
+}
+
 /// Describes a signed request to transfer a specific amount of funds on-chain.
 /// Includes the scheme, network, and signed payload contents.
 #[derive(Debug, Clone, Serialize, Deserialize)]
