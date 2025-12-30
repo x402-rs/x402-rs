@@ -264,7 +264,7 @@ where
 /// Includes the scheme, network, and signed payload contents.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PaymentPayload<TScheme, TPayload> {
+pub struct PaymentPayload<TScheme = String, TPayload = Box<serde_json::value::RawValue>> {
     pub x402_version: X402Version1,
     pub scheme: TScheme,
     pub network: String,

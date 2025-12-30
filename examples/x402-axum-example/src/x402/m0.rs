@@ -650,7 +650,7 @@ where
     pub async fn extract_payment_payload(
         &self,
         headers: &HeaderMap,
-    ) -> Result<v1::PaymentPayload<String, serde_json::Value>, X402Error> {
+    ) -> Result<v1::PaymentPayload, X402Error> {
         let payment_header = headers.get("X-Payment");
         match payment_header {
             None => Err(X402Error::payment_header_required(
@@ -662,10 +662,8 @@ where
                     X402Error::invalid_payment_header(self.payment_requirements.clone())
                 })?;
 
-                let payment_payload_result: Result<
-                    v1::PaymentPayload<String, serde_json::Value>,
-                    _,
-                > = serde_json::from_slice(base64.as_ref());
+                let payment_payload_result: Result<v1::PaymentPayload, _> =
+                    serde_json::from_slice(base64.as_ref());
                 let payment_payload = payment_payload_result.map_err(|e| {
                     X402Error::invalid_payment_header(self.payment_requirements.clone())
                 })?;
@@ -677,9 +675,8 @@ where
     /// Finds the payment requirement entry matching the given payload's scheme and network.
     fn find_matching_payment_requirements(
         &self,
-        payment_payload: &v1::PaymentPayload<String, serde_json::Value>,
+        payment_payload: &v1::PaymentPayload,
     ) -> Option<&v1::PaymentRequirements> {
-        // Convert payment requirements to serde_json::Value for comparison
         self.payment_requirements.iter().find(|requirement| {
             requirement.scheme == payment_payload.scheme
                 && requirement.network == payment_payload.network
@@ -693,7 +690,7 @@ where
     )]
     pub async fn verify_payment(
         &self,
-        payment_payload: v1::PaymentPayload<String, serde_json::Value>,
+        payment_payload: v1::PaymentPayload,
     ) -> Result<proto::VerifyRequest, X402Error> {
         let selected = self
             .find_matching_payment_requirements(&payment_payload)
