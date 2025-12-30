@@ -1,7 +1,7 @@
 use crate::x402::facilitator_client::FacilitatorClient;
 use crate::x402::m0::X402Paygate;
 use axum::extract::Request;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use std::convert::Infallible;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -283,7 +283,10 @@ where
                 mime_type,
                 resource: Some(resource_url), // TODO ResourceInfo ??
             };
-            gate.handle_request(inner, req).await
+            match gate.handle_request(inner, req).await {
+                Ok(success) => Ok(success),
+                Err(error) => Ok(error.into_response()),
+            }
         })
     }
 }

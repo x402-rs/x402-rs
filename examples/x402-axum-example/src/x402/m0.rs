@@ -586,27 +586,16 @@ where
         self,
         inner: S,
         req: http::Request<ReqBody>,
-    ) -> Result<Response, Infallible>
+    ) -> Result<Response, X402Error>
     where
         S::Response: IntoResponse,
         S::Error: IntoResponse,
         S::Future: Send,
     {
         // Extract payment payload from headers
-        let payment_payload = match self.extract_payment_payload(req.headers()).await {
-            Ok(payment_payload) => payment_payload,
-            Err(err) => {
-                return Ok(err.into_response());
-            }
-        };
-
+        let payment_payload = self.extract_payment_payload(req.headers()).await?;
         // Verify the payment meets requirements
-        let verify_request = match self.verify_payment(payment_payload).await {
-            Ok(verify_request) => verify_request,
-            Err(err) => {
-                return Ok(err.into_response());
-            }
-        };
+        let verify_request = self.verify_payment(payment_payload).await?;
 
         // FIXME: Implement settle_before_execution logic later
         // For now, always settle after successful execution
@@ -618,32 +607,17 @@ where
                 return Ok(err.into_response());
             }
         };
-
-        // Only settle if request was successful
+        // Only settle if the request was successful
         if response.status().is_client_error() || response.status().is_server_error() {
             return Ok(response.into_response());
         }
-
         // Convert verify request to settle request
         let settle_request = SettleRequest::from(serde_json::to_value(verify_request).unwrap());
-
         // Attempt settlement
-        let settlement = match self.settle_payment(&settle_request).await {
-            Ok(settlement) => settlement,
-            Err(err) => {
-                return Ok(err.into_response());
-            }
-        };
-
+        let settlement = self.settle_payment(&settle_request).await?;
         // Convert settlement to header value
-        let header_value = match self.settlement_to_header(settlement) {
-            Ok(header) => header,
-            Err(response) => {
-                return Ok(*response);
-            }
-        };
-
-        // Add payment response header and return
+        let header_value = self.settlement_to_header(settlement)?;
+        // Add the payment response header and return
         let mut res = response;
         res.headers_mut().insert("X-Payment-Response", header_value);
         Ok(res.into_response())
@@ -661,7 +635,17 @@ where
     where
         S::Future: Send,
     {
-        inner.call(req).await
+        #[cfg(feature = "telemetry")]
+        {
+            inner
+                .call(req)
+                .instrument(tracing::info_span!("inner"))
+                .await
+        }
+        #[cfg(not(feature = "telemetry"))]
+        {
+            inner.call(req).await
+        }
     }
 
     /// Parses the `X-Payment` header and returns a decoded [`PaymentPayload`], or constructs a 402 error if missing or malformed as [`X402Error`].
@@ -705,6 +689,10 @@ where
     }
 
     /// Verifies the provided payment using the facilitator and known requirements. Returns a [`VerifyRequest`] if the payment is valid.
+    #[cfg_attr(
+        feature = "telemetry",
+        instrument(name = "x402.verify_payment", skip_all, err)
+    )]
     pub async fn verify_payment(
         &self,
         payment_payload: v1::PaymentPayload<String, serde_json::Value>,
@@ -740,6 +728,10 @@ where
     }
 
     /// Attempts to settle a verified payment on-chain. Returns [`SettleResponse`] on success or emits a 402 error.
+    #[cfg_attr(
+        feature = "telemetry",
+        instrument(name = "x402.settle_payment", skip_all, err)
+    )]
     pub async fn settle_payment(
         &self,
         settle_request: &SettleRequest,
@@ -763,18 +755,13 @@ where
     /// Converts a [`SettleResponse`] into an HTTP header value.
     ///
     /// Returns an error response if conversion fails.
-    fn settlement_to_header(
-        &self,
-        settlement: SettleResponse,
-    ) -> Result<HeaderValue, Box<Response>> {
+    fn settlement_to_header(&self, settlement: SettleResponse) -> Result<HeaderValue, X402Error> {
         let json = serde_json::to_vec(&settlement)
-            .map_err(|err| X402Error::settlement_failed(err, vec![]).into_response())?;
+            .map_err(|err| X402Error::settlement_failed(err, vec![]))?;
         let payment_header = Base64Bytes::encode(json);
 
-        HeaderValue::from_bytes(payment_header.as_ref()).map_err(|err| {
-            let response = X402Error::settlement_failed(err, vec![]).into_response();
-            Box::new(response)
-        })
+        HeaderValue::from_bytes(payment_header.as_ref())
+            .map_err(|err| X402Error::settlement_failed(err, vec![]))
     }
 }
 
