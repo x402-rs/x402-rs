@@ -1,3 +1,5 @@
+use crate::x402::facilitator_client::FacilitatorClient;
+use crate::x402::m0::X402Paygate;
 use axum::extract::Request;
 use axum::response::Response;
 use std::convert::Infallible;
@@ -9,9 +11,8 @@ use tower::{Layer, Service};
 use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto::server::IntoPriceTag;
+use x402_rs::proto::v1;
 use x402_rs::proto::v1::V1PriceTag;
-use crate::x402::facilitator_client::FacilitatorClient;
-use crate::x402::m0::X402Paygate;
 
 /// The main X402 middleware instance for enforcing x402 payments on routes.
 ///
@@ -223,7 +224,6 @@ where
 
     /// Intercepts the request, injects payment enforcement logic, and forwards to the wrapped service.
     fn call(&mut self, req: Request) -> Self::Future {
-        // let offers = self.payment_offers.clone();
         let facilitator = self.facilitator.clone();
         let inner = self.inner.clone();
         let settle_before_execution = self.settle_before_execution;
@@ -231,21 +231,57 @@ where
         let base_url = self.base_url.clone();
         let description = self.description.clone();
         let mime_type = self.mime_type.clone();
-        let resource = self.resource.clone();
 
-        /// KKK
+        // Determine the resource URL (static or dynamic)
+        let resource_url = match self.resource.clone() {
+            Some(url) => url,
+            None => {
+                let mut url = base_url
+                    .clone()
+                    .unwrap_or_else(|| {
+                        #[cfg(feature = "telemetry")]
+                        tracing::warn!(
+                                "X402Middleware base_url is not configured; defaulting to http://localhost/ for resource resolution"
+                            );
+                        Url::parse("http://localhost/").unwrap()
+                    });
+                url.set_path(req.uri().path());
+                url.set_query(req.uri().query());
+                url
+            }
+        };
+
+        // Construct payment requirements from V1PriceTag accepts
+        let payment_requirements: Vec<v1::PaymentRequirements> = accepts
+            .iter()
+            .map(|price_tag| v1::PaymentRequirements {
+                scheme: price_tag.scheme.clone(),
+                network: price_tag.network.clone(),
+                max_amount_required: price_tag.amount.clone(),
+                resource: resource_url.to_string(),
+                description: description.clone().unwrap_or_default(),
+                mime_type: mime_type
+                    .clone()
+                    .unwrap_or_else(|| "application/json".to_string()),
+                output_schema: None,
+                pay_to: price_tag.pay_to.clone(),
+                max_timeout_seconds: 300,
+                asset: price_tag.asset.clone(),
+                extra: price_tag.extra.as_ref().map(|v| {
+                    serde_json::value::RawValue::from_string(v.to_string())
+                        .expect("Failed to convert extra to RawValue")
+                }),
+            })
+            .collect();
 
         Box::pin(async move {
-            // let payment_requirements =
-            //     gather_payment_requirements(offers.as_ref(), req.uri(), req.headers()).await;
             let gate = X402Paygate {
                 facilitator,
                 settle_before_execution,
-                accepts,
-                base_url,
+                payment_requirements,
                 description,
                 mime_type,
-                resource,
+                resource: Some(resource_url), // TODO ResourceInfo ??
             };
             gate.call(inner, req).await
         })

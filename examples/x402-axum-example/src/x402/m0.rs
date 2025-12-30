@@ -14,12 +14,11 @@ use x402_rs::util::Base64Bytes;
 
 /// A service-level helper struct responsible for verifying and settling
 /// x402 payments based on request headers and known payment requirements.
-pub struct X402Paygate<TPriceTag, TFacilitator> {
+pub struct X402Paygate<TPaymentRequirements, TFacilitator> {
     pub facilitator: TFacilitator,
     pub settle_before_execution: bool,
     /// Whether to settle payment before executing the request (true) or after (false)
-    pub accepts: Vec<TPriceTag>,
-    pub base_url: Option<Url>,
+    pub payment_requirements: Vec<TPaymentRequirements>,
     pub description: Option<String>,
     pub mime_type: Option<String>, // TODO ARC!!
     /// Optional resource URL. If not set, it will be derived from a request URI.
@@ -487,7 +486,7 @@ pub struct X402Paygate<TPriceTag, TFacilitator> {
 //     }
 // }
 
-impl<TFacilitator> X402Paygate<V1PriceTag, TFacilitator>
+impl<TFacilitator> X402Paygate<v1::PaymentRequirements, TFacilitator>
 where
     TFacilitator: Facilitator,
 {
