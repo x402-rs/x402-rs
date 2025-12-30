@@ -544,13 +544,11 @@ impl X402Error {
         Self(payment_required_response)
     }
 
-    pub fn settlement_failed<E2: Display>(
-        error: E2,
-        payment_requirements: Vec<v1::PaymentRequirements>,
-    ) -> Self {
+    // FIXME When settlement is failed we should return { error: "Settlement Failed", details: "Some error details" }"
+    pub fn settlement_failed<E2: Display>(error: E2) -> Self {
         let payment_required_response = v1::PaymentRequired {
             error: Some(format!("Settlement Failed: {error}")),
-            accepts: payment_requirements,
+            accepts: vec![],
             x402_version: v1::X402Version1,
         };
         Self(payment_required_response)
@@ -699,7 +697,9 @@ where
     ) -> Result<VerifyRequest, X402Error> {
         let selected = self
             .find_matching_payment_requirements(&payment_payload)
-            .ok_or(X402Error::no_payment_matching(vec![]))?;
+            .ok_or(X402Error::no_payment_matching(
+                self.payment_requirements.clone(),
+            ))?;
 
         let verify_request = v1::VerifyRequest {
             x402_version: v1::X402Version1,
@@ -714,16 +714,17 @@ where
             .facilitator
             .verify(&verify_request_proto)
             .await
-            .map_err(|e| X402Error::verification_failed(e, vec![]))?;
+            .map_err(|e| X402Error::verification_failed(e, self.payment_requirements.clone()))?;
 
         let verify_response_v1: v1::VerifyResponse =
             serde_json::from_value(verify_response.0.clone()).unwrap();
 
         match verify_response_v1 {
             v1::VerifyResponse::Valid { .. } => Ok(verify_request_proto),
-            v1::VerifyResponse::Invalid { reason, .. } => {
-                Err(X402Error::verification_failed(reason, vec![]))
-            }
+            v1::VerifyResponse::Invalid { reason, .. } => Err(X402Error::verification_failed(
+                reason,
+                self.payment_requirements.clone(),
+            )),
         }
     }
 
@@ -740,15 +741,13 @@ where
             .facilitator
             .settle(settle_request)
             .await
-            .map_err(|e| X402Error::settlement_failed(e, vec![]))?;
+            .map_err(|e| X402Error::settlement_failed(e))?;
         let settle_response_v1: v1::SettleResponse =
             serde_json::from_value(settle_response.0.clone()).unwrap();
 
         match settle_response_v1 {
             v1::SettleResponse::Success { .. } => Ok(settle_response),
-            v1::SettleResponse::Error { reason, network } => {
-                Err(X402Error::settlement_failed(reason, vec![]))
-            }
+            v1::SettleResponse::Error { reason, .. } => Err(X402Error::settlement_failed(reason)),
         }
     }
 
@@ -756,12 +755,12 @@ where
     ///
     /// Returns an error response if conversion fails.
     fn settlement_to_header(&self, settlement: SettleResponse) -> Result<HeaderValue, X402Error> {
-        let json = serde_json::to_vec(&settlement)
-            .map_err(|err| X402Error::settlement_failed(err, vec![]))?;
+        let json =
+            serde_json::to_vec(&settlement).map_err(|err| X402Error::settlement_failed(err))?;
         let payment_header = Base64Bytes::encode(json);
 
         HeaderValue::from_bytes(payment_header.as_ref())
-            .map_err(|err| X402Error::settlement_failed(err, vec![]))
+            .map_err(|err| X402Error::settlement_failed(err))
     }
 }
 
