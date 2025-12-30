@@ -608,13 +608,10 @@ where
         if response.status().is_client_error() || response.status().is_server_error() {
             return Ok(response.into_response());
         }
-        // Convert verify request to settle request
-        let settle_request =
-            proto::SettleRequest::from(serde_json::to_value(verify_request).unwrap());
         // Attempt settlement
-        let settlement = self.settle_payment(&settle_request).await?;
+        let settlement = self.settle_payment(&verify_request).await?;
         // Convert settlement to header value
-        let header_value = self.settlement_to_header(settlement)?;
+        let header_value = settlement_to_header(settlement)?;
         // Add the payment response header and return
         let mut res = response;
         res.headers_mut().insert("X-Payment-Response", header_value);
@@ -749,21 +746,17 @@ where
             v1::SettleResponse::Error { reason, .. } => Err(X402Error::settlement_failed(reason)),
         }
     }
+}
 
-    /// Converts a [`SettleResponse`] into an HTTP header value.
-    ///
-    /// Returns an error response if conversion fails.
-    fn settlement_to_header(
-        &self,
-        settlement: proto::SettleResponse,
-    ) -> Result<HeaderValue, X402Error> {
-        let json =
-            serde_json::to_vec(&settlement).map_err(|err| X402Error::settlement_failed(err))?;
-        let payment_header = Base64Bytes::encode(json);
+/// Converts a [`proto::SettleResponse`] into an HTTP header value.
+///
+/// Returns an error response if conversion fails.
+fn settlement_to_header(settlement: proto::SettleResponse) -> Result<HeaderValue, X402Error> {
+    let json = serde_json::to_vec(&settlement).map_err(|err| X402Error::settlement_failed(err))?;
+    let payment_header = Base64Bytes::encode(json);
 
-        HeaderValue::from_bytes(payment_header.as_ref())
-            .map_err(|err| X402Error::settlement_failed(err))
-    }
+    HeaderValue::from_bytes(payment_header.as_ref())
+        .map_err(|err| X402Error::settlement_failed(err))
 }
 
 fn extract_payment_header(header_map: &HeaderMap) -> Option<Transport<&[u8]>> {
