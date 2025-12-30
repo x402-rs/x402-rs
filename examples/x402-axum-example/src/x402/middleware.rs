@@ -283,7 +283,7 @@ where
                 mime_type,
                 resource: Some(resource_url), // TODO ResourceInfo ??
             };
-            gate.call(inner, req).await
+            gate.handle_request(inner, req).await
         })
     }
 }

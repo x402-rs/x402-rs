@@ -16,9 +16,10 @@ use x402_rs::util::Base64Bytes;
 /// x402 payments based on request headers and known payment requirements.
 pub struct X402Paygate<TPaymentRequirements, TFacilitator> {
     pub facilitator: TFacilitator,
-    pub settle_before_execution: bool,
     /// Whether to settle payment before executing the request (true) or after (false)
     pub payment_requirements: Vec<TPaymentRequirements>,
+
+    pub settle_before_execution: bool,
     pub description: Option<String>,
     pub mime_type: Option<String>, // TODO ARC!!
     /// Optional resource URL. If not set, it will be derived from a request URI.
@@ -573,6 +574,81 @@ impl<TFacilitator> X402Paygate<v1::PaymentRequirements, TFacilitator>
 where
     TFacilitator: Facilitator,
 {
+    #[cfg_attr(
+        feature = "telemetry",
+        instrument(name = "x402.handle_request", skip_all)
+    )]
+    pub async fn handle_request<
+        ReqBody,
+        ResBody,
+        S: Service<http::Request<ReqBody>, Response = http::Response<ResBody>>,
+    >(
+        self,
+        inner: S,
+        req: http::Request<ReqBody>,
+    ) -> Result<Response, Infallible>
+    where
+        S::Response: IntoResponse,
+        S::Error: IntoResponse,
+        S::Future: Send,
+    {
+        // Extract payment payload from headers
+        let payment_payload = match self.extract_payment_payload(req.headers()).await {
+            Ok(payment_payload) => payment_payload,
+            Err(err) => {
+                return Ok(err.into_response());
+            }
+        };
+
+        // Verify the payment meets requirements
+        let verify_request = match self.verify_payment(payment_payload).await {
+            Ok(verify_request) => verify_request,
+            Err(err) => {
+                return Ok(err.into_response());
+            }
+        };
+
+        // FIXME: Implement settle_before_execution logic later
+        // For now, always settle after successful execution
+
+        // Call inner service first
+        let response = match Self::call_inner(inner, req).await {
+            Ok(response) => response,
+            Err(err) => {
+                return Ok(err.into_response());
+            }
+        };
+
+        // Only settle if request was successful
+        if response.status().is_client_error() || response.status().is_server_error() {
+            return Ok(response.into_response());
+        }
+
+        // Convert verify request to settle request
+        let settle_request = SettleRequest::from(serde_json::to_value(verify_request).unwrap());
+
+        // Attempt settlement
+        let settlement = match self.settle_payment(&settle_request).await {
+            Ok(settlement) => settlement,
+            Err(err) => {
+                return Ok(err.into_response());
+            }
+        };
+
+        // Convert settlement to header value
+        let header_value = match self.settlement_to_header(settlement) {
+            Ok(header) => header,
+            Err(response) => {
+                return Ok(*response);
+            }
+        };
+
+        // Add payment response header and return
+        let mut res = response;
+        res.headers_mut().insert("X-Payment-Response", header_value);
+        Ok(res.into_response())
+    }
+
     /// Calls the inner service with proper telemetry instrumentation.
     async fn call_inner<
         ReqBody,
@@ -699,77 +775,6 @@ where
             let response = X402Error::settlement_failed(err, vec![]).into_response();
             Box::new(response)
         })
-    }
-
-    pub async fn call<
-        ReqBody,
-        ResBody,
-        S: Service<http::Request<ReqBody>, Response = http::Response<ResBody>>,
-    >(
-        self,
-        inner: S,
-        req: http::Request<ReqBody>,
-    ) -> Result<Response, Infallible>
-    where
-        S::Response: IntoResponse,
-        S::Error: IntoResponse,
-        S::Future: Send,
-    {
-        // Extract payment payload from headers
-        let payment_payload = match self.extract_payment_payload(req.headers()).await {
-            Ok(payment_payload) => payment_payload,
-            Err(err) => {
-                return Ok(err.into_response());
-            }
-        };
-
-        // Verify the payment meets requirements
-        let verify_request = match self.verify_payment(payment_payload).await {
-            Ok(verify_request) => verify_request,
-            Err(err) => {
-                return Ok(err.into_response());
-            }
-        };
-
-        // FIXME: Implement settle_before_execution logic later
-        // For now, always settle after successful execution
-
-        // Call inner service first
-        let response = match Self::call_inner(inner, req).await {
-            Ok(response) => response,
-            Err(err) => {
-                return Ok(err.into_response());
-            }
-        };
-
-        // Only settle if request was successful
-        if response.status().is_client_error() || response.status().is_server_error() {
-            return Ok(response.into_response());
-        }
-
-        // Convert verify request to settle request
-        let settle_request = SettleRequest::from(serde_json::to_value(verify_request).unwrap());
-
-        // Attempt settlement
-        let settlement = match self.settle_payment(&settle_request).await {
-            Ok(settlement) => settlement,
-            Err(err) => {
-                return Ok(err.into_response());
-            }
-        };
-
-        // Convert settlement to header value
-        let header_value = match self.settlement_to_header(settlement) {
-            Ok(header) => header,
-            Err(response) => {
-                return Ok(*response);
-            }
-        };
-
-        // Add payment response header and return
-        let mut res = response;
-        res.headers_mut().insert("X-Payment-Response", header_value);
-        Ok(res.into_response())
     }
 }
 
