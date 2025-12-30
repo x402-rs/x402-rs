@@ -232,6 +232,9 @@ where
         let description = self.description.clone();
         let mime_type = self.mime_type.clone();
         let resource = self.resource.clone();
+
+        /// KKK
+
         Box::pin(async move {
             // let payment_requirements =
             //     gather_payment_requirements(offers.as_ref(), req.uri(), req.headers()).await;

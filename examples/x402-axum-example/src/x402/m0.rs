@@ -505,8 +505,13 @@ where
         S::Error: IntoResponse,
         S::Future: Send,
     {
+        let payment_header = extract_payment_header(&req.headers());
+        match payment_header {
+            None => {}
+            Some(_) => {}
+        }
         // Ok(self.handle_request(inner, req).await)
-        todo!()
+        todo!("Continue from the code")
     }
 }
 
