@@ -21,6 +21,7 @@ use std::num::NonZeroUsize;
 use std::ops::Mul;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
 use tracing::Instrument;
 
@@ -172,7 +173,7 @@ impl Eip155TokenDeployment {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct TokenDeploymentEip712 {
     pub name: String,
