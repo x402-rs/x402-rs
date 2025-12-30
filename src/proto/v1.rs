@@ -167,6 +167,14 @@ impl From<VerifyResponse> for proto::VerifyResponse {
     }
 }
 
+impl TryFrom<proto::VerifyResponse> for VerifyResponse {
+    type Error = serde_json::Error;
+    fn try_from(value: proto::VerifyResponse) -> Result<Self, Self::Error> {
+        let json = value.0;
+        serde_json::from_value(json)
+    }
+}
+
 impl VerifyResponse {
     /// Constructs a successful verification response with the given `payer` address.
     ///

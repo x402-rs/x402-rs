@@ -704,22 +704,22 @@ where
             payment_requirements: selected,
         };
 
-        // let verify_request_json = serde_json::to_value(verify_request).unwrap();
-        let verify_request_proto = verify_request
+        let verify_request = verify_request
             .try_into()
             .map_err(|e| X402Error::verification_failed(e, self.payment_requirements.clone()))?;
 
         let verify_response = self
             .facilitator
-            .verify(&verify_request_proto)
+            .verify(&verify_request)
             .await
             .map_err(|e| X402Error::verification_failed(e, self.payment_requirements.clone()))?;
 
-        let verify_response_v1: v1::VerifyResponse =
-            serde_json::from_value(verify_response.0.clone()).unwrap();
+        let verify_response_v1: v1::VerifyResponse = verify_response
+            .try_into()
+            .map_err(|e| X402Error::verification_failed(e, self.payment_requirements.clone()))?;
 
         match verify_response_v1 {
-            v1::VerifyResponse::Valid { .. } => Ok(verify_request_proto),
+            v1::VerifyResponse::Valid { .. } => Ok(verify_request),
             v1::VerifyResponse::Invalid { reason, .. } => Err(X402Error::verification_failed(
                 reason,
                 self.payment_requirements.clone(),
