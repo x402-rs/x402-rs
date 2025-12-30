@@ -595,17 +595,19 @@ where
     ) -> Result<v1::PaymentPayload<String, serde_json::Value>, X402Error> {
         let payment_header = headers.get("X-Payment");
         match payment_header {
-            None => {
-                Err(X402Error::payment_header_required(self.payment_requirements.clone()))
-            }
+            None => Err(X402Error::payment_header_required(
+                self.payment_requirements.clone(),
+            )),
             Some(payment_header) => {
                 let base64_result = Base64Bytes::from(payment_header.as_bytes()).decode();
                 let base64 = base64_result.map_err(|err| {
                     X402Error::invalid_payment_header(self.payment_requirements.clone())
                 })?;
 
-                let payment_payload_result: Result<v1::PaymentPayload<String, serde_json::Value>, _> =
-                    serde_json::from_slice(base64.as_ref());
+                let payment_payload_result: Result<
+                    v1::PaymentPayload<String, serde_json::Value>,
+                    _,
+                > = serde_json::from_slice(base64.as_ref());
                 let payment_payload = payment_payload_result.map_err(|e| {
                     X402Error::invalid_payment_header(self.payment_requirements.clone())
                 })?;
@@ -618,24 +620,12 @@ where
     fn find_matching_payment_requirements(
         &self,
         payment_payload: &v1::PaymentPayload<String, serde_json::Value>,
-    ) -> Option<serde_json::Value> {
+    ) -> Option<&v1::PaymentRequirements> {
         // Convert payment requirements to serde_json::Value for comparison
-        let matched = self.payment_requirements
-            .iter()
-            .find(|requirement| {
-                requirement.scheme == payment_payload.scheme
-                    && requirement.network == payment_payload.network
-            });
-
-        match matched {
-            Some(matched_requirement) => {
-                let json_value = serde_json::to_value(matched_requirement).ok();
-                json_value
-            }
-            None => {
-                None
-            }
-        }
+        self.payment_requirements.iter().find(|requirement| {
+            requirement.scheme == payment_payload.scheme
+                && requirement.network == payment_payload.network
+        })
     }
 
     /// Verifies the provided payment using the facilitator and known requirements. Returns a [`VerifyRequest`] if the payment is valid.
@@ -649,29 +639,24 @@ where
 
         let verify_request = v1::VerifyRequest {
             x402_version: v1::X402Version1,
-            payment_payload: payment_payload.clone(),
-            payment_requirements: selected.clone(),
+            payment_payload: payment_payload,
+            payment_requirements: selected,
         };
 
-        let verify_request_json = serde_json::to_value(verify_request.clone()).unwrap();
-        let verify_request_proto =
-            proto::VerifyRequest::from(verify_request_json);
+        let verify_request_json = serde_json::to_value(verify_request).unwrap();
+        let verify_request_proto = proto::VerifyRequest::from(verify_request_json);
 
         let verify_response = self
             .facilitator
             .verify(&verify_request_proto)
             .await
-            .map_err(|e| {
-                X402Error::verification_failed(e, vec![])
-            })?;
+            .map_err(|e| X402Error::verification_failed(e, vec![]))?;
 
         let verify_response_v1: v1::VerifyResponse =
             serde_json::from_value(verify_response.0.clone()).unwrap();
 
         match verify_response_v1 {
-            v1::VerifyResponse::Valid { .. } => {
-                Ok(verify_request_proto)
-            }
+            v1::VerifyResponse::Valid { .. } => Ok(verify_request_proto),
             v1::VerifyResponse::Invalid { reason, .. } => {
                 Err(X402Error::verification_failed(reason, vec![]))
             }
@@ -732,9 +717,7 @@ where
     {
         // Extract payment payload from headers
         let payment_payload = match self.extract_payment_payload(req.headers()).await {
-            Ok(payment_payload) => {
-                payment_payload
-            }
+            Ok(payment_payload) => payment_payload,
             Err(err) => {
                 return Ok(err.into_response());
             }
@@ -742,9 +725,7 @@ where
 
         // Verify the payment meets requirements
         let verify_request = match self.verify_payment(payment_payload).await {
-            Ok(verify_request) => {
-                verify_request
-            }
+            Ok(verify_request) => verify_request,
             Err(err) => {
                 return Ok(err.into_response());
             }
@@ -755,9 +736,7 @@ where
 
         // Call inner service first
         let response = match Self::call_inner(inner, req).await {
-            Ok(response) => {
-                response
-            }
+            Ok(response) => response,
             Err(err) => {
                 return Ok(err.into_response());
             }
@@ -773,9 +752,7 @@ where
 
         // Attempt settlement
         let settlement = match self.settle_payment(&settle_request).await {
-            Ok(settlement) => {
-                settlement
-            }
+            Ok(settlement) => settlement,
             Err(err) => {
                 return Ok(err.into_response());
             }
@@ -783,9 +760,7 @@ where
 
         // Convert settlement to header value
         let header_value = match self.settlement_to_header(settlement) {
-            Ok(header) => {
-                header
-            }
+            Ok(header) => header,
             Err(response) => {
                 return Ok(*response);
             }

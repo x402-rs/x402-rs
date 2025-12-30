@@ -18,7 +18,11 @@ impl IntoPriceTag for V1Eip155ExactSchemePriceTag {
         let network = chain_id
             .as_network_name()
             .expect(format!("Can not get network name for chain id {}", chain_id).as_str());
-        let extra = self.asset.token.eip712.and_then(|eip712| serde_json::to_value(eip712).ok());
+        let extra = self
+            .asset
+            .token
+            .eip712
+            .and_then(|eip712| serde_json::to_value(eip712).ok());
         V1PriceTag {
             scheme: "exact".to_string(), // FIXME
             pay_to: self.pay_to.to_string(),
