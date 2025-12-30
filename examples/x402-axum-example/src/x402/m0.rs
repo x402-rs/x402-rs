@@ -567,6 +567,33 @@ impl IntoResponse for X402Error {
     }
 }
 
+impl<TPaymentRequirements, TFacilitator> X402Paygate<TPaymentRequirements, TFacilitator> {
+    /// Calls the inner service with proper telemetry instrumentation.
+    async fn call_inner<
+        ReqBody,
+        ResBody,
+        S: Service<http::Request<ReqBody>, Response = http::Response<ResBody>>,
+    >(
+        mut inner: S,
+        req: http::Request<ReqBody>,
+    ) -> Result<http::Response<ResBody>, S::Error>
+    where
+        S::Future: Send,
+    {
+        #[cfg(feature = "telemetry")]
+        {
+            inner
+                .call(req)
+                .instrument(tracing::info_span!("inner"))
+                .await
+        }
+        #[cfg(not(feature = "telemetry"))]
+        {
+            inner.call(req).await
+        }
+    }
+}
+
 impl<TFacilitator> X402Paygate<v1::PaymentRequirements, TFacilitator>
 where
     TFacilitator: Facilitator,
@@ -618,31 +645,6 @@ where
         Ok(res.into_response())
     }
 
-    /// Calls the inner service with proper telemetry instrumentation.
-    async fn call_inner<
-        ReqBody,
-        ResBody,
-        S: Service<http::Request<ReqBody>, Response = http::Response<ResBody>>,
-    >(
-        mut inner: S,
-        req: http::Request<ReqBody>,
-    ) -> Result<http::Response<ResBody>, S::Error>
-    where
-        S::Future: Send,
-    {
-        #[cfg(feature = "telemetry")]
-        {
-            inner
-                .call(req)
-                .instrument(tracing::info_span!("inner"))
-                .await
-        }
-        #[cfg(not(feature = "telemetry"))]
-        {
-            inner.call(req).await
-        }
-    }
-
     /// Parses the `X-Payment` header and returns a decoded [`PaymentPayload`], or constructs a 402 error if missing or malformed as [`X402Error`].
     pub async fn extract_payment_payload(
         &self,
@@ -658,10 +660,7 @@ where
                 let base64 = base64_result.map_err(|err| {
                     X402Error::invalid_payment_header(self.payment_requirements.clone())
                 })?;
-
-                let payment_payload_result: Result<v1::PaymentPayload, _> =
-                    serde_json::from_slice(base64.as_ref());
-                let payment_payload = payment_payload_result.map_err(|e| {
+                let payment_payload = serde_json::from_slice(base64.as_ref()).map_err(|e| {
                     X402Error::invalid_payment_header(self.payment_requirements.clone())
                 })?;
                 Ok(payment_payload)
