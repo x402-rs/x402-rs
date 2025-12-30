@@ -486,10 +486,208 @@ pub struct X402Paygate<TPaymentRequirements, TFacilitator> {
 //     }
 // }
 
+/// Wrapper for producing a `402 Payment Required` response with context.
+#[derive(Debug)]
+pub struct X402Error(v1::PaymentRequired);
+
+static ERR_PAYMENT_HEADER_REQUIRED: &'static str = "X-PAYMENT header is required";
+static ERR_INVALID_PAYMENT_HEADER: &'static str = "Invalid or malformed payment header";
+static ERR_NO_PAYMENT_MATCHING: &'static str = "Unable to find matching payment requirements";
+
+/// Middleware application error with detailed context.
+///
+/// Encapsulates a `402 Payment Required` response that can be returned
+/// when payment verification or settlement fails.
+impl X402Error {
+    pub fn payment_header_required(payment_requirements: Vec<v1::PaymentRequirements>) -> Self {
+        let payment_required_response = v1::PaymentRequired {
+            error: Some(ERR_PAYMENT_HEADER_REQUIRED.to_string()),
+            accepts: payment_requirements,
+            x402_version: v1::X402Version1,
+        };
+        Self(payment_required_response)
+    }
+
+    pub fn invalid_payment_header(payment_requirements: Vec<v1::PaymentRequirements>) -> Self {
+        let payment_required_response = v1::PaymentRequired {
+            error: Some(ERR_INVALID_PAYMENT_HEADER.to_string()),
+            accepts: payment_requirements,
+            x402_version: v1::X402Version1,
+        };
+        Self(payment_required_response)
+    }
+
+    pub fn no_payment_matching(payment_requirements: Vec<v1::PaymentRequirements>) -> Self {
+        let payment_required_response = v1::PaymentRequired {
+            error: Some(ERR_NO_PAYMENT_MATCHING.to_string()),
+            accepts: payment_requirements,
+            x402_version: v1::X402Version1,
+        };
+        Self(payment_required_response)
+    }
+
+    pub fn verification_failed<E2: Display>(
+        error: E2,
+        payment_requirements: Vec<v1::PaymentRequirements>,
+    ) -> Self {
+        let payment_required_response = v1::PaymentRequired {
+            error: Some(format!("Verification Failed: {error}")),
+            accepts: payment_requirements,
+            x402_version: v1::X402Version1,
+        };
+        Self(payment_required_response)
+    }
+
+    pub fn settlement_failed<E2: Display>(
+        error: E2,
+        payment_requirements: Vec<v1::PaymentRequirements>,
+    ) -> Self {
+        let payment_required_response = v1::PaymentRequired {
+            error: Some(format!("Settlement Failed: {error}")),
+            accepts: payment_requirements,
+            x402_version: v1::X402Version1,
+        };
+        Self(payment_required_response)
+    }
+}
+
+impl IntoResponse for X402Error {
+    fn into_response(self) -> Response {
+        let payment_required_response_bytes =
+            serde_json::to_vec(&self.0).expect("serialization failed");
+        let body = Body::from(payment_required_response_bytes);
+        Response::builder()
+            .status(StatusCode::PAYMENT_REQUIRED)
+            .header("Content-Type", "application/json")
+            .body(body)
+            .expect("Fail to construct response")
+    }
+}
+
 impl<TFacilitator> X402Paygate<v1::PaymentRequirements, TFacilitator>
 where
     TFacilitator: Facilitator,
 {
+    /// Calls the inner service with proper telemetry instrumentation.
+    async fn call_inner<
+        ReqBody,
+        ResBody,
+        S: Service<http::Request<ReqBody>, Response = http::Response<ResBody>>,
+    >(
+        mut inner: S,
+        req: http::Request<ReqBody>,
+    ) -> Result<http::Response<ResBody>, S::Error>
+    where
+        S::Future: Send,
+    {
+        inner.call(req).await
+    }
+
+    /// Parses the `X-Payment` header and returns a decoded [`PaymentPayload`], or constructs a 402 error if missing or malformed as [`X402Error`].
+    pub async fn extract_payment_payload(
+        &self,
+        headers: &HeaderMap,
+    ) -> Result<v1::PaymentPayload<String, serde_json::Value>, X402Error> {
+        let payment_header = headers.get("X-Payment");
+        match payment_header {
+            None => {
+                // Return the payment requirements that were passed to the X402Paygate struct
+                let requirements = self.payment_requirements.clone();
+                Err(X402Error::payment_header_required(requirements))
+            }
+            Some(payment_header) => {
+                let base64 = Base64Bytes::from(payment_header.as_bytes())
+                    .decode()
+                    .map_err(|err| {
+                        X402Error::invalid_payment_header(self.payment_requirements.clone())
+                    })?;
+                let payment_payload: v1::PaymentPayload<String, serde_json::Value> =
+                    serde_json::from_slice(base64.as_ref()).map_err(|_| {
+                        X402Error::invalid_payment_header(self.payment_requirements.clone())
+                    })?;
+                Ok(payment_payload)
+            }
+        }
+    }
+
+    /// Finds the payment requirement entry matching the given payload's scheme and network.
+    fn find_matching_payment_requirements(
+        &self,
+        payment_payload: &v1::PaymentPayload<String, serde_json::Value>,
+    ) -> Option<serde_json::Value> {
+        None
+    }
+
+    /// Verifies the provided payment using the facilitator and known requirements. Returns a [`VerifyRequest`] if the payment is valid.
+    pub async fn verify_payment(
+        &self,
+        payment_payload: v1::PaymentPayload<String, serde_json::Value>,
+    ) -> Result<VerifyRequest, X402Error> {
+        let selected = self
+            .find_matching_payment_requirements(&payment_payload)
+            .ok_or(X402Error::no_payment_matching(vec![]))?;
+        let verify_request = v1::VerifyRequest {
+            x402_version: v1::X402Version1,
+            payment_payload,
+            payment_requirements: selected,
+        };
+        let verify_request =
+            proto::VerifyRequest::from(serde_json::to_value(verify_request).unwrap());
+        let verify_response = self
+            .facilitator
+            .verify(&verify_request)
+            .await
+            .map_err(|e| X402Error::verification_failed(e, vec![]))?;
+
+        let verify_response_v1: v1::VerifyResponse =
+            serde_json::from_value(verify_response.0.clone()).unwrap();
+
+        match verify_response_v1 {
+            v1::VerifyResponse::Valid { .. } => Ok(verify_request),
+            v1::VerifyResponse::Invalid { reason, .. } => {
+                Err(X402Error::verification_failed(reason, vec![]))
+            }
+        }
+    }
+
+    /// Attempts to settle a verified payment on-chain. Returns [`SettleResponse`] on success or emits a 402 error.
+    pub async fn settle_payment(
+        &self,
+        settle_request: &SettleRequest,
+    ) -> Result<SettleResponse, X402Error> {
+        let settle_response: proto::SettleResponse = self
+            .facilitator
+            .settle(settle_request)
+            .await
+            .map_err(|e| X402Error::settlement_failed(e, vec![]))?;
+        let settle_response_v1: v1::SettleResponse =
+            serde_json::from_value(settle_response.0.clone()).unwrap();
+
+        match settle_response_v1 {
+            v1::SettleResponse::Success { .. } => Ok(settle_response),
+            v1::SettleResponse::Error { reason, network } => {
+                Err(X402Error::settlement_failed(reason, vec![]))
+            }
+        }
+    }
+
+    /// Converts a [`SettleResponse`] into an HTTP header value.
+    ///
+    /// Returns an error response if conversion fails.
+    fn settlement_to_header(
+        &self,
+        settlement: SettleResponse,
+    ) -> Result<HeaderValue, Box<Response>> {
+        let json = serde_json::to_vec(&settlement)
+            .map_err(|err| X402Error::settlement_failed(err, vec![]).into_response())?;
+        let payment_header = Base64Bytes::encode(json);
+
+        HeaderValue::from_bytes(payment_header.as_ref()).map_err(|err| {
+            let response = X402Error::settlement_failed(err, vec![]).into_response();
+            Box::new(response)
+        })
+    }
+
     pub async fn call<
         ReqBody,
         ResBody,
@@ -504,13 +702,53 @@ where
         S::Error: IntoResponse,
         S::Future: Send,
     {
-        let payment_header = extract_payment_header(&req.headers());
-        match payment_header {
-            None => {}
-            Some(_) => {}
+        // Extract payment payload from headers
+        let payment_payload = match self.extract_payment_payload(req.headers()).await {
+            Ok(payment_payload) => payment_payload,
+            Err(err) => {
+                return Ok(err.into_response());
+            }
+        };
+
+        // Verify the payment meets requirements
+        let verify_request = match self.verify_payment(payment_payload).await {
+            Ok(verify_request) => verify_request,
+            Err(err) => return Ok(err.into_response()),
+        };
+
+        // FIXME: Implement settle_before_execution logic later
+        // For now, always settle after successful execution
+
+        // Call inner service first
+        let response = match Self::call_inner(inner, req).await {
+            Ok(response) => response,
+            Err(err) => return Ok(err.into_response()),
+        };
+
+        // Only settle if request was successful
+        if response.status().is_client_error() || response.status().is_server_error() {
+            return Ok(response.into_response());
         }
-        // Ok(self.handle_request(inner, req).await)
-        todo!("Continue from the code")
+
+        // Convert verify request to settle request
+        let settle_request = SettleRequest::from(serde_json::to_value(verify_request).unwrap());
+
+        // Attempt settlement
+        let settlement = match self.settle_payment(&settle_request).await {
+            Ok(settlement) => settlement,
+            Err(err) => return Ok(err.into_response()),
+        };
+
+        // Convert settlement to header value
+        let header_value = match self.settlement_to_header(settlement) {
+            Ok(header) => header,
+            Err(response) => return Ok(*response),
+        };
+
+        // Add payment response header and return
+        let mut res = response;
+        res.headers_mut().insert("X-Payment-Response", header_value);
+        Ok(res.into_response())
     }
 }
 
