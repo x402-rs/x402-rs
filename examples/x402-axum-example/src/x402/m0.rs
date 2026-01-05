@@ -617,7 +617,12 @@ where
         S::Future: Send,
     {
         // Extract payment payload from headers
-        let payment_payload = self.extract_payment_payload(req.headers()).await?;
+        let header = extract_payment_header(req.headers(), "X-Payment").ok_or(
+            X402Error::payment_header_required(self.payment_requirements.clone()),
+        )?;
+        let payment_payload = extract_payment_payload::<v1::PaymentPayload>(header).ok_or(
+            X402Error::invalid_payment_header(self.payment_requirements.clone()),
+        )?;
         // Verify the payment meets requirements
         let verify_request = self.verify_payment(payment_payload).await?;
 
@@ -643,29 +648,6 @@ where
         let mut res = response;
         res.headers_mut().insert("X-Payment-Response", header_value);
         Ok(res.into_response())
-    }
-
-    /// Parses the `X-Payment` header and returns a decoded [`PaymentPayload`], or constructs a 402 error if missing or malformed as [`X402Error`].
-    pub async fn extract_payment_payload(
-        &self,
-        headers: &HeaderMap,
-    ) -> Result<v1::PaymentPayload, X402Error> {
-        let payment_header = headers.get("X-Payment");
-        match payment_header {
-            None => Err(X402Error::payment_header_required(
-                self.payment_requirements.clone(),
-            )),
-            Some(payment_header) => {
-                let base64_result = Base64Bytes::from(payment_header.as_bytes()).decode();
-                let base64 = base64_result.map_err(|err| {
-                    X402Error::invalid_payment_header(self.payment_requirements.clone())
-                })?;
-                let payment_payload = serde_json::from_slice(base64.as_ref()).map_err(|e| {
-                    X402Error::invalid_payment_header(self.payment_requirements.clone())
-                })?;
-                Ok(payment_payload)
-            }
-        }
     }
 
     /// Finds the payment requirement entry matching the given payload's scheme and network.
@@ -758,14 +740,15 @@ fn settlement_to_header(settlement: proto::SettleResponse) -> Result<HeaderValue
         .map_err(|err| X402Error::settlement_failed(err))
 }
 
-fn extract_payment_header(header_map: &HeaderMap) -> Option<Transport<&[u8]>> {
-    let x_payment = header_map.get("X-Payment");
-    if let Some(x_payment) = x_payment {
-        return Some(Transport::V1(x_payment.as_bytes()));
-    }
-    let payment_signature = header_map.get("Payment-Signature");
-    if let Some(payment_signature) = payment_signature {
-        return Some(Transport::V2(payment_signature.as_bytes()));
-    }
-    None
+fn extract_payment_header<'a>(header_map: &'a HeaderMap, header_name: &'a str) -> Option<&'a [u8]> {
+    header_map.get(header_name).map(|h| h.as_bytes())
+}
+
+fn extract_payment_payload<T>(header_bytes: &[u8]) -> Option<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let base64 = Base64Bytes::from(header_bytes).decode().ok()?;
+    let value = serde_json::from_slice(base64.as_ref()).ok()?;
+    Some(value)
 }
