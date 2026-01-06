@@ -17,12 +17,7 @@ pub struct X402Paygate<TPaymentRequirements, TFacilitator> {
     pub facilitator: TFacilitator,
     /// Whether to settle payment before executing the request (true) or after (false)
     pub payment_requirements: Vec<TPaymentRequirements>,
-
     pub settle_before_execution: bool,
-    pub description: Option<String>,
-    pub mime_type: Option<String>, // TODO ARC!!
-    /// Optional resource URL. If not set, it will be derived from a request URI.
-    pub resource: Option<Url>,
 }
 
 impl<TPaymentRequirements, TFacilitator> X402Paygate<TPaymentRequirements, TFacilitator> {

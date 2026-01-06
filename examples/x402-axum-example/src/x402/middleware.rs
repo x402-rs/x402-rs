@@ -1,5 +1,6 @@
 use crate::x402::facilitator_client::FacilitatorClient;
 use crate::x402::paygate::X402Paygate;
+use crate::x402::paygate2::ResourceInfoBuilder;
 use axum::extract::Request;
 use axum::response::{IntoResponse, Response};
 use std::convert::Infallible;
@@ -106,9 +107,7 @@ where
             facilitator: self.facilitator.clone(),
             accepts: vec![req.into_price_tag()],
             base_url: self.base_url.clone(),
-            description: None,
-            mime_type: None,
-            resource: None,
+            resource: ResourceInfoBuilder::default(),
             settle_before_execution: self.settle_before_execution,
         }
     }
@@ -120,10 +119,7 @@ pub struct X402LayerBuilder<TPriceTag, TFacilitator> {
     settle_before_execution: bool,
     base_url: Option<Url>,
     accepts: Vec<TPriceTag>,
-    description: Option<String>,
-    mime_type: Option<String>,
-    /// Optional resource URL. If not set, it will be derived from a request URI.
-    resource: Option<Url>,
+    resource: ResourceInfoBuilder,
 }
 
 impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
@@ -143,21 +139,21 @@ impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
     /// Set a description of what the payment grants access to.
     ///
     /// This is included in 402 responses to inform clients what they're paying for.
-    pub fn with_description(mut self, desc: impl Into<String>) -> Self {
-        self.description = Some(desc.into());
+    pub fn with_description(mut self, description: String) -> Self {
+        self.resource.description = description;
         self
     }
 
     /// Set the MIME type of the protected resource.
     ///
     /// Defaults to "application/json" if not specified.
-    pub fn with_mime_type(mut self, mime: impl Into<String>) -> Self {
-        self.mime_type = Some(mime.into());
+    pub fn with_mime_type(mut self, mime: String) -> Self {
+        self.resource.mime_type = mime;
         self
     }
 
     pub fn with_resource(mut self, resource: Url) -> Self {
-        self.resource = Some(resource);
+        self.resource.url = Some(resource.to_string());
         self
     }
 }
@@ -172,21 +168,22 @@ where
     type Service = X402MiddlewareService<TPriceTag, TFacilitator>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        if self.base_url.is_none() && self.resource.is_none() {
+        if self.base_url.is_none() && self.resource.url.is_none() {
             #[cfg(feature = "telemetry")]
             tracing::warn!(
                 "X402Middleware base_url is not configured; defaulting to http://localhost/ for resource resolution"
             );
         }
-        let base_url = self.base_url.clone().unwrap_or(Url::parse("http://localhost/").expect("Failed to parse default base URL"));
+        let base_url = self
+            .base_url
+            .clone()
+            .unwrap_or(Url::parse("http://localhost/").expect("Failed to parse default base URL"));
         X402MiddlewareService {
             // TODO Do the ARC!!
             facilitator: self.facilitator.clone(),
             settle_before_execution: self.settle_before_execution,
             base_url,
             accepts: self.accepts.clone(),
-            description: self.description.clone(),
-            mime_type: self.mime_type.clone(),
             resource: self.resource.clone(),
             inner: BoxCloneSyncService::new(inner),
         }
@@ -202,10 +199,7 @@ pub struct X402MiddlewareService<TPriceTag, TFacilitator> {
     /// Whether to settle payment before executing the request (true) or after (false)
     settle_before_execution: bool,
     accepts: Vec<TPriceTag>,
-    description: Option<String>,
-    mime_type: Option<String>,
-    /// Optional resource URL. If not set, it will be derived from a request URI.
-    resource: Option<Url>,
+    resource: ResourceInfoBuilder,
     /// The inner Axum service being wrapped
     inner: BoxCloneSyncService<Request, Response, Infallible>,
 }
@@ -229,19 +223,7 @@ where
         let inner = self.inner.clone();
         let settle_before_execution = self.settle_before_execution;
         let accepts = self.accepts.clone();
-        let description = self.description.clone();
-        let mime_type = self.mime_type.clone();
-
-        // Determine the resource URL (static or dynamic)
-        let resource_url = match self.resource.clone() {
-            Some(url) => url,
-            None => {
-                let mut url = self.base_url.clone();
-                url.set_path(req.uri().path());
-                url.set_query(req.uri().query());
-                url
-            }
-        };
+        let resource = self.resource.as_resource_info(&self.base_url, req.uri());
 
         // Construct payment requirements from V1PriceTag accepts
         let payment_requirements: Vec<v1::PaymentRequirements> = accepts
@@ -250,11 +232,9 @@ where
                 scheme: price_tag.scheme.clone(),
                 network: price_tag.network.clone(),
                 max_amount_required: price_tag.amount.clone(),
-                resource: resource_url.to_string(),
-                description: description.clone().unwrap_or_default(),
-                mime_type: mime_type
-                    .clone()
-                    .unwrap_or_else(|| "application/json".to_string()),
+                resource: resource.url.clone(),
+                description: resource.description.clone(),
+                mime_type: resource.mime_type.clone(),
                 output_schema: None,
                 pay_to: price_tag.pay_to.clone(),
                 max_timeout_seconds: 300,
@@ -271,9 +251,6 @@ where
                 facilitator,
                 settle_before_execution,
                 payment_requirements,
-                description,
-                mime_type,
-                resource: Some(resource_url), // TODO ResourceInfo ??
             };
             match gate.handle_request(inner, req).await {
                 Ok(success) => Ok(success),
