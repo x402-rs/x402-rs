@@ -13,7 +13,6 @@ use x402_rs::facilitator::Facilitator;
 use x402_rs::proto::server::IntoPriceTag;
 use x402_rs::proto::v1;
 use x402_rs::proto::v1::V1PriceTag;
-use crate::x402::paygate2::BaseUrl;
 
 /// The main X402 middleware instance for enforcing x402 payments on routes.
 ///
@@ -22,7 +21,7 @@ use crate::x402::paygate2::BaseUrl;
 #[derive(Clone, Debug)]
 pub struct X402Middleware<F> {
     facilitator: F,
-    base_url: BaseUrl,
+    base_url: Option<Url>,
     settle_before_execution: bool,
 }
 
@@ -31,7 +30,7 @@ impl X402Middleware<Arc<FacilitatorClient>> {
         let facilitator = FacilitatorClient::try_from(url).expect("Invalid facilitator URL");
         Self {
             facilitator: Arc::new(facilitator),
-            base_url: BaseUrl::None,
+            base_url: None,
             settle_before_execution: false,
         }
     }
@@ -40,7 +39,7 @@ impl X402Middleware<Arc<FacilitatorClient>> {
         let facilitator = FacilitatorClient::try_from(url)?;
         Ok(Self {
             facilitator: Arc::new(facilitator),
-            base_url: BaseUrl::None,
+            base_url: None,
             settle_before_execution: false,
         })
     }
@@ -72,7 +71,7 @@ where
 {
     pub fn with_base_url(&self, base_url: Url) -> X402Middleware<F> {
         let mut this = self.clone();
-        this.base_url = BaseUrl::new(base_url);
+        this.base_url = Some(base_url);
         this
     }
 
@@ -119,7 +118,7 @@ where
 pub struct X402LayerBuilder<TPriceTag, TFacilitator> {
     facilitator: TFacilitator,
     settle_before_execution: bool,
-    base_url: BaseUrl,
+    base_url: Option<Url>,
     accepts: Vec<TPriceTag>,
     description: Option<String>,
     mime_type: Option<String>,
@@ -179,11 +178,12 @@ where
                 "X402Middleware base_url is not configured; defaulting to http://localhost/ for resource resolution"
             );
         }
+        let base_url = self.base_url.clone().unwrap_or(Url::parse("http://localhost/").expect("Failed to parse default base URL"));
         X402MiddlewareService {
             // TODO Do the ARC!!
             facilitator: self.facilitator.clone(),
-            base_url: self.base_url.clone(),
             settle_before_execution: self.settle_before_execution,
+            base_url,
             accepts: self.accepts.clone(),
             description: self.description.clone(),
             mime_type: self.mime_type.clone(),
@@ -198,7 +198,7 @@ where
 pub struct X402MiddlewareService<TPriceTag, TFacilitator> {
     /// Payment facilitator (local or remote)
     facilitator: TFacilitator,
-    base_url: BaseUrl,
+    base_url: Url,
     /// Whether to settle payment before executing the request (true) or after (false)
     settle_before_execution: bool,
     accepts: Vec<TPriceTag>,
@@ -229,7 +229,6 @@ where
         let inner = self.inner.clone();
         let settle_before_execution = self.settle_before_execution;
         let accepts = self.accepts.clone();
-        let base_url = self.base_url.clone();
         let description = self.description.clone();
         let mime_type = self.mime_type.clone();
 
@@ -237,15 +236,7 @@ where
         let resource_url = match self.resource.clone() {
             Some(url) => url,
             None => {
-                let mut url = base_url
-                    .clone()
-                    .unwrap_or_else(|| {
-                        #[cfg(feature = "telemetry")]
-                        tracing::warn!(
-                                "X402Middleware base_url is not configured; defaulting to http://localhost/ for resource resolution"
-                            );
-                        Url::parse("http://localhost/").unwrap()
-                    });
+                let mut url = self.base_url.clone();
                 url.set_path(req.uri().path());
                 url.set_query(req.uri().query());
                 url
