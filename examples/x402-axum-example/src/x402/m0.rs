@@ -626,28 +626,47 @@ where
         // Verify the payment meets requirements
         let verify_request = self.verify_payment(payment_payload).await?;
 
-        // FIXME: Implement settle_before_execution logic later
-        // For now, always settle after successful execution
+        if self.settle_before_execution {
+            // Settlement before execution: settle payment first, then call inner handler
+            #[cfg(feature = "telemetry")]
+            tracing::debug!("Settling payment before request execution");
 
-        // Call inner service first
-        let response = match Self::call_inner(inner, req).await {
-            Ok(response) => response,
-            Err(err) => {
-                return Ok(err.into_response());
+            let settlement = self.settle_payment(&verify_request).await?;
+
+            let header_value = settlement_to_header(settlement)?;
+
+            // Settlement succeeded, now execute the request
+            let response = match Self::call_inner(inner, req).await {
+                Ok(response) => response,
+                Err(err) => return Ok(err.into_response()),
+            };
+
+            // Add payment response header
+            let mut res = response;
+            res.headers_mut().insert("X-Payment-Response", header_value);
+            Ok(res.into_response())
+        } else {
+            // Settlement after execution (default): call inner handler first, then settle
+            #[cfg(feature = "telemetry")]
+            tracing::debug!("Settling payment after request execution");
+
+            let response = match Self::call_inner(inner, req).await {
+                Ok(response) => response,
+                Err(err) => return Ok(err.into_response()),
+            };
+
+            if response.status().is_client_error() || response.status().is_server_error() {
+                return Ok(response.into_response());
             }
-        };
-        // Only settle if the request was successful
-        if response.status().is_client_error() || response.status().is_server_error() {
-            return Ok(response.into_response());
+
+            let settlement = self.settle_payment(&verify_request).await?;
+
+            let header_value = settlement_to_header(settlement)?;
+
+            let mut res = response;
+            res.headers_mut().insert("X-Payment-Response", header_value);
+            Ok(res.into_response())
         }
-        // Attempt settlement
-        let settlement = self.settle_payment(&verify_request).await?;
-        // Convert settlement to header value
-        let header_value = settlement_to_header(settlement)?;
-        // Add the payment response header and return
-        let mut res = response;
-        res.headers_mut().insert("X-Payment-Response", header_value);
-        Ok(res.into_response())
     }
 
     /// Finds the payment requirement entry matching the given payload's scheme and network.
