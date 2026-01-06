@@ -370,5 +370,6 @@ pub struct V1PriceTag {
     pub asset: String,
     pub network: String,
     pub amount: String,
+    pub max_timeout_seconds: u64,
     pub extra: Option<serde_json::Value>,
 }

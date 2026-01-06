@@ -237,7 +237,7 @@ where
                 mime_type: resource.mime_type.clone(),
                 output_schema: None,
                 pay_to: price_tag.pay_to.clone(),
-                max_timeout_seconds: 300,
+                max_timeout_seconds: price_tag.max_timeout_seconds,
                 asset: price_tag.asset.clone(),
                 extra: price_tag.extra.as_ref().map(|v| {
                     serde_json::value::RawValue::from_string(v.to_string())

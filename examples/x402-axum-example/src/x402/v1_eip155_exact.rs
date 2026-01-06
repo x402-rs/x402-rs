@@ -29,6 +29,7 @@ impl IntoPriceTag for V1Eip155ExactSchemePriceTag {
             asset: self.asset.token.address.to_string(),
             network: network.to_string(),
             amount: self.asset.amount.to_string(),
+            max_timeout_seconds: 300,
             extra,
         }
     }
