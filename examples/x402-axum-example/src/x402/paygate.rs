@@ -1,13 +1,15 @@
+use axum::body::Body;
 use axum::response::{IntoResponse, Response};
-use http::{HeaderMap, HeaderValue};
+use http::{HeaderMap, HeaderValue, StatusCode};
+use serde::Serialize;
+use std::fmt::Display;
 use tower::Service;
 use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto;
-use x402_rs::proto::v1;
+use x402_rs::proto::{v1, v2};
+use x402_rs::proto::v2::ResourceInfo;
 use x402_rs::util::Base64Bytes;
-
-use crate::x402::paygate_error::PaygateError;
 
 /// A service-level helper struct responsible for verifying and settling
 /// x402 payments based on request headers and known payment requirements.
@@ -199,10 +201,14 @@ where
 
         match settle_response_v1 {
             v1::SettleResponse::Success { .. } => Ok(settle_response),
-            v1::SettleResponse::Error { reason, .. } => Err(PaygateError::settlement_failed(reason)),
+            v1::SettleResponse::Error { reason, .. } => {
+                Err(PaygateError::settlement_failed(reason))
+            }
         }
     }
 }
+
+
 
 /// Converts a [`proto::SettleResponse`] into an HTTP header value.
 ///
@@ -210,7 +216,8 @@ where
 fn settlement_to_header(
     settlement: proto::SettleResponse,
 ) -> Result<HeaderValue, PaygateError<v1::PaymentRequirements>> {
-    let json = serde_json::to_vec(&settlement).map_err(|err| PaygateError::settlement_failed(err))?;
+    let json =
+        serde_json::to_vec(&settlement).map_err(|err| PaygateError::settlement_failed(err))?;
     let payment_header = Base64Bytes::encode(json);
 
     HeaderValue::from_bytes(payment_header.as_ref())
@@ -228,4 +235,142 @@ where
     let base64 = Base64Bytes::from(header_bytes).decode().ok()?;
     let value = serde_json::from_slice(base64.as_ref()).ok()?;
     Some(value)
+}
+
+pub trait HasPaymentRequired {
+    type PaymentRequired;
+}
+
+impl HasPaymentRequired for v1::PaymentRequirements {
+    type PaymentRequired = v1::PaymentRequired;
+}
+
+impl HasPaymentRequired for v2::PaymentRequirements {
+    type PaymentRequired = v2::PaymentRequired;
+}
+
+/// Wrapper for producing a `402 Payment Required` response with context.
+#[derive(Debug)]
+pub struct PaygateError<T: HasPaymentRequired>(T::PaymentRequired);
+
+impl PaygateError<v1::PaymentRequirements> {
+    pub fn payment_header_required(payment_requirements: Vec<v1::PaymentRequirements>) -> Self {
+        let payment_required_response = v1::PaymentRequired {
+            error: Some("X-PAYMENT header is required".to_string()),
+            accepts: payment_requirements,
+            x402_version: v1::X402Version1,
+        };
+        Self(payment_required_response)
+    }
+
+    pub fn invalid_payment_header(payment_requirements: Vec<v1::PaymentRequirements>) -> Self {
+        let payment_required_response = v1::PaymentRequired {
+            error: Some("Invalid or malformed payment header".to_string()),
+            accepts: payment_requirements,
+            x402_version: v1::X402Version1,
+        };
+        Self(payment_required_response)
+    }
+
+    pub fn no_payment_matching(payment_requirements: Vec<v1::PaymentRequirements>) -> Self {
+        let payment_required_response = v1::PaymentRequired {
+            error: Some("Unable to find matching payment requirements".to_string()),
+            accepts: payment_requirements,
+            x402_version: v1::X402Version1,
+        };
+        Self(payment_required_response)
+    }
+
+    pub fn verification_failed<E2: Display>(
+        error: E2,
+        payment_requirements: Vec<v1::PaymentRequirements>,
+    ) -> Self {
+        let payment_required_response = v1::PaymentRequired {
+            error: Some(format!("Verification Failed: {error}")),
+            accepts: payment_requirements,
+            x402_version: v1::X402Version1,
+        };
+        Self(payment_required_response)
+    }
+
+    pub fn settlement_failed<E2: Display>(error: E2) -> Self {
+        let payment_required_response = v1::PaymentRequired {
+            error: Some(format!("Settlement Failed: {error}")),
+            accepts: vec![],
+            x402_version: v1::X402Version1,
+        };
+        Self(payment_required_response)
+    }
+}
+
+impl PaygateError<v2::PaymentRequirements> {
+    pub fn payment_header_required(resource: ResourceInfo, payment_requirements: Vec<v2::PaymentRequirements>) -> Self {
+        let payment_required_response = v2::PaymentRequired {
+            error: Some("X-PAYMENT header is required".to_string()),
+            accepts: payment_requirements,
+            resource,
+            x402_version: v2::X402Version2,
+        };
+        Self(payment_required_response)
+    }
+
+    pub fn invalid_payment_header(resource: ResourceInfo, payment_requirements: Vec<v2::PaymentRequirements>) -> Self {
+        let payment_required_response = v2::PaymentRequired {
+            error: Some("Invalid or malformed payment header".to_string()),
+            accepts: payment_requirements,
+            resource,
+            x402_version: v2::X402Version2,
+        };
+        Self(payment_required_response)
+    }
+
+    pub fn no_payment_matching(resource: ResourceInfo, payment_requirements: Vec<v2::PaymentRequirements>) -> Self {
+        let payment_required_response = v2::PaymentRequired {
+            error: Some("Unable to find matching payment requirements".to_string()),
+            accepts: payment_requirements,
+            resource,
+            x402_version: v2::X402Version2,
+        };
+        Self(payment_required_response)
+    }
+
+    pub fn verification_failed<E2: Display>(
+        error: E2,
+        resource: ResourceInfo,
+        payment_requirements: Vec<v2::PaymentRequirements>,
+    ) -> Self {
+        let payment_required_response = v2::PaymentRequired {
+            error: Some(format!("Verification Failed: {error}")),
+            accepts: payment_requirements,
+            resource,
+            x402_version: v2::X402Version2,
+        };
+        Self(payment_required_response)
+    }
+
+    pub fn settlement_failed<E2: Display>(error: E2, resource: ResourceInfo) -> Self {
+        let payment_required_response = v2::PaymentRequired {
+            error: Some(format!("Settlement Failed: {error}")),
+            accepts: vec![],
+            resource,
+            x402_version: v2::X402Version2,
+        };
+        Self(payment_required_response)
+    }
+}
+
+impl<T: HasPaymentRequired> IntoResponse for PaygateError<T>
+where
+    T::PaymentRequired: Serialize,
+{
+    fn into_response(self) -> Response {
+        let payment_required_response_bytes =
+            serde_json::to_vec(&self.0).expect("serialization failed");
+        let body = Body::from(payment_required_response_bytes);
+        Response::builder()
+            .status(StatusCode::PAYMENT_REQUIRED)
+            .header("Content-Type", "application/json")
+            .body(body)
+            .expect("Fail to construct response")
+    }
 }

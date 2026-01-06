@@ -1,5 +1,5 @@
 use crate::x402::facilitator_client::FacilitatorClient;
-use crate::x402::m0::X402Paygate;
+use crate::x402::paygate::X402Paygate;
 use axum::extract::Request;
 use axum::response::{IntoResponse, Response};
 use std::convert::Infallible;
