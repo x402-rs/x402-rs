@@ -54,22 +54,6 @@ pub enum X402Error {
     JsonError(#[from] serde_json::Error),
 }
 
-#[allow(dead_code)] // Public for consumption by downstream crates.
-pub enum Transport<A> {
-    V1(A),
-    V2(A),
-}
-
-#[allow(dead_code)] // Public for consumption by downstream crates.
-impl<A> Transport<A> {
-    pub fn inner(&self) -> &A {
-        match self {
-            Transport::V1(a) => a,
-            Transport::V2(a) => a,
-        }
-    }
-}
-
 // ============================================================================
 // PaymentSelector - Selection strategy
 // ============================================================================

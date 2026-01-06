@@ -1,6 +1,5 @@
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::str::FromStr;
 
 use crate::chain::ChainId;
@@ -12,22 +11,37 @@ pub mod util;
 pub mod v1;
 pub mod v2;
 
-pub trait ProtocolVersions {
+pub trait ProtocolV {
     type V1;
     type V2;
 }
 
-impl ProtocolVersions for PaymentRequired {
-    type V1 = v1::PaymentRequired;
-    type V2 = v2::PaymentRequired;
-}
-
 pub enum ProtocolVersioned<T>
 where
-    T: ProtocolVersions,
+    T: ProtocolV,
 {
+    #[allow(dead_code)]
     V1(T::V1),
+    #[allow(dead_code)]
     V2(T::V2),
+}
+
+impl<T> ProtocolVersioned<T>
+where
+    T: ProtocolV,
+{
+    pub fn as_v1(&self) -> Option<&T::V1> {
+        match self {
+            ProtocolVersioned::V1(v) => Some(v),
+            _ => None,
+        }
+    }
+    pub fn as_v2(&self) -> Option<&T::V2> {
+        match self {
+            ProtocolVersioned::V2(v) => Some(v),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -210,10 +224,11 @@ impl PaymentProblem {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-#[allow(dead_code)] // Public for consumption by downstream crates.
-pub enum PaymentRequired {
-    V1(v1::PaymentRequired),
-    V2(v2::PaymentRequired),
+pub struct PaymentRequiredV;
+
+impl ProtocolV for PaymentRequiredV {
+    type V1 = v1::PaymentRequired;
+    type V2 = v2::PaymentRequired;
 }
+
+pub type PaymentRequired = ProtocolVersioned<PaymentRequiredV>;

@@ -2,11 +2,11 @@ use http::{Extensions, HeaderMap, StatusCode};
 use reqwest::{Request, Response};
 use reqwest_middleware as rqm;
 use std::sync::Arc;
+use x402_rs::proto;
 use x402_rs::proto::client::{
-    FirstMatch, PaymentCandidate, PaymentSelector, Transport, X402Error, X402SchemeClient,
+    FirstMatch, PaymentCandidate, PaymentSelector, X402Error, X402SchemeClient,
 };
 
-use crate::HttpPaymentRequired;
 use crate::http_transport::http_payment_required_from_response;
 
 /// The main x402 client that orchestrates scheme clients and selection.
@@ -74,10 +74,10 @@ where
     TSelector: PaymentSelector,
 {
     pub async fn make_payment_headers(&self, res: Response) -> Result<HeaderMap, X402Error> {
-        let payment_quote = http_payment_required_from_response(res)
+        let payment_required = http_payment_required_from_response(res)
             .await
             .ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
-        let candidates = self.schemes.candidates(&payment_quote);
+        let candidates = self.schemes.candidates(&payment_required);
 
         // Select the best candidate
         let selected = self
@@ -86,9 +86,9 @@ where
             .ok_or(X402Error::NoMatchingPaymentOption)?;
 
         let signed_payload = selected.sign().await?;
-        let header_name = match &payment_quote {
-            Transport::V1(_) => "X-Payment",
-            Transport::V2(_) => "Payment-Signature",
+        let header_name = match &payment_required {
+            proto::PaymentRequired::V1(_) => "X-Payment",
+            proto::PaymentRequired::V2(_) => "Payment-Signature",
         };
         let headers = {
             let mut headers = HeaderMap::new();
@@ -108,8 +108,7 @@ impl ClientSchemes {
         self.0.push(Arc::new(client));
     }
 
-    pub fn candidates(&self, payment_quote: &HttpPaymentRequired) -> Vec<PaymentCandidate> {
-        let payment_required = payment_quote.inner();
+    pub fn candidates(&self, payment_required: &proto::PaymentRequired) -> Vec<PaymentCandidate> {
         let mut candidates = vec![];
         for client in self.0.iter() {
             let accepted = client.accept(payment_required);
