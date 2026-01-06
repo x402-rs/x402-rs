@@ -182,7 +182,7 @@ where
             // TODO Do the ARC!!
             facilitator: self.facilitator.clone(),
             settle_before_execution: self.settle_before_execution,
-            base_url,
+            base_url: Arc::new(base_url),
             accepts: self.accepts.clone(),
             resource: self.resource.clone(),
             inner: BoxCloneSyncService::new(inner),
@@ -195,7 +195,7 @@ where
 pub struct X402MiddlewareService<TPriceTag, TFacilitator> {
     /// Payment facilitator (local or remote)
     facilitator: TFacilitator,
-    base_url: Url,
+    base_url: Arc<Url>,
     /// Whether to settle payment before executing the request (true) or after (false)
     settle_before_execution: bool,
     accepts: Vec<TPriceTag>,

@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use http::Uri;
 use url::Url;
 use x402_rs::proto::v2;
@@ -33,4 +34,13 @@ impl ResourceInfoBuilder {
             }),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct PriceTagContainer<TPriceTag>(Arc<Vec<TPriceTag>>);
+
+pub struct X402Paygate2<TPriceTag, TFacilitator> {
+    facilitator: TFacilitator,
+    settle_before_execution: bool,
+    base_url: Arc<Url>,
 }
