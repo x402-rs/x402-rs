@@ -179,12 +179,11 @@ where
             .clone()
             .unwrap_or(Url::parse("http://localhost/").expect("Failed to parse default base URL"));
         X402MiddlewareService {
-            // TODO Do the ARC!!
             facilitator: self.facilitator.clone(),
             settle_before_execution: self.settle_before_execution,
             base_url: Arc::new(base_url),
-            accepts: self.accepts.clone(),
-            resource: self.resource.clone(),
+            accepts: Arc::new(self.accepts.clone()),
+            resource: Arc::new(self.resource.clone()),
             inner: BoxCloneSyncService::new(inner),
         }
     }
@@ -198,8 +197,8 @@ pub struct X402MiddlewareService<TPriceTag, TFacilitator> {
     base_url: Arc<Url>,
     /// Whether to settle payment before executing the request (true) or after (false)
     settle_before_execution: bool,
-    accepts: Vec<TPriceTag>,
-    resource: ResourceInfoBuilder,
+    accepts: Arc<Vec<TPriceTag>>,
+    resource: Arc<ResourceInfoBuilder>,
     /// The inner Axum service being wrapped
     inner: BoxCloneSyncService<Request, Response, Infallible>,
 }
@@ -246,12 +245,13 @@ where
             })
             .collect();
 
+        let gate = X402Paygate {
+            facilitator,
+            settle_before_execution,
+            payment_requirements,
+        };
+
         Box::pin(async move {
-            let gate = X402Paygate {
-                facilitator,
-                settle_before_execution,
-                payment_requirements,
-            };
             match gate.handle_request(inner, req).await {
                 Ok(success) => Ok(success),
                 Err(error) => Ok(error.into_response()),

@@ -39,7 +39,7 @@ impl ResourceInfoBuilder {
 #[derive(Debug, Clone)]
 pub struct PriceTagContainer<TPriceTag>(Arc<Vec<TPriceTag>>);
 
-pub struct X402Paygate2<TPriceTag, TFacilitator> {
+pub struct X402Paygate2<TFacilitator> {
     facilitator: TFacilitator,
     settle_before_execution: bool,
     base_url: Arc<Url>,
