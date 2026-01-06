@@ -7,7 +7,7 @@ use x402_rs::proto;
 use x402_rs::proto::v1;
 use x402_rs::util::Base64Bytes;
 
-use crate::x402::x402_error::X402Error;
+use crate::x402::paygate_error::PaygateError;
 
 /// A service-level helper struct responsible for verifying and settling
 /// x402 payments based on request headers and known payment requirements.
@@ -22,8 +22,6 @@ pub struct X402Paygate<TPaymentRequirements, TFacilitator> {
     /// Optional resource URL. If not set, it will be derived from a request URI.
     pub resource: Option<Url>,
 }
-
-
 
 impl<TPaymentRequirements, TFacilitator> X402Paygate<TPaymentRequirements, TFacilitator> {
     /// Calls the inner service with proper telemetry instrumentation.
@@ -68,7 +66,7 @@ where
         self,
         inner: S,
         req: http::Request<ReqBody>,
-    ) -> Result<Response, X402Error>
+    ) -> Result<Response, PaygateError<v1::PaymentRequirements>>
     where
         S::Response: IntoResponse,
         S::Error: IntoResponse,
@@ -76,10 +74,10 @@ where
     {
         // Extract payment payload from headers
         let header = extract_payment_header(req.headers(), "X-Payment").ok_or(
-            X402Error::payment_header_required(self.payment_requirements.clone()),
+            PaygateError::payment_header_required(self.payment_requirements.clone()),
         )?;
         let payment_payload = extract_payment_payload::<v1::PaymentPayload>(header).ok_or(
-            X402Error::invalid_payment_header(self.payment_requirements.clone()),
+            PaygateError::invalid_payment_header(self.payment_requirements.clone()),
         )?;
         // Verify the payment meets requirements
         let verify_request = self.verify_payment(payment_payload).await?;
@@ -146,10 +144,10 @@ where
     pub async fn verify_payment(
         &self,
         payment_payload: v1::PaymentPayload,
-    ) -> Result<proto::VerifyRequest, X402Error> {
+    ) -> Result<proto::VerifyRequest, PaygateError<v1::PaymentRequirements>> {
         let selected = self
             .find_matching_payment_requirements(&payment_payload)
-            .ok_or(X402Error::no_payment_matching(
+            .ok_or(PaygateError::no_payment_matching(
                 self.payment_requirements.clone(),
             ))?;
 
@@ -161,21 +159,21 @@ where
 
         let verify_request = verify_request
             .try_into()
-            .map_err(|e| X402Error::verification_failed(e, self.payment_requirements.clone()))?;
+            .map_err(|e| PaygateError::verification_failed(e, self.payment_requirements.clone()))?;
 
         let verify_response = self
             .facilitator
             .verify(&verify_request)
             .await
-            .map_err(|e| X402Error::verification_failed(e, self.payment_requirements.clone()))?;
+            .map_err(|e| PaygateError::verification_failed(e, self.payment_requirements.clone()))?;
 
         let verify_response_v1: v1::VerifyResponse = verify_response
             .try_into()
-            .map_err(|e| X402Error::verification_failed(e, self.payment_requirements.clone()))?;
+            .map_err(|e| PaygateError::verification_failed(e, self.payment_requirements.clone()))?;
 
         match verify_response_v1 {
             v1::VerifyResponse::Valid { .. } => Ok(verify_request),
-            v1::VerifyResponse::Invalid { reason, .. } => Err(X402Error::verification_failed(
+            v1::VerifyResponse::Invalid { reason, .. } => Err(PaygateError::verification_failed(
                 reason,
                 self.payment_requirements.clone(),
             )),
@@ -190,18 +188,18 @@ where
     pub async fn settle_payment(
         &self,
         settle_request: &proto::SettleRequest,
-    ) -> Result<proto::SettleResponse, X402Error> {
+    ) -> Result<proto::SettleResponse, PaygateError<v1::PaymentRequirements>> {
         let settle_response: proto::SettleResponse = self
             .facilitator
             .settle(settle_request)
             .await
-            .map_err(|e| X402Error::settlement_failed(e))?;
+            .map_err(|e| PaygateError::settlement_failed(e))?;
         let settle_response_v1: v1::SettleResponse =
             serde_json::from_value(settle_response.0.clone()).unwrap();
 
         match settle_response_v1 {
             v1::SettleResponse::Success { .. } => Ok(settle_response),
-            v1::SettleResponse::Error { reason, .. } => Err(X402Error::settlement_failed(reason)),
+            v1::SettleResponse::Error { reason, .. } => Err(PaygateError::settlement_failed(reason)),
         }
     }
 }
@@ -209,12 +207,14 @@ where
 /// Converts a [`proto::SettleResponse`] into an HTTP header value.
 ///
 /// Returns an error response if conversion fails.
-fn settlement_to_header(settlement: proto::SettleResponse) -> Result<HeaderValue, X402Error> {
-    let json = serde_json::to_vec(&settlement).map_err(|err| X402Error::settlement_failed(err))?;
+fn settlement_to_header(
+    settlement: proto::SettleResponse,
+) -> Result<HeaderValue, PaygateError<v1::PaymentRequirements>> {
+    let json = serde_json::to_vec(&settlement).map_err(|err| PaygateError::settlement_failed(err))?;
     let payment_header = Base64Bytes::encode(json);
 
     HeaderValue::from_bytes(payment_header.as_ref())
-        .map_err(|err| X402Error::settlement_failed(err))
+        .map_err(|err| PaygateError::settlement_failed(err))
 }
 
 fn extract_payment_header<'a>(header_map: &'a HeaderMap, header_name: &'a str) -> Option<&'a [u8]> {
