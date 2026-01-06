@@ -1,6 +1,6 @@
 use crate::x402::facilitator_client::FacilitatorClient;
 use crate::x402::paygate::X402Paygate;
-use crate::x402::paygate2::ResourceInfoBuilder;
+use crate::x402::paygate2::{ResourceInfoBuilder, V1Paygate};
 use axum::extract::Request;
 use axum::response::{IntoResponse, Response};
 use std::convert::Infallible;
@@ -218,44 +218,48 @@ where
 
     /// Intercepts the request, injects payment enforcement logic, and forwards to the wrapped service.
     fn call(&mut self, req: Request) -> Self::Future {
-        let facilitator = self.facilitator.clone();
-        let inner = self.inner.clone();
-        let settle_before_execution = self.settle_before_execution;
-        let accepts = self.accepts.clone();
-        let resource = self.resource.as_resource_info(&self.base_url, req.uri());
+        // let facilitator = self.facilitator.clone();
+        // let inner = self.inner.clone();
+        // let settle_before_execution = self.settle_before_execution;
+        // let accepts = self.accepts.clone();
+        // let resource = self.resource.as_resource_info(&self.base_url, req.uri());
+        //
+        // // Construct payment requirements from V1PriceTag accepts
+        // let payment_requirements: Vec<v1::PaymentRequirements> = accepts
+        //     .iter()
+        //     .map(|price_tag| v1::PaymentRequirements {
+        //         scheme: price_tag.scheme.clone(),
+        //         network: price_tag.network.clone(),
+        //         max_amount_required: price_tag.amount.clone(),
+        //         resource: resource.url.clone(),
+        //         description: resource.description.clone(),
+        //         mime_type: resource.mime_type.clone(),
+        //         output_schema: None,
+        //         pay_to: price_tag.pay_to.clone(),
+        //         max_timeout_seconds: price_tag.max_timeout_seconds,
+        //         asset: price_tag.asset.clone(),
+        //         extra: price_tag.extra.as_ref().map(|v| {
+        //             serde_json::value::RawValue::from_string(v.to_string())
+        //                 .expect("Failed to convert extra to RawValue")
+        //         }),
+        //     })
+        //     .collect();
+        //
+        // let gate = X402Paygate {
+        //     facilitator,
+        //     settle_before_execution,
+        //     payment_requirements,
+        // };
 
-        // Construct payment requirements from V1PriceTag accepts
-        let payment_requirements: Vec<v1::PaymentRequirements> = accepts
-            .iter()
-            .map(|price_tag| v1::PaymentRequirements {
-                scheme: price_tag.scheme.clone(),
-                network: price_tag.network.clone(),
-                max_amount_required: price_tag.amount.clone(),
-                resource: resource.url.clone(),
-                description: resource.description.clone(),
-                mime_type: resource.mime_type.clone(),
-                output_schema: None,
-                pay_to: price_tag.pay_to.clone(),
-                max_timeout_seconds: price_tag.max_timeout_seconds,
-                asset: price_tag.asset.clone(),
-                extra: price_tag.extra.as_ref().map(|v| {
-                    serde_json::value::RawValue::from_string(v.to_string())
-                        .expect("Failed to convert extra to RawValue")
-                }),
-            })
-            .collect();
-
-        let gate = X402Paygate {
-            facilitator,
-            settle_before_execution,
-            payment_requirements,
+        let gate = V1Paygate {
+            facilitator: self.facilitator.clone(),
+            settle_before_execution: self.settle_before_execution,
+            base_url: self.base_url.clone(),
+            accepts: self.accepts.clone(),
+            resource: self.resource.clone(),
+            inner: self.inner.clone(),
+            req,
         };
-
-        Box::pin(async move {
-            match gate.handle_request(inner, req).await {
-                Ok(success) => Ok(success),
-                Err(error) => Ok(error.into_response()),
-            }
-        })
+        Box::pin(gate.call())
     }
 }

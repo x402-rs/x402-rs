@@ -1,6 +1,11 @@
-use std::sync::Arc;
+use axum::extract::Request;
+use axum::response::{IntoResponse, Response};
 use http::Uri;
+use std::convert::Infallible;
+use std::sync::Arc;
+use tower::Service;
 use url::Url;
+use x402_rs::proto::v1::V1PriceTag;
 use x402_rs::proto::v2;
 
 #[derive(Debug, Clone)]
@@ -36,11 +41,18 @@ impl ResourceInfoBuilder {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct PriceTagContainer<TPriceTag>(Arc<Vec<TPriceTag>>);
+pub struct V1Paygate<TFacilitator, TInner, TReq> {
+    pub facilitator: TFacilitator,
+    pub settle_before_execution: bool,
+    pub base_url: Arc<Url>,
+    pub accepts: Arc<Vec<V1PriceTag>>,
+    pub resource: Arc<ResourceInfoBuilder>,
+    pub inner: TInner,
+    pub req: TReq,
+}
 
-pub struct X402Paygate2<TFacilitator> {
-    facilitator: TFacilitator,
-    settle_before_execution: bool,
-    base_url: Arc<Url>,
+impl<TFacilitator, TInner, TReq> V1Paygate<TFacilitator, TInner, TReq> {
+    pub async fn call(self) -> Result<Response, Infallible> {
+        todo!()
+    }
 }
