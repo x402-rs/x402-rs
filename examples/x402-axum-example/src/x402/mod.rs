@@ -2,3 +2,4 @@ pub mod facilitator_client;
 pub mod middleware;
 pub mod paygate;
 pub mod v1_eip155_exact;
+pub mod paygate2;
