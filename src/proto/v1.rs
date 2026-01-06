@@ -354,7 +354,9 @@ impl PaymentRequirements {
 #[serde(rename_all = "camelCase")]
 pub struct PaymentRequired {
     pub x402_version: X402Version1,
+    #[serde(default)]
     pub accepts: Vec<PaymentRequirements>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 
