@@ -5,6 +5,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tower::Service;
 use url::Url;
+use x402_rs::facilitator::Facilitator;
 use x402_rs::proto::v1::V1PriceTag;
 use x402_rs::proto::v2;
 
@@ -41,18 +42,47 @@ impl ResourceInfoBuilder {
     }
 }
 
-pub struct V1Paygate<TFacilitator, TInner, TReq> {
+pub struct V1Paygate<TFacilitator> {
     pub facilitator: TFacilitator,
     pub settle_before_execution: bool,
     pub base_url: Arc<Url>,
     pub accepts: Arc<Vec<V1PriceTag>>,
     pub resource: Arc<ResourceInfoBuilder>,
-    pub inner: TInner,
-    pub req: TReq,
 }
 
-impl<TFacilitator, TInner, TReq> V1Paygate<TFacilitator, TInner, TReq> {
-    pub async fn call(self) -> Result<Response, Infallible> {
+impl<TFacilitator> V1Paygate<TFacilitator>
+where TFacilitator: Facilitator {
+    #[cfg_attr(
+        feature = "telemetry",
+        instrument(name = "x402.handle_request", skip_all)
+    )]
+    pub async fn call<
+        ReqBody,
+        ResBody,
+        S: Service<http::Request<ReqBody>, Response = http::Response<ResBody>>,
+    >(
+        self,
+        inner: S,
+        req: http::Request<ReqBody>,
+    ) -> Result<Response, Infallible>
+    where
+        S::Response: IntoResponse,
+        S::Error: IntoResponse,
+        S::Future: Send,
+    {
         todo!()
     }
+}
+
+
+#[derive(Debug, thiserror::Error)]
+enum PaygateError {
+    #[error(transparent)]
+    Verification(#[from] VerificationError),
+}
+
+#[derive(Debug, thiserror::Error)]
+enum VerificationError {
+    #[error("{0} header is required")]
+    PaymentHeaderRequired(String),
 }

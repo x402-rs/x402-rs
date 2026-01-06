@@ -257,9 +257,8 @@ where
             base_url: self.base_url.clone(),
             accepts: self.accepts.clone(),
             resource: self.resource.clone(),
-            inner: self.inner.clone(),
-            req,
         };
-        Box::pin(gate.call())
+        let inner = self.inner.clone();
+        Box::pin(gate.call(inner, req))
     }
 }
