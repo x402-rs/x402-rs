@@ -303,62 +303,6 @@ impl PaygateError<v1::PaymentRequirements> {
     }
 }
 
-impl PaygateError<v2::PaymentRequirements> {
-    pub fn payment_header_required(resource: ResourceInfo, payment_requirements: Vec<v2::PaymentRequirements>) -> Self {
-        let payment_required_response = v2::PaymentRequired {
-            error: Some("X-PAYMENT header is required".to_string()),
-            accepts: payment_requirements,
-            resource,
-            x402_version: v2::X402Version2,
-        };
-        Self(payment_required_response)
-    }
-
-    pub fn invalid_payment_header(resource: ResourceInfo, payment_requirements: Vec<v2::PaymentRequirements>) -> Self {
-        let payment_required_response = v2::PaymentRequired {
-            error: Some("Invalid or malformed payment header".to_string()),
-            accepts: payment_requirements,
-            resource,
-            x402_version: v2::X402Version2,
-        };
-        Self(payment_required_response)
-    }
-
-    pub fn no_payment_matching(resource: ResourceInfo, payment_requirements: Vec<v2::PaymentRequirements>) -> Self {
-        let payment_required_response = v2::PaymentRequired {
-            error: Some("Unable to find matching payment requirements".to_string()),
-            accepts: payment_requirements,
-            resource,
-            x402_version: v2::X402Version2,
-        };
-        Self(payment_required_response)
-    }
-
-    pub fn verification_failed<E2: Display>(
-        error: E2,
-        resource: ResourceInfo,
-        payment_requirements: Vec<v2::PaymentRequirements>,
-    ) -> Self {
-        let payment_required_response = v2::PaymentRequired {
-            error: Some(format!("Verification Failed: {error}")),
-            accepts: payment_requirements,
-            resource,
-            x402_version: v2::X402Version2,
-        };
-        Self(payment_required_response)
-    }
-
-    pub fn settlement_failed<E2: Display>(error: E2, resource: ResourceInfo) -> Self {
-        let payment_required_response = v2::PaymentRequired {
-            error: Some(format!("Settlement Failed: {error}")),
-            accepts: vec![],
-            resource,
-            x402_version: v2::X402Version2,
-        };
-        Self(payment_required_response)
-    }
-}
-
 impl<T: HasPaymentRequired> IntoResponse for PaygateError<T>
 where
     T::PaymentRequired: Serialize,
