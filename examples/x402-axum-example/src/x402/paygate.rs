@@ -7,8 +7,8 @@ use tower::Service;
 use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto;
-use x402_rs::proto::{v1, v2};
 use x402_rs::proto::v2::ResourceInfo;
+use x402_rs::proto::{v1, v2};
 use x402_rs::util::Base64Bytes;
 
 /// A service-level helper struct responsible for verifying and settling
@@ -207,8 +207,6 @@ where
         }
     }
 }
-
-
 
 /// Converts a [`proto::SettleResponse`] into an HTTP header value.
 ///

@@ -16,12 +16,12 @@ use alloy_signer_local::PrivateKeySigner;
 use alloy_transport::TransportError;
 use alloy_transport::layers::{FallbackLayer, ThrottleLayer};
 use alloy_transport_http::Http;
+use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::num::NonZeroUsize;
 use std::ops::Mul;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
 use tracing::Instrument;
 
