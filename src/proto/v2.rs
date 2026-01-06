@@ -146,6 +146,7 @@ impl PaymentRequirements {
 #[serde(rename_all = "camelCase")]
 pub struct PaymentRequired {
     pub x402_version: X402Version2,
+    pub error: Option<String>,
     pub resource: ResourceInfo,
     pub accepts: Vec<PaymentRequirements>,
 }

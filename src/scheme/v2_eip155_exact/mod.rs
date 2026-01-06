@@ -108,8 +108,8 @@ impl X402SchemeFacilitator for V2Eip155ExactFacilitator {
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
         let kinds = vec![proto::SupportedPaymentKind {
-            x402_version: proto::X402Version::v2().into(),
-            scheme: types::ExactScheme.to_string(),
+            x402_version: v2::X402Version2.into(),
+            scheme: ExactScheme.to_string(),
             network: chain_id.clone().into(),
             extra: None,
         }];
