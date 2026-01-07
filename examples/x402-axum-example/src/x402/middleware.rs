@@ -1,6 +1,7 @@
 use axum::extract::Request;
 use axum::response::Response;
 use std::convert::Infallible;
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -13,6 +14,8 @@ use x402_rs::proto::v1::V1PriceTag;
 
 use crate::x402::facilitator_client::FacilitatorClient;
 use crate::x402::paygate::{ResourceInfoBuilder, V1Paygate};
+use crate::x402::paygate_v2::V2Paygate;
+use crate::x402::v2_eip155_exact::V2PriceTag;
 
 /// The main X402 middleware instance for enforcing x402 payments on routes.
 ///
@@ -251,6 +254,31 @@ where
         // };
 
         let gate = V1Paygate {
+            facilitator: self.facilitator.clone(),
+            settle_before_execution: self.settle_before_execution,
+            accepts: self.accepts.clone(),
+            resource: self.resource.as_resource_info(&self.base_url, req.uri()),
+        };
+        Box::pin(gate.handle_request(self.inner.clone(), req))
+    }
+}
+
+impl<TFacilitator> Service<Request> for X402MiddlewareService<V2PriceTag, TFacilitator>
+where
+    TFacilitator: Facilitator + Clone + Send + Sync + 'static,
+{
+    type Response = Response;
+    type Error = Infallible;
+    type Future = Pin<Box<dyn Future<Output = Result<Response, Infallible>> + Send>>;
+
+    /// Delegates readiness polling to the wrapped inner service.
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    /// Intercepts the request, injects V2 payment enforcement logic, and forwards to the wrapped service.
+    fn call(&mut self, req: Request) -> Self::Future {
+        let gate = V2Paygate {
             facilitator: self.facilitator.clone(),
             settle_before_execution: self.settle_before_execution,
             accepts: self.accepts.clone(),
