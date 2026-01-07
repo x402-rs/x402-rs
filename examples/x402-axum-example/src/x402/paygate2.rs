@@ -134,22 +134,42 @@ where
 
         let verify_request = self.make_verify_request(payment_payload)?;
 
-        let verify_response = self.verify_payment(&verify_request).await?;
+        if self.settle_before_execution {
+            // Settlement before execution: settle payment first, then call inner handler
+            #[cfg(feature = "telemetry")]
+            tracing::debug!("Settling payment before request execution");
 
-        let verify_response_v1: v1::VerifyResponse = verify_response
-            .try_into()
-            .map_err(|e| VerificationError::VerificationFailed(format!("{e}")))?;
+            let settlement = self.settle_payment(&verify_request).await?;
 
-        let verify_request = match verify_response_v1 {
-            v1::VerifyResponse::Valid { .. } => Ok(verify_request),
-            v1::VerifyResponse::Invalid { reason, .. } => {
-                Err(VerificationError::VerificationFailed(reason))
-            }
-        }?;
+            let header_value = settlement_to_header(settlement)?;
 
-        // Settlement after execution (default): call inner handler first, then settle
+            // Settlement succeeded, now execute the request
+            let response = match Self::call_inner(inner, req).await {
+                Ok(response) => response,
+                Err(err) => return Ok(err.into_response()),
+            };
+
+            // Add payment response header
+            let mut res = response;
+            res.headers_mut().insert("X-Payment-Response", header_value);
+            Ok(res.into_response())
+        } else {
+            // Settlement after execution (default): call inner handler first, then settle
             #[cfg(feature = "telemetry")]
             tracing::debug!("Settling payment after request execution");
+
+            let verify_response = self.verify_payment(&verify_request).await?;
+
+            let verify_response_v1: v1::VerifyResponse = verify_response
+                .try_into()
+                .map_err(|e| VerificationError::VerificationFailed(format!("{e}")))?;
+
+            let verify_request = match verify_response_v1 {
+                v1::VerifyResponse::Valid { .. } => Ok(verify_request),
+                v1::VerifyResponse::Invalid { reason, .. } => {
+                    Err(VerificationError::VerificationFailed(reason))
+                }
+            }?;
 
             let response = match Self::call_inner(inner, req).await {
                 Ok(response) => response,
@@ -167,6 +187,7 @@ where
             let mut res = response;
             res.headers_mut().insert("X-Payment-Response", header_value);
             Ok(res.into_response())
+        }
     }
 
     fn make_verify_request(
@@ -216,8 +237,6 @@ where
         Ok(settle_response)
     }
 
-
-
     pub fn error_into_response(&self, err: PaygateError) -> Response {
         match err {
             PaygateError::Verification(err) => {
@@ -236,10 +255,13 @@ where
                     .expect("Fail to construct response")
             }
             PaygateError::Settlement(err) => {
-                let body = Body::from(json!({
-                    "error": "Settlement failed",
-                    "details": err.to_string()
-                }).to_string());
+                let body = Body::from(
+                    json!({
+                        "error": "Settlement failed",
+                        "details": err.to_string()
+                    })
+                    .to_string(),
+                );
                 Response::builder()
                     .status(StatusCode::PAYMENT_REQUIRED)
                     .header("Content-Type", "application/json")
