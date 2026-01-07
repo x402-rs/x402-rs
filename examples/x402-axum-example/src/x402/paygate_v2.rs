@@ -50,7 +50,8 @@ impl<TFacilitator> V2Paygate<TFacilitator>
 where
     TFacilitator: Facilitator,
 {
-    const PAYMENT_HEADER_NAME: &'static str = "X-PAYMENT";
+    /// V2 uses "Payment-Signature" header for the payment payload
+    const PAYMENT_HEADER_NAME: &'static str = "Payment-Signature";
 
     #[cfg_attr(
         feature = "telemetry",
@@ -218,13 +219,17 @@ where
                     x402_version: v2::X402Version2,
                     resource: self.resource.clone(),
                 };
-                let payment_required_response_bytes =
+                // V2 sends payment required in the "Payment-Required" header (base64 encoded)
+                let payment_required_bytes =
                     serde_json::to_vec(&payment_required_response).expect("serialization failed");
-                let body = Body::from(payment_required_response_bytes);
+                let payment_required_header = Base64Bytes::encode(&payment_required_bytes);
+                let header_value = HeaderValue::from_bytes(payment_required_header.as_ref())
+                    .expect("Failed to create header value");
+
                 Response::builder()
                     .status(StatusCode::PAYMENT_REQUIRED)
-                    .header("Content-Type", "application/json")
-                    .body(body)
+                    .header("Payment-Required", header_value)
+                    .body(Body::empty())
                     .expect("Fail to construct response")
             }
             PaygateV2Error::Settlement(err) => {

@@ -14,6 +14,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 use x402_rs::__reexports::alloy_primitives::address;
 use x402_rs::networks::{KnownNetworkEip155, USDC};
 use x402_rs::util::Telemetry;
+use crate::x402::v2_eip155_exact::V2Eip155ExactSchemePriceTag;
 
 mod x402;
 
@@ -42,9 +43,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route(
             "/protected-route",
-            get(my_handler).layer(x402.with_price_tag(V1Eip155ExactSchemePriceTag {
+            get(my_handler).layer(x402.with_price_tag(V2Eip155ExactSchemePriceTag {
                 pay_to: address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07").into(),
                 asset: USDC::base_sepolia().amount(10),
+                max_timeout_seconds: 300
             })), //.layer(
                  // x402.with_description("Premium API - Discoverable")
                  //     .with_mime_type("application/json")
