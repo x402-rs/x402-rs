@@ -1,5 +1,4 @@
 use axum::body::Body;
-use axum::extract::Request;
 use axum::response::{IntoResponse, Response};
 use http::{HeaderMap, HeaderValue, StatusCode, Uri};
 use serde_json::json;
@@ -10,7 +9,6 @@ use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto;
 use x402_rs::proto::v1::V1PriceTag;
-use x402_rs::proto::v2::ResourceInfo;
 use x402_rs::proto::{v1, v2};
 use x402_rs::util::Base64Bytes;
 
@@ -51,7 +49,7 @@ pub struct V1Paygate<TFacilitator> {
     pub facilitator: TFacilitator,
     pub settle_before_execution: bool,
     pub accepts: Arc<Vec<V1PriceTag>>,
-    pub resource: ResourceInfo,
+    pub resource: v2::ResourceInfo,
 }
 
 impl<TFacilitator> V1Paygate<TFacilitator> {
