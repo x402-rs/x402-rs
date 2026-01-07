@@ -47,24 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 pay_to: address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07").into(),
                 asset: USDC::base_sepolia().amount(10),
                 max_timeout_seconds: 300
-            })), //.layer(
-                 // x402.with_description("Premium API - Discoverable")
-                 //     .with_mime_type("application/json")
-                 //     .with_price_tag()
-                 //     .accept()
-                 // .with_input_schema(serde_json::json!({
-                 //     "type": "http",
-                 //     "method": "GET",
-                 //     "discoverable": true,
-                 //     "description": "Access premium content"
-                 // }))
-                 // .with_output_schema(serde_json::json!({
-                 //     "type": "string",
-                 //     "description": "VIP content response"
-                 // }))
-                 // .with_price_tag(usdc_solana.amount(0.0025).unwrap())
-                 // .or_price_tag(usdc_base_sepolia.amount(0.0025).unwrap()),
-                 //),
+            })),
         )
         // .route(
         //     "/api/weather",
