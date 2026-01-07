@@ -254,11 +254,9 @@ where
         let gate = V1Paygate {
             facilitator: self.facilitator.clone(),
             settle_before_execution: self.settle_before_execution,
-            base_url: self.base_url.clone(),
             accepts: self.accepts.clone(),
-            resource: self.resource.clone(),
+            resource: self.resource.as_resource_info(&self.base_url, req.uri()),
         };
-        let inner = self.inner.clone();
-        Box::pin(gate.call(inner, req))
+        Box::pin(gate.handle_request(self.inner.clone(), req))
     }
 }

@@ -371,5 +371,5 @@ pub struct V1PriceTag {
     pub network: String,
     pub amount: String,
     pub max_timeout_seconds: u64,
-    pub extra: Option<serde_json::Value>,
+    pub extra: Option<Box<serde_json::value::RawValue>>,
 }
