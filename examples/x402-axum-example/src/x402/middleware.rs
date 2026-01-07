@@ -12,7 +12,7 @@ use x402_rs::facilitator::Facilitator;
 use x402_rs::proto::server::IntoPriceTag;
 
 use crate::x402::facilitator_client::FacilitatorClient;
-use crate::x402::paygate_uni::{Paygate, PaygateProtocol, ResourceInfoBuilder};
+use crate::x402::paygate::{Paygate, PaygateProtocol, ResourceInfoBuilder};
 
 /// The main X402 middleware instance for enforcing x402 payments on routes.
 ///
