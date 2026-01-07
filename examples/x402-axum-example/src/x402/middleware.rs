@@ -10,12 +10,9 @@ use tower::{Layer, Service};
 use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto::server::IntoPriceTag;
-use x402_rs::proto::v1::V1PriceTag;
 
 use crate::x402::facilitator_client::FacilitatorClient;
-use crate::x402::paygate::{ResourceInfoBuilder, V1Paygate};
-use crate::x402::paygate_v2::V2Paygate;
-use crate::x402::v2_eip155_exact::V2PriceTag;
+use crate::x402::paygate_uni::{Paygate, PaygateProtocol, ResourceInfoBuilder};
 
 /// The main X402 middleware instance for enforcing x402 payments on routes.
 ///
@@ -205,8 +202,13 @@ pub struct X402MiddlewareService<TPriceTag, TFacilitator> {
     inner: BoxCloneSyncService<Request, Response, Infallible>,
 }
 
-impl<TFacilitator> Service<Request> for X402MiddlewareService<V1PriceTag, TFacilitator>
+/// Unified Service implementation for any price tag type that implements PaygateProtocol.
+///
+/// This single implementation replaces the previous separate implementations for
+/// V1PriceTag and V2PriceTag, using the unified Paygate from paygate_uni.rs.
+impl<TPriceTag, TFacilitator> Service<Request> for X402MiddlewareService<TPriceTag, TFacilitator>
 where
+    TPriceTag: PaygateProtocol,
     TFacilitator: Facilitator + Clone + Send + Sync + 'static,
 {
     type Response = Response;
@@ -220,65 +222,7 @@ where
 
     /// Intercepts the request, injects payment enforcement logic, and forwards to the wrapped service.
     fn call(&mut self, req: Request) -> Self::Future {
-        // let facilitator = self.facilitator.clone();
-        // let inner = self.inner.clone();
-        // let settle_before_execution = self.settle_before_execution;
-        // let accepts = self.accepts.clone();
-        // let resource = self.resource.as_resource_info(&self.base_url, req.uri());
-        //
-        // // Construct payment requirements from V1PriceTag accepts
-        // let payment_requirements: Vec<v1::PaymentRequirements> = accepts
-        //     .iter()
-        //     .map(|price_tag| v1::PaymentRequirements {
-        //         scheme: price_tag.scheme.clone(),
-        //         network: price_tag.network.clone(),
-        //         max_amount_required: price_tag.amount.clone(),
-        //         resource: resource.url.clone(),
-        //         description: resource.description.clone(),
-        //         mime_type: resource.mime_type.clone(),
-        //         output_schema: None,
-        //         pay_to: price_tag.pay_to.clone(),
-        //         max_timeout_seconds: price_tag.max_timeout_seconds,
-        //         asset: price_tag.asset.clone(),
-        //         extra: price_tag.extra.as_ref().map(|v| {
-        //             serde_json::value::RawValue::from_string(v.to_string())
-        //                 .expect("Failed to convert extra to RawValue")
-        //         }),
-        //     })
-        //     .collect();
-        //
-        // let gate = X402Paygate {
-        //     facilitator,
-        //     settle_before_execution,
-        //     payment_requirements,
-        // };
-
-        let gate = V1Paygate {
-            facilitator: self.facilitator.clone(),
-            settle_before_execution: self.settle_before_execution,
-            accepts: self.accepts.clone(),
-            resource: self.resource.as_resource_info(&self.base_url, req.uri()),
-        };
-        Box::pin(gate.handle_request(self.inner.clone(), req))
-    }
-}
-
-impl<TFacilitator> Service<Request> for X402MiddlewareService<V2PriceTag, TFacilitator>
-where
-    TFacilitator: Facilitator + Clone + Send + Sync + 'static,
-{
-    type Response = Response;
-    type Error = Infallible;
-    type Future = Pin<Box<dyn Future<Output = Result<Response, Infallible>> + Send>>;
-
-    /// Delegates readiness polling to the wrapped inner service.
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    /// Intercepts the request, injects V2 payment enforcement logic, and forwards to the wrapped service.
-    fn call(&mut self, req: Request) -> Self::Future {
-        let gate = V2Paygate {
+        let gate = Paygate {
             facilitator: self.facilitator.clone(),
             settle_before_execution: self.settle_before_execution,
             accepts: self.accepts.clone(),
