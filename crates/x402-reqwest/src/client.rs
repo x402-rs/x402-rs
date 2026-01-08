@@ -6,8 +6,8 @@ use x402_rs::proto;
 use x402_rs::proto::client::{
     FirstMatch, PaymentCandidate, PaymentSelector, X402Error, X402SchemeClient,
 };
-
-use crate::http_transport::http_payment_required_from_response;
+use x402_rs::proto::{v1, v2};
+use x402_rs::util::Base64Bytes;
 
 /// The main x402 client that orchestrates scheme clients and selection.
 pub struct X402Client<TSelector> {
@@ -148,3 +148,28 @@ where
         next.run(retry, extensions).await
     }
 }
+
+pub async fn http_payment_required_from_response(
+    response: Response,
+) -> Option<proto::PaymentRequired> {
+    let headers = response.headers();
+    let v2_payment_required = headers
+        .get("Payment-Required")
+        .and_then(|h| Base64Bytes::from(h.as_bytes()).decode().ok())
+        .and_then(|b| serde_json::from_slice::<v2::PaymentRequired>(&b).ok());
+    if let Some(v2_payment_required) = v2_payment_required {
+        return Some(proto::PaymentRequired::V2(v2_payment_required));
+    }
+    let v1_payment_required = response
+        .bytes()
+        .await
+        .ok()
+        .and_then(|b| serde_json::from_slice::<v1::PaymentRequired>(&b).ok());
+    if let Some(v1_payment_required) = v1_payment_required {
+        return Some(proto::PaymentRequired::V1(v1_payment_required));
+    }
+    None
+}
+
+// TODO Add telemetry
+// TODO Add docs
