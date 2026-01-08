@@ -7,7 +7,8 @@
 //!
 //! ## Example Usage
 //!
-//! ```rust,no_run
+//! ```rust
+//! use alloy_primitives::address;
 //! use axum::{Router, routing::get};
 //! use axum::response::IntoResponse;
 //! use http::StatusCode;
@@ -21,8 +22,8 @@
 //!     "/protected",
 //!     get(my_handler).layer(
 //!         x402.with_price_tag(V1Eip155Exact::price_tag(
-//!             "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".parse().unwrap(),
-//!             USDC::base_sepolia().parse("0.01")?,
+//!             address!("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"),
+//!             USDC::base_sepolia().parse("0.01").unwrap(),
 //!         ))
 //!     ),
 //! );

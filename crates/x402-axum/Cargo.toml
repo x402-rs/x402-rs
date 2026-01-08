@@ -22,9 +22,18 @@ thiserror = { version = "2.0" }
 tower = { version = "0.5" }
 http = { version = "1.4" }
 axum-core = { version = "0.5" }
+tokio = { version = "1.45", features = ["sync"] }
 
 # Telemetry
 tracing = { version = "0.1", optional = true }
+
+[dev-dependencies]
+wiremock = "0.6"
+axum = { version = "0.8 "}
+# Ensure x402-rs has tracing enabled for tests
+x402-rs = { version = "0.11", default-features = false, features = ["telemetry"] }
+alloy-primitives = { version = "1.4.1" }
+solana-pubkey = { version = "4.0.0" }
 
 [features]
 default = []

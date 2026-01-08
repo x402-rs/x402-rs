@@ -7,7 +7,8 @@
 //!
 //! ## Example Usage
 //!
-//! ```rust,no_run
+//! ```rust
+//! use alloy_primitives::address;
 //! use axum::{Router, routing::get};
 //! use axum::response::IntoResponse;
 //! use http::StatusCode;
@@ -21,8 +22,8 @@
 //!     "/protected",
 //!     get(my_handler).layer(
 //!         x402.with_price_tag(V1Eip155Exact::price_tag(
-//!             "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".parse().unwrap(),
-//!             USDC::base_sepolia().amount(10),
+//!             address!("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"),
+//!             USDC::base_sepolia().parse("0.01").unwrap(),
 //!         ))
 //!     ),
 //! );
@@ -57,6 +58,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Duration;
 use tower::util::BoxCloneSyncService;
 use tower::{Layer, Service};
 use url::Url;
@@ -77,7 +79,12 @@ pub struct X402Middleware<F> {
     settle_before_execution: bool,
 }
 
-// TODO with caching timeout for facilitator client supported thing
+impl<F> X402Middleware<F> {
+    pub fn facilitator(&self) -> &F {
+        &self.facilitator
+    }
+}
+
 impl X402Middleware<Arc<FacilitatorClient>> {
     /// Creates a new middleware instance with a default facilitator URL.
     ///
@@ -106,6 +113,19 @@ impl X402Middleware<Arc<FacilitatorClient>> {
     /// Returns the configured facilitator URL.
     pub fn facilitator_url(&self) -> &Url {
         self.facilitator.base_url()
+    }
+
+    /// Sets the TTL for caching the facilitator's supported response.
+    ///
+    /// Default is 10 minutes. Use [`FacilitatorClient::without_supported_cache()`]
+    /// to disable caching entirely.
+    pub fn with_supported_cache_ttl(&self, ttl: Duration) -> Self {
+        let facilitator = Arc::new(self.facilitator.with_supported_cache_ttl(ttl));
+        Self {
+            facilitator,
+            base_url: self.base_url.clone(),
+            settle_before_execution: self.settle_before_execution,
+        }
     }
 }
 
