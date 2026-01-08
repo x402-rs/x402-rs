@@ -10,11 +10,8 @@ pub struct V2SolanaExactSchemePriceTag {
     pub max_timeout_seconds: u64,
 }
 
-/// V2 price tag type for use with the middleware
-pub type V2PriceTag = v2::PaymentRequirements;
-
 impl IntoPriceTag for V2SolanaExactSchemePriceTag {
-    type PriceTag = V2PriceTag;
+    type PriceTag = v2::PriceTag;
 
     fn into_price_tag(self) -> Self::PriceTag {
         let chain_id: ChainId = self.asset.token.chain_reference.into();

@@ -2,7 +2,7 @@ use x402_rs::__reexports::alloy_primitives::U256;
 use x402_rs::chain::eip155::Eip155TokenDeployment;
 use x402_rs::chain::{ChainId, DeployedTokenAmount, eip155};
 use x402_rs::proto::server::IntoPriceTag;
-use x402_rs::proto::v1::V1PriceTag;
+use x402_rs::proto::v1;
 
 #[derive(Debug, Clone)]
 pub struct V1Eip155ExactSchemePriceTag {
@@ -12,7 +12,7 @@ pub struct V1Eip155ExactSchemePriceTag {
 }
 
 impl IntoPriceTag for V1Eip155ExactSchemePriceTag {
-    type PriceTag = V1PriceTag;
+    type PriceTag = v1::PriceTag;
 
     fn into_price_tag(self) -> Self::PriceTag {
         let chain_id: ChainId = self.asset.token.chain_reference.into();
@@ -25,7 +25,7 @@ impl IntoPriceTag for V1Eip155ExactSchemePriceTag {
             .eip712
             .and_then(|eip712| serde_json::to_string(&eip712).ok())
             .and_then(|extra| serde_json::value::RawValue::from_string(extra).ok());
-        V1PriceTag {
+        v1::PriceTag {
             scheme: "exact".to_string(), // FIXME
             pay_to: self.pay_to.to_string(),
             asset: self.asset.token.address.to_string(),

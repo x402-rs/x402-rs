@@ -364,7 +364,7 @@ pub struct PaymentRequired {
 }
 
 #[derive(Debug, Clone)]
-pub struct V1PriceTag {
+pub struct PriceTag {
     pub scheme: String,
     pub pay_to: String,
     pub asset: String,

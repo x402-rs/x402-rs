@@ -27,7 +27,6 @@ use url::Url;
 use x402_rs::chain::ChainId;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto;
-use x402_rs::proto::v1::V1PriceTag;
 use x402_rs::proto::{SupportedResponse, v1, v2};
 use x402_rs::util::Base64Bytes;
 
@@ -35,13 +34,6 @@ use x402_rs::util::Base64Bytes;
 use tracing::Instrument;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
-
-// ============================================================================
-// Re-exports for convenience
-// ============================================================================
-
-/// V2 price tag type alias for convenience.
-pub type V2PriceTag = v2::PaymentRequirements;
 
 // ============================================================================
 // Common Types
@@ -151,10 +143,10 @@ pub trait PaygateProtocol: Clone + Send + Sync + 'static {
 }
 
 // ============================================================================
-// V1 Protocol Implementation (on V1PriceTag)
+// V1 Protocol Implementation (on v1::PriceTag)
 // ============================================================================
 
-impl PaygateProtocol for V1PriceTag {
+impl PaygateProtocol for v1::PriceTag {
     type PaymentPayload = v1::PaymentPayload;
 
     const PAYMENT_HEADER_NAME: &'static str = "X-PAYMENT";
@@ -266,7 +258,7 @@ impl PaygateProtocol for V1PriceTag {
 
 /// Helper function to convert V1PriceTag to v1::PaymentRequirements with resource info.
 fn price_tag_to_v1_requirements_with_resource(
-    price_tag: &V1PriceTag,
+    price_tag: &v1::PriceTag,
     resource: &v2::ResourceInfo,
 ) -> v1::PaymentRequirements {
     v1::PaymentRequirements {

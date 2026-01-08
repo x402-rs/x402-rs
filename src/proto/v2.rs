@@ -152,3 +152,5 @@ pub struct PaymentRequired {
     #[serde(default)]
     pub accepts: Vec<PaymentRequirements>,
 }
+
+pub type PriceTag = PaymentRequirements;
