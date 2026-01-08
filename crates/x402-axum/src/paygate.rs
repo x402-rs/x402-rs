@@ -164,6 +164,7 @@ pub trait PaygateProtocol: Clone + Send + Sync + 'static {
     /// Called by middleware when building 402 response to add extra information like fee payer
     /// from the facilitator's supported endpoints.
     fn enrich_with_capabilities(price_tag: &Self, capabilities: &SupportedResponse) -> Self;
+    // FIXME ^^ mut SELF instead of Clone
 }
 
 // ============================================================================
@@ -428,20 +429,20 @@ impl PaygateProtocol for v2::PaymentRequirements {
 /// The protocol version is determined by the price tag type parameter `P`, which must
 /// implement [`PaygateProtocol`]. Use `V1PriceTag` for V1 protocol or `V2PriceTag`
 /// (alias for `v2::PaymentRequirements`) for V2 protocol.
-pub struct Paygate<P, TFacilitator> {
+pub struct Paygate<TPriceTag, TFacilitator> {
     /// The facilitator for verifying and settling payments
     pub facilitator: TFacilitator,
     /// Whether to settle before or after request execution
     pub settle_before_execution: bool,
     /// Accepted payment requirements
-    pub accepts: Arc<Vec<P>>,
+    pub accepts: Arc<Vec<TPriceTag>>,
     /// Resource information for the protected endpoint
     pub resource: v2::ResourceInfo,
 }
 
-impl<P, TFacilitator> Paygate<P, TFacilitator>
+impl<TPriceTag, TFacilitator> Paygate<TPriceTag, TFacilitator>
 where
-    P: PaygateProtocol,
+    TPriceTag: PaygateProtocol,
 {
     /// Calls the inner service with proper telemetry instrumentation.
     async fn call_inner<
@@ -469,9 +470,9 @@ where
     }
 }
 
-impl<P, TFacilitator> Paygate<P, TFacilitator>
+impl<TPriceTag, TFacilitator> Paygate<TPriceTag, TFacilitator>
 where
-    P: PaygateProtocol,
+    TPriceTag: PaygateProtocol,
     TFacilitator: Facilitator,
 {
     /// Handles an incoming request, processing payment if required.
@@ -501,7 +502,7 @@ where
             Err(err) => {
                 // Get enriched accepts for 402 response
                 let enriched_accepts = self.get_enriched_accepts().await;
-                Ok(P::error_into_response(
+                Ok(TPriceTag::error_into_response(
                     err,
                     &enriched_accepts,
                     &self.resource,
@@ -511,13 +512,13 @@ where
     }
 
     /// Gets enriched price tags with facilitator capabilities.
-    async fn get_enriched_accepts(&self) -> Vec<P> {
+    async fn get_enriched_accepts(&self) -> Vec<TPriceTag> {
         // Try to get capabilities, use empty if fails
         let capabilities = self.facilitator.supported().await.unwrap_or_default();
 
         self.accepts
             .iter()
-            .map(|pt| P::enrich_with_capabilities(pt, &capabilities))
+            .map(|pt| TPriceTag::enrich_with_capabilities(pt, &capabilities))
             .collect()
     }
 
@@ -540,14 +541,14 @@ where
         S::Future: Send,
     {
         // Extract payment payload from headers
-        let header = extract_payment_header(req.headers(), P::PAYMENT_HEADER_NAME).ok_or(
-            VerificationError::PaymentHeaderRequired(P::PAYMENT_HEADER_NAME),
+        let header = extract_payment_header(req.headers(), TPriceTag::PAYMENT_HEADER_NAME).ok_or(
+            VerificationError::PaymentHeaderRequired(TPriceTag::PAYMENT_HEADER_NAME),
         )?;
-        let payment_payload = extract_payment_payload::<P::PaymentPayload>(header)
+        let payment_payload = extract_payment_payload::<TPriceTag::PaymentPayload>(header)
             .ok_or(VerificationError::InvalidPaymentHeader)?;
 
         let verify_request =
-            P::make_verify_request(payment_payload, &self.accepts, &self.resource)?;
+            TPriceTag::make_verify_request(payment_payload, &self.accepts, &self.resource)?;
 
         if self.settle_before_execution {
             // Settlement before execution: settle payment first, then call inner handler
@@ -575,7 +576,7 @@ where
 
             let verify_response = self.verify_payment(&verify_request).await?;
 
-            P::validate_verify_response(verify_response)?;
+            TPriceTag::validate_verify_response(verify_response)?;
 
             let response = match Self::call_inner(inner, req).await {
                 Ok(response) => response,
