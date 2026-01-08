@@ -1,7 +1,7 @@
 use x402_rs::chain::solana::{Address, SolanaTokenDeployment};
 use x402_rs::chain::{ChainId, DeployedTokenAmount};
-use x402_rs::proto::server::IntoPriceTag;
 use x402_rs::proto::v1;
+use x402_rs::scheme::IntoPriceTag;
 
 #[derive(Debug, Clone)]
 pub struct V1SolanaExactSchemePriceTag {

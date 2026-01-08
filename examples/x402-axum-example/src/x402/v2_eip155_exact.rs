@@ -1,8 +1,8 @@
 use x402_rs::__reexports::alloy_primitives::U256;
 use x402_rs::chain::eip155::Eip155TokenDeployment;
 use x402_rs::chain::{ChainId, DeployedTokenAmount, eip155};
-use x402_rs::proto::server::IntoPriceTag;
 use x402_rs::proto::v2;
+use x402_rs::scheme::IntoPriceTag;
 
 #[derive(Debug, Clone)]
 pub struct V2Eip155ExactSchemePriceTag {

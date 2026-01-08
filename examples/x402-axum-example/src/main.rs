@@ -1,5 +1,4 @@
 use crate::x402::middleware::X402Middleware;
-use crate::x402::v1_eip155_exact::V1Eip155ExactSchemePriceTag;
 use crate::x402::v1_solana_exact::V1SolanaExactSchemePriceTag;
 use axum::Router;
 use axum::http::StatusCode;
@@ -15,6 +14,7 @@ use x402_rs::__reexports::alloy_primitives::address;
 use x402_rs::__reexports::solana_pubkey::pubkey;
 use x402_rs::chain::solana::Address;
 use x402_rs::networks::{KnownNetworkEip155, KnownNetworkSolana, USDC};
+use x402_rs::scheme::v1_eip155_exact::V1Eip155ExactPriceTag;
 use x402_rs::util::Telemetry;
 
 mod x402;
@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/protected-route",
             get(my_handler).layer(
-                x402.with_price_tag(V1Eip155ExactSchemePriceTag {
+                x402.with_price_tag(V1Eip155ExactPriceTag {
                     pay_to: address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07").into(),
                     asset: USDC::base_sepolia().amount(10),
                     max_timeout_seconds: 300,

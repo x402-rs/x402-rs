@@ -5,6 +5,8 @@ use crate::chain::{ChainId, ChainIdPattern};
 use crate::proto;
 use crate::scheme::X402SchemeId;
 
+// FIXME Move all that to scheme/mod.rs
+
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct PaymentCandidate {
     pub chain_id: ChainId,

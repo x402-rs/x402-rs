@@ -9,8 +9,7 @@ use tower::util::BoxCloneSyncService;
 use tower::{Layer, Service};
 use url::Url;
 use x402_rs::facilitator::Facilitator;
-use x402_rs::proto::server::IntoPriceTag;
-
+use x402_rs::scheme::IntoPriceTag;
 use crate::x402::facilitator_client::FacilitatorClient;
 use crate::x402::paygate::{Paygate, PaygateProtocol, ResourceInfoBuilder};
 

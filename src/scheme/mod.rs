@@ -49,6 +49,11 @@ pub trait X402SchemeId {
     }
 }
 
+pub trait IntoPriceTag {
+    type PriceTag;
+    fn into_price_tag(self) -> Self::PriceTag;
+}
+
 pub trait X402SchemeFacilitatorBuilder {
     fn build(
         &self,

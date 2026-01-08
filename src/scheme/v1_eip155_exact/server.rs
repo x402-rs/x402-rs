@@ -1,17 +1,18 @@
-use x402_rs::__reexports::alloy_primitives::U256;
-use x402_rs::chain::eip155::Eip155TokenDeployment;
-use x402_rs::chain::{ChainId, DeployedTokenAmount, eip155};
-use x402_rs::proto::server::IntoPriceTag;
-use x402_rs::proto::v1;
+use alloy_primitives::U256;
+
+use crate::chain::{ChainId, DeployedTokenAmount};
+use crate::chain::eip155::{ChecksummedAddress, Eip155TokenDeployment};
+use crate::proto::v1;
+use crate::scheme::{IntoPriceTag, V1Eip155Exact};
 
 #[derive(Debug, Clone)]
-pub struct V1Eip155ExactSchemePriceTag {
-    pub pay_to: eip155::ChecksummedAddress,
+pub struct V1Eip155ExactPriceTag {
+    pub pay_to: ChecksummedAddress,
     pub asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,
     pub max_timeout_seconds: u64,
 }
 
-impl IntoPriceTag for V1Eip155ExactSchemePriceTag {
+impl IntoPriceTag for V1Eip155ExactPriceTag {
     type PriceTag = v1::PriceTag;
 
     fn into_price_tag(self) -> Self::PriceTag {

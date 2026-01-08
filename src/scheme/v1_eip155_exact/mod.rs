@@ -15,6 +15,7 @@ use tracing_core::Level;
 
 pub mod client;
 pub mod types;
+pub mod server;
 
 use crate::chain::eip155::{
     Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction,
@@ -29,6 +30,7 @@ use crate::scheme::{
 use crate::timestamp::UnixTimestamp;
 
 pub use types::*;
+pub use server::*;
 
 /// Signature verifier for EIP-6492, EIP-1271, EOA, universally deployed on the supported EVM chains
 /// If absent on a target chain, verification will fail; you should deploy the validator there.
