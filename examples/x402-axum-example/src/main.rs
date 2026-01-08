@@ -1,23 +1,19 @@
-use crate::x402::middleware::X402Middleware;
+use alloy_primitives::address;
 use axum::Router;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use dotenvy::dotenv;
+use solana_pubkey::pubkey;
 use std::env;
 use tracing::instrument;
-// TODO Kill re-exports or make them more direct, like x402_rs::macro::address and ::pubkey
-use x402_rs::__reexports::alloy_primitives::address;
-use x402_rs::__reexports::solana_pubkey::pubkey;
-use x402_rs::chain::solana::Address;
+use x402_axum::X402Middleware;
 use x402_rs::networks::{KnownNetworkEip155, KnownNetworkSolana, USDC};
 use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
 use x402_rs::scheme::v1_solana_exact::V1SolanaExact;
 use x402_rs::scheme::v2_eip155_exact::V2Eip155Exact;
 use x402_rs::scheme::v2_solana_exact::V2SolanaExact;
 use x402_rs::util::Telemetry;
-
-mod x402;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

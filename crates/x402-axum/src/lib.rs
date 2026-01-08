@@ -40,7 +40,6 @@
 
 pub mod facilitator_client;
 pub mod layer;
-pub mod price;
+pub mod paygate;
 
 pub use layer::X402Middleware;
-pub use price::*;

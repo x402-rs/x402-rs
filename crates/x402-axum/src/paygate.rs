@@ -16,8 +16,8 @@
 //! let v2_paygate: Paygate<V2PriceTag, _> = Paygate::new(facilitator, accepts, resource);
 //! ```
 
-use axum::body::Body;
-use axum::response::{IntoResponse, Response};
+use axum_core::body::Body;
+use axum_core::response::{IntoResponse, Response};
 use http::{HeaderMap, HeaderValue, StatusCode, Uri};
 use serde_json::json;
 use std::convert::Infallible;

@@ -34,12 +34,12 @@ use std::fmt::Display;
 use std::time::Duration;
 use url::Url;
 use x402_rs::facilitator::Facilitator;
-use x402_rs::types::{
-    SettleRequest, SettleResponse, SupportedPaymentKindsResponse, VerifyRequest, VerifyResponse,
-};
 
 #[cfg(feature = "telemetry")]
 use tracing::{Instrument, Span};
+use x402_rs::proto::{
+    SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse,
+};
 
 /// A client for communicating with a remote x402 facilitator.
 ///
@@ -114,7 +114,8 @@ impl Facilitator for FacilitatorClient {
         FacilitatorClient::settle(self, request).await
     }
 
-    async fn supported(&self) -> Result<SupportedPaymentKindsResponse, Self::Error> {
+    async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
+        // TODO Cache it
         FacilitatorClient::supported(self).await
     }
 }
@@ -262,7 +263,7 @@ impl FacilitatorClient {
             .await
     }
 
-    pub async fn supported(&self) -> Result<SupportedPaymentKindsResponse, FacilitatorClientError> {
+    pub async fn supported(&self) -> Result<SupportedResponse, FacilitatorClientError> {
         self.get_json(&self.supported_url, "GET /supported").await
     }
 
