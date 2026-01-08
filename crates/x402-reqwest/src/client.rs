@@ -152,9 +152,9 @@ where
     /// Returns [`X402Error::ParseError`] if the response cannot be parsed.
     /// Returns [`X402Error::NoMatchingPaymentOption`] if no registered scheme
     /// can handle the payment requirements.
-    #[cfg_attr(feature = "telemetry", instrument(name = "x402.make_payment_headers", skip_all, err))]
+    #[cfg_attr(feature = "telemetry", instrument(name = "x402.reqwest.make_payment_headers", skip_all, err))]
     pub async fn make_payment_headers(&self, res: Response) -> Result<HeaderMap, X402Error> {
-        let payment_required = http_payment_required_from_response(res)
+        let payment_required = parse_payment_required(res)
             .await
             .ok_or(X402Error::ParseError("Invalid 402 response".to_string()))?;
         let candidates = self.schemes.candidates(&payment_required);
@@ -219,10 +219,7 @@ where
     /// 1. Extracts payment requirements from the response
     /// 2. Signs a payment using registered scheme clients
     /// 3. Retries the request with the payment header
-    #[cfg_attr(
-        feature = "telemetry",
-        instrument(name = "x402.middleware.handle", skip_all, err)
-    )]
+    #[cfg_attr(feature = "telemetry", instrument(name = "x402.reqwest.handle", skip_all, err))]
     async fn handle(
         &self,
         req: Request,
@@ -262,11 +259,8 @@ where
 /// Parses a 402 Payment Required response into a [`proto::PaymentRequired`].
 ///
 /// Supports both V1 (JSON body) and V2 (base64-encoded header) formats.
-#[cfg_attr(
-    feature = "telemetry",
-    instrument(name = "x402.parse_payment_required", skip(response))
-)]
-pub async fn http_payment_required_from_response(
+#[cfg_attr(feature = "telemetry", instrument(name = "x402.reqwest.parse_payment_required", skip(response)))]
+pub async fn parse_payment_required(
     response: Response,
 ) -> Option<proto::PaymentRequired> {
     // Try V2 format first (header-based)

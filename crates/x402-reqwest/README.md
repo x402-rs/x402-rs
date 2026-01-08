@@ -146,6 +146,22 @@ Enable it via:
 x402-reqwest = { version = "0.5", features = ["telemetry"] }
 ```
 
+## Telemetry
+
+When the `telemetry` feature is enabled, the middleware emits structured tracing events for key operations:
+
+- **x402.reqwest.handle**: Span covering the entire middleware handling, including 402 detection and payment retry
+- **x402.reqwest.make_payment_headers**: Span for payment header creation and signing
+- **x402.reqwest.parse_payment_required**: Span for parsing 402 responses (V1 body or V2 header)
+
+The telemetry includes:
+- Payment version (V1 or V2)
+- Selected scheme and network
+- Request URLs and response status codes
+- Payment parsing results
+
+This integrates with any `tracing`-compatible subscriber. For OpenTelemetry export, see [x402-rs telemetry](https://docs.rs/x402-rs/latest/x402_rs/util/telemetry/index.html).
+
 ## Related Crates
 
 - [x402-rs](https://crates.io/crates/x402-rs): Core x402 types, facilitator traits, helpers.
