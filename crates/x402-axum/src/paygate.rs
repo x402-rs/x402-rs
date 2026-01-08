@@ -4,16 +4,29 @@
 //! payment gate logic between protocol versions while allowing version-specific
 //! behavior through the [`PaygateProtocol`] trait.
 //!
-//! # Example
+//! ## Overview
+//!
+//! The paygate handles:
+//! - Extracting payment headers from requests
+//! - Verifying payments with the facilitator
+//! - Settling payments on-chain
+//! - Returning appropriate 402 responses when payment is required
+//!
+//! ## Example
 //!
 //! ```ignore
-//! use x402::paygate::{Paygate, V1PriceTag, V2PriceTag};
+//! use x402_axum::paygate::{Paygate, PaygateProtocol};
 //!
-//! // Create a V1 paygate
-//! let v1_paygate: Paygate<V1PriceTag, _> = Paygate::new(facilitator, accepts, resource);
+//! // Create a paygate for V1 or V2 protocol
+//! let paygate = Paygate {
+//!     facilitator,
+//!     settle_before_execution: false,
+//!     accepts: Arc::new(price_tags),
+//!     resource: ResourceInfoBuilder::default().as_resource_info(&base_url, &uri),
+//! };
 //!
-//! // Create a V2 paygate
-//! let v2_paygate: Paygate<V2PriceTag, _> = Paygate::new(facilitator, accepts, resource);
+//! // Handle a request
+//! let response = paygate.handle_request(inner, request).await;
 //! ```
 
 use axum_core::body::Body;
@@ -42,8 +55,11 @@ use tracing::instrument;
 /// Builder for resource information that can be used with both V1 and V2 protocols.
 #[derive(Debug, Clone)]
 pub struct ResourceInfoBuilder {
+    /// Description of the protected resource
     pub description: String,
+    /// MIME type of the protected resource
     pub mime_type: String,
+    /// Optional explicit URL of the protected resource
     pub url: Option<String>,
 }
 
@@ -61,7 +77,10 @@ impl Default for ResourceInfoBuilder {
 }
 
 impl ResourceInfoBuilder {
-    /// Determine the resource URL (static or dynamic).
+    /// Determines the resource URL (static or dynamic).
+    ///
+    /// If `url` is set, returns it directly. Otherwise, constructs a URL by combining
+    /// the base URL with the request URI's path and query.
     pub fn as_resource_info(&self, base_url: &Url, request_uri: &Uri) -> v2::ResourceInfo {
         v2::ResourceInfo {
             description: self.description.clone(),
@@ -141,7 +160,9 @@ pub trait PaygateProtocol: Clone + Send + Sync + 'static {
     ) -> Result<(), VerificationError>;
 
     /// Enriches a price tag with facilitator capabilities.
-    /// Called by middleware when building 402 response.
+    ///
+    /// Called by middleware when building 402 response to add extra information like fee payer
+    /// from the facilitator's supported endpoints.
     fn enrich_with_capabilities(price_tag: &Self, capabilities: &SupportedResponse) -> Self;
 }
 
@@ -408,9 +429,13 @@ impl PaygateProtocol for v2::PaymentRequirements {
 /// implement [`PaygateProtocol`]. Use `V1PriceTag` for V1 protocol or `V2PriceTag`
 /// (alias for `v2::PaymentRequirements`) for V2 protocol.
 pub struct Paygate<P, TFacilitator> {
+    /// The facilitator for verifying and settling payments
     pub facilitator: TFacilitator,
+    /// Whether to settle before or after request execution
     pub settle_before_execution: bool,
+    /// Accepted payment requirements
     pub accepts: Arc<Vec<P>>,
+    /// Resource information for the protected endpoint
     pub resource: v2::ResourceInfo,
 }
 
@@ -450,6 +475,9 @@ where
     TFacilitator: Facilitator,
 {
     /// Handles an incoming request, processing payment if required.
+    ///
+    /// Returns 402 response if payment fails.
+    /// Otherwise, returns the response from the inner service.
     #[cfg_attr(
         feature = "telemetry",
         instrument(name = "x402.handle_request", skip_all)
@@ -482,7 +510,7 @@ where
         }
     }
 
-    /// Gets enriched price tags with facilitator capabilities
+    /// Gets enriched price tags with facilitator capabilities.
     async fn get_enriched_accepts(&self) -> Vec<P> {
         // Try to get capabilities, use empty if fails
         let capabilities = self.facilitator.supported().await.unwrap_or_default();
@@ -494,6 +522,9 @@ where
     }
 
     /// Handles an incoming request, returning errors as `PaygateError`.
+    ///
+    /// This is the fallible version of `handle_request` that returns an actual error
+    /// instead of turning it into 402 Payment Required response.
     pub async fn handle_request_fallible<
         ReqBody,
         ResBody,
