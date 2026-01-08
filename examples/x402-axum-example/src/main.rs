@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register();
 
     let facilitator_url =
-        env::var("FACILITATOR_URL").unwrap_or_else(|_| "https://facilitator.x402.rs".to_string());
+        env::var("FACILITATOR_URL").unwrap_or("https://facilitator.x402.rs".to_string());
 
     let x402 = X402Middleware::try_from(facilitator_url)?;
 
