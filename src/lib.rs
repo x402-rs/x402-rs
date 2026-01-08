@@ -26,12 +26,3 @@ pub mod proto;
 pub mod scheme;
 pub mod timestamp;
 pub mod util;
-
-// TODO Kill re-exports or make them more direct, like x402_rs::macro::address and ::pubkey and kill macros
-
-// Hidden re-exports just for macro expansion.
-#[doc(hidden)]
-pub mod __reexports {
-    pub use alloy_primitives;
-    pub use solana_pubkey;
-}
