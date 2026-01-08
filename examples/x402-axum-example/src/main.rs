@@ -7,7 +7,6 @@ use dotenvy::dotenv;
 use std::env;
 use tracing::instrument;
 // TODO Kill re-exports or make them more direct, like x402_rs::macro::address and ::pubkey
-use crate::x402::v2_eip155_exact::V2Eip155ExactSchemePriceTag;
 use crate::x402::v2_solana_exact::V2SolanaExactSchemePriceTag;
 use x402_rs::__reexports::alloy_primitives::address;
 use x402_rs::__reexports::solana_pubkey::pubkey;
@@ -15,6 +14,7 @@ use x402_rs::chain::solana::Address;
 use x402_rs::networks::{KnownNetworkEip155, KnownNetworkSolana, USDC};
 use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
 use x402_rs::scheme::v1_solana_exact::V1SolanaExact;
+use x402_rs::scheme::v2_eip155_exact::V2Eip155Exact;
 use x402_rs::util::Telemetry;
 
 mod x402;
@@ -50,11 +50,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/protected-route-2",
             get(my_handler).layer(
-                x402.with_price_tag(V2Eip155ExactSchemePriceTag {
-                    pay_to: address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07").into(),
-                    asset: USDC::base_sepolia().amount(10),
-                    max_timeout_seconds: 300,
-                })
+                x402.with_price_tag(V2Eip155Exact::price_tag(
+                    address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"),
+                    USDC::base_sepolia().amount(10),
+                ))
                 .with_price_tag(V2SolanaExactSchemePriceTag {
                     pay_to: pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV").into(),
                     asset: USDC::solana().amount(100),

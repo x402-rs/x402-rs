@@ -1,6 +1,8 @@
 pub mod client;
+pub mod server;
 pub mod types;
 
+use alloy_primitives::U256;
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
@@ -9,9 +11,10 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::chain::eip155::{
-    Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
+    ChecksummedAddress, Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
+    Eip155TokenDeployment,
 };
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
+use crate::chain::{ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::proto::v2;
@@ -23,10 +26,20 @@ use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 
+pub use server::*;
 #[allow(unused)]
 pub use types::*;
 
 pub struct V2Eip155Exact;
+
+impl V2Eip155Exact {
+    pub fn price_tag<A: Into<ChecksummedAddress>>(
+        pay_to: A,
+        asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,
+    ) -> V2Eip155ExactPriceTag {
+        V2Eip155ExactPriceTag::new(pay_to.into(), asset)
+    }
+}
 
 impl X402SchemeId for V2Eip155Exact {
     fn namespace(&self) -> &str {
