@@ -242,7 +242,6 @@ impl FacilitatorClient {
 
     /// Returns any custom headers configured on the client.
     pub fn headers(&self) -> &HeaderMap {
-        // FIXME - Do I have headers setter??
         &self.headers
     }
 
