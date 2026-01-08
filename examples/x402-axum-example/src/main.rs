@@ -1,18 +1,18 @@
 use crate::x402::middleware::X402Middleware;
 use crate::x402::v1_eip155_exact::V1Eip155ExactSchemePriceTag;
+use crate::x402::v1_solana_exact::V1SolanaExactSchemePriceTag;
 use axum::Router;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use dotenvy::dotenv;
-use opentelemetry::trace::Status;
-use serde_json::json;
 use std::env;
-use tower_http::trace::TraceLayer;
 use tracing::instrument;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
+// TODO Kill re-exports or make them more direct, like x402_rs::macro::address and ::pubkey
 use x402_rs::__reexports::alloy_primitives::address;
-use x402_rs::networks::{KnownNetworkEip155, USDC};
+use x402_rs::__reexports::solana_pubkey::pubkey;
+use x402_rs::chain::solana::Address;
+use x402_rs::networks::{KnownNetworkEip155, KnownNetworkSolana, USDC};
 use x402_rs::util::Telemetry;
 
 mod x402;
@@ -34,10 +34,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route(
             "/protected-route",
-            get(my_handler).layer(x402.with_price_tag(V1Eip155ExactSchemePriceTag {
-                pay_to: address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07").into(),
-                asset: USDC::base_sepolia().amount(10),
-            })),
+            get(my_handler).layer(
+                x402.with_price_tag(V1Eip155ExactSchemePriceTag {
+                    pay_to: address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07").into(),
+                    asset: USDC::base_sepolia().amount(10),
+                })
+                .with_price_tag(V1SolanaExactSchemePriceTag {
+                    pay_to: pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV").into(),
+                    asset: USDC::solana().amount(100),
+                }),
+            ),
         )
         // .route(
         //     "/api/weather",
@@ -109,26 +115,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[instrument(skip_all)]
 async fn my_handler() -> impl IntoResponse {
     (StatusCode::OK, "This is a VIP content!")
-}
-
-#[instrument(skip_all)]
-async fn weather_handler() -> impl IntoResponse {
-    (
-        StatusCode::OK,
-        axum::Json(json!({
-            "temperature": 72,
-            "conditions": "sunny",
-            "humidity": 45
-        })),
-    )
-}
-
-#[instrument(skip_all)]
-async fn internal_handler() -> impl IntoResponse {
-    (
-        StatusCode::OK,
-        axum::Json(json!({
-            "status": "admin_access_granted"
-        })),
-    )
 }

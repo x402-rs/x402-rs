@@ -28,13 +28,13 @@ use x402_rs::chain::ChainId;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto;
 use x402_rs::proto::v1::V1PriceTag;
-use x402_rs::proto::{v1, v2, SupportedResponse};
+use x402_rs::proto::{SupportedResponse, v1, v2};
 use x402_rs::util::Base64Bytes;
 
 #[cfg(feature = "telemetry")]
-use tracing::instrument;
-#[cfg(feature = "telemetry")]
 use tracing::Instrument;
+#[cfg(feature = "telemetry")]
+use tracing::instrument;
 
 // ============================================================================
 // Re-exports for convenience
@@ -147,10 +147,7 @@ pub trait PaygateProtocol: Clone + Send + Sync + 'static {
 
     /// Enriches a price tag with facilitator capabilities.
     /// Called by middleware when building 402 response.
-    fn enrich_with_capabilities(
-        price_tag: &Self,
-        capabilities: &SupportedResponse,
-    ) -> Self;
+    fn enrich_with_capabilities(price_tag: &Self, capabilities: &SupportedResponse) -> Self;
 }
 
 // ============================================================================
@@ -242,10 +239,7 @@ impl PaygateProtocol for V1PriceTag {
         }
     }
 
-    fn enrich_with_capabilities(
-        price_tag: &Self,
-        capabilities: &SupportedResponse,
-    ) -> Self {
+    fn enrich_with_capabilities(price_tag: &Self, capabilities: &SupportedResponse) -> Self {
         let mut enriched = price_tag.clone();
 
         // Only enrich if extra is None (not already set)
@@ -387,10 +381,7 @@ impl PaygateProtocol for v2::PaymentRequirements {
         }
     }
 
-    fn enrich_with_capabilities(
-        price_tag: &Self,
-        capabilities: &SupportedResponse,
-    ) -> Self {
+    fn enrich_with_capabilities(price_tag: &Self, capabilities: &SupportedResponse) -> Self {
         let mut enriched = price_tag.clone();
 
         // Only enrich if extra is None (not already set)
@@ -422,8 +413,7 @@ impl PaygateProtocol for v2::PaymentRequirements {
 /// The protocol version is determined by the price tag type parameter `P`, which must
 /// implement [`PaygateProtocol`]. Use `V1PriceTag` for V1 protocol or `V2PriceTag`
 /// (alias for `v2::PaymentRequirements`) for V2 protocol.
-pub struct Paygate<P, TFacilitator>
-{
+pub struct Paygate<P, TFacilitator> {
     pub facilitator: TFacilitator,
     pub settle_before_execution: bool,
     pub accepts: Arc<Vec<P>>,
@@ -489,7 +479,11 @@ where
             Err(err) => {
                 // Get enriched accepts for 402 response
                 let enriched_accepts = self.get_enriched_accepts().await;
-                Ok(P::error_into_response(err, &enriched_accepts, &self.resource))
+                Ok(P::error_into_response(
+                    err,
+                    &enriched_accepts,
+                    &self.resource,
+                ))
             }
         }
     }
@@ -521,12 +515,14 @@ where
         S::Future: Send,
     {
         // Extract payment payload from headers
-        let header = extract_payment_header(req.headers(), P::PAYMENT_HEADER_NAME)
-            .ok_or(VerificationError::PaymentHeaderRequired(P::PAYMENT_HEADER_NAME))?;
+        let header = extract_payment_header(req.headers(), P::PAYMENT_HEADER_NAME).ok_or(
+            VerificationError::PaymentHeaderRequired(P::PAYMENT_HEADER_NAME),
+        )?;
         let payment_payload = extract_payment_payload::<P::PaymentPayload>(header)
             .ok_or(VerificationError::InvalidPaymentHeader)?;
 
-        let verify_request = P::make_verify_request(payment_payload, &self.accepts, &self.resource)?;
+        let verify_request =
+            P::make_verify_request(payment_payload, &self.accepts, &self.resource)?;
 
         if self.settle_before_execution {
             // Settlement before execution: settle payment first, then call inner handler

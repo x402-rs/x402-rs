@@ -159,9 +159,9 @@ impl SolanaTokenDeployment {
         }
     }
 
-    pub fn amount<V: Into<u64>>(
+    pub fn amount(
         &self,
-        v: V,
+        v: u64,
     ) -> DeployedTokenAmount<u64, SolanaTokenDeployment> {
         DeployedTokenAmount {
             amount: v.into(),

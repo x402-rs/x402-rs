@@ -130,8 +130,8 @@ impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
     /// # Arguments
     ///
     /// * `req` - A payment requirement that implements `Into<V>`
-    pub fn with_price_tag<R: Into<TPriceTag>>(mut self, req: R) -> Self {
-        self.accepts.push(req.into());
+    pub fn with_price_tag<R: IntoPriceTag<PriceTag = TPriceTag>>(mut self, req: R) -> Self {
+        self.accepts.push(req.into_price_tag());
         self
     }
 
