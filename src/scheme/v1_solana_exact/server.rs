@@ -2,6 +2,7 @@ use crate::chain::solana::{Address, SolanaTokenDeployment};
 use crate::chain::{ChainId, DeployedTokenAmount};
 use crate::proto::v1;
 use crate::scheme::IntoPriceTag;
+use crate::scheme::v1_solana_exact::ExactScheme;
 
 #[derive(Debug, Clone)]
 pub struct V1SolanaExactPriceTag {
@@ -34,7 +35,7 @@ impl IntoPriceTag for V1SolanaExactPriceTag {
             .as_network_name()
             .expect(format!("Can not get network name for chain id {}", chain_id).as_str());
         v1::PriceTag {
-            scheme: "exact".to_string(), // FIXME
+            scheme: ExactScheme.to_string(),
             pay_to: self.pay_to.to_string(),
             asset: self.asset.token.address.to_string(),
             network: network.to_string(),
