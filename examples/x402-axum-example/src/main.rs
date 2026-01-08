@@ -38,10 +38,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 x402.with_price_tag(V1Eip155ExactSchemePriceTag {
                     pay_to: address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07").into(),
                     asset: USDC::base_sepolia().amount(10),
+                    max_timeout_seconds: 300,
                 })
                 .with_price_tag(V1SolanaExactSchemePriceTag {
                     pay_to: pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV").into(),
                     asset: USDC::solana().amount(100),
+                    max_timeout_seconds: 300,
                 }),
             ),
         )

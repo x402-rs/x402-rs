@@ -7,6 +7,7 @@ use x402_rs::proto::v1::V1PriceTag;
 pub struct V1SolanaExactSchemePriceTag {
     pub pay_to: Address,
     pub asset: DeployedTokenAmount<u64, SolanaTokenDeployment>,
+    pub max_timeout_seconds: u64,
 }
 
 impl IntoPriceTag for V1SolanaExactSchemePriceTag {
@@ -23,7 +24,7 @@ impl IntoPriceTag for V1SolanaExactSchemePriceTag {
             asset: self.asset.token.address.to_string(),
             network: network.to_string(),
             amount: self.asset.amount.to_string(),
-            max_timeout_seconds: 300,
+            max_timeout_seconds: self.max_timeout_seconds,
             extra: None,
         }
     }
