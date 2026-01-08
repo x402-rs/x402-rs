@@ -151,6 +151,7 @@ x402-reqwest = { version = "0.5", features = ["telemetry"] }
 When the `telemetry` feature is enabled, the middleware emits structured tracing events for key operations:
 
 - **x402.reqwest.handle**: Span covering the entire middleware handling, including 402 detection and payment retry
+- **x402.reqwest.next**: Span for the underlying HTTP request (both initial and retry)
 - **x402.reqwest.make_payment_headers**: Span for payment header creation and signing
 - **x402.reqwest.parse_payment_required**: Span for parsing 402 responses (V1 body or V2 header)
 
