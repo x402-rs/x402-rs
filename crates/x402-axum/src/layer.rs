@@ -195,9 +195,9 @@ where
     ) -> X402LayerBuilder<A::PriceTag, TFacilitator> {
         X402LayerBuilder {
             facilitator: self.facilitator.clone(),
-            accepts: vec![req.into_price_tag()],
-            base_url: self.base_url.clone(),
-            resource: ResourceInfoBuilder::default(),
+            accepts: Arc::new(vec![req.into_price_tag()]),
+            base_url: self.base_url.clone().map(Arc::new),
+            resource: Arc::new(ResourceInfoBuilder::default()),
             settle_before_execution: self.settle_before_execution,
         }
     }
@@ -208,9 +208,9 @@ where
 pub struct X402LayerBuilder<TPriceTag, TFacilitator> {
     facilitator: TFacilitator,
     settle_before_execution: bool,
-    base_url: Option<Url>,
-    accepts: Vec<TPriceTag>,
-    resource: ResourceInfoBuilder,
+    base_url: Option<Arc<Url>>,
+    accepts: Arc<Vec<TPriceTag>>,
+    resource: Arc<ResourceInfoBuilder>,
 }
 
 impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
@@ -218,7 +218,9 @@ impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
     ///
     /// Allows specifying multiple accepted payment methods (e.g., different networks).
     pub fn with_price_tag<R: IntoPriceTag<PriceTag = TPriceTag>>(mut self, req: R) -> Self {
-        self.accepts.push(req.into_price_tag());
+        let mut new_accepts = (*self.accepts).clone();
+        new_accepts.push(req.into_price_tag());
+        self.accepts = Arc::new(new_accepts);
         self
     }
 
@@ -226,7 +228,9 @@ impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
     ///
     /// This is included in 402 responses to inform clients what they're paying for.
     pub fn with_description(mut self, description: String) -> Self {
-        self.resource.description = description;
+        let mut new_resource = (*self.resource).clone();
+        new_resource.description = description;
+        self.resource = Arc::new(new_resource);
         self
     }
 
@@ -234,7 +238,9 @@ impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
     ///
     /// Defaults to `application/json` if not specified.
     pub fn with_mime_type(mut self, mime: String) -> Self {
-        self.resource.mime_type = mime;
+        let mut new_resource = (*self.resource).clone();
+        new_resource.mime_type = mime;
+        self.resource = Arc::new(new_resource);
         self
     }
 
@@ -243,7 +249,9 @@ impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
     /// When set, this URL is used directly instead of constructing it from the base URL
     /// and request URI. This is the preferred approach in production.
     pub fn with_resource(mut self, resource: Url) -> Self {
-        self.resource.url = Some(resource.to_string());
+        let mut new_resource = (*self.resource).clone();
+        new_resource.url = Some(resource.to_string());
+        self.resource = Arc::new(new_resource);
         self
     }
 }
@@ -268,13 +276,13 @@ where
         let base_url = self
             .base_url
             .clone()
-            .unwrap_or(Url::parse("http://localhost/").expect("Failed to parse default base URL"));
+            .unwrap_or_else(|| Arc::new(Url::parse("http://localhost/").expect("Failed to parse default base URL")));
         X402MiddlewareService {
             facilitator: self.facilitator.clone(),
             settle_before_execution: self.settle_before_execution,
-            base_url: Arc::new(base_url),
-            accepts: Arc::new(self.accepts.clone()),
-            resource: Arc::new(self.resource.clone()),
+            base_url,
+            accepts: self.accepts.clone(),
+            resource: self.resource.clone(),
             inner: BoxCloneSyncService::new(inner),
         }
     }
