@@ -21,7 +21,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::chain::{ChainId, ChainProviderOps};
+use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::config::SolanaChainConfig;
 use crate::networks::KnownNetworkSolana;
 use crate::scheme::X402SchemeFacilitatorError;
@@ -156,6 +156,16 @@ impl SolanaTokenDeployment {
             chain_reference,
             address,
             decimals,
+        }
+    }
+
+    pub fn amount<V: Into<u64>>(
+        &self,
+        v: V,
+    ) -> DeployedTokenAmount<u64, SolanaTokenDeployment> {
+        DeployedTokenAmount {
+            amount: v.into(),
+            token: self.clone(),
         }
     }
 }

@@ -24,10 +24,11 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tower::Service;
 use url::Url;
+use x402_rs::chain::ChainId;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto;
 use x402_rs::proto::v1::V1PriceTag;
-use x402_rs::proto::{v1, v2};
+use x402_rs::proto::{v1, v2, SupportedResponse};
 use x402_rs::util::Base64Bytes;
 
 #[cfg(feature = "telemetry")]
@@ -143,6 +144,13 @@ pub trait PaygateProtocol: Clone + Send + Sync + 'static {
     fn validate_verify_response(
         verify_response: proto::VerifyResponse,
     ) -> Result<(), VerificationError>;
+
+    /// Enriches a price tag with facilitator capabilities.
+    /// Called by middleware when building 402 response.
+    fn enrich_with_capabilities(
+        price_tag: &Self,
+        capabilities: &SupportedResponse,
+    ) -> Self;
 }
 
 // ============================================================================
@@ -232,6 +240,33 @@ impl PaygateProtocol for V1PriceTag {
                 Err(VerificationError::VerificationFailed(reason))
             }
         }
+    }
+
+    fn enrich_with_capabilities(
+        price_tag: &Self,
+        capabilities: &SupportedResponse,
+    ) -> Self {
+        let mut enriched = price_tag.clone();
+
+        // Only enrich if extra is None (not already set)
+        if enriched.extra.is_some() {
+            return enriched;
+        }
+
+        // Find fee_payer for this network from capabilities.signers
+        let chain_id = ChainId::from_network_name(&price_tag.network);
+        if let Some(chain_id) = chain_id {
+            if let Some(signers) = capabilities.signers.get(&chain_id) {
+                if let Some(fee_payer) = signers.first() {
+                    let extra = serde_json::json!({ "feePayer": fee_payer });
+                    enriched.extra = serde_json::to_string(&extra)
+                        .ok()
+                        .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
+                }
+            }
+        }
+
+        enriched
     }
 }
 
@@ -351,6 +386,31 @@ impl PaygateProtocol for v2::PaymentRequirements {
             }
         }
     }
+
+    fn enrich_with_capabilities(
+        price_tag: &Self,
+        capabilities: &SupportedResponse,
+    ) -> Self {
+        let mut enriched = price_tag.clone();
+
+        // Only enrich if extra is None (not already set)
+        if enriched.extra.is_some() {
+            return enriched;
+        }
+
+        // Find fee_payer for this network from capabilities.signers
+        // V2 uses ChainId directly for network
+        if let Some(signers) = capabilities.signers.get(&price_tag.network) {
+            if let Some(fee_payer) = signers.first() {
+                let extra = serde_json::json!({ "feePayer": fee_payer });
+                enriched.extra = serde_json::to_string(&extra)
+                    .ok()
+                    .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
+            }
+        }
+
+        enriched
+    }
 }
 
 // ============================================================================
@@ -426,8 +486,23 @@ where
     {
         match self.handle_request_fallible(inner, req).await {
             Ok(response) => Ok(response),
-            Err(err) => Ok(P::error_into_response(err, &self.accepts, &self.resource)),
+            Err(err) => {
+                // Get enriched accepts for 402 response
+                let enriched_accepts = self.get_enriched_accepts().await;
+                Ok(P::error_into_response(err, &enriched_accepts, &self.resource))
+            }
         }
+    }
+
+    /// Gets enriched price tags with facilitator capabilities
+    async fn get_enriched_accepts(&self) -> Vec<P> {
+        // Try to get capabilities, use empty if fails
+        let capabilities = self.facilitator.supported().await.unwrap_or_default();
+
+        self.accepts
+            .iter()
+            .map(|pt| P::enrich_with_capabilities(pt, &capabilities))
+            .collect()
     }
 
     /// Handles an incoming request, returning errors as `PaygateError`.

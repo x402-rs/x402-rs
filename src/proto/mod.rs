@@ -54,7 +54,7 @@ pub struct SupportedPaymentKind {
     pub extra: Option<serde_json::Value>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct SupportedResponse {

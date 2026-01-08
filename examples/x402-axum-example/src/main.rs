@@ -14,7 +14,6 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 use x402_rs::__reexports::alloy_primitives::address;
 use x402_rs::networks::{KnownNetworkEip155, USDC};
 use x402_rs::util::Telemetry;
-use crate::x402::v2_eip155_exact::V2Eip155ExactSchemePriceTag;
 
 mod x402;
 
@@ -30,15 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let facilitator_url =
         env::var("FACILITATOR_URL").unwrap_or_else(|_| "https://facilitator.x402.rs".to_string());
 
-    let x402 = X402Middleware::try_from(facilitator_url)?; //.with_base_url(url::Url::parse("https://localhost:3000/").unwrap());
-    // let usdc_base_sepolia = USDCDeployment::by_network(Network::BaseSepolia)
-    //     .pay_to(address_evm!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"));
-    // let usdc_solana = USDCDeployment::by_network(Network::Solana)
-    //     .pay_to(address_sol!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV"));
-
-    let k = x402.clone();
-    // .with_description("Premium API - Discoverable")
-    // .with_mime_type("application/json");
+    let x402 = X402Middleware::try_from(facilitator_url)?;
 
     let app = Router::new()
         .route(
@@ -46,7 +37,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(my_handler).layer(x402.with_price_tag(V1Eip155ExactSchemePriceTag {
                 pay_to: address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07").into(),
                 asset: USDC::base_sepolia().amount(10),
-                // max_timeout_seconds: 300
             })),
         )
         // .route(

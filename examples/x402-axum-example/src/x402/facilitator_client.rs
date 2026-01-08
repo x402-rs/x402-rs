@@ -115,6 +115,7 @@ impl Facilitator for FacilitatorClient {
     }
 
     async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
+        // TODO Cache it
         FacilitatorClient::supported(self).await
     }
 }
