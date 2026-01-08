@@ -14,6 +14,9 @@ use x402_rs::proto::client::{
 use x402_rs::proto::{v1, v2};
 use x402_rs::util::Base64Bytes;
 
+#[cfg(feature = "telemetry")]
+use tracing::{debug, info, instrument, trace};
+
 /// The main x402 client that orchestrates scheme clients and selection.
 ///
 /// The [`X402Client`] acts as middleware for reqwest, automatically handling
@@ -149,6 +152,7 @@ where
     /// Returns [`X402Error::ParseError`] if the response cannot be parsed.
     /// Returns [`X402Error::NoMatchingPaymentOption`] if no registered scheme
     /// can handle the payment requirements.
+    #[cfg_attr(feature = "telemetry", instrument(name = "x402.make_payment_headers", skip_all, err))]
     pub async fn make_payment_headers(&self, res: Response) -> Result<HeaderMap, X402Error> {
         let payment_required = http_payment_required_from_response(res)
             .await
@@ -160,6 +164,13 @@ where
             .selector
             .select(&candidates)
             .ok_or(X402Error::NoMatchingPaymentOption)?;
+
+        #[cfg(feature = "telemetry")]
+        debug!(
+            scheme = %selected.scheme,
+            chain_id = %selected.chain_id,
+            "Selected payment scheme"
+        );
 
         let signed_payload = selected.sign().await?;
         let header_name = match &payment_required {
@@ -208,6 +219,10 @@ where
     /// 1. Extracts payment requirements from the response
     /// 2. Signs a payment using registered scheme clients
     /// 3. Retries the request with the payment header
+    #[cfg_attr(
+        feature = "telemetry",
+        instrument(name = "x402.middleware.handle", skip_all, err)
+    )]
     async fn handle(
         &self,
         req: Request,
@@ -216,9 +231,15 @@ where
     ) -> rqm::Result<Response> {
         let retry_req = req.try_clone();
         let res = next.clone().run(req, extensions).await?;
+
         if res.status() != StatusCode::PAYMENT_REQUIRED {
+            #[cfg(feature = "telemetry")]
+            trace!(status = ?res.status(), "No payment required, returning response");
             return Ok(res);
         }
+
+        #[cfg(feature = "telemetry")]
+        info!(url = ?res.url(), "Received 402 Payment Required, processing payment");
 
         let headers = self
             .make_payment_headers(res)
@@ -230,6 +251,10 @@ where
             X402Error::RequestNotCloneable.into(),
         ))?;
         retry.headers_mut().extend(headers);
+
+        #[cfg(feature = "telemetry")]
+        trace!(url = ?retry.url(), "Retrying request with payment headers");
+
         next.run(retry, extensions).await
     }
 }
@@ -237,6 +262,10 @@ where
 /// Parses a 402 Payment Required response into a [`proto::PaymentRequired`].
 ///
 /// Supports both V1 (JSON body) and V2 (base64-encoded header) formats.
+#[cfg_attr(
+    feature = "telemetry",
+    instrument(name = "x402.parse_payment_required", skip(response))
+)]
 pub async fn http_payment_required_from_response(
     response: Response,
 ) -> Option<proto::PaymentRequired> {
@@ -247,6 +276,8 @@ pub async fn http_payment_required_from_response(
         .and_then(|h| Base64Bytes::from(h.as_bytes()).decode().ok())
         .and_then(|b| serde_json::from_slice::<v2::PaymentRequired>(&b).ok());
     if let Some(v2_payment_required) = v2_payment_required {
+        #[cfg(feature = "telemetry")]
+        debug!("Parsed V2 payment required from header");
         return Some(proto::PaymentRequired::V2(v2_payment_required));
     }
 
@@ -257,12 +288,13 @@ pub async fn http_payment_required_from_response(
         .ok()
         .and_then(|b| serde_json::from_slice::<v1::PaymentRequired>(&b).ok());
     if let Some(v1_payment_required) = v1_payment_required {
+        #[cfg(feature = "telemetry")]
+        debug!("Parsed V1 payment required from body");
         return Some(proto::PaymentRequired::V1(v1_payment_required));
     }
 
+    #[cfg(feature = "telemetry")]
+    debug!("Could not parse payment required from response");
+
     None
 }
-
-// TODO Add telemetry
-// TODO Add docs
-// TODO README (and Axum readme!)
