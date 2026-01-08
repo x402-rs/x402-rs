@@ -213,7 +213,10 @@ pub struct X402LayerBuilder<TPriceTag, TFacilitator> {
     resource: Arc<ResourceInfoBuilder>,
 }
 
-impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
+impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator>
+where
+    TPriceTag: Clone,
+{
     /// Adds another payment option.
     ///
     /// Allows specifying multiple accepted payment methods (e.g., different networks).
@@ -223,7 +226,9 @@ impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
         self.accepts = Arc::new(new_accepts);
         self
     }
+}
 
+impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
     /// Sets a description of what the payment grants access to.
     ///
     /// This is included in 402 responses to inform clients what they're paying for.
@@ -266,21 +271,10 @@ where
     type Service = X402MiddlewareService<TPriceTag, TFacilitator>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        if self.base_url.is_none() && self.resource.url.is_none() {
-            #[cfg(feature = "telemetry")]
-            tracing::warn!(
-                "X402Middleware base_url is not configured; defaulting to http://localhost/ for resource resolution"
-            );
-            // TODO Fuck, probably Builder is cloned on every request, so we should de-clone earlier
-        }
-        let base_url = self
-            .base_url
-            .clone()
-            .unwrap_or_else(|| Arc::new(Url::parse("http://localhost/").expect("Failed to parse default base URL")));
         X402MiddlewareService {
             facilitator: self.facilitator.clone(),
             settle_before_execution: self.settle_before_execution,
-            base_url,
+            base_url: self.base_url.clone(),
             accepts: self.accepts.clone(),
             resource: self.resource.clone(),
             inner: BoxCloneSyncService::new(inner),
@@ -294,7 +288,7 @@ pub struct X402MiddlewareService<TPriceTag, TFacilitator> {
     /// Payment facilitator (local or remote)
     facilitator: TFacilitator,
     /// Base URL for constructing resource URLs
-    base_url: Arc<Url>,
+    base_url: Option<Arc<Url>>,
     /// Whether to settle payment before executing the request (true) or after (false)
     settle_before_execution: bool,
     /// Accepted payment requirements
@@ -325,7 +319,9 @@ where
             facilitator: self.facilitator.clone(),
             settle_before_execution: self.settle_before_execution,
             accepts: self.accepts.clone(),
-            resource: self.resource.as_resource_info(&self.base_url, req.uri()),
+            resource: self
+                .resource
+                .as_resource_info(self.base_url.as_deref(), &req),
         };
         Box::pin(gate.handle_request(self.inner.clone(), req))
     }

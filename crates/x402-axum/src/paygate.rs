@@ -30,8 +30,9 @@
 //! ```
 
 use axum_core::body::Body;
+use axum_core::extract::Request;
 use axum_core::response::{IntoResponse, Response};
-use http::{HeaderMap, HeaderValue, StatusCode, Uri};
+use http::{HeaderMap, HeaderValue, StatusCode};
 use serde_json::json;
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -81,16 +82,34 @@ impl ResourceInfoBuilder {
     ///
     /// If `url` is set, returns it directly. Otherwise, constructs a URL by combining
     /// the base URL with the request URI's path and query.
-    pub fn as_resource_info(&self, base_url: &Url, request_uri: &Uri) -> v2::ResourceInfo {
+    pub fn as_resource_info(&self, base_url: Option<&Url>, req: &Request) -> v2::ResourceInfo {
+        // if self.base_url.is_none() && self.resource.url.is_none() {
+        //             #[cfg(feature = "telemetry")]
+        //             tracing::warn!(
+        //                 "X402Middleware base_url is not configured; defaulting to http://localhost/ for resource resolution"
+        //             );
+        //             // TODO Fuck, probably Builder is cloned on every request, so we should de-clone earlier
+        //         }
+        let url = self.url.clone().unwrap_or_else(|| {
+            let mut url = base_url.cloned().unwrap_or_else(|| {
+                let host = req.headers().get("host").and_then(|h| h.to_str().ok()).unwrap_or("localhost");
+                let origin = format!("http://{}", host);
+                let url = Url::parse(&origin).unwrap_or_else(|_| Url::parse("http://localhost").unwrap());
+                #[cfg(feature = "telemetry")]
+                tracing::warn!(
+                    "X402Middleware base_url is not configured; using {url} as origin for resource resolution"
+                );
+                url
+            });
+            let request_uri = req.uri();
+            url.set_path(request_uri.path());
+            url.set_query(request_uri.query());
+            url.to_string()
+        });
         v2::ResourceInfo {
             description: self.description.clone(),
             mime_type: self.mime_type.clone(),
-            url: self.url.clone().unwrap_or_else(|| {
-                let mut url = base_url.clone();
-                url.set_path(request_uri.path());
-                url.set_query(request_uri.query());
-                url.to_string()
-            }),
+            url,
         }
     }
 }
