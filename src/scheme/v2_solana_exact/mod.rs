@@ -1,12 +1,13 @@
 pub mod client;
+pub mod server;
 pub mod types;
 
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 
-use crate::chain::solana::SolanaChainProvider;
-use crate::chain::{ChainProvider, ChainProviderOps};
+use crate::chain::solana::{Address, SolanaChainProvider, SolanaTokenDeployment};
+use crate::chain::{ChainProvider, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
@@ -17,7 +18,18 @@ use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 
+pub use server::*;
+
 pub struct V2SolanaExact;
+
+impl V2SolanaExact {
+    pub fn price_tag<A: Into<Address>>(
+        pay_to: A,
+        asset: DeployedTokenAmount<u64, SolanaTokenDeployment>,
+    ) -> V2SolanaExactPriceTag {
+        V2SolanaExactPriceTag::new(pay_to.into(), asset)
+    }
+}
 
 impl X402SchemeId for V2SolanaExact {
     fn namespace(&self) -> &str {

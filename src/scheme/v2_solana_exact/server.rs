@@ -1,16 +1,31 @@
-use x402_rs::chain::solana::{Address, SolanaTokenDeployment};
-use x402_rs::chain::{ChainId, DeployedTokenAmount};
-use x402_rs::proto::v2;
-use x402_rs::scheme::IntoPriceTag;
+use crate::chain::solana::{Address, SolanaTokenDeployment};
+use crate::chain::{ChainId, DeployedTokenAmount};
+use crate::proto::v2;
+use crate::scheme::IntoPriceTag;
 
 #[derive(Debug, Clone)]
-pub struct V2SolanaExactSchemePriceTag {
+pub struct V2SolanaExactPriceTag {
     pub pay_to: Address,
     pub asset: DeployedTokenAmount<u64, SolanaTokenDeployment>,
     pub max_timeout_seconds: u64,
 }
 
-impl IntoPriceTag for V2SolanaExactSchemePriceTag {
+impl V2SolanaExactPriceTag {
+    pub fn new(pay_to: Address, asset: DeployedTokenAmount<u64, SolanaTokenDeployment>) -> Self {
+        Self {
+            pay_to,
+            asset,
+            max_timeout_seconds: 300,
+        }
+    }
+
+    pub fn with_timeout(mut self, seconds: u64) -> Self {
+        self.max_timeout_seconds = seconds;
+        self
+    }
+}
+
+impl IntoPriceTag for V2SolanaExactPriceTag {
     type PriceTag = v2::PriceTag;
 
     fn into_price_tag(self) -> Self::PriceTag {
