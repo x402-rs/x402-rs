@@ -9,7 +9,7 @@
 </td></tr></table>
 </div>
 
-Axum middleware for protecting routes with [x402 protocol](https://www.x402.org) payments.
+**Axum middleware for protecting routes with [x402 protocol](https://www.x402.org) payments.**
 
 This crate provides a drop-in `tower::Layer` that intercepts incoming requests,
 validates payment headers using a configured x402 facilitator,

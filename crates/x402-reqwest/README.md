@@ -3,6 +3,12 @@
 [![Crates.io](https://img.shields.io/crates/v/x402-reqwest.svg)](https://crates.io/crates/x402-reqwest)
 [![Docs.rs](https://docs.rs/x402-reqwest/badge.svg)](https://docs.rs/x402-reqwest)
 
+<div align="center">
+<table><tr><td>
+🔧 <strong>Protocol v2 Update Coming</strong> — This crate is being updated to support x402 protocol v2 with the new multi-chain, multi-scheme architecture. The update is on its way! For v1 support, see the <code>protocol-x402-v1</code> branch.
+</td></tr></table>
+</div>
+
 **Reqwest middleware that transparently handles HTTP `402 Payment Required` responses using the [x402 protocol](https://x402.org/).**
 
 This crate enables your reqwest or reqwest-middleware-based HTTP clients to:
