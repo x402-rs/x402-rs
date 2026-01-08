@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let keypair = env::var("SOLANA_PRIVATE_KEY")
             .ok()
             .map(|v| Keypair::from_base58_string(&v));
-        let rpc_client = env::var("SOLANA_RPC_URL").ok().map(|v| RpcClient::new(v));
+        let rpc_client = env::var("SOLANA_RPC_URL").ok().map(RpcClient::new);
         if let Some((keypair, rpc_client)) = keypair.zip(rpc_client) {
             let keypair = Arc::new(keypair);
             let rpc_client = Arc::new(rpc_client);
