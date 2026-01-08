@@ -8126,7 +8126,6 @@ version = "0.7.0"
 dependencies = [
  "axum-core",
  "http 1.4.0",
- "once_cell",
  "reqwest",
  "serde",
  "serde_json",
