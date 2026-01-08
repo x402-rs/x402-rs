@@ -24,6 +24,7 @@ pub struct X402Middleware<F> {
     settle_before_execution: bool,
 }
 
+// TODO with caching timeout for facilitator client supported thing
 impl X402Middleware<Arc<FacilitatorClient>> {
     pub fn new(url: &str) -> Self {
         let facilitator = FacilitatorClient::try_from(url).expect("Invalid facilitator URL");
