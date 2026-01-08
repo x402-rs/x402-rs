@@ -1,4 +1,5 @@
 pub mod client;
+pub mod server;
 pub mod types;
 
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
@@ -16,19 +17,32 @@ use std::error::Error;
 use std::sync::Arc;
 use tracing_core::Level;
 
-use crate::chain::solana::{Address, SolanaChainProvider, SolanaChainProviderError};
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
+use crate::chain::solana::{
+    Address, SolanaChainProvider, SolanaChainProviderError, SolanaTokenDeployment,
+};
+use crate::chain::{ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
-use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 use crate::util::Base64Bytes;
 
+pub use server::*;
+pub use types::*;
+
 pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 pub struct V1SolanaExact;
+
+impl V1SolanaExact {
+    pub fn price_tag<A: Into<Address>>(
+        pay_to: A,
+        asset: DeployedTokenAmount<u64, SolanaTokenDeployment>,
+    ) -> V1SolanaExactPriceTag {
+        V1SolanaExactPriceTag::new(pay_to.into(), asset)
+    }
+}
 
 impl X402SchemeId for V1SolanaExact {
     fn x402_version(&self) -> u8 {
