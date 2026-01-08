@@ -3,7 +3,7 @@ use alloy_primitives::U256;
 use crate::chain::{ChainId, DeployedTokenAmount};
 use crate::chain::eip155::{ChecksummedAddress, Eip155TokenDeployment};
 use crate::proto::v1;
-use crate::scheme::{IntoPriceTag, V1Eip155Exact};
+use crate::scheme::IntoPriceTag;
 
 #[derive(Debug, Clone)]
 pub struct V1Eip155ExactPriceTag {

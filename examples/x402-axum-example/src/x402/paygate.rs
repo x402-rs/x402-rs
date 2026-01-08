@@ -47,6 +47,9 @@ pub struct ResourceInfoBuilder {
     pub url: Option<String>,
 }
 
+// FIXME Matching for v2??
+// FIXME Partial, FUll, dynamic price tag offers
+
 impl Default for ResourceInfoBuilder {
     fn default() -> Self {
         Self {
