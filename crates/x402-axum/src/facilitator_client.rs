@@ -1,6 +1,6 @@
 //! A [`x402_rs::facilitator::Facilitator`] implementation that interacts with a _remote_ x402 Facilitator over HTTP.
 //!
-//! This [`FacilitatorClient`] handles the `/verify` and `/settle` endpoints of a remote facilitator,
+//! This [`FacilitatorClient`] handles the `/verify`, `/settle`, and `/supported` endpoints of a remote facilitator,
 //! and implements the [`x402_rs::facilitator::Facilitator`] trait for compatibility
 //! with x402-based middleware and logic.
 //!
@@ -9,10 +9,8 @@
 //! ```rust
 //! use x402_axum::facilitator_client::FacilitatorClient;
 //!
-//! let facilitator = FacilitatorClient::try_from("https://facilitator.ukstv.me/").unwrap();
+//! let facilitator = FacilitatorClient::try_from("https://facilitator.x402.rs").unwrap();
 //! ```
-//! This client is cheap to clone and internally shares a connection pool via `reqwest::Client`,
-//! making it safe and efficient to reuse across multiple Axum routes or concurrent tasks.
 //!
 //! ## Features
 //!
@@ -43,11 +41,10 @@ use x402_rs::proto::{
 
 /// A client for communicating with a remote x402 facilitator.
 ///
-/// Handles `/verify` and `/settle` endpoints via JSON HTTP POST.
+/// Handles `/verify`, `/settle`, and `/supported` endpoints via JSON HTTP.
 #[derive(Clone, Debug)]
 pub struct FacilitatorClient {
     /// Base URL of the facilitator (e.g. `https://facilitator.example/`)
-    #[allow(dead_code)] // Public for consumption by downstream crates.
     base_url: Url,
     /// Full URL to `POST /verify` requests
     verify_url: Url,
@@ -67,7 +64,6 @@ impl Facilitator for FacilitatorClient {
     type Error = FacilitatorClientError;
 
     /// Verifies a payment payload with the facilitator.
-    /// Instruments a tracing span (only when telemetry feature is enabled).
     #[cfg(feature = "telemetry")]
     async fn verify(
         &self,
@@ -81,7 +77,6 @@ impl Facilitator for FacilitatorClient {
     }
 
     /// Verifies a payment payload with the facilitator.
-    /// Instruments a tracing span (only when telemetry feature is enabled).
     #[cfg(not(feature = "telemetry"))]
     async fn verify(
         &self,
@@ -90,8 +85,7 @@ impl Facilitator for FacilitatorClient {
         FacilitatorClient::verify(self, request).await
     }
 
-    /// Attempts to settle a verified payment with the facilitator.
-    /// Instruments a tracing span (only when telemetry feature is enabled).
+    /// Settles a verified payment with the facilitator.
     #[cfg(feature = "telemetry")]
     async fn settle(
         &self,
@@ -104,8 +98,7 @@ impl Facilitator for FacilitatorClient {
         .await
     }
 
-    /// Attempts to settle a verified payment with the facilitator.
-    /// Instruments a tracing span (only when telemetry feature is enabled).
+    /// Settles a verified payment with the facilitator.
     #[cfg(not(feature = "telemetry"))]
     async fn settle(
         &self,
@@ -114,6 +107,7 @@ impl Facilitator for FacilitatorClient {
         FacilitatorClient::settle(self, request).await
     }
 
+    /// Retrieves the supported payment kinds from the facilitator.
     async fn supported(&self) -> Result<SupportedResponse, Self::Error> {
         // TODO Cache it
         FacilitatorClient::supported(self).await
@@ -157,44 +151,39 @@ pub enum FacilitatorClientError {
 
 impl FacilitatorClient {
     /// Returns the base URL used by this client.
-    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn base_url(&self) -> &Url {
         &self.base_url
     }
 
     /// Returns the computed `./verify` URL relative to [`FacilitatorClient::base_url`].
-    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn verify_url(&self) -> &Url {
         &self.verify_url
     }
 
-    /// Returns the computed `./settle` URL relative to [`FacilitatorClient::base_url`]
-    #[allow(dead_code)] // Public for consumption by downstream crates.
+    /// Returns the computed `./settle` URL relative to [`FacilitatorClient::base_url`].
     pub fn settle_url(&self) -> &Url {
         &self.settle_url
     }
 
-    /// Returns the computed `./supported` URL relative to [`FacilitatorClient::base_url`]
-    #[allow(dead_code)] // Public for consumption by downstream crates.
+    /// Returns the computed `./supported` URL relative to [`FacilitatorClient::base_url`].
     pub fn supported_url(&self) -> &Url {
         &self.supported_url
     }
 
     /// Returns any custom headers configured on the client.
-    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn headers(&self) -> &HeaderMap {
+        // FIXME - Do I have headers setter??
         &self.headers
     }
 
     /// Returns the configured timeout, if any.
-    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn timeout(&self) -> &Option<Duration> {
         &self.timeout
     }
 
     /// Constructs a new [`FacilitatorClient`] from a base URL.
     ///
-    /// This sets up `./verify` and `./settle` endpoint URLs relative to the base.
+    /// This sets up `./verify`, `./settle`, and `./supported` endpoint URLs relative to the base.
     pub fn try_new(base_url: Url) -> Result<Self, FacilitatorClientError> {
         let client = Client::new();
         let verify_url =
@@ -230,7 +219,6 @@ impl FacilitatorClient {
     }
 
     /// Attaches custom headers to all future requests.
-    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn with_headers(&self, headers: HeaderMap) -> Self {
         let mut this = self.clone();
         this.headers = headers;
@@ -238,7 +226,6 @@ impl FacilitatorClient {
     }
 
     /// Sets a timeout for all future requests.
-    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn with_timeout(&self, timeout: Duration) -> Self {
         let mut this = self.clone();
         this.timeout = Some(timeout);
@@ -263,6 +250,7 @@ impl FacilitatorClient {
             .await
     }
 
+    /// Sends a `GET /supported` request to the facilitator.
     pub async fn supported(&self) -> Result<SupportedResponse, FacilitatorClientError> {
         self.get_json(&self.supported_url, "GET /supported").await
     }
@@ -319,7 +307,7 @@ impl FacilitatorClient {
     /// Generic GET helper that handles JSON serialization, error mapping,
     /// timeout application, and telemetry integration.
     ///
-    /// `context` is a human-readable identifier used in tracing and error messages (e.g. `"POST /verify"`).
+    /// `context` is a human-readable identifier used in tracing and error messages (e.g. `"GET /supported"`).
     async fn get_json<R>(
         &self,
         url: &Url,
@@ -377,6 +365,15 @@ impl TryFrom<&str> for FacilitatorClient {
             source: e,
         })?;
         FacilitatorClient::try_new(url)
+    }
+}
+
+/// Converts a String URL into a `FacilitatorClient`.
+impl TryFrom<String> for FacilitatorClient {
+    type Error = FacilitatorClientError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        FacilitatorClient::try_from(value.as_str())
     }
 }
 
