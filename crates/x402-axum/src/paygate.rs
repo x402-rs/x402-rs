@@ -83,13 +83,6 @@ impl ResourceInfoBuilder {
     /// If `url` is set, returns it directly. Otherwise, constructs a URL by combining
     /// the base URL with the request URI's path and query.
     pub fn as_resource_info(&self, base_url: Option<&Url>, req: &Request) -> v2::ResourceInfo {
-        // if self.base_url.is_none() && self.resource.url.is_none() {
-        //             #[cfg(feature = "telemetry")]
-        //             tracing::warn!(
-        //                 "X402Middleware base_url is not configured; defaulting to http://localhost/ for resource resolution"
-        //             );
-        //             // TODO Fuck, probably Builder is cloned on every request, so we should de-clone earlier
-        //         }
         let url = self.url.clone().unwrap_or_else(|| {
             let mut url = base_url.cloned().unwrap_or_else(|| {
                 let host = req.headers().get("host").and_then(|h| h.to_str().ok()).unwrap_or("localhost");

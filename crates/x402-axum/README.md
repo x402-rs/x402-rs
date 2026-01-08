@@ -26,6 +26,7 @@ If no valid payment is provided, a `402 Payment Required` response is returned w
 - Returns standards-compliant `402 Payment Required` responses
 - Emits rich tracing spans with optional OpenTelemetry integration (`telemetry` feature)
 - Compatible with any x402 facilitator
+- Configurable facilitator cache TTL for performance optimization
 
 ## Installation
 
@@ -66,6 +67,22 @@ let app: Router = Router::new().route(
 async fn my_handler() -> impl IntoResponse {
     (StatusCode::OK, "This is VIP content!")
 }
+```
+
+## Settlement Timing
+
+By default, the middleware settles payments **after** request execution. You can change this:
+
+```rust
+let x402 = X402Middleware::new("https://facilitator.x402.rs")
+    .settle_before_execution();  // Settle before executing the handler
+```
+
+Or explicitly set settlement after execution (default behavior):
+
+```rust
+let x402 = X402Middleware::new("https://facilitator.x402.rs")
+    .settle_after_execution();  // Settle after successful request execution
 ```
 
 ## Defining Prices
@@ -240,6 +257,24 @@ let app = Router::new().route(
 );
 ```
 
+### Facilitator Cache TTL
+
+Configure the TTL for caching the facilitator's supported response:
+
+```rust
+use std::time::Duration;
+
+let x402 = X402Middleware::new("https://facilitator.x402.rs")
+    .with_supported_cache_ttl(Duration::from_secs(300)); // 5 minutes
+```
+
+To disable caching entirely:
+
+```rust
+let x402 = X402Middleware::new("https://facilitator.x402.rs")
+    .with_supported_cache_ttl(Duration::from_secs(0));
+```
+
 ## HTTP Behavior
 
 If no valid payment is included, the middleware responds with a 402 Payment Required:
@@ -260,6 +295,18 @@ If no valid payment is included, the middleware responds with a 402 Payment Requ
 // HTTP/1.1 402 Payment Required
 // Payment-Required: <base64-encoded PaymentRequired>
 ```
+
+## Error Handling
+
+The middleware provides detailed error information through the `VerificationError` and `PaygateError` types:
+
+- `VerificationError::PaymentHeaderRequired`: Missing payment header
+- `VerificationError::InvalidPaymentHeader`: Malformed payment header
+- `VerificationError::NoPaymentMatching`: No matching payment requirements found
+- `VerificationError::VerificationFailed`: Payment verification failed
+- `PaygateError::Settlement`: Payment settlement failed
+
+These errors are automatically converted to appropriate 402 Payment Required responses with detailed error messages.
 
 ## Optional Telemetry
 

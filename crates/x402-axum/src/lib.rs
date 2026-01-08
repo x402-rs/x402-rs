@@ -36,6 +36,11 @@
 //! See [`X402Middleware`] for full configuration options.
 //! For low-level interaction with the facilitator, see [`facilitator_client::FacilitatorClient`].
 //!
+//! ## Protocol Support
+//!
+//! Supports both V1 and V2 x402 protocols through the [`PaygateProtocol`] trait.
+//! The protocol version is determined by the price tag type used.
+//!
 //! ## Settlement Timing
 //!
 //! By default, settlement occurs **after** the request is processed. You can change this behavior:
@@ -50,6 +55,7 @@
 //! - **[`X402Middleware::with_price_tag`]** sets the assets and amounts accepted for payment.
 //! - **[`X402Middleware::with_base_url`]** sets the base URL for computing full resource URLs.
 //!   If not set, defaults to `http://localhost/` (avoid in production).
+//! - **[`X402Middleware::with_supported_cache_ttl`]** configures the TTL for caching facilitator capabilities.
 //! - **[`X402LayerBuilder::with_description`]** is optional but helps the payer understand what is being paid for.
 //! - **[`X402LayerBuilder::with_mime_type`]** sets the MIME type of the protected resource (default: `application/json`).
 //! - **[`X402LayerBuilder::with_resource`]** explicitly sets the full URI of the protected resource.
