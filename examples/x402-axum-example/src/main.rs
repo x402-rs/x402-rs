@@ -9,6 +9,8 @@ use dotenvy::dotenv;
 use std::env;
 use tracing::instrument;
 // TODO Kill re-exports or make them more direct, like x402_rs::macro::address and ::pubkey
+use crate::x402::v2_eip155_exact::V2Eip155ExactSchemePriceTag;
+use crate::x402::v2_solana_exact::V2SolanaExactSchemePriceTag;
 use x402_rs::__reexports::alloy_primitives::address;
 use x402_rs::__reexports::solana_pubkey::pubkey;
 use x402_rs::chain::solana::Address;
@@ -47,60 +49,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }),
             ),
         )
-        // .route(
-        //     "/api/weather",
-        //     get(weather_handler).layer(
-        //         x402.with_description("Weather API - Public endpoint with query params")
-        //             .with_mime_type("application/json")
-        //             .with_input_schema(serde_json::json!({
-        //                 "type": "http",
-        //                 "method": "GET",
-        //                 "discoverable": true,
-        //                 "queryParams": {
-        //                     "location": {
-        //                         "type": "string",
-        //                         "description": "City name or coordinates",
-        //                         "required": true
-        //                     },
-        //                     "units": {
-        //                         "type": "string",
-        //                         "enum": ["metric", "imperial"],
-        //                         "default": "metric"
-        //                     }
-        //                 }
-        //             }))
-        //             .with_output_schema(serde_json::json!({
-        //                 "type": "object",
-        //                 "properties": {
-        //                     "temperature": { "type": "number", "description": "Current temperature" },
-        //                     "conditions": { "type": "string", "description": "Weather conditions" },
-        //                     "humidity": { "type": "number", "description": "Humidity percentage" }
-        //                 },
-        //                 "required": ["temperature", "conditions"]
-        //             }))
-        //             .with_price_tag(usdc_base_sepolia.amount(0.001).unwrap()),
-        //     ),
-        // )
-        // .route(
-        //     "/api/internal",
-        //     get(internal_handler).layer(
-        //         x402.with_description("Internal API - Private endpoint")
-        //             .with_mime_type("application/json")
-        //             .with_input_schema(serde_json::json!({
-        //                 "type": "http",
-        //                 "method": "GET",
-        //                 "discoverable": false,
-        //                 "description": "Internal admin functions - direct access only"
-        //             }))
-        //             .with_output_schema(serde_json::json!({
-        //                 "type": "object",
-        //                 "properties": {
-        //                     "status": { "type": "string" }
-        //                 }
-        //             }))
-        //             .with_price_tag(usdc_base_sepolia.amount(1.00).unwrap()),
-        //     ),
-        // )
+        .route(
+            "/protected-route-2",
+            get(my_handler).layer(
+                x402.with_price_tag(V2Eip155ExactSchemePriceTag {
+                    pay_to: address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07").into(),
+                    asset: USDC::base_sepolia().amount(10),
+                    max_timeout_seconds: 300,
+                })
+                .with_price_tag(V2SolanaExactSchemePriceTag {
+                    pay_to: pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV").into(),
+                    asset: USDC::solana().amount(100),
+                    max_timeout_seconds: 300,
+                }),
+            ),
+        )
         .layer(telemetry.http_tracing());
 
     tracing::info!("Using facilitator on {}", x402.facilitator_url());
