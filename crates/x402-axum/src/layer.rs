@@ -1,3 +1,55 @@
+//! Axum middleware for enforcing [x402](https://www.x402.org) payments on protected routes.
+//!
+//! This middleware validates incoming `X-Payment` headers using a configured x402 facilitator,
+//! and settles valid payments either before or after request execution (configurable).
+//!
+//! Returns a `402 Payment Required` JSON response if the request lacks a valid payment.
+//!
+//! ## Example Usage
+//!
+//! ```rust,no_run
+//! use axum::{Router, routing::get};
+//! use axum::response::IntoResponse;
+//! use http::StatusCode;
+//! use x402_axum::X402Middleware;
+//! use x402_rs::networks::{KnownNetworkEip155, USDC};
+//! use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
+//!
+//! let x402 = X402Middleware::new("https://facilitator.x402.rs");
+//!
+//! let app: Router = Router::new().route(
+//!     "/protected",
+//!     get(my_handler).layer(
+//!         x402.with_price_tag(V1Eip155Exact::price_tag(
+//!             "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".parse().unwrap(),
+//!             USDC::base_sepolia().amount(10),
+//!         ))
+//!     ),
+//! );
+//!
+//! async fn my_handler() -> impl IntoResponse {
+//!     (StatusCode::OK, "This is VIP content!")
+//! }
+//! ```
+//!
+//! ## Settlement Timing
+//!
+//! By default, settlement occurs **after** the request is processed. You can change this behavior:
+//!
+//! - **[`X402Middleware::settle_before_execution`]** - Settle payment **before** request execution.
+//! - **[`X402Middleware::settle_after_execution`]** - Settle payment **after** request execution (default).
+//!   This allows processing the request before committing the payment on-chain.
+//!
+//! ## Configuration Notes
+//!
+//! - **[`X402Middleware::with_price_tag`]** sets the assets and amounts accepted for payment.
+//! - **[`X402Middleware::with_base_url`]** sets the base URL for computing full resource URLs.
+//!   If not set, defaults to `http://localhost/` (avoid in production).
+//! - **[`X402Middleware::with_description`]** is optional but helps the payer understand what is being paid for.
+//! - **[`X402LayerBuilder::with_mime_type`]** sets the MIME type of the protected resource (default: `application/json`).
+//! - **[`X402LayerBuilder::with_resource`]** explicitly sets the full URI of the protected resource.
+//!
+
 use axum_core::extract::Request;
 use axum_core::response::Response;
 use std::convert::Infallible;
@@ -27,6 +79,11 @@ pub struct X402Middleware<F> {
 
 // TODO with caching timeout for facilitator client supported thing
 impl X402Middleware<Arc<FacilitatorClient>> {
+    /// Creates a new middleware instance with a default facilitator URL.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the facilitator URL is invalid.
     pub fn new(url: &str) -> Self {
         let facilitator = FacilitatorClient::try_from(url).expect("Invalid facilitator URL");
         Self {
@@ -36,6 +93,7 @@ impl X402Middleware<Arc<FacilitatorClient>> {
         }
     }
 
+    /// Creates a new middleware instance with a facilitator URL.
     pub fn try_new(url: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let facilitator = FacilitatorClient::try_from(url)?;
         Ok(Self {
@@ -45,6 +103,7 @@ impl X402Middleware<Arc<FacilitatorClient>> {
         })
     }
 
+    /// Returns the configured facilitator URL.
     pub fn facilitator_url(&self) -> &Url {
         self.facilitator.base_url()
     }
@@ -70,12 +129,20 @@ impl<F> X402Middleware<F>
 where
     F: Clone,
 {
+    /// Sets the base URL used to construct resource URLs dynamically.
+    ///
+    /// If [`X402LayerBuilder::with_resource`] is not called, this base URL is combined with
+    /// each request's path/query to compute the resource. If not set, defaults to `http://localhost/`.
+    ///
+    /// In production, prefer calling `with_resource` or setting a precise `base_url`.
     pub fn with_base_url(&self, base_url: Url) -> X402Middleware<F> {
         let mut this = self.clone();
         this.base_url = Some(base_url);
         this
     }
 
+    /// Enables settlement prior to request execution.
+    /// When disabled (default), settlement occurs after successful request execution.
     pub fn settle_before_execution(&self) -> X402Middleware<F> {
         let mut this = self.clone();
         this.settle_before_execution = true;
@@ -87,7 +154,6 @@ where
     /// When disabled, settlement occurs after successful request execution.
     /// This is the default behavior and allows the application to process
     /// the request before committing the payment on-chain.
-    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn settle_after_execution(&self) -> Self {
         let mut this = self.clone();
         this.settle_before_execution = false;
@@ -99,6 +165,10 @@ impl<TFacilitator> X402Middleware<TFacilitator>
 where
     TFacilitator: Clone,
 {
+    /// Sets the price tag for the protected route.
+    ///
+    /// Creates a layer builder that can be further configured with additional
+    /// price tags and resource information.
     pub fn with_price_tag<A: IntoPriceTag>(
         &self,
         req: A,
@@ -113,6 +183,7 @@ where
     }
 }
 
+/// Builder for configuring the X402 middleware layer.
 #[derive(Clone)]
 pub struct X402LayerBuilder<TPriceTag, TFacilitator> {
     facilitator: TFacilitator,
@@ -123,20 +194,15 @@ pub struct X402LayerBuilder<TPriceTag, TFacilitator> {
 }
 
 impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
-    /// Add another payment option.
+    /// Adds another payment option.
     ///
-    /// The requirement must convert to the same type `V` as the first `.accept()`.
-    /// This is enforced at compile time.
-    ///
-    /// # Arguments
-    ///
-    /// * `req` - A payment requirement that implements `Into<V>`
+    /// Allows specifying multiple accepted payment methods (e.g., different networks).
     pub fn with_price_tag<R: IntoPriceTag<PriceTag = TPriceTag>>(mut self, req: R) -> Self {
         self.accepts.push(req.into_price_tag());
         self
     }
 
-    /// Set a description of what the payment grants access to.
+    /// Sets a description of what the payment grants access to.
     ///
     /// This is included in 402 responses to inform clients what they're paying for.
     pub fn with_description(mut self, description: String) -> Self {
@@ -144,14 +210,18 @@ impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
         self
     }
 
-    /// Set the MIME type of the protected resource.
+    /// Sets the MIME type of the protected resource.
     ///
-    /// Defaults to "application/json" if not specified.
+    /// Defaults to `application/json` if not specified.
     pub fn with_mime_type(mut self, mime: String) -> Self {
         self.resource.mime_type = mime;
         self
     }
 
+    /// Sets the full URL of the protected resource.
+    ///
+    /// When set, this URL is used directly instead of constructing it from the base URL
+    /// and request URI. This is the preferred approach in production.
     pub fn with_resource(mut self, resource: Url) -> Self {
         self.resource.url = Some(resource.to_string());
         self
@@ -189,24 +259,23 @@ where
     }
 }
 
-/// Wraps a cloned inner Axum service and augments it with payment enforcement logic.
+/// Axum service that enforces x402 payments on incoming requests.
 #[derive(Clone, Debug)]
 pub struct X402MiddlewareService<TPriceTag, TFacilitator> {
     /// Payment facilitator (local or remote)
     facilitator: TFacilitator,
+    /// Base URL for constructing resource URLs
     base_url: Arc<Url>,
     /// Whether to settle payment before executing the request (true) or after (false)
     settle_before_execution: bool,
+    /// Accepted payment requirements
     accepts: Arc<Vec<TPriceTag>>,
+    /// Resource information
     resource: Arc<ResourceInfoBuilder>,
     /// The inner Axum service being wrapped
     inner: BoxCloneSyncService<Request, Response, Infallible>,
 }
 
-/// Unified Service implementation for any price tag type that implements PaygateProtocol.
-///
-/// This single implementation replaces the previous separate implementations for
-/// V1PriceTag and V2PriceTag, using the unified Paygate from paygate_uni.rs.
 impl<TPriceTag, TFacilitator> Service<Request> for X402MiddlewareService<TPriceTag, TFacilitator>
 where
     TPriceTag: PaygateProtocol,
