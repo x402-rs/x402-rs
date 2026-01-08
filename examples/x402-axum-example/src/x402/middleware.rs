@@ -1,3 +1,5 @@
+use crate::x402::facilitator_client::FacilitatorClient;
+use crate::x402::paygate::{Paygate, PaygateProtocol, ResourceInfoBuilder};
 use axum::extract::Request;
 use axum::response::Response;
 use std::convert::Infallible;
@@ -10,8 +12,6 @@ use tower::{Layer, Service};
 use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::scheme::IntoPriceTag;
-use crate::x402::facilitator_client::FacilitatorClient;
-use crate::x402::paygate::{Paygate, PaygateProtocol, ResourceInfoBuilder};
 
 /// The main X402 middleware instance for enforcing x402 payments on routes.
 ///

@@ -14,14 +14,14 @@ use tracing::instrument;
 use tracing_core::Level;
 
 pub mod client;
-pub mod types;
 pub mod server;
+pub mod types;
 
 use crate::chain::eip155::{
-    Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction,
-    MetaTransactionSendError,
+    ChecksummedAddress, Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
+    Eip155TokenDeployment, MetaTransaction, MetaTransactionSendError,
 };
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
+use crate::chain::{ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::{PaymentVerificationError, v1};
 use crate::scheme::{
@@ -29,14 +29,23 @@ use crate::scheme::{
 };
 use crate::timestamp::UnixTimestamp;
 
-pub use types::*;
 pub use server::*;
+pub use types::*;
 
 /// Signature verifier for EIP-6492, EIP-1271, EOA, universally deployed on the supported EVM chains
 /// If absent on a target chain, verification will fail; you should deploy the validator there.
 pub const VALIDATOR_ADDRESS: Address = address!("0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B");
 
 pub struct V1Eip155Exact;
+
+impl V1Eip155Exact {
+    pub fn price_tag<A: Into<ChecksummedAddress>>(
+        pay_to: A,
+        asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,
+    ) -> V1Eip155ExactPriceTag {
+        V1Eip155ExactPriceTag::new(pay_to.into(), asset)
+    }
+}
 
 impl X402SchemeId for V1Eip155Exact {
     fn x402_version(&self) -> u8 {

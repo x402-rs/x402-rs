@@ -159,10 +159,7 @@ impl SolanaTokenDeployment {
         }
     }
 
-    pub fn amount(
-        &self,
-        v: u64,
-    ) -> DeployedTokenAmount<u64, SolanaTokenDeployment> {
+    pub fn amount(&self, v: u64) -> DeployedTokenAmount<u64, SolanaTokenDeployment> {
         DeployedTokenAmount {
             amount: v.into(),
             token: self.clone(),
