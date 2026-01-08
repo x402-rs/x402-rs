@@ -263,6 +263,7 @@ where
             tracing::warn!(
                 "X402Middleware base_url is not configured; defaulting to http://localhost/ for resource resolution"
             );
+            // TODO Fuck, probably Builder is cloned on every request, so we should de-clone earlier
         }
         let base_url = self
             .base_url

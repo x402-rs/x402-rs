@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 x402-rs = { version = "0.11", path = "../../" }
-x402-axum = { version = "0.7", path = "../../crates/x402-axum" }
+x402-axum = { version = "0.7", path = "../../crates/x402-axum", features = ["telemetry"] }
 http = { version = "1.4.0" }
 reqwest = { version = "0.12.25" }
 thiserror = { version = "2.0.17" }
