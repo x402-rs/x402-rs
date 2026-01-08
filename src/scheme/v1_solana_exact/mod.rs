@@ -36,6 +36,7 @@ pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25
 pub struct V1SolanaExact;
 
 impl V1SolanaExact {
+    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn price_tag<A: Into<Address>>(
         pay_to: A,
         asset: DeployedTokenAmount<u64, SolanaTokenDeployment>,

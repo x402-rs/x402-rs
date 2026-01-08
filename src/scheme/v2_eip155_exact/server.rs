@@ -5,12 +5,14 @@ use crate::scheme::IntoPriceTag;
 use alloy_primitives::U256;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct V2Eip155ExactPriceTag {
     pub pay_to: ChecksummedAddress,
     pub asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,
     pub max_timeout_seconds: u64,
 }
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 impl V2Eip155ExactPriceTag {
     pub fn new(
         pay_to: ChecksummedAddress,

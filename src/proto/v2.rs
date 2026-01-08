@@ -153,4 +153,5 @@ pub struct PaymentRequired {
     pub accepts: Vec<PaymentRequirements>,
 }
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub type PriceTag = PaymentRequirements;

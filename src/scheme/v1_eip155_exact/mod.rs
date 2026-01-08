@@ -39,6 +39,7 @@ pub const VALIDATOR_ADDRESS: Address = address!("0xdAcD51A54883eb67D95FAEb2BBfdC
 pub struct V1Eip155Exact;
 
 impl V1Eip155Exact {
+    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn price_tag<A: Into<ChecksummedAddress>>(
         pay_to: A,
         asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,

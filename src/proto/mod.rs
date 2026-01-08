@@ -25,24 +25,6 @@ where
     V2(T::V2),
 }
 
-impl<T> ProtocolVersioned<T>
-where
-    T: ProtocolV,
-{
-    pub fn as_v1(&self) -> Option<&T::V1> {
-        match self {
-            ProtocolVersioned::V1(v) => Some(v),
-            _ => None,
-        }
-    }
-    pub fn as_v2(&self) -> Option<&T::V2> {
-        match self {
-            ProtocolVersioned::V2(v) => Some(v),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SupportedPaymentKind {

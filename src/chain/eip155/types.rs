@@ -86,7 +86,7 @@ impl<'de> Deserialize<'de> for TokenAmount {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Ok(Self::from_str(&s).map_err(serde::de::Error::custom)?)
+        Self::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
 

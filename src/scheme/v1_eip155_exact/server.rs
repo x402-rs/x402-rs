@@ -7,12 +7,14 @@ use crate::scheme::IntoPriceTag;
 use crate::scheme::v1_eip155_exact::ExactScheme;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct V1Eip155ExactPriceTag {
     pub pay_to: ChecksummedAddress,
     pub asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,
     pub max_timeout_seconds: u64,
 }
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 impl V1Eip155ExactPriceTag {
     pub fn new(
         pay_to: ChecksummedAddress,
@@ -38,7 +40,7 @@ impl IntoPriceTag for V1Eip155ExactPriceTag {
         let chain_id: ChainId = self.asset.token.chain_reference.into();
         let network = chain_id
             .as_network_name()
-            .expect(format!("Can not get network name for chain id {}", chain_id).as_str());
+            .unwrap_or_else(|| panic!("Can not get network name for chain id {}", chain_id));
         let extra = self
             .asset
             .token

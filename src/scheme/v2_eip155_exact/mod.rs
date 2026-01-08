@@ -33,6 +33,7 @@ pub use types::*;
 pub struct V2Eip155Exact;
 
 impl V2Eip155Exact {
+    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn price_tag<A: Into<ChecksummedAddress>>(
         pay_to: A,
         asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,

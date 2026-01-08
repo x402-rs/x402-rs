@@ -48,6 +48,7 @@ pub trait X402SchemeId {
     }
 }
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub trait IntoPriceTag {
     type PriceTag;
     fn into_price_tag(self) -> Self::PriceTag;

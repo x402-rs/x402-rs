@@ -244,15 +244,14 @@ impl PaygateProtocol for v1::PriceTag {
 
         // Find fee_payer for this network from capabilities.signers
         let chain_id = ChainId::from_network_name(&price_tag.network);
-        if let Some(chain_id) = chain_id {
-            if let Some(signers) = capabilities.signers.get(&chain_id) {
-                if let Some(fee_payer) = signers.first() {
-                    let extra = serde_json::json!({ "feePayer": fee_payer });
-                    enriched.extra = serde_json::to_string(&extra)
-                        .ok()
-                        .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
-                }
-            }
+        if let Some(chain_id) = chain_id
+            && let Some(signers) = capabilities.signers.get(&chain_id)
+            && let Some(fee_payer) = signers.first()
+        {
+            let extra = serde_json::json!({ "feePayer": fee_payer });
+            enriched.extra = serde_json::to_string(&extra)
+                .ok()
+                .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
         }
 
         enriched
@@ -386,13 +385,13 @@ impl PaygateProtocol for v2::PaymentRequirements {
 
         // Find fee_payer for this network from capabilities.signers
         // V2 uses ChainId directly for network
-        if let Some(signers) = capabilities.signers.get(&price_tag.network) {
-            if let Some(fee_payer) = signers.first() {
-                let extra = serde_json::json!({ "feePayer": fee_payer });
-                enriched.extra = serde_json::to_string(&extra)
-                    .ok()
-                    .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
-            }
+        if let Some(signers) = capabilities.signers.get(&price_tag.network)
+            && let Some(fee_payer) = signers.first()
+        {
+            let extra = serde_json::json!({ "feePayer": fee_payer });
+            enriched.extra = serde_json::to_string(&extra)
+                .ok()
+                .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
         }
 
         enriched

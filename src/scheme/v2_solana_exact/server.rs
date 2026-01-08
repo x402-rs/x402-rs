@@ -4,12 +4,14 @@ use crate::proto::v2;
 use crate::scheme::IntoPriceTag;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct V2SolanaExactPriceTag {
     pub pay_to: Address,
     pub asset: DeployedTokenAmount<u64, SolanaTokenDeployment>,
     pub max_timeout_seconds: u64,
 }
 
+#[allow(dead_code)] // Public for consumption by downstream crates.
 impl V2SolanaExactPriceTag {
     pub fn new(pay_to: Address, asset: DeployedTokenAmount<u64, SolanaTokenDeployment>) -> Self {
         Self {

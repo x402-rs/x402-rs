@@ -37,8 +37,8 @@ pub enum MoneyAmountParseError {
     InvalidFormat,
     #[error(
         "Amount must be between {} and {}",
-        money_amount::MIN_STR,
-        money_amount::MAX_STR
+        constants::MIN_STR,
+        constants::MAX_STR
     )]
     OutOfRange,
     #[error("Negative value is not allowed")]
@@ -47,7 +47,7 @@ pub enum MoneyAmountParseError {
     WrongPrecision { money: u32, token: u32 },
 }
 
-mod money_amount {
+mod constants {
     use super::*;
     use once_cell::sync::Lazy;
 
@@ -76,7 +76,7 @@ impl MoneyAmount {
             return Err(MoneyAmountParseError::Negative);
         }
 
-        if parsed < *money_amount::MIN || parsed > *money_amount::MAX {
+        if parsed < *constants::MIN || parsed > *constants::MAX {
             return Err(MoneyAmountParseError::OutOfRange);
         }
 
@@ -114,7 +114,7 @@ impl TryFrom<f64> for MoneyAmount {
         if decimal.is_sign_negative() {
             return Err(MoneyAmountParseError::Negative);
         }
-        if decimal < *money_amount::MIN || decimal > *money_amount::MAX {
+        if decimal < *constants::MIN || decimal > *constants::MAX {
             return Err(MoneyAmountParseError::OutOfRange);
         }
         Ok(MoneyAmount(decimal))

@@ -364,6 +364,7 @@ pub struct PaymentRequired {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct PriceTag {
     pub scheme: String,
     pub pay_to: String,

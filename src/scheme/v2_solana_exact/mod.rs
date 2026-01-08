@@ -23,6 +23,7 @@ pub use server::*;
 pub struct V2SolanaExact;
 
 impl V2SolanaExact {
+    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn price_tag<A: Into<Address>>(
         pay_to: A,
         asset: DeployedTokenAmount<u64, SolanaTokenDeployment>,

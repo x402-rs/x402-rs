@@ -159,12 +159,15 @@ impl SolanaTokenDeployment {
         }
     }
 
+    #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn amount(&self, v: u64) -> DeployedTokenAmount<u64, SolanaTokenDeployment> {
         DeployedTokenAmount {
-            amount: v.into(),
+            amount: v,
             token: self.clone(),
         }
     }
+
+    // FIXME fn parse from eip155 token deployment
 }
 
 #[derive(thiserror::Error, Debug)]
