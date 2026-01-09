@@ -63,7 +63,6 @@ pub struct ResourceInfoBuilder {
     pub url: Option<String>,
 }
 
-// FIXME Matching for v2??
 // FIXME Partial, FUll, dynamic price tag offers
 
 impl Default for ResourceInfoBuilder {
@@ -310,13 +309,11 @@ impl PaygateProtocol for v2::PriceTag {
         let accepted = &payment_payload.accepted;
 
         // Find matching requirements from our accepts list
+        // According to V2 spec, the accepted requirements must exactly match
+        // one of the requirements we offered in PaymentRequired.accepts
         let selected = accepts
             .iter()
-            .find(|price_tag| {
-                let requirements = &price_tag.requirements;
-                // FIXME v2 matching
-                requirements.scheme == accepted.scheme && requirements.network == accepted.network
-            })
+            .find(|price_tag| **price_tag == *accepted)
             .ok_or(VerificationError::NoPaymentMatching)?;
 
         // Build the V2 verify request

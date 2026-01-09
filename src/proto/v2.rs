@@ -106,7 +106,7 @@ pub struct PaymentRequirements<
     TScheme = String,
     TAmount = String,
     TAddress = String,
-    TExtra = Box<serde_json::value::RawValue>,
+    TExtra = Box<serde_json::value::RawValue>, // FIXME Maybe just json VALUE??
 > {
     pub scheme: TScheme,
     pub network: ChainId,
@@ -191,5 +191,29 @@ impl PriceTag {
         if let Some(enricher) = self.enricher.clone() {
             enricher(self, capabilities);
         }
+    }
+}
+
+/// Custom PartialEq to compare `PriceTag` with `PaymentRequirements`.
+///
+/// Since `RawValue` doesn't implement `PartialEq`, we use serde-mediated comparison
+/// for the `extra` field while comparing other fields directly.
+impl PartialEq<PaymentRequirements> for PriceTag {
+    fn eq(&self, b: &PaymentRequirements) -> bool {
+        let a = &self.requirements;
+        a.scheme == b.scheme
+            && a.network == b.network
+            && a.amount == b.amount
+            && a.asset == b.asset
+            && a.pay_to == b.pay_to
+            && a.max_timeout_seconds == b.max_timeout_seconds
+            && match (&a.extra, &b.extra) {
+                (Some(a_extra), Some(b_extra)) => {
+                    // Compare extra by serializing to JSON strings
+                    serde_json::to_string(a_extra).ok() == serde_json::to_string(b_extra).ok()
+                }
+                (None, None) => true,
+                _ => false,
+            }
     }
 }
