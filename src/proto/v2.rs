@@ -106,7 +106,7 @@ pub struct PaymentRequirements<
     TScheme = String,
     TAmount = String,
     TAddress = String,
-    TExtra = serde_json::Value, // FIXME Maybe just json VALUE??
+    TExtra = serde_json::Value,
 > {
     pub scheme: TScheme,
     pub network: ChainId,
