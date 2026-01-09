@@ -38,7 +38,6 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tower::Service;
 use url::Url;
-use x402_rs::chain::ChainId;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto;
 use x402_rs::proto::{SupportedResponse, v1, v2};
@@ -269,22 +268,7 @@ impl PaygateProtocol for v1::PriceTag {
     }
 
     fn enrich_with_capabilities(&mut self, capabilities: &SupportedResponse) {
-        // Only enrich if extra is None (not already set)
-        if self.extra.is_some() {
-            return;
-        }
-
-        // Find fee_payer for this network from capabilities.signers
-        let chain_id = ChainId::from_network_name(&self.network);
-        if let Some(chain_id) = chain_id
-            && let Some(signers) = capabilities.signers.get(&chain_id)
-            && let Some(fee_payer) = signers.first()
-        {
-            let extra = json!({ "feePayer": fee_payer });
-            self.extra = serde_json::to_string(&extra)
-                .ok()
-                .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
-        }
+        self.enrich(capabilities);
     }
 }
 
@@ -408,21 +392,7 @@ impl PaygateProtocol for v2::PriceTag {
     }
 
     fn enrich_with_capabilities(&mut self, capabilities: &SupportedResponse) {
-        // Only enrich if extra is None (not already set)
-        if self.requirements.extra.is_some() {
-            return;
-        }
-
-        // Find fee_payer for this network from capabilities.signers
-        // V2 uses ChainId directly for network
-        if let Some(signers) = capabilities.signers.get(&self.requirements.network)
-            && let Some(fee_payer) = signers.first()
-        {
-            let extra = serde_json::json!({ "feePayer": fee_payer });
-            self.requirements.extra = serde_json::to_string(&extra)
-                .ok()
-                .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
-        }
+        self.enrich(capabilities);
     }
 }
 

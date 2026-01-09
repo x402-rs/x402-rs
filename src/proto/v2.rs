@@ -1,11 +1,14 @@
-use crate::chain::ChainId;
-use crate::proto;
-use crate::proto::v1;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+use std::sync::Arc;
+
+use crate::chain::ChainId;
+use crate::proto;
+use crate::proto::SupportedResponse;
+use crate::proto::v1;
 
 /// Version 2 of the x402 protocol.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
@@ -153,8 +156,34 @@ pub struct PaymentRequired {
     pub accepts: Vec<PaymentRequirements>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct PriceTag {
     pub requirements: PaymentRequirements,
+    /// Optional enrichment function provided by concrete price tags
+    #[doc(hidden)]
+    pub enricher: Option<Enricher>,
+}
+
+impl fmt::Debug for PriceTag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PriceTag")
+            .field("requirements", &self.requirements)
+            .finish()
+    }
+}
+
+/// Type alias for price tag enrichment functions.
+/// The function takes a mutable reference to the price tag and the facilitator's
+/// supported capabilities, and enriches the price tag (e.g., adds fee_payer for Solana).
+pub type Enricher = Arc<dyn Fn(&mut PriceTag, &SupportedResponse) + Send + Sync>;
+
+impl PriceTag {
+    /// Apply the stored enrichment function if present.
+    #[allow(dead_code)]
+    pub fn enrich(&mut self, capabilities: &SupportedResponse) {
+        if let Some(enricher) = self.enricher.clone() {
+            enricher(self, capabilities);
+        }
+    }
 }

@@ -55,6 +55,7 @@ impl IntoPriceTag for V1Eip155ExactPriceTag {
             amount: self.asset.amount.to_string(),
             max_timeout_seconds: self.max_timeout_seconds,
             extra,
+            enricher: None,
         }
     }
 }

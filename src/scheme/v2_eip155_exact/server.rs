@@ -52,6 +52,9 @@ impl IntoPriceTag for V2Eip155ExactPriceTag {
             max_timeout_seconds: self.max_timeout_seconds,
             extra,
         };
-        v2::PriceTag { requirements }
+        v2::PriceTag {
+            requirements,
+            enricher: None,
+        }
     }
 }

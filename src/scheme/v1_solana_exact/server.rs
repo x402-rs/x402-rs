@@ -1,6 +1,9 @@
+use std::sync::Arc;
+
 use crate::chain::solana::{Address, SolanaTokenDeployment};
 use crate::chain::{ChainId, DeployedTokenAmount};
 use crate::proto::v1;
+use crate::proto::SupportedResponse;
 use crate::scheme::IntoPriceTag;
 use crate::scheme::v1_solana_exact::ExactScheme;
 
@@ -44,6 +47,26 @@ impl IntoPriceTag for V1SolanaExactPriceTag {
             amount: self.asset.amount.to_string(),
             max_timeout_seconds: self.max_timeout_seconds,
             extra: None,
+            enricher: Some(Arc::new(solana_fee_payer_enricher)),
         }
+    }
+}
+
+/// Enricher function for Solana price tags - adds fee_payer to extra field
+#[allow(dead_code)]
+fn solana_fee_payer_enricher(price_tag: &mut v1::PriceTag, capabilities: &SupportedResponse) {
+    if price_tag.extra.is_some() {
+        return;
+    }
+
+    let chain_id = ChainId::from_network_name(&price_tag.network);
+    if let Some(chain_id) = chain_id
+        && let Some(signers) = capabilities.signers.get(&chain_id)
+        && let Some(fee_payer) = signers.first()
+    {
+        let extra = serde_json::json!({ "feePayer": fee_payer });
+        price_tag.extra = serde_json::to_string(&extra)
+            .ok()
+            .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
     }
 }
