@@ -33,7 +33,7 @@ impl IntoPriceTag for V2SolanaExactPriceTag {
 
     fn into_price_tag(self) -> Self::PriceTag {
         let chain_id: ChainId = self.asset.token.chain_reference.into();
-        v2::PaymentRequirements {
+        let requirements = v2::PaymentRequirements {
             scheme: ExactScheme.to_string(),
             pay_to: self.pay_to.to_string(),
             asset: self.asset.token.address.to_string(),
@@ -41,6 +41,7 @@ impl IntoPriceTag for V2SolanaExactPriceTag {
             amount: self.asset.amount.to_string(),
             max_timeout_seconds: self.max_timeout_seconds,
             extra: None,
-        }
+        };
+        v2::PriceTag { requirements }
     }
 }

@@ -312,7 +312,7 @@ fn price_tag_to_v1_requirements_with_resource(
 // V2 Protocol Implementation (on v2::PaymentRequirements / V2PriceTag)
 // ============================================================================
 
-impl PaygateProtocol for v2::PaymentRequirements {
+impl PaygateProtocol for v2::PriceTag {
     type PaymentPayload = v2::PaymentPayload<v2::PaymentRequirements, serde_json::Value>;
 
     const PAYMENT_HEADER_NAME: &'static str = "Payment-Signature";
@@ -329,8 +329,10 @@ impl PaygateProtocol for v2::PaymentRequirements {
         // Find matching requirements from our accepts list
         let selected = accepts
             .iter()
-            .find(|requirement| {
-                requirement.scheme == accepted.scheme && requirement.network == accepted.network
+            .find(|price_tag| {
+                let requirements = &price_tag.requirements;
+                // FIXME v2 matching
+                requirements.scheme == accepted.scheme && requirements.network == accepted.network
             })
             .ok_or(VerificationError::NoPaymentMatching)?;
 
@@ -338,7 +340,7 @@ impl PaygateProtocol for v2::PaymentRequirements {
         let verify_request = v2::VerifyRequest {
             x402_version: v2::X402Version2,
             payment_payload,
-            payment_requirements: selected.clone(),
+            payment_requirements: selected.requirements.clone(),
         };
 
         let json = serde_json::to_value(&verify_request)
@@ -356,7 +358,7 @@ impl PaygateProtocol for v2::PaymentRequirements {
             PaygateError::Verification(err) => {
                 let payment_required_response = v2::PaymentRequired {
                     error: Some(err.to_string()),
-                    accepts: accepts.to_vec(),
+                    accepts: accepts.iter().map(|pt| pt.requirements.clone()).collect(),
                     x402_version: v2::X402Version2,
                     resource: resource.clone(),
                 };
@@ -407,17 +409,17 @@ impl PaygateProtocol for v2::PaymentRequirements {
 
     fn enrich_with_capabilities(&mut self, capabilities: &SupportedResponse) {
         // Only enrich if extra is None (not already set)
-        if self.extra.is_some() {
+        if self.requirements.extra.is_some() {
             return;
         }
 
         // Find fee_payer for this network from capabilities.signers
         // V2 uses ChainId directly for network
-        if let Some(signers) = capabilities.signers.get(&self.network)
+        if let Some(signers) = capabilities.signers.get(&self.requirements.network)
             && let Some(fee_payer) = signers.first()
         {
             let extra = serde_json::json!({ "feePayer": fee_payer });
-            self.extra = serde_json::to_string(&extra)
+            self.requirements.extra = serde_json::to_string(&extra)
                 .ok()
                 .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
         }
