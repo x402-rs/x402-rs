@@ -5,7 +5,6 @@ use std::str::FromStr;
 use crate::chain::ChainId;
 use crate::scheme::SchemeHandlerSlug;
 
-pub mod client;
 pub mod util;
 pub mod v1;
 pub mod v2;

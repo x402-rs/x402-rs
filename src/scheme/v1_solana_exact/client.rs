@@ -18,9 +18,11 @@ use spl_token::solana_program::program_pack::Pack;
 use crate::chain::ChainId;
 use crate::chain::solana::Address;
 use crate::proto::PaymentRequired;
-use crate::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient};
 use crate::proto::v1::X402Version1;
 use crate::scheme::X402SchemeId;
+use crate::scheme::client::{
+    PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
+};
 use crate::scheme::v1_solana_exact::types::{
     ExactScheme, ExactSolanaPayload, PaymentPayload, PaymentRequirements,
 };

@@ -5,8 +5,6 @@ use crate::chain::{ChainId, ChainIdPattern};
 use crate::proto;
 use crate::scheme::X402SchemeId;
 
-// FIXME Move all that to scheme/mod.rs
-
 // TODO: Update x402-rs README for axum example, reqwest example
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
@@ -27,7 +25,7 @@ impl PaymentCandidate {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub trait X402SchemeClient: X402SchemeId + Send + Sync {
     fn accept(&self, payment_required: &proto::PaymentRequired) -> Vec<PaymentCandidate>;

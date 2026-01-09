@@ -8,10 +8,10 @@ use reqwest::{Request, Response};
 use reqwest_middleware as rqm;
 use std::sync::Arc;
 use x402_rs::proto;
-use x402_rs::proto::client::{
+use x402_rs::proto::{v1, v2};
+use x402_rs::scheme::client::{
     FirstMatch, PaymentCandidate, PaymentSelector, X402Error, X402SchemeClient,
 };
-use x402_rs::proto::{v1, v2};
 use x402_rs::util::Base64Bytes;
 
 #[cfg(feature = "telemetry")]

@@ -8,8 +8,10 @@ use std::sync::Arc;
 use crate::chain::ChainId;
 use crate::chain::eip155::Eip155ChainReference;
 use crate::proto::PaymentRequired;
-use crate::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient};
 use crate::proto::v1::X402Version1;
+use crate::scheme::client::{
+    PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
+};
 use crate::scheme::v1_eip155_exact::{
     ExactEvmPayload, ExactEvmPayloadAuthorization, ExactScheme, PaymentRequirementsExtra,
     TransferWithAuthorization, types,

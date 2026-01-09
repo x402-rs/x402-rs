@@ -482,7 +482,9 @@ pub trait Eip155MetaTransactionProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chain::solana::{Address as SolanaAddress, SolanaChainReference, SolanaTokenDeployment};
+    use crate::chain::solana::{
+        Address as SolanaAddress, SolanaChainReference, SolanaTokenDeployment,
+    };
     use crate::networks::KnownNetworkSolana;
     use std::str::FromStr;
 

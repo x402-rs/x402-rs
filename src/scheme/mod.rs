@@ -3,6 +3,8 @@ pub mod v1_solana_exact;
 pub mod v2_eip155_exact;
 pub mod v2_solana_exact;
 
+pub mod client;
+
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
