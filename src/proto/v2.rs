@@ -18,6 +18,12 @@ impl X402Version2 {
     pub const VALUE: u8 = 2;
 }
 
+impl PartialEq<u8> for X402Version2 {
+    fn eq(&self, other: &u8) -> bool {
+        *other == Self::VALUE
+    }
+}
+
 impl From<X402Version2> for u8 {
     fn from(_: X402Version2) -> Self {
         X402Version2::VALUE

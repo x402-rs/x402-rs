@@ -2,10 +2,11 @@ use std::sync::Arc;
 
 use crate::chain::solana::{Address, SolanaTokenDeployment};
 use crate::chain::{ChainId, DeployedTokenAmount};
-use crate::proto::v2;
 use crate::proto::SupportedResponse;
+use crate::proto::v2;
 use crate::scheme::IntoPriceTag;
 use crate::scheme::v1_solana_exact::ExactScheme;
+use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
@@ -59,11 +60,20 @@ fn solana_fee_payer_enricher_v2(price_tag: &mut v2::PriceTag, capabilities: &Sup
         return;
     }
 
-    // V2 uses ChainId directly
-    if let Some(signers) = capabilities.signers.get(&price_tag.requirements.network)
-        && let Some(fee_payer) = signers.first()
-    {
-        let extra = serde_json::json!({ "feePayer": fee_payer });
+    // Find the matching kind and deserialize the whole extra into SupportedPaymentKindExtra
+    let extra = capabilities
+        .kinds
+        .iter()
+        .find(|kind| {
+            v2::X402Version2 == kind.x402_version
+                && kind.scheme == ExactScheme.to_string()
+                && kind.network == price_tag.requirements.network.to_string()
+        })
+        .and_then(|kind| kind.extra.as_ref())
+        .and_then(|extra| serde_json::from_value::<SupportedPaymentKindExtra>(extra.clone()).ok());
+
+    // Serialize the whole extra back to RawValue
+    if let Some(extra) = extra {
         price_tag.requirements.extra = serde_json::to_string(&extra)
             .ok()
             .and_then(|s| serde_json::value::RawValue::from_string(s).ok());

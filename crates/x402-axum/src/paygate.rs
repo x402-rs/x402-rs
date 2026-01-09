@@ -175,7 +175,6 @@ pub trait PaygateProtocol: Clone + Send + Sync + 'static {
     /// Called by middleware when building 402 response to add extra information like fee payer
     /// from the facilitator's supported endpoints.
     fn enrich_with_capabilities(&mut self, capabilities: &SupportedResponse);
-    // FIXME CONTINUE ^^ mut SELF instead of Clone ?
 }
 
 // ============================================================================
