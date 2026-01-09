@@ -2,6 +2,7 @@ use crate::chain::eip155::{ChecksummedAddress, Eip155TokenDeployment};
 use crate::chain::{ChainId, DeployedTokenAmount};
 use crate::proto::v2;
 use crate::scheme::IntoPriceTag;
+use crate::scheme::v2_eip155_exact::ExactScheme;
 use alloy_primitives::U256;
 
 #[derive(Debug, Clone)]
@@ -43,7 +44,7 @@ impl IntoPriceTag for V2Eip155ExactPriceTag {
             .and_then(|eip712| serde_json::to_string(&eip712).ok())
             .and_then(|extra| serde_json::value::RawValue::from_string(extra).ok());
         v2::PaymentRequirements {
-            scheme: "exact".to_string(),
+            scheme: ExactScheme.to_string(),
             pay_to: self.pay_to.to_string(),
             asset: self.asset.token.address.to_string(),
             network: chain_id,

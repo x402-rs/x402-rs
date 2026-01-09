@@ -2,6 +2,7 @@ use crate::chain::solana::{Address, SolanaTokenDeployment};
 use crate::chain::{ChainId, DeployedTokenAmount};
 use crate::proto::v2;
 use crate::scheme::IntoPriceTag;
+use crate::scheme::v1_solana_exact::ExactScheme;
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
@@ -33,7 +34,7 @@ impl IntoPriceTag for V2SolanaExactPriceTag {
     fn into_price_tag(self) -> Self::PriceTag {
         let chain_id: ChainId = self.asset.token.chain_reference.into();
         v2::PaymentRequirements {
-            scheme: "exact".to_string(),
+            scheme: ExactScheme.to_string(),
             pay_to: self.pay_to.to_string(),
             asset: self.asset.token.address.to_string(),
             network: chain_id,
