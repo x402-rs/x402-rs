@@ -33,9 +33,9 @@ use axum_core::body::Body;
 use axum_core::extract::Request;
 use axum_core::response::{IntoResponse, Response};
 use http::{HeaderMap, HeaderValue, StatusCode};
-use serde_json::json;
 use std::convert::Infallible;
 use std::sync::Arc;
+use serde_json::json;
 use tower::Service;
 use url::Url;
 use x402_rs::chain::ChainId;
@@ -175,8 +175,8 @@ pub trait PaygateProtocol: Clone + Send + Sync + 'static {
     ///
     /// Called by middleware when building 402 response to add extra information like fee payer
     /// from the facilitator's supported endpoints.
-    fn enrich_with_capabilities(price_tag: &Self, capabilities: &SupportedResponse) -> Self;
-    // FIXME ^^ mut SELF instead of Clone
+    fn enrich_with_capabilities(&mut self, capabilities: &SupportedResponse);
+    // FIXME CONTINUE ^^ mut SELF instead of Clone ?
 }
 
 // ============================================================================
@@ -268,27 +268,23 @@ impl PaygateProtocol for v1::PriceTag {
         }
     }
 
-    fn enrich_with_capabilities(price_tag: &Self, capabilities: &SupportedResponse) -> Self {
-        let mut enriched = price_tag.clone();
-
+    fn enrich_with_capabilities(&mut self, capabilities: &SupportedResponse) {
         // Only enrich if extra is None (not already set)
-        if enriched.extra.is_some() {
-            return enriched;
+        if self.extra.is_some() {
+            return;
         }
 
         // Find fee_payer for this network from capabilities.signers
-        let chain_id = ChainId::from_network_name(&price_tag.network);
+        let chain_id = ChainId::from_network_name(&self.network);
         if let Some(chain_id) = chain_id
             && let Some(signers) = capabilities.signers.get(&chain_id)
             && let Some(fee_payer) = signers.first()
         {
-            let extra = serde_json::json!({ "feePayer": fee_payer });
-            enriched.extra = serde_json::to_string(&extra)
+            let extra = json!({ "feePayer": fee_payer });
+            self.extra = serde_json::to_string(&extra)
                 .ok()
                 .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
         }
-
-        enriched
     }
 }
 
@@ -409,26 +405,22 @@ impl PaygateProtocol for v2::PaymentRequirements {
         }
     }
 
-    fn enrich_with_capabilities(price_tag: &Self, capabilities: &SupportedResponse) -> Self {
-        let mut enriched = price_tag.clone();
-
+    fn enrich_with_capabilities(&mut self, capabilities: &SupportedResponse) {
         // Only enrich if extra is None (not already set)
-        if enriched.extra.is_some() {
-            return enriched;
+        if self.extra.is_some() {
+            return;
         }
 
         // Find fee_payer for this network from capabilities.signers
         // V2 uses ChainId directly for network
-        if let Some(signers) = capabilities.signers.get(&price_tag.network)
+        if let Some(signers) = capabilities.signers.get(&self.network)
             && let Some(fee_payer) = signers.first()
         {
             let extra = serde_json::json!({ "feePayer": fee_payer });
-            enriched.extra = serde_json::to_string(&extra)
+            self.extra = serde_json::to_string(&extra)
                 .ok()
                 .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
         }
-
-        enriched
     }
 }
 
@@ -530,7 +522,11 @@ where
 
         self.accepts
             .iter()
-            .map(|pt| TPriceTag::enrich_with_capabilities(pt, &capabilities))
+            .map(|pt| {
+                let mut pt_clone = pt.clone();
+                pt_clone.enrich_with_capabilities(&capabilities);
+                pt_clone
+            })
             .collect()
     }
 

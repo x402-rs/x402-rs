@@ -179,11 +179,11 @@ impl PaygateProtocol for MyCustomPriceTag {
     }
 
     fn enrich_with_capabilities(
-        price_tag: &Self,
+        &mut self,
         capabilities: &SupportedResponse,
-    ) -> Self {
+    ) {
         // Add facilitator-specific data (e.g., fee payers)
-        price_tag.clone()
+        // This method modifies `self` directly to avoid unnecessary cloning.
     }
 }
 
