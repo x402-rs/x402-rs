@@ -25,6 +25,7 @@ use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::config::SolanaChainConfig;
 use crate::networks::KnownNetworkSolana;
 use crate::scheme::X402SchemeFacilitatorError;
+use crate::util::money_amount::{MoneyAmount, MoneyAmountParseError};
 
 pub const SOLANA_NAMESPACE: &str = "solana";
 
@@ -167,7 +168,37 @@ impl SolanaTokenDeployment {
         }
     }
 
-    // FIXME fn parse from eip155 token deployment
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn parse<V>(
+        &self,
+        v: V,
+    ) -> Result<DeployedTokenAmount<u64, SolanaTokenDeployment>, MoneyAmountParseError>
+    where
+        V: TryInto<MoneyAmount>,
+        MoneyAmountParseError: From<<V as TryInto<MoneyAmount>>::Error>,
+    {
+        let money_amount = v.try_into()?;
+        let scale = money_amount.scale();
+        let token_scale = self.decimals as u32;
+        if scale > token_scale {
+            return Err(MoneyAmountParseError::WrongPrecision {
+                money: scale,
+                token: token_scale,
+            });
+        }
+        let scale_diff = token_scale - scale;
+        let multiplier = 10u64
+            .checked_pow(scale_diff)
+            .ok_or(MoneyAmountParseError::OutOfRange)?;
+        let digits = u64::try_from(money_amount.mantissa()).expect("mantissa fits in u64");
+        let value = digits
+            .checked_mul(multiplier)
+            .ok_or(MoneyAmountParseError::OutOfRange)?;
+        Ok(DeployedTokenAmount {
+            amount: value,
+            token: self.clone(),
+        })
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -486,5 +517,136 @@ impl FromStr for Address {
         let pubkey =
             Pubkey::from_str(s).map_err(|_| format!("Failed to decode Solana address: {s}"))?;
         Ok(Self(pubkey))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_deployment(decimals: u8) -> SolanaTokenDeployment {
+        let chain_ref = SolanaChainReference::solana();
+        // Use a well-known test address (USDC on Solana devnet)
+        let address = Address::from_str("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZ5nc4pb").unwrap();
+        SolanaTokenDeployment::new(chain_ref, address, decimals)
+    }
+
+    #[test]
+    fn test_parse_whole_number() {
+        let deployment = create_test_deployment(6); // 6 decimals like USDC
+        let result = deployment.parse("100");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, 100_000_000); // 100 * 10^6
+    }
+
+    #[test]
+    fn test_parse_with_decimals() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("1.50");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, 1_500_000); // 1.50 * 10^6
+    }
+
+    #[test]
+    fn test_parse_zero_decimals() {
+        let deployment = create_test_deployment(0);
+        let result = deployment.parse("42");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, 42);
+    }
+
+    #[test]
+    fn test_parse_precision_too_high() {
+        let deployment = create_test_deployment(2); // Only 2 decimals
+        let result = deployment.parse("1.234"); // 3 decimals - should fail
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, MoneyAmountParseError::WrongPrecision { .. }));
+    }
+
+    #[test]
+    fn test_parse_exact_precision() {
+        let deployment = create_test_deployment(9); // 9 decimals
+        let result = deployment.parse("0.123456789");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, 123_456_789);
+    }
+
+    #[test]
+    fn test_parse_smallest_amount() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("0.000001");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, 1);
+    }
+
+    #[test]
+    fn test_parse_with_currency_symbol() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("$10.50");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, 10_500_000);
+    }
+
+    #[test]
+    fn test_parse_with_commas() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("1,000");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, 1_000_000_000);
+    }
+
+    #[test]
+    fn test_parse_large_amount() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("999999999");
+        assert!(result.is_ok());
+        // 999999999 * 10^6 = 999999999000000
+        assert_eq!(result.unwrap().amount, 999_999_999_000_000);
+    }
+
+    #[test]
+    fn test_parse_overflow_returns_error() {
+        // Create a deployment with 19 decimals (beyond what u64 can handle)
+        let deployment = create_test_deployment(19);
+        // 999999999 with 19 decimals = 999999999 * 10^19, which overflows u64
+        let result = deployment.parse("999999999");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            MoneyAmountParseError::OutOfRange
+        ));
+    }
+
+    #[test]
+    fn test_parse_matches_eip155_behavior() {
+        use crate::chain::eip155::{Eip155ChainReference, Eip155TokenDeployment};
+
+        // Create equivalent deployments
+        let eip155_chain = Eip155ChainReference::new(1);
+        let eip155_deployment = Eip155TokenDeployment {
+            chain_reference: eip155_chain,
+            address: alloy_primitives::Address::ZERO,
+            decimals: 6,
+            eip712: None,
+        };
+
+        let solana_deployment = create_test_deployment(6);
+
+        // Test various amounts
+        let test_cases = ["1", "1.5", "0.01", "100", "999.999"];
+
+        for amount in test_cases {
+            let eip155_result = eip155_deployment.parse(amount);
+            let solana_result = solana_deployment.parse(amount);
+
+            assert_eq!(eip155_result.is_ok(), solana_result.is_ok());
+
+            if let (Ok(eip155), Ok(solana)) = (eip155_result, solana_result) {
+                // EIP155 uses U256, Solana uses u64
+                let eip155_value: u64 = eip155.amount.try_into().unwrap();
+                assert_eq!(eip155_value, solana.amount);
+            }
+        }
     }
 }
