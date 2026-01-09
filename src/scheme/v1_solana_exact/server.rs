@@ -72,10 +72,8 @@ fn solana_fee_payer_enricher(price_tag: &mut v1::PriceTag, capabilities: &Suppor
         .and_then(|kind| kind.extra.as_ref())
         .and_then(|extra| serde_json::from_value::<SupportedPaymentKindExtra>(extra.clone()).ok());
 
-    // Serialize the whole extra back to RawValue
+    // Serialize the whole extra back to Value
     if let Some(extra) = extra {
-        price_tag.extra = serde_json::to_string(&extra)
-            .ok()
-            .and_then(|s| serde_json::value::RawValue::from_string(s).ok());
+        price_tag.extra = serde_json::to_value(&extra).ok();
     }
 }

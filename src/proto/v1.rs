@@ -308,7 +308,7 @@ pub struct PaymentRequirements<
     TScheme = String,
     TAmount = String,
     TAddress = String,
-    TExtra = Box<serde_json::value::RawValue>,
+    TExtra = serde_json::Value,
 > {
     pub scheme: TScheme,
     pub network: String,
@@ -328,13 +328,12 @@ pub struct PaymentRequirements<
 impl PaymentRequirements {
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn as_concrete<
-        'a,
         TScheme: FromStr,
         TAmount: FromStr,
         TAddress: FromStr,
-        TExtra: Deserialize<'a>,
+        TExtra: DeserializeOwned,
     >(
-        &'a self,
+        &self,
     ) -> Option<PaymentRequirements<TScheme, TAmount, TAddress, TExtra>> {
         let scheme = self.scheme.parse::<TScheme>().ok()?;
         let max_amount_required = self.max_amount_required.parse::<TAmount>().ok()?;
@@ -343,7 +342,7 @@ impl PaymentRequirements {
         let extra = self
             .extra
             .as_ref()
-            .and_then(|v| serde_json::from_str::<TExtra>(v.get()).ok());
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
         Some(PaymentRequirements {
             scheme,
             network: self.network.clone(),
@@ -380,7 +379,7 @@ pub struct PriceTag {
     pub network: String,
     pub amount: String,
     pub max_timeout_seconds: u64,
-    pub extra: Option<Box<serde_json::value::RawValue>>,
+    pub extra: Option<serde_json::Value>,
     /// Optional enrichment function provided by concrete price tags
     #[doc(hidden)]
     pub enricher: Option<Enricher>,

@@ -41,8 +41,7 @@ impl IntoPriceTag for V2Eip155ExactPriceTag {
             .asset
             .token
             .eip712
-            .and_then(|eip712| serde_json::to_string(&eip712).ok())
-            .and_then(|extra| serde_json::value::RawValue::from_string(extra).ok());
+            .and_then(|eip712| serde_json::to_value(&eip712).ok());
         let requirements = v2::PaymentRequirements {
             scheme: ExactScheme.to_string(),
             pay_to: self.pay_to.to_string(),
