@@ -412,4 +412,9 @@ impl PriceTag {
             enricher(self, capabilities);
         }
     }
+
+    pub fn with_timeout(mut self, seconds: u64) -> Self {
+        self.max_timeout_seconds = seconds;
+        self
+    }
 }

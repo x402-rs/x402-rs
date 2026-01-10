@@ -1,5 +1,4 @@
 pub mod client;
-pub mod server;
 pub mod types;
 
 use alloy_primitives::U256;
@@ -26,7 +25,6 @@ use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 
-pub use server::*;
 #[allow(unused)]
 pub use types::*;
 
@@ -37,8 +35,25 @@ impl V2Eip155Exact {
     pub fn price_tag<A: Into<ChecksummedAddress>>(
         pay_to: A,
         asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,
-    ) -> V2Eip155ExactPriceTag {
-        V2Eip155ExactPriceTag::new(pay_to.into(), asset)
+    ) -> v2::PriceTag {
+        let chain_id: ChainId = asset.token.chain_reference.into();
+        let extra = asset
+            .token
+            .eip712
+            .and_then(|eip712| serde_json::to_value(&eip712).ok());
+        let requirements = v2::PaymentRequirements {
+            scheme: ExactScheme.to_string(),
+            pay_to: pay_to.into().to_string(),
+            asset: asset.token.address.to_string(),
+            network: chain_id,
+            amount: asset.amount.to_string(),
+            max_timeout_seconds: 300,
+            extra,
+        };
+        v2::PriceTag {
+            requirements,
+            enricher: None,
+        }
     }
 }
 
