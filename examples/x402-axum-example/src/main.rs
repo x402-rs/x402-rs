@@ -79,6 +79,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             })),
         )
+        .route(
+            "/conditional-free-v2",
+            get(my_handler).layer(x402.with_dynamic_price(|_headers, uri, _base_url| {
+                // Check if "free" query parameter is present - if so, bypass payment
+                let is_free = uri.query().map(|q| q.contains("free")).unwrap_or(false);
+
+                async move {
+                    if is_free {
+                        // Return empty vector to bypass payment enforcement
+                        vec![]
+                    } else {
+                        vec![
+                            V2Eip155Exact::price_tag(
+                                address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"),
+                                USDC::base_sepolia().amount(100u64),
+                            ),
+                            V2SolanaExact::price_tag(
+                                pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV"),
+                                USDC::solana().amount(100),
+                            ),
+                        ]
+                    }
+                }
+            })),
+        )
         .layer(telemetry.http_tracing());
 
     tracing::info!("Using facilitator on {}", x402.facilitator_url());

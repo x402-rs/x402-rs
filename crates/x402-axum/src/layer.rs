@@ -368,13 +368,18 @@ where
         let base_url = self.base_url.clone();
         let resource_builder = self.resource.clone();
         let settle_before_execution = self.settle_before_execution;
-        let inner = self.inner.clone();
+        let mut inner = self.inner.clone();
 
         Box::pin(async move {
             // Resolve price tags from the source
             let accepts = price_source
                 .resolve(req.headers(), req.uri(), base_url.as_deref())
                 .await;
+
+            // If no price tags are configured, bypass payment enforcement
+            if accepts.is_empty() {
+                return inner.call(req).await;
+            }
 
             let resource = resource_builder.as_resource_info(base_url.as_deref(), &req);
 
