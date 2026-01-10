@@ -107,3 +107,9 @@ impl From<u128> for TokenAmount {
         Self(U256::from(value))
     }
 }
+
+impl From<u64> for TokenAmount {
+    fn from(value: u64) -> Self {
+        Self(U256::from(value))
+    }
+}
