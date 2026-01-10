@@ -14,7 +14,6 @@ use tracing::instrument;
 use tracing_core::Level;
 
 pub mod client;
-pub mod server;
 pub mod types;
 
 use crate::chain::eip155::{
@@ -29,7 +28,6 @@ use crate::scheme::{
 };
 use crate::timestamp::UnixTimestamp;
 
-pub use server::*;
 pub use types::*;
 
 /// Signature verifier for EIP-6492, EIP-1271, EOA, universally deployed on the supported EVM chains
@@ -43,8 +41,25 @@ impl V1Eip155Exact {
     pub fn price_tag<A: Into<ChecksummedAddress>>(
         pay_to: A,
         asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,
-    ) -> V1Eip155ExactPriceTag {
-        V1Eip155ExactPriceTag::new(pay_to.into(), asset)
+    ) -> v1::PriceTag {
+        let chain_id: ChainId = asset.token.chain_reference.into();
+        let network = chain_id
+            .as_network_name()
+            .unwrap_or_else(|| panic!("Can not get network name for chain id {}", chain_id));
+        let extra = asset
+            .token
+            .eip712
+            .and_then(|eip712| serde_json::to_value(&eip712).ok());
+        v1::PriceTag {
+            scheme: ExactScheme.to_string(),
+            pay_to: pay_to.into().to_string(),
+            asset: asset.token.address.to_string(),
+            network: network.to_string(),
+            amount: asset.amount.to_string(),
+            max_timeout_seconds: 300,
+            extra,
+            enricher: None,
+        }
     }
 }
 
