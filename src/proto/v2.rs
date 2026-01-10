@@ -192,6 +192,7 @@ impl PriceTag {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_timeout(mut self, seconds: u64) -> Self {
         self.requirements.max_timeout_seconds = seconds;
         self

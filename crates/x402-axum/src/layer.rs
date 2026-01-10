@@ -64,7 +64,6 @@ use tower::util::BoxCloneSyncService;
 use tower::{Layer, Service};
 use url::Url;
 use x402_rs::facilitator::Facilitator;
-use x402_rs::scheme::IntoPriceTag;
 
 use crate::facilitator_client::FacilitatorClient;
 use crate::paygate::{
@@ -193,13 +192,13 @@ where
     ///
     /// Creates a layer builder that can be further configured with additional
     /// price tags and resource information.
-    pub fn with_price_tag<A: IntoPriceTag>(
+    pub fn with_price_tag<TPriceTag>(
         &self,
-        req: A,
-    ) -> X402LayerBuilder<StaticPriceTags<A::PriceTag>, TFacilitator> {
+        price_tag: TPriceTag,
+    ) -> X402LayerBuilder<StaticPriceTags<TPriceTag>, TFacilitator> {
         X402LayerBuilder {
             facilitator: self.facilitator.clone(),
-            price_source: StaticPriceTags::new(vec![req.into_price_tag()]),
+            price_source: StaticPriceTags::new(vec![price_tag]),
             base_url: self.base_url.clone().map(Arc::new),
             resource: Arc::new(ResourceInfoBuilder::default()),
             settle_before_execution: self.settle_before_execution,
@@ -209,7 +208,7 @@ where
     /// Sets a dynamic price source for the protected route.
     ///
     /// The `callback` receives request headers, URI, and base URL, and returns
-    /// a vector of items implementing [`IntoPriceTag`].
+    /// a vector of V1 price tags.
     ///
     /// # Example
     ///
@@ -227,15 +226,13 @@ where
     ///     vec![V1Eip155Exact::price_tag(pay_to, USDC::base_sepolia().parse(amount).unwrap())]
     /// })
     /// ```
-    pub fn with_dynamic_price<T, F, Fut>(
+    pub fn with_dynamic_price<F, Fut, TPriceTag>(
         &self,
         callback: F,
-    ) -> X402LayerBuilder<DynamicPriceTags<T::PriceTag>, TFacilitator>
+    ) -> X402LayerBuilder<DynamicPriceTags<TPriceTag>, TFacilitator>
     where
-        T: IntoPriceTag,
-        T::PriceTag: PaygateProtocol,
         F: Fn(&HeaderMap, &Uri, Option<&Url>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Vec<T>> + Send + 'static,
+        Fut: Future<Output = Vec<TPriceTag>> + Send + 'static,
     {
         X402LayerBuilder {
             facilitator: self.facilitator.clone(),
@@ -269,8 +266,8 @@ where
     /// Allows specifying multiple accepted payment methods (e.g., different networks).
     ///
     /// Note: This method is only available for static price tag sources.
-    pub fn with_price_tag<R: IntoPriceTag<PriceTag = TPriceTag>>(mut self, req: R) -> Self {
-        self.price_source = self.price_source.with_price_tag(req.into_price_tag());
+    pub fn with_price_tag(mut self, price_tag: TPriceTag) -> Self {
+        self.price_source = self.price_source.with_price_tag(price_tag);
         self
     }
 }

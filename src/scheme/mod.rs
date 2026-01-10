@@ -50,30 +50,6 @@ pub trait X402SchemeId {
     }
 }
 
-#[allow(dead_code)] // Public for consumption by downstream crates.
-pub trait IntoPriceTag {
-    type PriceTag;
-    fn into_price_tag(self) -> Self::PriceTag;
-}
-
-/// Identity implementation for v1::PriceTag - allows dynamic price callbacks
-/// to return v1::PriceTag directly without conversion.
-impl IntoPriceTag for proto::v1::PriceTag {
-    type PriceTag = Self;
-    fn into_price_tag(self) -> Self::PriceTag {
-        self
-    }
-}
-
-/// Identity implementation for v2::PriceTag - allows dynamic price callbacks
-/// to return v2::PriceTag directly without conversion.
-impl IntoPriceTag for proto::v2::PriceTag {
-    type PriceTag = Self;
-    fn into_price_tag(self) -> Self::PriceTag {
-        self
-    }
-}
-
 pub trait X402SchemeFacilitatorBuilder {
     fn build(
         &self,

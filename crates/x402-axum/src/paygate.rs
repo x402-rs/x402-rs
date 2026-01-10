@@ -43,7 +43,6 @@ use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto;
 use x402_rs::proto::{SupportedResponse, v1, v2};
-use x402_rs::scheme::IntoPriceTag;
 use x402_rs::util::Base64Bytes;
 
 #[cfg(feature = "telemetry")]
@@ -679,9 +678,7 @@ pub trait PriceTagSource {
 /// ```ignore
 /// use x402_axum::paygate::StaticPriceTags;
 ///
-/// let source = StaticPriceTags::new(vec![
-///     V1Eip155Exact::price_tag(pay_to, amount).into_price_tag(),
-/// ]);
+/// let source = StaticPriceTags::new(vec![V1Eip155Exact::price_tag(pay_to, amount)]);
 /// ```
 #[derive(Clone, Debug)]
 pub struct StaticPriceTags<TPriceTag> {
@@ -794,8 +791,7 @@ impl<TPriceTag> std::fmt::Debug for DynamicPriceTags<TPriceTag> {
 impl<TPriceTag> DynamicPriceTags<TPriceTag> {
     /// Creates a new dynamic price source from an async closure.
     ///
-    /// The closure receives request context and returns items implementing
-    /// [`IntoPriceTag`](x402_rs::scheme::IntoPriceTag).
+    /// The closure receives request context and returns a vector of price tags.
     ///
     /// # Example
     ///
@@ -806,22 +802,14 @@ impl<TPriceTag> DynamicPriceTags<TPriceTag> {
     ///     vec![V1Eip155Exact::price_tag(pay_to, amount)]
     /// })
     /// ```
-    pub fn new<T, F, Fut>(callback: F) -> Self
+    pub fn new<F, Fut>(callback: F) -> Self
     where
-        T: IntoPriceTag<PriceTag = TPriceTag>,
         F: Fn(&HeaderMap, &Uri, Option<&Url>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Vec<T>> + Send + 'static,
+        Fut: Future<Output = Vec<TPriceTag>> + Send + 'static,
     {
-        // Wrap the user's closure and convert items to PriceTag internally
         Self {
             callback: Arc::new(move |headers, uri, base_url| {
-                let fut = callback(headers, uri, base_url);
-                Box::pin(async move {
-                    fut.await
-                        .into_iter()
-                        .map(|item| item.into_price_tag())
-                        .collect()
-                })
+                Box::pin(callback(headers, uri, base_url))
             }),
         }
     }
