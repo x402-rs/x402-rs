@@ -271,36 +271,45 @@ From [x402.org Quickstart for Sellers](https://x402.gitbook.io/x402/getting-star
 ```typescript
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
-import { paymentMiddleware } from "x402-hono";
+import { paymentMiddleware } from "@x402/hono";
+import { x402ResourceServer, HTTPFacilitatorClient } from "@x402/core/server";
+import { registerExactEvmScheme } from "@x402/evm/exact/server";
 
 const app = new Hono();
+const payTo = "0xYourAddress";
 
-// Configure the payment middleware
-app.use(paymentMiddleware(
-  "0xYourAddress", // Your receiving wallet address
-  {
-    "/protected-route": {
-      price: "$0.10",
-      network: "base-sepolia",
-      config: {
+const facilitatorClient = new HTTPFacilitatorClient({
+  url: "https://x402.org/facilitator"
+});
+
+const server = new x402ResourceServer(facilitatorClient);
+registerExactEvmScheme(server);
+
+app.use(
+  paymentMiddleware(
+    {
+      "/protected-route": {
+        accepts: [
+          {
+            scheme: "exact",
+            price: "$0.10",
+            network: "eip155:84532",
+            payTo,
+          },
+        ],
         description: "Access to premium content",
-      }
-    }
-  },
-  {
-    url: "http://your-validator.url/", // 👈 Your self-hosted Facilitator
-  }
-));
+        mimeType: "application/json",
+      },
+    },
+    server,
+  ),
+);
 
-// Implement your protected route
 app.get("/protected-route", (c) => {
   return c.json({ message: "This content is behind a paywall" });
 });
 
-serve({
-  fetch: app.fetch,
-  port: 3000
-});
+serve({ fetch: app.fetch, port: 3000 });
 ```
 
 </details>
@@ -309,13 +318,29 @@ serve({
 <summary>If you use `x402-axum`</summary>
 
 ```rust
-let x402 = X402Middleware::try_from("http://your-validator.url/").unwrap();  // 👈 Your self-hosted Facilitator
-let usdc = USDCDeployment::by_network(Network::BaseSepolia);
+use alloy_primitives::address;
+use axum::{Router, routing::get};
+use axum::response::IntoResponse;
+use http::StatusCode;
+use x402_axum::X402Middleware;
+use x402_rs::networks::USDC;
+use x402_rs::scheme::v2_eip155_exact::V2Eip155Exact;
 
-let app = Router::new().route("/paid-content", get(handler).layer( 
-        x402.with_price_tag(usdc.amount("0.025").pay_to("0xYourAddress").unwrap())
+let x402 = X402Middleware::new("https://facilitator.x402.rs");  // 👈 Your self-hosted Facilitator
+
+let app = Router::new().route(
+    "/paid-content",
+    get(handler).layer(
+        x402.with_price_tag(V2Eip155Exact::price_tag(
+            address!("0xYourAddress"),
+            USDC::base_sepolia().amount(10u64),
+        ))
     ),
 );
+
+async fn handler() -> impl IntoResponse {
+    (StatusCode::OK, "This is VIP content!")
+}
 ```
 
 </details>
@@ -363,15 +388,15 @@ The service reads configuration from a JSON file (`config.json` by default) or v
 }
 ```
 
-| Option | Type | Required | Default | Description |
-|:-------|:-----|:---------|:--------|:------------|
-| `signers` | array | ✅ | - | Array of private keys (hex format, 0x-prefixed) or env var references |
-| `rpc` | array | ✅ | - | Array of RPC endpoint configurations |
-| `rpc[].http` | string | ✅ | - | HTTP URL for the RPC endpoint |
-| `rpc[].rate_limit` | number | ❌ | - | Rate limit for requests per second |
-| `eip1559` | boolean | ❌ | `true` | Use EIP-1559 transaction type (type 2) instead of legacy transactions |
-| `flashblocks` | boolean | ❌ | `false` | Estimate gas against "latest" block to accommodate flashblocks-enabled RPC semantics |
-| `receipt_timeout_secs` | number | ❌ | `30` | Timeout for waiting for transaction receipt |
+| Option                 | Type    | Required | Default | Description                                                                          |
+|:-----------------------|:--------|:---------|:--------|:-------------------------------------------------------------------------------------|
+| `signers`              | array   | ✅        | -       | Array of private keys (hex format, 0x-prefixed) or env var references                |
+| `rpc`                  | array   | ✅        | -       | Array of RPC endpoint configurations                                                 |
+| `rpc[].http`           | string  | ✅        | -       | HTTP URL for the RPC endpoint                                                        |
+| `rpc[].rate_limit`     | number  | ❌        | -       | Rate limit for requests per second                                                   |
+| `eip1559`              | boolean | ❌        | `true`  | Use EIP-1559 transaction type (type 2) instead of legacy transactions                |
+| `flashblocks`          | boolean | ❌        | `false` | Estimate gas against "latest" block to accommodate flashblocks-enabled RPC semantics |
+| `receipt_timeout_secs` | number  | ❌        | `30`    | Timeout for waiting for transaction receipt                                          |
 
 #### Solana Chain Configuration (`solana:*`)
 
@@ -387,13 +412,13 @@ The service reads configuration from a JSON file (`config.json` by default) or v
 }
 ```
 
-| Option | Type | Required | Default | Description |
-|:-------|:-----|:---------|:--------|:------------|
-| `signer` | string | ✅ | - | Private key (base58 format, 64 bytes) or env var reference |
-| `rpc` | string | ✅ | - | HTTP URL for the RPC endpoint |
-| `pubsub` | string | ❌ | - | WebSocket URL for pubsub notifications |
-| `max_compute_unit_limit` | number | ❌ | `400000` | Maximum compute unit limit for transactions |
-| `max_compute_unit_price` | number | ❌ | `1000000` | Maximum compute unit price for transactions |
+| Option                   | Type   | Required | Default   | Description                                                |
+|:-------------------------|:-------|:---------|:----------|:-----------------------------------------------------------|
+| `signer`                 | string | ✅        | -         | Private key (base58 format, 64 bytes) or env var reference |
+| `rpc`                    | string | ✅        | -         | HTTP URL for the RPC endpoint                              |
+| `pubsub`                 | string | ❌        | -         | WebSocket URL for pubsub notifications                     |
+| `max_compute_unit_limit` | number | ❌        | `400000`  | Maximum compute unit limit for transactions                |
+| `max_compute_unit_price` | number | ❌        | `1000000` | Maximum compute unit price for transactions                |
 
 #### Scheme Configuration
 
@@ -410,12 +435,12 @@ The service reads configuration from a JSON file (`config.json` by default) or v
 }
 ```
 
-| Option | Type | Required | Default | Description |
-|:-------|:-----|:---------|:--------|:------------|
-| `enabled` | boolean | ❌ | `true` | Whether this scheme is enabled |
-| `slug` | string | ✅ | - | Scheme identifier: `v{version}:{namespace}:{name}` |
-| `chains` | string | ✅ | - | Chain pattern: `eip155:*`, `solana:*`, or specific chain ID |
-| `config` | object | ❌ | - | Scheme-specific configuration |
+| Option    | Type    | Required | Default | Description                                                 |
+|:----------|:--------|:---------|:--------|:------------------------------------------------------------|
+| `enabled` | boolean | ❌        | `true`  | Whether this scheme is enabled                              |
+| `slug`    | string  | ✅        | -       | Scheme identifier: `v{version}:{namespace}:{name}`          |
+| `chains`  | string  | ✅        | -       | Chain pattern: `eip155:*`, `solana:*`, or specific chain ID |
+| `config`  | object  | ❌        | -       | Scheme-specific configuration                               |
 
 **Important:** Schemes must be explicitly listed in the `schemes` array to be enabled. If a scheme is not in the configuration, it will not be available for payment verification or settlement.
 
@@ -431,7 +456,6 @@ Environment variables can be used for:
 - **Private keys**: Reference in config with `$VAR` or `${VAR}` syntax
 - **Server settings**: `PORT` and `HOST` as fallbacks if not in config file
 - **Logging**: `RUST_LOG` for log level (e.g., `info`, `debug`, `trace`)
-
 
 ### Observability
 
@@ -457,18 +481,18 @@ The service automatically detects and initializes exporters if `OTEL_EXPORTER_OT
 
 The Facilitator supports any network you configure in `config.json`. Common chain identifiers:
 
-| Network                   | CAIP-2 Chain ID                              | Notes                            |
-|:--------------------------|:---------------------------------------------|:---------------------------------|
-| Base Sepolia Testnet      | `eip155:84532`                               | Testnet, Recommended for testing |
-| Base Mainnet              | `eip155:8453`                                | Mainnet                          |
-| Ethereum Mainnet          | `eip155:1`                                   | Mainnet                          |
-| Avalanche Fuji Testnet    | `eip155:43113`                               | Testnet                          |
-| Avalanche C-Chain Mainnet | `eip155:43114`                               | Mainnet                          |
-| Polygon Amoy Testnet      | `eip155:80002`                               | Testnet                          |
-| Polygon Mainnet           | `eip155:137`                                 | Mainnet                          |
-| Sei Testnet               | `eip155:713715`                              | Testnet                          |
-| Sei Mainnet               | `eip155:1329`                                | Mainnet                          |
-| Solana Mainnet            | `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`    | Mainnet                          |
+| Network                   | CAIP-2 Chain ID                                       | Notes                            |
+|:--------------------------|:------------------------------------------------------|:---------------------------------|
+| Base Sepolia Testnet      | `eip155:84532`                                        | Testnet, Recommended for testing |
+| Base Mainnet              | `eip155:8453`                                         | Mainnet                          |
+| Ethereum Mainnet          | `eip155:1`                                            | Mainnet                          |
+| Avalanche Fuji Testnet    | `eip155:43113`                                        | Testnet                          |
+| Avalanche C-Chain Mainnet | `eip155:43114`                                        | Mainnet                          |
+| Polygon Amoy Testnet      | `eip155:80002`                                        | Testnet                          |
+| Polygon Mainnet           | `eip155:137`                                          | Mainnet                          |
+| Sei Testnet               | `eip155:713715`                                       | Testnet                          |
+| Sei Mainnet               | `eip155:1329`                                         | Mainnet                          |
+| Solana Mainnet            | `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`             | Mainnet                          |
 | Solana Devnet             | `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG` | Testnet, Recommended for testing |
 
 Networks are enabled by adding them to the `chains` section in your `config.json`.
