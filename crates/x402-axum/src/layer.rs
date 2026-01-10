@@ -208,13 +208,14 @@ where
 
     /// Sets a dynamic price source for the protected route.
     ///
-    /// Users provide a simple async closure - no Box::pin needed!
-    /// The closure receives request headers, URI, and base URL, and returns
-    /// a vector of price tags.
+    /// The `callback` receives request headers, URI, and base URL, and returns
+    /// a vector of items implementing [`IntoPriceTag`].
     ///
     /// # Example
     ///
     /// ```rust,ignore
+    /// use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
+    ///
     /// x402.with_dynamic_price(|headers, uri, base_url| async move {
     ///     let is_premium = headers
     ///         .get("X-User-Tier")
@@ -222,18 +223,19 @@ where
     ///         .map(|v| v == "premium")
     ///         .unwrap_or(false);
     ///
-    ///     let amount = if is_premium { 5000 } else { 10000 };
-    ///     vec![create_price_tag(amount)]
+    ///     let amount = if is_premium { "0.005" } else { "0.01" };
+    ///     vec![V1Eip155Exact::price_tag(pay_to, USDC::base_sepolia().parse(amount).unwrap())]
     /// })
     /// ```
-    pub fn with_dynamic_price<TPriceTag, F, Fut>(
+    pub fn with_dynamic_price<T, F, Fut>(
         &self,
         callback: F,
-    ) -> X402LayerBuilder<DynamicPriceTags<TPriceTag>, TFacilitator>
+    ) -> X402LayerBuilder<DynamicPriceTags<T::PriceTag>, TFacilitator>
     where
-        TPriceTag: PaygateProtocol,
+        T: IntoPriceTag + Send + 'static,
+        T::PriceTag: PaygateProtocol,
         F: Fn(&HeaderMap, &Uri, Option<&Url>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Vec<TPriceTag>> + Send + 'static,
+        Fut: Future<Output = Vec<T>> + Send + 'static,
     {
         X402LayerBuilder {
             facilitator: self.facilitator.clone(),

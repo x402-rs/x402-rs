@@ -794,26 +794,34 @@ where
 {
     /// Creates a new dynamic price source from an async closure.
     ///
-    /// The closure receives request context and returns price tags.
-    /// Users write a simple async closure - no Box::pin needed!
+    /// The closure receives request context and returns items implementing
+    /// [`IntoPriceTag`](x402_rs::scheme::IntoPriceTag).
     ///
     /// # Example
     ///
     /// ```ignore
+    /// use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
+    ///
     /// DynamicPriceTags::new(|headers, uri, base_url| async move {
-    ///     // Compute price based on request
-    ///     vec![my_price_tag]
+    ///     vec![V1Eip155Exact::price_tag(pay_to, amount)]
     /// })
     /// ```
-    pub fn new<F, Fut>(callback: F) -> Self
+    pub fn new<T, F, Fut>(callback: F) -> Self
     where
+        T: x402_rs::scheme::IntoPriceTag<PriceTag = TPriceTag> + Send,
         F: Fn(&HeaderMap, &Uri, Option<&Url>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Vec<TPriceTag>> + Send + 'static,
+        Fut: Future<Output = Vec<T>> + Send + 'static,
     {
-        // Wrap the user's simple async closure in Box::pin internally
+        // Wrap the user's closure and convert items to PriceTag internally
         Self {
             callback: Arc::new(move |headers, uri, base_url| {
-                Box::pin(callback(headers, uri, base_url))
+                let fut = callback(headers, uri, base_url);
+                Box::pin(async move {
+                    fut.await
+                        .into_iter()
+                        .map(|item| item.into_price_tag())
+                        .collect()
+                })
             }),
         }
     }

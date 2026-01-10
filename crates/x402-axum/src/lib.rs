@@ -47,6 +47,7 @@
 //!
 //! ```rust,ignore
 //! use x402_axum::X402Middleware;
+//! use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
 //!
 //! let x402 = X402Middleware::new("https://facilitator.x402.rs");
 //!
@@ -62,7 +63,7 @@
 //!                 .unwrap_or(false);
 //!
 //!             let amount = if is_premium { "0.005" } else { "0.01" };
-//!             vec![V1Eip155Exact::price_tag(pay_to, USDC::base_sepolia().parse(amount).unwrap()).into_price_tag()]
+//!             vec![V1Eip155Exact::price_tag(pay_to, USDC::base_sepolia().parse(amount).unwrap())]
 //!         })
 //!     ),
 //! );
