@@ -1,5 +1,4 @@
 pub mod client;
-pub mod server;
 pub mod types;
 
 use std::collections::HashMap;
@@ -7,9 +6,10 @@ use std::error::Error;
 use std::sync::Arc;
 
 use crate::chain::solana::{Address, SolanaChainProvider, SolanaTokenDeployment};
-use crate::chain::{ChainProvider, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
-use crate::proto::PaymentVerificationError;
+use crate::proto::v2;
+use crate::scheme::v1_solana_exact::types::ExactScheme;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::v1_solana_exact::{
     TransferRequirement, VerifyTransferResult, settle_transaction, verify_transaction,
@@ -18,8 +18,6 @@ use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 
-pub use server::*;
-
 pub struct V2SolanaExact;
 
 impl V2SolanaExact {
@@ -27,8 +25,21 @@ impl V2SolanaExact {
     pub fn price_tag<A: Into<Address>>(
         pay_to: A,
         asset: DeployedTokenAmount<u64, SolanaTokenDeployment>,
-    ) -> V2SolanaExactPriceTag {
-        V2SolanaExactPriceTag::new(pay_to.into(), asset)
+    ) -> v2::PriceTag {
+        let chain_id: ChainId = asset.token.chain_reference.into();
+        let requirements = v2::PaymentRequirements {
+            scheme: ExactScheme.to_string(),
+            pay_to: pay_to.into().to_string(),
+            asset: asset.token.address.to_string(),
+            network: chain_id,
+            amount: asset.amount.to_string(),
+            max_timeout_seconds: 300,
+            extra: None,
+        };
+        v2::PriceTag {
+            requirements,
+            enricher: Some(Arc::new(solana_fee_payer_enricher_v2)),
+        }
     }
 }
 
@@ -117,19 +128,19 @@ impl X402SchemeFacilitator for V2SolanaExactFacilitator {
 pub async fn verify_transfer(
     provider: &SolanaChainProvider,
     request: &types::VerifyRequest,
-) -> Result<VerifyTransferResult, PaymentVerificationError> {
+) -> Result<VerifyTransferResult, proto::PaymentVerificationError> {
     let payload = &request.payment_payload;
     let requirements = &request.payment_requirements;
 
     let accepted = &payload.accepted;
     if accepted != requirements {
-        return Err(PaymentVerificationError::AcceptedRequirementsMismatch);
+        return Err(proto::PaymentVerificationError::AcceptedRequirementsMismatch);
     }
 
     let chain_id = provider.chain_id();
     let payload_chain_id = &accepted.network;
     if payload_chain_id != &chain_id {
-        return Err(PaymentVerificationError::UnsupportedChain);
+        return Err(proto::PaymentVerificationError::UnsupportedChain);
     }
     let transaction_b64_string = payload.payload.transaction.clone();
     let transfer_requirement = TransferRequirement {
@@ -138,4 +149,31 @@ pub async fn verify_transfer(
         amount: requirements.amount.inner(),
     };
     verify_transaction(provider, transaction_b64_string, &transfer_requirement).await
+}
+
+/// Enricher function for V2 Solana price tags - adds fee_payer to extra field
+pub fn solana_fee_payer_enricher_v2(
+    price_tag: &mut v2::PriceTag,
+    capabilities: &proto::SupportedResponse,
+) {
+    if price_tag.requirements.extra.is_some() {
+        return;
+    }
+
+    // Find the matching kind and deserialize the whole extra into SupportedPaymentKindExtra
+    let extra = capabilities
+        .kinds
+        .iter()
+        .find(|kind| {
+            v2::X402Version2 == kind.x402_version
+                && kind.scheme == ExactScheme.to_string()
+                && kind.network == price_tag.requirements.network.to_string()
+        })
+        .and_then(|kind| kind.extra.as_ref())
+        .and_then(|extra| serde_json::from_value::<SupportedPaymentKindExtra>(extra.clone()).ok());
+
+    // Serialize the whole extra back to Value
+    if let Some(extra) = extra {
+        price_tag.requirements.extra = serde_json::to_value(&extra).ok();
+    }
 }
