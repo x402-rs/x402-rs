@@ -92,9 +92,13 @@ See [`x402-reqwest` crate docs](./crates/x402-reqwest/README.md).
 | Solana Support                      | Support Solana chain.                                                                                    | ✅ Complete |
 | Protocol v2 Support                 | Support x402 protocol version 2 with improved payload structure.                                         | ✅ Complete |
 | Multiple chains and multiple tokens | Support various tokens and EVM compatible chains.                                                        | ✅ Complete |
-| Axum Middleware v2 Support          | Full x402 protocol v2 support in x402-axum with multi-chain, multi-scheme architecture.                   | ✅ Complete |
-| Reqwest Client v2 Support           | Full x402 protocol v2 support in x402-reqwest with multi-chain, multi-scheme architecture.                | ✅ Complete |
+| Axum Middleware v2 Support          | Full x402 protocol v2 support in x402-axum with multi-chain, multi-scheme architecture.                  | ✅ Complete |
+| Reqwest Client v2 Support           | Full x402 protocol v2 support in x402-reqwest with multi-chain, multi-scheme architecture.               | ✅ Complete |
 | Buiild your own facilitator hooks   | Pre/post hooks for analytics, access control, and auditability.                                          | 🔜 Planned |
+| Bazaar Extension                    | Marketplace integration for discovering and purchasing x402-protected resources.                         | 🔜 Planned |
+| Gasless Approval Flow               | Support for Permit2 and ERC20 approvals to enable gasless payment authorization.                         | 🔜 Planned |
+| Upto Scheme                         | Payment scheme supporting "up to" amount payments with flexible pricing.                                 | 🔜 Planned |
+| Deferred Scheme                     | Payment scheme supporting deferred settlement and payment scheduling.                                    | 🔜 Planned |
 
 The initial focus is on establishing a stable, production-quality Rust SDK and middleware ecosystem for x402 integration.
 
