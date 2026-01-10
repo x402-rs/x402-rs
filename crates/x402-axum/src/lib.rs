@@ -41,6 +41,33 @@
 //! Supports both V1 and V2 x402 protocols through the [`PaygateProtocol`] trait.
 //! The protocol version is determined by the price tag type used.
 //!
+//! ## Dynamic Pricing
+//!
+//! For dynamic pricing based on request context, use [`X402Middleware::with_dynamic_price`]:
+//!
+//! ```rust,ignore
+//! use x402_axum::X402Middleware;
+//!
+//! let x402 = X402Middleware::new("https://facilitator.x402.rs");
+//!
+//! let app: Router = Router::new().route(
+//!     "/protected",
+//!     get(my_handler).layer(
+//!         x402.with_dynamic_price(|headers, uri, base_url| async move {
+//!             // Compute price based on request context
+//!             let is_premium = headers
+//!                 .get("X-User-Tier")
+//!                 .and_then(|v| v.to_str().ok())
+//!                 .map(|v| v == "premium")
+//!                 .unwrap_or(false);
+//!
+//!             let amount = if is_premium { "0.005" } else { "0.01" };
+//!             vec![V1Eip155Exact::price_tag(pay_to, USDC::base_sepolia().parse(amount).unwrap()).into_price_tag()]
+//!         })
+//!     ),
+//! );
+//! ```
+//!
 //! ## Settlement Timing
 //!
 //! By default, settlement occurs **after** the request is processed. You can change this behavior:
@@ -52,7 +79,8 @@
 //!
 //! ## Configuration Notes
 //!
-//! - **[`X402Middleware::with_price_tag`]** sets the assets and amounts accepted for payment.
+//! - **[`X402Middleware::with_price_tag`]** sets the assets and amounts accepted for payment (static pricing).
+//! - **[`X402Middleware::with_dynamic_price`]** sets a callback for dynamic pricing based on request context.
 //! - **[`X402Middleware::with_base_url`]** sets the base URL for computing full resource URLs.
 //!   If not set, defaults to `http://localhost/` (avoid in production).
 //! - **[`X402Middleware::with_supported_cache_ttl`]** configures the TTL for caching facilitator capabilities.
@@ -64,4 +92,5 @@ pub mod facilitator_client;
 pub mod layer;
 pub mod paygate;
 
-pub use layer::X402Middleware;
+pub use layer::{X402LayerBuilder, X402Middleware};
+pub use paygate::{DynamicPriceTags, PaygateProtocol, PriceTagSource, StaticPriceTags};

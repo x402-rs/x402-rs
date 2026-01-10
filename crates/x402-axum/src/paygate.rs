@@ -32,9 +32,11 @@
 use axum_core::body::Body;
 use axum_core::extract::Request;
 use axum_core::response::{IntoResponse, Response};
-use http::{HeaderMap, HeaderValue, StatusCode};
+use http::{HeaderMap, HeaderValue, StatusCode, Uri};
 use serde_json::json;
 use std::convert::Infallible;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use tower::Service;
 use url::Url;
@@ -62,8 +64,6 @@ pub struct ResourceInfoBuilder {
     /// Optional explicit URL of the protected resource
     pub url: Option<String>,
 }
-
-// FIXME Partial, FUll, dynamic price tag offers
 
 impl Default for ResourceInfoBuilder {
     fn default() -> Self {
@@ -625,4 +625,212 @@ fn settlement_to_header(settlement: proto::SettleResponse) -> Result<HeaderValue
     let payment_header = Base64Bytes::encode(json);
     HeaderValue::from_bytes(payment_header.as_ref())
         .map_err(|err| PaygateError::Settlement(err.to_string()))
+}
+
+// ============================================================================
+// PriceTagSource Trait and Implementations
+// ============================================================================
+
+/// Trait for types that can provide price tags for a request.
+///
+/// This trait abstracts over static and dynamic pricing strategies.
+/// Implementations must be infallible - they always return price tags.
+///
+/// # Example
+///
+/// ```ignore
+/// use x402_axum::paygate::{PriceTagSource, StaticPriceTags, DynamicPriceTags};
+///
+/// // Static pricing - same price for every request
+/// let static_source = StaticPriceTags::new(vec![my_price_tag]);
+///
+/// // Dynamic pricing - compute price per-request
+/// let dynamic_source = DynamicPriceTags::new(|headers, uri, base_url| async move {
+///     vec![compute_price_tag(headers)]
+/// });
+/// ```
+pub trait PriceTagSource: Clone + Send + Sync + 'static {
+    /// The concrete price tag type produced by this source.
+    type PriceTag: PaygateProtocol;
+
+    /// Resolves price tags for the given request context.
+    ///
+    /// This method is infallible - it must always return a non-empty vector of price tags.
+    fn resolve(
+        &self,
+        headers: &HeaderMap,
+        uri: &Uri,
+        base_url: Option<&Url>,
+    ) -> impl Future<Output = Vec<Self::PriceTag>> + Send;
+}
+
+// ============================================================================
+// StaticPriceTags Implementation
+// ============================================================================
+
+/// Static price tag source - returns the same price tags for every request.
+///
+/// This is the default implementation used when calling `with_price_tag()`.
+/// It simply stores a vector of price tags and returns clones on each request.
+///
+/// # Example
+///
+/// ```ignore
+/// use x402_axum::paygate::StaticPriceTags;
+///
+/// let source = StaticPriceTags::new(vec![
+///     V1Eip155Exact::price_tag(pay_to, amount).into_price_tag(),
+/// ]);
+/// ```
+#[derive(Clone, Debug)]
+pub struct StaticPriceTags<TPriceTag> {
+    tags: Arc<Vec<TPriceTag>>,
+}
+
+impl<TPriceTag> StaticPriceTags<TPriceTag> {
+    /// Creates a new static price tag source from a vector of price tags.
+    pub fn new(tags: Vec<TPriceTag>) -> Self {
+        Self {
+            tags: Arc::new(tags),
+        }
+    }
+
+    /// Adds a price tag to the source.
+    pub fn with_tag(mut self, tag: TPriceTag) -> Self
+    where
+        TPriceTag: Clone,
+    {
+        let mut tags = (*self.tags).clone();
+        tags.push(tag);
+        self.tags = Arc::new(tags);
+        self
+    }
+
+    /// Returns a reference to the stored price tags.
+    pub fn tags(&self) -> &[TPriceTag] {
+        &self.tags
+    }
+}
+
+impl<TPriceTag> PriceTagSource for StaticPriceTags<TPriceTag>
+where
+    TPriceTag: PaygateProtocol,
+{
+    type PriceTag = TPriceTag;
+
+    async fn resolve(
+        &self,
+        _headers: &HeaderMap,
+        _uri: &Uri,
+        _base_url: Option<&Url>,
+    ) -> Vec<Self::PriceTag> {
+        // Simply clone the static tags
+        (*self.tags).clone()
+    }
+}
+
+// ============================================================================
+// DynamicPriceTags Implementation
+// ============================================================================
+
+/// Internal type alias for the boxed dynamic pricing callback.
+/// Users don't interact with this directly.
+///
+/// Uses higher-ranked trait bounds (HRTB) to express that the callback
+/// works with any lifetime of the input references.
+type BoxedDynamicPriceCallback<TPriceTag> = dyn for<'a> Fn(
+        &'a HeaderMap,
+        &'a Uri,
+        Option<&'a Url>,
+    ) -> Pin<Box<dyn Future<Output = Vec<TPriceTag>> + Send + 'a>>
+    + Send
+    + Sync;
+
+/// Dynamic price tag source - computes price tags per-request via callback.
+///
+/// This implementation allows computing different prices based on request
+/// headers, URI, or other runtime factors.
+///
+/// # Example
+///
+/// ```ignore
+/// use x402_axum::paygate::DynamicPriceTags;
+///
+/// // Users write a simple async closure - no Box::pin needed!
+/// let source = DynamicPriceTags::new(|headers, uri, base_url| async move {
+///     let is_premium = headers
+///         .get("X-User-Tier")
+///         .and_then(|v| v.to_str().ok())
+///         .map(|v| v == "premium")
+///         .unwrap_or(false);
+///
+///     let amount = if is_premium { 5000 } else { 10000 };
+///     vec![create_price_tag(amount)]
+/// });
+/// ```
+pub struct DynamicPriceTags<TPriceTag> {
+    callback: Arc<BoxedDynamicPriceCallback<TPriceTag>>,
+}
+
+impl<TPriceTag> Clone for DynamicPriceTags<TPriceTag> {
+    fn clone(&self) -> Self {
+        Self {
+            callback: self.callback.clone(),
+        }
+    }
+}
+
+impl<TPriceTag> std::fmt::Debug for DynamicPriceTags<TPriceTag> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DynamicPriceTags")
+            .field("callback", &"<callback>")
+            .finish()
+    }
+}
+
+impl<TPriceTag> DynamicPriceTags<TPriceTag>
+where
+    TPriceTag: Send + 'static,
+{
+    /// Creates a new dynamic price source from an async closure.
+    ///
+    /// The closure receives request context and returns price tags.
+    /// Users write a simple async closure - no Box::pin needed!
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// DynamicPriceTags::new(|headers, uri, base_url| async move {
+    ///     // Compute price based on request
+    ///     vec![my_price_tag]
+    /// })
+    /// ```
+    pub fn new<F, Fut>(callback: F) -> Self
+    where
+        F: Fn(&HeaderMap, &Uri, Option<&Url>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Vec<TPriceTag>> + Send + 'static,
+    {
+        // Wrap the user's simple async closure in Box::pin internally
+        Self {
+            callback: Arc::new(move |headers, uri, base_url| {
+                Box::pin(callback(headers, uri, base_url))
+            }),
+        }
+    }
+}
+
+impl<TPriceTag> PriceTagSource for DynamicPriceTags<TPriceTag>
+where
+    TPriceTag: PaygateProtocol,
+{
+    type PriceTag = TPriceTag;
+
+    async fn resolve(
+        &self,
+        headers: &HeaderMap,
+        uri: &Uri,
+        base_url: Option<&Url>,
+    ) -> Vec<Self::PriceTag> {
+        (self.callback)(headers, uri, base_url).await
+    }
 }

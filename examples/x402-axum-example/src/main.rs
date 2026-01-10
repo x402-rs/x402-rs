@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = Router::new()
         .route(
-            "/protected-route",
+            "/static-price-v1",
             get(my_handler).layer(
                 x402.with_price_tag(V1Eip155Exact::price_tag(
                     address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"),
@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ),
         )
         .route(
-            "/protected-route-2",
+            "/static-price-v2",
             get(my_handler).layer(
                 x402.with_price_tag(V2Eip155Exact::price_tag(
                     address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"),

@@ -53,6 +53,7 @@
 
 use axum_core::extract::Request;
 use axum_core::response::Response;
+use http::{HeaderMap, Uri};
 use std::convert::Infallible;
 use std::future::Future;
 use std::pin::Pin;
@@ -66,7 +67,10 @@ use x402_rs::facilitator::Facilitator;
 use x402_rs::scheme::IntoPriceTag;
 
 use crate::facilitator_client::FacilitatorClient;
-use crate::paygate::{Paygate, PaygateProtocol, ResourceInfoBuilder};
+use crate::paygate::{
+    DynamicPriceTags, Paygate, PaygateProtocol, PriceTagSource, ResourceInfoBuilder,
+    StaticPriceTags,
+};
 
 /// The main X402 middleware instance for enforcing x402 payments on routes.
 ///
@@ -192,10 +196,48 @@ where
     pub fn with_price_tag<A: IntoPriceTag>(
         &self,
         req: A,
-    ) -> X402LayerBuilder<A::PriceTag, TFacilitator> {
+    ) -> X402LayerBuilder<StaticPriceTags<A::PriceTag>, TFacilitator> {
         X402LayerBuilder {
             facilitator: self.facilitator.clone(),
-            accepts: Arc::new(vec![req.into_price_tag()]),
+            price_source: StaticPriceTags::new(vec![req.into_price_tag()]),
+            base_url: self.base_url.clone().map(Arc::new),
+            resource: Arc::new(ResourceInfoBuilder::default()),
+            settle_before_execution: self.settle_before_execution,
+        }
+    }
+
+    /// Sets a dynamic price source for the protected route.
+    ///
+    /// Users provide a simple async closure - no Box::pin needed!
+    /// The closure receives request headers, URI, and base URL, and returns
+    /// a vector of price tags.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// x402.with_dynamic_price(|headers, uri, base_url| async move {
+    ///     let is_premium = headers
+    ///         .get("X-User-Tier")
+    ///         .and_then(|v| v.to_str().ok())
+    ///         .map(|v| v == "premium")
+    ///         .unwrap_or(false);
+    ///
+    ///     let amount = if is_premium { 5000 } else { 10000 };
+    ///     vec![create_price_tag(amount)]
+    /// })
+    /// ```
+    pub fn with_dynamic_price<TPriceTag, F, Fut>(
+        &self,
+        callback: F,
+    ) -> X402LayerBuilder<DynamicPriceTags<TPriceTag>, TFacilitator>
+    where
+        TPriceTag: PaygateProtocol,
+        F: Fn(&HeaderMap, &Uri, Option<&Url>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Vec<TPriceTag>> + Send + 'static,
+    {
+        X402LayerBuilder {
+            facilitator: self.facilitator.clone(),
+            price_source: DynamicPriceTags::new(callback),
             base_url: self.base_url.clone().map(Arc::new),
             resource: Arc::new(ResourceInfoBuilder::default()),
             settle_before_execution: self.settle_before_execution,
@@ -204,31 +246,34 @@ where
 }
 
 /// Builder for configuring the X402 middleware layer.
+///
+/// Generic over `TSource` which implements [`PriceTagSource`] to support
+/// both static and dynamic pricing strategies.
 #[derive(Clone)]
-pub struct X402LayerBuilder<TPriceTag, TFacilitator> {
+pub struct X402LayerBuilder<TSource, TFacilitator> {
     facilitator: TFacilitator,
     settle_before_execution: bool,
     base_url: Option<Arc<Url>>,
-    accepts: Arc<Vec<TPriceTag>>,
+    price_source: TSource,
     resource: Arc<ResourceInfoBuilder>,
 }
 
-impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator>
+impl<TPriceTag, TFacilitator> X402LayerBuilder<StaticPriceTags<TPriceTag>, TFacilitator>
 where
     TPriceTag: Clone,
 {
     /// Adds another payment option.
     ///
     /// Allows specifying multiple accepted payment methods (e.g., different networks).
+    ///
+    /// Note: This method is only available for static price tag sources.
     pub fn with_price_tag<R: IntoPriceTag<PriceTag = TPriceTag>>(mut self, req: R) -> Self {
-        let mut new_accepts = (*self.accepts).clone();
-        new_accepts.push(req.into_price_tag());
-        self.accepts = Arc::new(new_accepts);
+        self.price_source = self.price_source.with_tag(req.into_price_tag());
         self
     }
 }
 
-impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
+impl<TSource, TFacilitator> X402LayerBuilder<TSource, TFacilitator> {
     /// Sets a description of what the payment grants access to.
     ///
     /// This is included in 402 responses to inform clients what they're paying for.
@@ -261,21 +306,21 @@ impl<TPriceTag, TFacilitator> X402LayerBuilder<TPriceTag, TFacilitator> {
     }
 }
 
-impl<S, TPriceTag, TFacilitator> Layer<S> for X402LayerBuilder<TPriceTag, TFacilitator>
+impl<S, TSource, TFacilitator> Layer<S> for X402LayerBuilder<TSource, TFacilitator>
 where
     S: Service<Request, Response = Response, Error = Infallible> + Clone + Send + Sync + 'static,
     S::Future: Send + 'static,
     TFacilitator: Facilitator + Clone,
-    TPriceTag: Clone,
+    TSource: PriceTagSource,
 {
-    type Service = X402MiddlewareService<TPriceTag, TFacilitator>;
+    type Service = X402MiddlewareService<TSource, TFacilitator>;
 
     fn layer(&self, inner: S) -> Self::Service {
         X402MiddlewareService {
             facilitator: self.facilitator.clone(),
             settle_before_execution: self.settle_before_execution,
             base_url: self.base_url.clone(),
-            accepts: self.accepts.clone(),
+            price_source: self.price_source.clone(),
             resource: self.resource.clone(),
             inner: BoxCloneSyncService::new(inner),
         }
@@ -283,25 +328,29 @@ where
 }
 
 /// Axum service that enforces x402 payments on incoming requests.
-#[derive(Clone, Debug)]
-pub struct X402MiddlewareService<TPriceTag, TFacilitator> {
+///
+/// Generic over `TSource` which implements [`PriceTagSource`] to support
+/// both static and dynamic pricing strategies.
+#[derive(Clone)]
+pub struct X402MiddlewareService<TSource, TFacilitator> {
     /// Payment facilitator (local or remote)
     facilitator: TFacilitator,
     /// Base URL for constructing resource URLs
     base_url: Option<Arc<Url>>,
     /// Whether to settle payment before executing the request (true) or after (false)
     settle_before_execution: bool,
-    /// Accepted payment requirements
-    accepts: Arc<Vec<TPriceTag>>,
+    /// Price tag source - can be static or dynamic
+    price_source: TSource,
     /// Resource information
     resource: Arc<ResourceInfoBuilder>,
     /// The inner Axum service being wrapped
     inner: BoxCloneSyncService<Request, Response, Infallible>,
 }
 
-impl<TPriceTag, TFacilitator> Service<Request> for X402MiddlewareService<TPriceTag, TFacilitator>
+impl<TSource, TFacilitator> Service<Request> for X402MiddlewareService<TSource, TFacilitator>
 where
-    TPriceTag: PaygateProtocol,
+    TSource: PriceTagSource,
+    TSource::PriceTag: PaygateProtocol,
     TFacilitator: Facilitator + Clone + Send + Sync + 'static,
 {
     type Response = Response;
@@ -315,14 +364,28 @@ where
 
     /// Intercepts the request, injects payment enforcement logic, and forwards to the wrapped service.
     fn call(&mut self, req: Request) -> Self::Future {
-        let gate = Paygate {
-            facilitator: self.facilitator.clone(),
-            settle_before_execution: self.settle_before_execution,
-            accepts: self.accepts.clone(),
-            resource: self
-                .resource
-                .as_resource_info(self.base_url.as_deref(), &req),
-        };
-        Box::pin(gate.handle_request(self.inner.clone(), req))
+        let price_source = self.price_source.clone();
+        let facilitator = self.facilitator.clone();
+        let base_url = self.base_url.clone();
+        let resource_builder = self.resource.clone();
+        let settle_before_execution = self.settle_before_execution;
+        let inner = self.inner.clone();
+
+        Box::pin(async move {
+            // Resolve price tags from the source
+            let accepts = price_source
+                .resolve(req.headers(), req.uri(), base_url.as_deref())
+                .await;
+
+            let resource = resource_builder.as_resource_info(base_url.as_deref(), &req);
+
+            let gate = Paygate {
+                facilitator,
+                settle_before_execution,
+                accepts: Arc::new(accepts),
+                resource,
+            };
+            gate.handle_request(inner, req).await
+        })
     }
 }
