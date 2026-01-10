@@ -232,7 +232,7 @@ where
         callback: F,
     ) -> X402LayerBuilder<DynamicPriceTags<T::PriceTag>, TFacilitator>
     where
-        T: IntoPriceTag + Send + 'static,
+        T: IntoPriceTag,
         T::PriceTag: PaygateProtocol,
         F: Fn(&HeaderMap, &Uri, Option<&Url>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Vec<T>> + Send + 'static,
@@ -270,7 +270,7 @@ where
     ///
     /// Note: This method is only available for static price tag sources.
     pub fn with_price_tag<R: IntoPriceTag<PriceTag = TPriceTag>>(mut self, req: R) -> Self {
-        self.price_source = self.price_source.with_tag(req.into_price_tag());
+        self.price_source = self.price_source.with_price_tag(req.into_price_tag());
         self
     }
 }
@@ -313,7 +313,7 @@ where
     S: Service<Request, Response = Response, Error = Infallible> + Clone + Send + Sync + 'static,
     S::Future: Send + 'static,
     TFacilitator: Facilitator + Clone,
-    TSource: PriceTagSource,
+    TSource: PriceTagSource + Clone,
 {
     type Service = X402MiddlewareService<TSource, TFacilitator>;
 
@@ -351,7 +351,7 @@ pub struct X402MiddlewareService<TSource, TFacilitator> {
 
 impl<TSource, TFacilitator> Service<Request> for X402MiddlewareService<TSource, TFacilitator>
 where
-    TSource: PriceTagSource,
+    TSource: PriceTagSource + Clone + Send + 'static,
     TSource::PriceTag: PaygateProtocol,
     TFacilitator: Facilitator + Clone + Send + Sync + 'static,
 {

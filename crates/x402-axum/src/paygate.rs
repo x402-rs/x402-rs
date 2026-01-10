@@ -43,6 +43,7 @@ use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto;
 use x402_rs::proto::{SupportedResponse, v1, v2};
+use x402_rs::scheme::IntoPriceTag;
 use x402_rs::util::Base64Bytes;
 
 #[cfg(feature = "telemetry")]
@@ -649,7 +650,7 @@ fn settlement_to_header(settlement: proto::SettleResponse) -> Result<HeaderValue
 ///     vec![compute_price_tag(headers)]
 /// });
 /// ```
-pub trait PriceTagSource: Clone + Send + Sync + 'static {
+pub trait PriceTagSource {
     /// The concrete price tag type produced by this source.
     type PriceTag: PaygateProtocol;
 
@@ -695,20 +696,22 @@ impl<TPriceTag> StaticPriceTags<TPriceTag> {
         }
     }
 
+    /// Returns a reference to the stored price tags.
+    pub fn tags(&self) -> &[TPriceTag] {
+        &self.tags
+    }
+}
+
+impl<TPriceTag> StaticPriceTags<TPriceTag>
+where
+    TPriceTag: Clone,
+{
     /// Adds a price tag to the source.
-    pub fn with_tag(mut self, tag: TPriceTag) -> Self
-    where
-        TPriceTag: Clone,
-    {
+    pub fn with_price_tag(mut self, tag: TPriceTag) -> Self {
         let mut tags = (*self.tags).clone();
         tags.push(tag);
         self.tags = Arc::new(tags);
         self
-    }
-
-    /// Returns a reference to the stored price tags.
-    pub fn tags(&self) -> &[TPriceTag] {
-        &self.tags
     }
 }
 
@@ -788,10 +791,7 @@ impl<TPriceTag> std::fmt::Debug for DynamicPriceTags<TPriceTag> {
     }
 }
 
-impl<TPriceTag> DynamicPriceTags<TPriceTag>
-where
-    TPriceTag: Send + 'static,
-{
+impl<TPriceTag> DynamicPriceTags<TPriceTag> {
     /// Creates a new dynamic price source from an async closure.
     ///
     /// The closure receives request context and returns items implementing
@@ -808,7 +808,7 @@ where
     /// ```
     pub fn new<T, F, Fut>(callback: F) -> Self
     where
-        T: x402_rs::scheme::IntoPriceTag<PriceTag = TPriceTag> + Send,
+        T: IntoPriceTag<PriceTag = TPriceTag>,
         F: Fn(&HeaderMap, &Uri, Option<&Url>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Vec<T>> + Send + 'static,
     {
