@@ -49,11 +49,21 @@ See the [Facilitator](#facilitator) section below for full usage details
 Use `x402-axum` to gate your routes behind on-chain payments:
 
 ```rust
-let x402 = X402Middleware::try_from("https://x402.org/facilitator/").unwrap();
-let usdc = USDCDeployment::by_network(Network::BaseSepolia);
+use alloy_primitives::address;
+use axum::{Router, routing::get};
+use x402_axum::X402Middleware;
+use x402_rs::networks::USDC;
+use x402_rs::scheme::v2_eip155_exact::V2Eip155Exact;
 
-let app = Router::new().route("/paid-content", get(handler).layer( 
-        x402.with_price_tag(usdc.amount("0.025").pay_to("0xYourAddress").unwrap())
+let x402 = X402Middleware::try_from("https://facilitator.x402.rs").unwrap();
+
+let app = Router::new().route(
+    "/paid-content",
+    get(handler).layer(
+        x402.with_price_tag(V2Eip155Exact::price_tag(
+            address!("0xYourAddress"),
+            USDC::base_sepolia().amount(10u64),
+        ))
     ),
 );
 ```
@@ -65,18 +75,51 @@ See [`x402-axum` crate docs](./crates/x402-axum/README.md).
 Use `x402-reqwest` to send payments:
 
 ```rust
-let signer: PrivateKeySigner = "0x...".parse()?; // never hardcode real keys!
+use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
+use x402_rs::scheme::v1_eip155_exact::client::V1Eip155ExactClient;
+use x402_rs::scheme::v2_eip155_exact::client::V2Eip155ExactClient;
+use alloy_signer_local::PrivateKeySigner;
+use std::sync::Arc;
+use reqwest::Client;
 
-let client = reqwest::Client::new()
-    .with_payments(signer)
-    .prefer(USDCDeployment::by_network(Network::Base))
-    .max(USDCDeployment::by_network(Network::Base).amount("1.00")?)
+let signer: Arc<PrivateKeySigner> = Arc::new("0x...".parse()?); // never hardcode real keys!
+
+let x402_client = X402Client::new()
+    .register(V1Eip155ExactClient::new(signer.clone()))
+    .register(V2Eip155ExactClient::new(signer));
+
+let client = Client::new()
+    .with_payments(x402_client)
     .build();
 
 let res = client
     .get("https://example.com/protected")
     .send()
     .await?;
+```
+
+The middleware automatically:
+- Detects `402 Payment Required` responses
+- Extracts payment requirements from the response
+- Signs payments using registered scheme clients
+- Retries the request with the payment header attached
+
+For multi-chain support (EVM and Solana), register additional scheme clients:
+
+```rust
+use x402_rs::scheme::v1_solana_exact::client::V1SolanaExactClient;
+use x402_rs::scheme::v2_solana_exact::client::V2SolanaExactClient;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_keypair::Keypair;
+
+let solana_keypair = Arc::new(Keypair::from_base58_string("..."));
+let solana_rpc = Arc::new(RpcClient::new("https://api.devnet.solana.com"));
+
+let x402_client = X402Client::new()
+    .register(V1Eip155ExactClient::new(evm_signer.clone()))
+    .register(V2Eip155ExactClient::new(evm_signer))
+    .register(V1SolanaExactClient::new(solana_keypair.clone(), solana_rpc.clone()))
+    .register(V2SolanaExactClient::new(solana_keypair, solana_rpc));
 ```
 
 See [`x402-reqwest` crate docs](./crates/x402-reqwest/README.md).
