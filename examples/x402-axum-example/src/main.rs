@@ -56,6 +56,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )),
             ),
         )
+        // Dynamic pricing: adjust price based on request parameters
+        // GET /dynamic-price-v2 -> 100 units
+        // GET /dynamic-price-v2?discount -> 50 units (discounted)
         .route(
             "/dynamic-price-v2",
             get(my_handler).layer(x402.with_dynamic_price(|_headers, uri, _base_url| {
@@ -79,6 +82,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             })),
         )
+        // Conditional free access: bypass payment when "free" query parameter is present
+        // GET /conditional-free-v2 -> requires payment (402)
+        // GET /conditional-free-v2?free -> bypasses payment, returns content directly
+        //
+        // This demonstrates returning an empty price tags vector to skip payment enforcement.
+        // Useful for implementing free tiers, promotional access, or conditional pricing.
         .route(
             "/conditional-free-v2",
             get(my_handler).layer(x402.with_dynamic_price(|_headers, uri, _base_url| {
@@ -87,9 +96,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 async move {
                     if is_free {
-                        // Return empty vector to bypass payment enforcement
+                        // Return empty vector to bypass payment enforcement entirely.
+                        // The middleware will forward the request directly to the handler
+                        // without requiring any payment.
                         vec![]
                     } else {
+                        // Normal pricing - payment required
                         vec![
                             V2Eip155Exact::price_tag(
                                 address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"),

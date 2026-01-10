@@ -85,6 +85,75 @@ let x402 = X402Middleware::new("https://facilitator.x402.rs")
     .settle_after_execution();  // Settle after successful request execution
 ```
 
+## Dynamic Pricing
+
+The middleware supports dynamic pricing through the `with_dynamic_price` method, which allows you to compute prices per-request based on headers, URI, or other runtime factors:
+
+```rust,no_run
+use x402_axum::X402Middleware;
+use x402_rs::networks::{KnownNetworkEip155, USDC};
+use x402_rs::scheme::v2_eip155_exact::V2Eip155Exact;
+
+let x402 = X402Middleware::new("https://facilitator.x402.rs");
+
+let app = Router::new().route(
+    "/api/data",
+    get(handler).layer(x402.with_dynamic_price(|headers, uri, _base_url| {
+        // Check for discount query parameter
+        let has_discount = uri.query().map(|q| q.contains("discount")).unwrap_or(false);
+        let amount = if has_discount { 50 } else { 100 };
+
+        async move {
+            vec![V2Eip155Exact::price_tag(
+                "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".parse().unwrap(),
+                USDC::base_sepolia().amount(amount),
+            )]
+        }
+    })),
+);
+```
+
+### Conditional Free Access (Empty Price Tags)
+
+When the dynamic pricing callback returns an **empty vector**, the middleware bypasses payment enforcement entirely and forwards the request directly to the handler. This is useful for implementing:
+
+- Free tiers or promotional access
+- Conditional pricing based on user authentication
+- A/B testing with paid vs free access
+
+```rust,no_run
+use x402_axum::X402Middleware;
+use x402_rs::networks::{KnownNetworkEip155, USDC};
+use x402_rs::scheme::v2_eip155_exact::V2Eip155Exact;
+
+let x402 = X402Middleware::new("https://facilitator.x402.rs");
+
+let app = Router::new().route(
+    "/api/data",
+    get(handler).layer(x402.with_dynamic_price(|_headers, uri, _base_url| {
+        // Check if "free" query parameter is present
+        let is_free = uri.query().map(|q| q.contains("free")).unwrap_or(false);
+
+        async move {
+            if is_free {
+                // Return empty vector to bypass payment enforcement
+                vec![]
+            } else {
+                // Normal pricing - payment required
+                vec![V2Eip155Exact::price_tag(
+                    "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".parse().unwrap(),
+                    USDC::base_sepolia().amount(100),
+                )]
+            }
+        }
+    })),
+);
+```
+
+With this configuration:
+- `GET /api/data` → Returns 402 Payment Required
+- `GET /api/data?free` → Bypasses payment, returns content directly
+
 ## Defining Prices
 
 Prices are defined using the scheme-specific price tag types from `x402_rs`. The crate includes

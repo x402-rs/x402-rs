@@ -13,6 +13,8 @@ This example shows how to:
 - Configure a remote facilitator for payment verification and settlement.
 - Gate access to an API endpoint using the [`x402-axum`](https://crates.io/crates/x402-axum) middleware
   that requires on-chain payment before responding.
+- Use **dynamic pricing** to adjust prices based on request parameters.
+- Implement **conditional free access** by returning an empty price tags vector.
 - Enable structured logging and distributed tracing using `tracing` and OpenTelemetry to observe what's happening inside the middleware.
 
 ## What’s Included
@@ -76,6 +78,30 @@ curl http://localhost:3000/protected-route
   "x402Version": 1
 }
 ```
+
+### Dynamic Pricing Endpoints
+
+The example includes endpoints demonstrating dynamic pricing:
+
+**Dynamic price with discount:**
+```bash
+# Full price (100 units)
+curl http://localhost:3000/dynamic-price-v2
+
+# Discounted price (50 units)
+curl http://localhost:3000/dynamic-price-v2?discount
+```
+
+**Conditional free access:**
+```bash
+# Requires payment (returns 402)
+curl http://localhost:3000/conditional-free-v2
+
+# Bypasses payment entirely (returns content directly)
+curl http://localhost:3000/conditional-free-v2?free
+```
+
+The conditional free access works by returning an empty price tags vector from the dynamic pricing callback. When the middleware receives an empty vector, it bypasses payment enforcement and forwards the request directly to the handler.
 
 **Example (Request with payment):**
 
