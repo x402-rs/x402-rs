@@ -23,7 +23,8 @@ All in all: **automatically pay for resources using the x402 protocol**.
 
 - Pluggable reqwest middleware using [reqwest-middleware](https://crates.io/crates/reqwest-middleware)
 - Multi-chain support (EVM via EIP-155, Solana)
-- Both V1 and V2 protocol support
+- Full V1 and V2 protocol support with automatic detection and handling
+- Multi-scheme architecture supporting various payment schemes
 - Customizable payment selection logic
 - Tracing support (opt-in via `telemetry` feature)
 
