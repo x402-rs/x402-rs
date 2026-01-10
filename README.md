@@ -19,8 +19,8 @@ This repository provides:
   - Facilitator binary - production-grade HTTP server to verify and settle x402 payments
 - [`x402-axum`](./crates/x402-axum) - Axum middleware for accepting x402 payments,
 - [`x402-reqwest`](./crates/x402-reqwest) - Wrapper for reqwest for transparent x402 payments,
-- [`x402-axum-example`](./examples/x402-axum-example) - an example of `x402-axum` usage.
-- [`x402-reqwest-example`](./examples/x402-reqwest-example) - an example of `x402-reqwest` usage.
+- [`x402-axum-example`](./examples/x402-axum-example) - an example of `x402-axum` usage with multi-chain support.
+- [`x402-reqwest-example`](./examples/x402-reqwest-example) - an example of `x402-reqwest` usage with multi-chain support.
 
 ## About x402
 
@@ -92,6 +92,8 @@ See [`x402-reqwest` crate docs](./crates/x402-reqwest/README.md).
 | Solana Support                      | Support Solana chain.                                                                                    | ✅ Complete |
 | Protocol v2 Support                 | Support x402 protocol version 2 with improved payload structure.                                         | ✅ Complete |
 | Multiple chains and multiple tokens | Support various tokens and EVM compatible chains.                                                        | ✅ Complete |
+| Axum Middleware v2 Support          | Full x402 protocol v2 support in x402-axum with multi-chain, multi-scheme architecture.                   | ✅ Complete |
+| Reqwest Client v2 Support           | Full x402 protocol v2 support in x402-reqwest with multi-chain, multi-scheme architecture.                | ✅ Complete |
 | Buiild your own facilitator hooks   | Pre/post hooks for analytics, access control, and auditability.                                          | 🔜 Planned |
 
 The initial focus is on establishing a stable, production-quality Rust SDK and middleware ecosystem for x402 integration.
