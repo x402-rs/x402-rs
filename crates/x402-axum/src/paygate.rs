@@ -412,10 +412,7 @@ pub struct Paygate<TPriceTag, TFacilitator> {
     pub resource: v2::ResourceInfo,
 }
 
-impl<TPriceTag, TFacilitator> Paygate<TPriceTag, TFacilitator>
-where
-    TPriceTag: PaygateProtocol,
-{
+impl<TPriceTag, TFacilitator> Paygate<TPriceTag, TFacilitator> {
     /// Calls the inner service with proper telemetry instrumentation.
     async fn call_inner<
         ReqBody,
