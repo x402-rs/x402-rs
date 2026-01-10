@@ -16,23 +16,26 @@ This example shows how to:
 - Use **dynamic pricing** to adjust prices based on request parameters.
 - Implement **conditional free access** by returning an empty price tags vector.
 - Enable structured logging and distributed tracing using `tracing` and OpenTelemetry to observe what's happening inside the middleware.
+- Support **multiple chains** (EVM and Solana) and **multiple schemes** (v1 and v2 protocols).
 
 ## What’s Included
 
 - **Axum setup**
-  - Defines the protected route with a `GET /protected-route` handler.
+  - Defines multiple protected routes with different pricing strategies.
 - **x402 middleware usage**
-  - Applies a `price_tag` (combination of payment address, asset, and required amount) requesting 0.025 USDC on the Base Sepolia testnet.
-  -	Adds human-readable metadata via `.with_description(...)` and `.with_mime_type(...)`.
--	**Tracing setup**
-  - HTTP-level tracing via `tower_http::trace::TraceLayer` 
+  - Demonstrates both **static pricing** and **dynamic pricing** approaches.
+  - Shows **multi-chain support** with EVM (Base Sepolia) and Solana payment options.
+  - Includes **conditional free access** by returning empty price tags.
+  - Adds human-readable metadata via `.with_description(...)` and `.with_mime_type(...)`.
+- **Tracing setup**
+  - HTTP-level tracing via `tower_http::trace::TraceLayer`
   - OpenTelemetry integration via `x402_rs::telemetry::Telemetry`
-  -	Rich per-request spans that capture method, URI, latency, status, and middleware internals.
+  - Rich per-request spans that capture method, URI, latency, status, and middleware internals.
 
 ## Prerequisites
 
 - Rust 1.76+ (Rust 2024 Edition)
-- A running x402 facilitator (this example uses [https://facilitator.ukstv.me](https://facilitator.ukstv.me))
+- A running x402 facilitator
 - Optional `.env` file to configure OpenTelemetry endpoint
 
 ## Try It
@@ -43,41 +46,15 @@ cd x402-rs/examples/x402-axum-example
 cargo run
 ```
 
-The server will start on http://localhost:3000 and exposes a protected route at `GET /protected-route`.
+The server will start on http://localhost:3000 and exposes multiple protected routes:
 
-The route is protected by x402 middleware and requires a valid x402 payment.
+- `GET /static-price-v1` - Static pricing with v1 protocol (EVM + Solana)
+- `GET /static-price-v2` - Static pricing with v2 protocol (EVM + Solana)
+- `GET /dynamic-price-v2` - Dynamic pricing "exact" scheme with v2 protocol (adjusts based on `discount` query param)
+- `GET /conditional-free-v2` - Conditional free access (bypasses payment with `free` query param)
+
+All routes are protected by x402 middleware and require valid x402 payments unless conditional free access is triggered.
 If no valid payment is provided, the server responds with a 402 Payment Required status and detailed requirements.
-
-**Example (Request without payment):**
-```bash
-curl http://localhost:3000/protected-route
-```
-```json5
-// HTTP/1.1 402 Payment Required
-// Content-Type: application/json
-// ...
-{
-  "error": "X-PAYMENT header is required",
-  "accepts": [
-    {
-      "scheme": "exact",
-      "network": "base-sepolia",
-      "maxAmountRequired": "2500",
-      "resource": "https://localhost:3000/protected-route",
-      "description": "Premium API",
-      "mimeType": "application/json",
-      "payTo": "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07",
-      "maxTimeoutSeconds": 300,
-      "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-      "extra": {
-        "name": "USDC",
-        "version": "2"
-      }
-    }
-  ],
-  "x402Version": 1
-}
-```
 
 ### Dynamic Pricing Endpoints
 
@@ -85,10 +62,10 @@ The example includes endpoints demonstrating dynamic pricing:
 
 **Dynamic price with discount:**
 ```bash
-# Full price (100 units)
+# Full price (100 units of USDC on both EVM and Solana)
 curl http://localhost:3000/dynamic-price-v2
 
-# Discounted price (50 units)
+# Discounted price (50 units of USDC on both EVM and Solana)
 curl http://localhost:3000/dynamic-price-v2?discount
 ```
 
@@ -103,10 +80,12 @@ curl http://localhost:3000/conditional-free-v2?free
 
 The conditional free access works by returning an empty price tags vector from the dynamic pricing callback. When the middleware receives an empty vector, it bypasses payment enforcement and forwards the request directly to the handler.
 
+This demonstrates the flexibility, allowing for complex pricing strategies including free tiers, promotional access, and conditional pricing based on any request criteria.
+
 **Example (Request with payment):**
 
 If you use an x402-compatible client like [`x402-fetch`](https://www.npmjs.com/package/x402-fetch),
-it will automatically perform payment (e.g., 0.0025 USDC) before fetching http://localhost:3000/protected-route, and receive the protected response.
+it will automatically perform payment (e.g., 0.01 USDC on Base Sepolia or 100 USDC on Solana) before fetching any of the protected routes, and receive the protected response.
 
 <details>
 <summary>Example JS code to access a paid endpoint</summary>
@@ -129,7 +108,7 @@ const client = createWalletClient({
 const fetchWithPay = wrapFetchWithPayment(fetch, client);
 
 // Make a request that may require payment
-const response = await fetchWithPay("http://localhost:3000/protected-route", {
+const response = await fetchWithPay("http://localhost:3000/static-price-v2", {
   method: "GET",
 });
 

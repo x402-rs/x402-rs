@@ -20,7 +20,9 @@ If no valid payment is provided, a `402 Payment Required` response is returned w
 ## Features
 
 - Built for [Axum](https://github.com/tokio-rs/axum)
-- Supports both V1 and V2 x402 protocols
+- Full Protocol v2 Support - Complete implementation of x402 protocol v2
+- Multi-chain Support - EVM (EIP-155) and Solana chains
+- Multi-scheme Architecture - Support for various payment schemes
 - Fluent builder API for configuring payment requirements
 - Configurable settlement timing (before or after request execution)
 - Returns standards-compliant `402 Payment Required` responses
@@ -159,10 +161,10 @@ With this configuration:
 Prices are defined using the scheme-specific price tag types from `x402_rs`. The crate includes
 built-in schemes for common protocols:
 
-- **[`V1Eip155Exact::price_tag()`]** - V1 EIP-155 exact payment on EVM chains
-- **[`V2Eip155Exact::price_tag()`]** - V2 EIP-155 exact payment on EVM chains
-- **[`V1SolanaExact::price_tag()`]** - V1 Solana exact payment
-- **[`V2SolanaExact::price_tag()`]** - V2 Solana exact payment
+- **`V1Eip155Exact::price_tag()`** - V1 EIP-155 exact payment on EVM chains (ERC-3009)
+- **`V2Eip155Exact::price_tag()`** - V2 EIP-155 exact payment on EVM chains (ERC-3009)
+- **`V1SolanaExact::price_tag()`** - V1 Solana exact payment (SPL token transfer)
+- **`V2SolanaExact::price_tag()`** - V2 Solana exact payment (SPL token transfer)
 
 ### Built-in Schemes
 
