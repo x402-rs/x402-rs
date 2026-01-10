@@ -128,9 +128,9 @@ or otherwise custom schemes.
 
 To create a custom scheme, you'll need to:
 
-1. **Define your price tag type** - A struct that holds payment parameters (recipient, amount, asset)
-2. **Implement [`PaygateProtocol`]** - Handle verification, error responses, and facilitator enrichment
-3. **Implement [`IntoPriceTag`]** - Allow converting from your application types to price tags
+1. **Define your scheme struct** - A unit struct that serves as a namespace for your scheme
+2. **Add a `price_tag` method** - A static method that constructs the protocol-specific price tag
+3. **Implement [`PaygateProtocol`]** - Handle verification, error responses, and facilitator enrichment
 
 Example structure for a custom scheme:
 
@@ -138,63 +138,35 @@ Example structure for a custom scheme:
 use axum_core::response::Response;
 use x402_axum::paygate::{PaygateError, PaygateProtocol, ResourceInfoBuilder, VerificationError};
 use x402_rs::proto::{self, v2, SupportedResponse};
-use x402_rs::scheme::IntoPriceTag;
 
-pub struct MyCustomPriceTag {
-    pub recipient: String,
-    pub amount: String,
-    pub asset: String,
-}
+/// Your custom scheme struct
+pub struct MyCustomScheme;
 
-// Implement PaygateProtocol for your custom price tag
-impl PaygateProtocol for MyCustomPriceTag {
-    type PaymentPayload = /* your payload type */;
-
-    /// Use `X-PAYMENT` for V1 protocol or `Payment-Signature` for V2 protocol
-    const PAYMENT_HEADER_NAME: &'static str = "Payment-Signature";
-
-    fn make_verify_request(
-        payload: Self::PaymentPayload,
-        accepts: &[Self],
-        resource: &v2::ResourceInfo,
-    ) -> Result<proto::VerifyRequest, VerificationError> {
-        // Convert your price tag + payload into a verify request
-        todo!()
-    }
-
-    fn error_into_response(
-        err: PaygateError,
-        accepts: &[Self],
-        resource: &v2::ResourceInfo,
-    ) -> Response {
-        // Format errors according to your scheme's protocol
-        todo!()
-    }
-
-    fn validate_verify_response(
-        verify_response: proto::VerifyResponse,
-    ) -> Result<(), VerificationError> {
-        // Validate the facilitator's response
-        todo!()
-    }
-
-    fn enrich_with_capabilities(
-        &mut self,
-        capabilities: &SupportedResponse,
-    ) {
-        // Add facilitator-specific data (e.g., fee payers)
-        // This method modifies `self` directly to avoid unnecessary cloning.
+impl MyCustomScheme {
+    /// Create a price tag for this scheme
+    pub fn price_tag(
+        pay_to: String,
+        asset: String,
+        amount: u64,
+    ) -> v2::PriceTag {
+        v2::PriceTag {
+            requirements: v2::PaymentRequirements {
+                scheme: "my-custom-scheme".to_string(),
+                pay_to,
+                asset,
+                network: /* your chain id */,
+                amount: amount.to_string(),
+                max_timeout_seconds: 300,
+                extra: None,
+            },
+            enricher: None, // Or Some(Arc::new(your_enricher_fn)) if needed
+        }
     }
 }
 
-// Implement IntoPriceTag for conversion
-impl IntoPriceTag for MyCustomPriceTag {
-    type PriceTag = Self;
-
-    fn into_price_tag(self) -> Self::PriceTag {
-        self
-    }
-}
+// Implement PaygateProtocol for the price tag type (v2::PriceTag in this case)
+// Note: PaygateProtocol is already implemented for v1::PriceTag and v2::PriceTag
+// You only need to implement it if you're creating a completely custom price tag type
 ```
 
 For a complete example, see the [How to Write a Scheme](docs/how-to-write-a-scheme.md) guide.
