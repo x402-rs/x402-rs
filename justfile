@@ -27,3 +27,10 @@ check-all:
   cd crates/x402-reqwest && cargo check
   cd examples/x402-axum-example && cargo check
   cd examples/x402-reqwest-example && cargo check
+
+test-all:
+  cargo check
+  cd crates/x402-axum && cargo test
+  cd crates/x402-reqwest && cargo test
+  cd examples/x402-axum-example && cargo test
+  cd examples/x402-reqwest-example && cargo test
