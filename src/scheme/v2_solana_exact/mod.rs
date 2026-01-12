@@ -17,6 +17,7 @@ use crate::scheme::v1_solana_exact::{
 use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
+use types::V2SolanaExactFacilitatorConfig;
 
 pub struct V2SolanaExact;
 
@@ -57,19 +58,26 @@ impl X402SchemeFacilitatorBuilder for V2SolanaExact {
     fn build(
         &self,
         provider: ChainProvider,
-        _config: Option<serde_json::Value>,
+        config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
         let provider = if let ChainProvider::Solana(provider) = provider {
             provider
         } else {
             return Err("V2SolanaExact::build: provider must be a SolanaChainProvider".into());
         };
-        Ok(Box::new(V2SolanaExactFacilitator { provider }))
+
+        let config = config
+            .map(|c| serde_json::from_value::<V2SolanaExactFacilitatorConfig>(c))
+            .transpose()?
+            .unwrap_or_default();
+
+        Ok(Box::new(V2SolanaExactFacilitator { provider, config }))
     }
 }
 
 pub struct V2SolanaExactFacilitator {
     provider: Arc<SolanaChainProvider>,
+    config: V2SolanaExactFacilitatorConfig,
 }
 
 #[async_trait::async_trait]
@@ -79,8 +87,8 @@ impl X402SchemeFacilitator for V2SolanaExactFacilitator {
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
         let request = types::VerifyRequest::from_proto(request.clone())?;
-        let verification = verify_transfer(&self.provider, &request).await?;
-        Ok(proto::v2::VerifyResponse::valid(verification.payer.to_string()).into())
+        let verification = verify_transfer(&self.provider, &request, &self.config).await?;
+        Ok(v2::VerifyResponse::valid(verification.payer.to_string()).into())
     }
 
     async fn settle(
@@ -88,10 +96,10 @@ impl X402SchemeFacilitator for V2SolanaExactFacilitator {
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError> {
         let request = types::SettleRequest::from_proto(request.clone())?;
-        let verification = verify_transfer(&self.provider, &request).await?;
+        let verification = verify_transfer(&self.provider, &request, &self.config).await?;
         let payer = verification.payer.to_string();
         let tx_sig = settle_transaction(&self.provider, verification).await?;
-        Ok(proto::v2::SettleResponse::Success {
+        Ok(v2::SettleResponse::Success {
             payer,
             transaction: tx_sig.to_string(),
             network: self.provider.chain_id().to_string(),
@@ -128,6 +136,7 @@ impl X402SchemeFacilitator for V2SolanaExactFacilitator {
 pub async fn verify_transfer(
     provider: &SolanaChainProvider,
     request: &types::VerifyRequest,
+    config: &V2SolanaExactFacilitatorConfig,
 ) -> Result<VerifyTransferResult, proto::PaymentVerificationError> {
     let payload = &request.payment_payload;
     let requirements = &request.payment_requirements;
@@ -148,7 +157,7 @@ pub async fn verify_transfer(
         asset: &requirements.asset,
         amount: requirements.amount.inner(),
     };
-    verify_transaction(provider, transaction_b64_string, &transfer_requirement).await
+    verify_transaction(provider, transaction_b64_string, &transfer_requirement, config).await
 }
 
 /// Enricher function for V2 Solana price tags - adds fee_payer to extra field

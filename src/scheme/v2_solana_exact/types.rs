@@ -2,8 +2,12 @@ use crate::chain::solana::Address;
 use crate::proto::util::U64String;
 use crate::proto::v2;
 use crate::scheme::v1_solana_exact::types::{ExactSolanaPayload, SupportedPaymentKindExtra};
+use crate::scheme::v1_solana_exact::types::V1SolanaExactFacilitatorConfig;
 
 pub use crate::scheme::v1_eip155_exact::types::ExactScheme;
+
+/// Configuration for V2 Solana Exact facilitator - reuses V1 config
+pub type V2SolanaExactFacilitatorConfig = V1SolanaExactFacilitatorConfig;
 
 pub type VerifyRequest = v2::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;
