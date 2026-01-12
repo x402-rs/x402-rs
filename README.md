@@ -6,12 +6,6 @@
 
 > A Rust-based implementation of the x402 protocol with support for protocol v1 and v2.
 
-<div align="center">
-<table><tr><td>
-🚀 <strong>x402 Protocol v2</strong> — This is the main branch with x402 protocol v2 support, featuring a ground-up rethinking of how we accommodate various chains and payment schemes. The core facilitator is fully functional and ready for use. The <code>x402-axum</code> and <code>x402-reqwest</code> crates are being updated to leverage the new multi-chain, multi-scheme architecture and will be available soon. For protocol v1, see the <code>protocol-x402-v1</code> branch.
-</td></tr></table>
-</div>
-
 This repository provides:
 
 - `x402-rs` (current crate):
