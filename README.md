@@ -435,12 +435,12 @@ The service reads configuration from a JSON file (`config.json` by default) or v
 }
 ```
 
-| Option | Type | Required | Default | Description |
-|:-------|:-----|:---------|:--------|:------------|
-| `enabled` | boolean | ❌ | `true` | Whether this scheme is enabled |
-| `id` | string | ✅ | - | Scheme identifier: `v{version}-{namespace}-{name}` |
-| `chains` | string | ✅ | - | Chain pattern: `eip155:*`, `solana:*`, or specific chain ID |
-| `config` | object | ❌ | - | Scheme-specific configuration |
+| Option    | Type    | Required | Default | Description                                                 |
+|:----------|:--------|:---------|:--------|:------------------------------------------------------------|
+| `enabled` | boolean | ❌        | `true`  | Whether this scheme is enabled                              |
+| `id`      | string  | ✅        | -       | Scheme identifier: `v{version}-{namespace}-{name}`          |
+| `chains`  | string  | ✅        | -       | Chain pattern: `eip155:*`, `solana:*`, or specific chain ID |
+| `config`  | object  | ❌        | -       | Scheme-specific configuration                               |
 
 **Important:** Schemes must be explicitly listed in the `schemes` array to be enabled. If a scheme is not in the configuration, it will not be available for payment verification or settlement.
 
