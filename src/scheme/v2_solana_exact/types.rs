@@ -1,8 +1,8 @@
 use crate::chain::solana::Address;
 use crate::proto::util::U64String;
 use crate::proto::v2;
-use crate::scheme::v1_solana_exact::types::{ExactSolanaPayload, SupportedPaymentKindExtra};
 use crate::scheme::v1_solana_exact::types::V1SolanaExactFacilitatorConfig;
+use crate::scheme::v1_solana_exact::types::{ExactSolanaPayload, SupportedPaymentKindExtra};
 
 pub use crate::scheme::v1_eip155_exact::types::ExactScheme;
 

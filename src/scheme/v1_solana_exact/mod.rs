@@ -84,7 +84,7 @@ impl X402SchemeFacilitatorBuilder for V1SolanaExact {
         };
 
         let config = config
-            .map(|c| serde_json::from_value::<V1SolanaExactFacilitatorConfig>(c))
+            .map(serde_json::from_value::<V1SolanaExactFacilitatorConfig>)
             .transpose()?
             .unwrap_or_default();
 
@@ -461,8 +461,13 @@ pub async fn verify_transfer(
         asset: &requirements.asset,
         amount: requirements.max_amount_required.inner(),
     };
-    let result =
-        verify_transaction(provider, transaction_b64_string, &transfer_requirement, config).await?;
+    let result = verify_transaction(
+        provider,
+        transaction_b64_string,
+        &transfer_requirement,
+        config,
+    )
+    .await?;
     Ok(result)
 }
 

@@ -67,7 +67,7 @@ impl X402SchemeFacilitatorBuilder for V2SolanaExact {
         };
 
         let config = config
-            .map(|c| serde_json::from_value::<V2SolanaExactFacilitatorConfig>(c))
+            .map(serde_json::from_value::<V2SolanaExactFacilitatorConfig>)
             .transpose()?
             .unwrap_or_default();
 
@@ -157,7 +157,13 @@ pub async fn verify_transfer(
         asset: &requirements.asset,
         amount: requirements.amount.inner(),
     };
-    verify_transaction(provider, transaction_b64_string, &transfer_requirement, config).await
+    verify_transaction(
+        provider,
+        transaction_b64_string,
+        &transfer_requirement,
+        config,
+    )
+    .await
 }
 
 /// Enricher function for V2 Solana price tags - adds fee_payer to extra field
