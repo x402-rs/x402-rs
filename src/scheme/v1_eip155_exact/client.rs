@@ -1,3 +1,18 @@
+//! Client-side payment signing for the V1 EIP-155 "exact" scheme.
+//!
+//! This module provides [`V1Eip155ExactClient`] for signing ERC-3009
+//! `transferWithAuthorization` payments on EVM chains.
+//!
+//! # Usage
+//!
+//! ```ignore
+//! use x402::scheme::v1_eip155_exact::client::V1Eip155ExactClient;
+//! use alloy_signer_local::PrivateKeySigner;
+//!
+//! let signer = PrivateKeySigner::random();
+//! let client = V1Eip155ExactClient::new(signer);
+//! ```
+
 use alloy_primitives::{Address, FixedBytes, Signature, U256};
 use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::{SolStruct, eip712_domain};

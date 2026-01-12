@@ -1,19 +1,46 @@
+//! Base64 encoding and decoding utilities.
+//!
+//! This module provides [`Base64Bytes`], a wrapper type for working with
+//! base64-encoded data in the x402 protocol.
+
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as b64;
 use std::borrow::Cow;
 use std::fmt::Display;
 
-/// Contains bytes of base64 encoded some other bytes.
+/// A wrapper for base64-encoded byte data.
+///
+/// This type holds bytes that represent base64-encoded data and provides
+/// methods for encoding and decoding. It uses copy-on-write semantics
+/// to avoid unnecessary allocations.
+///
+/// # Example
+///
+/// ```
+/// use x402::util::Base64Bytes;
+///
+/// // Encode some data
+/// let encoded = Base64Bytes::encode(b"hello world");
+/// assert_eq!(encoded.to_string(), "aGVsbG8gd29ybGQ=");
+///
+/// // Decode it back
+/// let decoded = encoded.decode().unwrap();
+/// assert_eq!(decoded, b"hello world");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Base64Bytes<'a>(pub Cow<'a, [u8]>);
 
 impl Base64Bytes<'_> {
-    /// Decode base64 string bytes to raw binary payload.
+    /// Decodes the base64 string bytes to raw binary data.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the data is not valid base64.
     pub fn decode(&self) -> Result<Vec<u8>, base64::DecodeError> {
         b64.decode(&self.0)
     }
 
-    /// Encode raw binary input into base64 string bytes
+    /// Encodes raw binary data into base64 string bytes.
     pub fn encode<T: AsRef<[u8]>>(input: T) -> Base64Bytes<'static> {
         let encoded = b64.encode(input.as_ref());
         Base64Bytes(Cow::Owned(encoded.into_bytes()))

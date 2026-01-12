@@ -1,3 +1,8 @@
+//! Type definitions for the V1 Solana "exact" payment scheme.
+//!
+//! This module defines the wire format types for SPL Token based payments
+//! on Solana using the V1 x402 protocol.
+
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;

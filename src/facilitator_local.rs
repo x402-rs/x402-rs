@@ -1,13 +1,27 @@
-//! Facilitator implementation for x402 payments using on-chain verification and settlement.
+//! Local facilitator implementation for x402 payments.
 //!
-//! This module provides a [`Facilitator`] implementation that validates x402 payment payloads
-//! and performs on-chain settlements using ERC-3009 `transferWithAuthorization`.
+//! This module provides [`FacilitatorLocal`], a [`Facilitator`] implementation that
+//! validates x402 payment payloads and performs on-chain settlements using the
+//! registered scheme handlers.
 //!
-//! Features include:
-//! - EIP-712 signature recovery
-//! - ERC-20 balance checks
-//! - Contract interaction using Alloy
-//! - Network-specific configuration via [`ProviderCache`] and [`USDCDeployment`]
+//! # Architecture
+//!
+//! The local facilitator delegates payment processing to scheme handlers registered
+//! in a [`SchemeRegistry`]. Each handler is responsible for:
+//!
+//! - Verifying payment signatures and requirements
+//! - Checking on-chain balances
+//! - Executing settlement transactions
+//!
+//! # Example
+//!
+//! ```ignore
+//! use x402::facilitator_local::FacilitatorLocal;
+//! use x402::scheme::SchemeRegistry;
+//!
+//! let registry = SchemeRegistry::build(chains, blueprints, &config);
+//! let facilitator = FacilitatorLocal::new(registry);
+//! ```
 
 use std::collections::HashMap;
 
@@ -16,19 +30,21 @@ use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::scheme::{SchemeRegistry, X402SchemeFacilitatorError};
 
-/// A concrete [`Facilitator`] implementation that verifies and settles x402 payments
-/// using a network-aware provider cache.
+/// A local [`Facilitator`] implementation that delegates to scheme handlers.
 ///
-/// This type is generic over the [`ProviderMap`] implementation used to access EVM providers,
-/// which enables testing or customization beyond the default [`ProviderCache`].
+/// This type wraps a [`SchemeRegistry`] and routes payment verification and
+/// settlement requests to the appropriate scheme handler based on the payment's
+/// chain ID and scheme name.
+///
+/// # Type Parameter
+///
+/// - `A` - The handler registry type (typically [`SchemeRegistry`])
 pub struct FacilitatorLocal<A> {
     handlers: A,
 }
 
 impl<A> FacilitatorLocal<A> {
-    /// Creates a new [`FacilitatorLocal`] with the given provider cache.
-    ///
-    /// The provider cache is used to resolve the appropriate EVM provider for each payment's target network.
+    /// Creates a new [`FacilitatorLocal`] with the given scheme handler registry.
     pub fn new(handlers: A) -> Self {
         FacilitatorLocal { handlers }
     }
@@ -91,10 +107,13 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
     }
 }
 
+/// Errors that can occur during local facilitator operations.
 #[derive(Debug, thiserror::Error)]
 pub enum FacilitatorLocalError {
+    /// Payment verification failed.
     #[error(transparent)]
     Verification(X402SchemeFacilitatorError),
+    /// Payment settlement failed.
     #[error(transparent)]
     Settlement(X402SchemeFacilitatorError),
 }

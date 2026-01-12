@@ -1,3 +1,20 @@
+//! Client-side payment signing for the V2 Solana "exact" scheme.
+//!
+//! This module provides [`V2SolanaExactClient`] for building and signing
+//! SPL Token transfer transactions on Solana using the V2 protocol.
+//!
+//! # Usage
+//!
+//! ```ignore
+//! use x402::scheme::v2_solana_exact::client::V2SolanaExactClient;
+//! use solana_client::nonblocking::rpc_client::RpcClient;
+//! use solana_sdk::signer::keypair::Keypair;
+//!
+//! let keypair = Keypair::new();
+//! let rpc = RpcClient::new("https://api.mainnet-beta.solana.com".to_string());
+//! let client = V2SolanaExactClient::new(keypair, rpc);
+//! ```
+
 use alloy_primitives::U256;
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;

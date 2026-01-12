@@ -1,3 +1,31 @@
+//! OpenTelemetry tracing and metrics setup.
+//!
+//! This module provides [`Telemetry`] for configuring OpenTelemetry-based
+//! distributed tracing and metrics collection. It supports both HTTP and
+//! gRPC OTLP exporters.
+//!
+//! # Configuration
+//!
+//! Telemetry is configured via environment variables:
+//!
+//! - `OTEL_EXPORTER_OTLP_ENDPOINT` - OTLP collector endpoint
+//! - `OTEL_EXPORTER_OTLP_PROTOCOL` - Protocol (`http/protobuf` or `grpc`)
+//! - `OTEL_SERVICE_NAME` - Service name for traces
+//! - `OTEL_SERVICE_VERSION` - Service version
+//! - `OTEL_SERVICE_DEPLOYMENT` - Deployment environment
+//!
+//! # Example
+//!
+//! ```ignore
+//! use x402::util::Telemetry;
+//!
+//! // Initialize telemetry (reads from environment)
+//! let _providers = Telemetry::new().register();
+//!
+//! // Telemetry is now active; spans and metrics will be exported
+//! tracing::info!("Application started");
+//! ```
+
 use axum::http::{Request, Response};
 use opentelemetry::trace::{Status, TracerProvider};
 use opentelemetry::{KeyValue, Value, global};

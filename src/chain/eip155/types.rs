@@ -1,8 +1,27 @@
+//! Wire format types for EVM chain interactions.
+//!
+//! This module provides types that handle serialization and deserialization
+//! of EVM-specific values in the x402 protocol wire format.
+
 use alloy_primitives::{Address, U256, hex};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
+/// An Ethereum address that serializes with EIP-55 checksum encoding.
+///
+/// This wrapper ensures addresses are always serialized in checksummed format
+/// (e.g., `0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`) for compatibility
+/// with the x402 protocol wire format.
+///
+/// # Example
+///
+/// ```
+/// use x402_rs::chain::eip155::ChecksummedAddress;
+///
+/// let addr: ChecksummedAddress = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045".parse().unwrap();
+/// assert_eq!(addr.to_string(), "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ChecksummedAddress(pub Address);
 
@@ -58,7 +77,22 @@ impl PartialEq<ChecksummedAddress> for Address {
     }
 }
 
-/// U256 - serialized as decimal string
+/// A token amount represented as a U256, serialized as a decimal string.
+///
+/// This wrapper ensures token amounts are serialized as decimal strings
+/// (e.g., `"1000000"`) rather than hex to maintain compatibility with
+/// the x402 protocol wire format and avoid precision issues in JSON.
+///
+/// # Example
+///
+/// ```
+/// use x402_rs::chain::eip155::TokenAmount;
+/// use alloy_primitives::U256;
+///
+/// let amount = TokenAmount(U256::from(1_000_000u64));
+/// let json = serde_json::to_string(&amount).unwrap();
+/// assert_eq!(json, "\"1000000\"");
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TokenAmount(pub U256);
 

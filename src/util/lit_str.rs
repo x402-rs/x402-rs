@@ -1,3 +1,32 @@
+//! Compile-time string literal type generation.
+//!
+//! This module provides the [`lit_str!`] macro for creating types that
+//! represent specific string literals at compile time. These types are
+//! useful for ensuring type safety when working with fixed string values
+//! in protocol messages.
+//!
+//! # Example
+//!
+//! ```ignore
+//! use x402::lit_str;
+//!
+//! lit_str!(ExactScheme, "exact");
+//!
+//! // The type only accepts the exact string
+//! let scheme: ExactScheme = "exact".parse().unwrap();
+//! assert_eq!(scheme.to_string(), "exact");
+//!
+//! // Other strings are rejected
+//! assert!("other".parse::<ExactScheme>().is_err());
+//! ```
+
+/// Creates a type that represents a specific string literal.
+///
+/// The generated type:
+/// - Has a `VALUE` constant with the string
+/// - Implements `FromStr` (only accepts the exact string)
+/// - Implements `Serialize`/`Deserialize` (as the string)
+/// - Implements `Display` (outputs the string)
 #[macro_export]
 macro_rules! lit_str {
     ($struct_name:ident, $val:expr) => {

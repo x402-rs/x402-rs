@@ -1,3 +1,8 @@
+//! Type definitions for the V1 EIP-155 "exact" payment scheme.
+//!
+//! This module defines the wire format types for ERC-3009 based payments
+//! on EVM chains using the V1 x402 protocol.
+
 use alloy_primitives::{Address, B256, Bytes, U256};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};

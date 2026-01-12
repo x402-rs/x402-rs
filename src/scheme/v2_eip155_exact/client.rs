@@ -1,3 +1,18 @@
+//! Client-side payment signing for the V2 EIP-155 "exact" scheme.
+//!
+//! This module provides [`V2Eip155ExactClient`] for signing ERC-3009
+//! `transferWithAuthorization` payments on EVM chains using the V2 protocol.
+//!
+//! # Usage
+//!
+//! ```ignore
+//! use x402::scheme::v2_eip155_exact::client::V2Eip155ExactClient;
+//! use alloy_signer_local::PrivateKeySigner;
+//!
+//! let signer = PrivateKeySigner::random();
+//! let client = V2Eip155ExactClient::new(signer);
+//! ```
+
 use crate::chain::eip155::Eip155ChainReference;
 use crate::proto::v2::ResourceInfo;
 use crate::proto::{PaymentRequired, v2};

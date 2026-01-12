@@ -1,3 +1,35 @@
+//! Payment scheme implementations for x402.
+//!
+//! This module provides the extensible scheme system that allows different
+//! payment methods to be plugged into the x402 protocol. Each scheme defines
+//! how payments are authorized, verified, and settled.
+//!
+//! # Architecture
+//!
+//! The scheme system has three main components:
+//!
+//! 1. **Blueprints** ([`SchemeBlueprints`]) - Factories that create scheme handlers
+//! 2. **Handlers** ([`X402SchemeFacilitator`]) - Process verify/settle requests
+//! 3. **Registry** ([`SchemeRegistry`]) - Maps chain+scheme combinations to handlers
+//!
+//! # Built-in Schemes
+//!
+//! - [`v1_eip155_exact`] - V1 protocol, EVM chains, exact amount transfers
+//! - [`v1_solana_exact`] - V1 protocol, Solana, exact amount transfers
+//! - [`v2_eip155_exact`] - V2 protocol, EVM chains, exact amount transfers
+//! - [`v2_solana_exact`] - V2 protocol, Solana, exact amount transfers
+//!
+//! # Implementing a Custom Scheme
+//!
+//! To implement a custom scheme:
+//!
+//! 1. Implement [`X402SchemeId`] to identify your scheme
+//! 2. Implement [`X402SchemeFacilitatorBuilder`] to create handlers
+//! 3. Implement [`X402SchemeFacilitator`] for the actual verification/settlement logic
+//! 4. Register your scheme with [`SchemeBlueprints::register`]
+//!
+//! See the [how-to-write-a-scheme](../../docs/how-to-write-a-scheme.md) guide for details.
+
 pub mod v1_eip155_exact;
 pub mod v1_solana_exact;
 pub mod v2_eip155_exact;
@@ -18,28 +50,55 @@ use crate::scheme::v1_solana_exact::V1SolanaExact;
 use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_solana_exact::V2SolanaExact;
 
+/// Trait for scheme handlers that process payment verification and settlement.
+///
+/// Implementations of this trait handle the core payment processing logic:
+/// verifying that payments are valid and settling them on-chain.
 #[async_trait::async_trait]
 pub trait X402SchemeFacilitator: Send + Sync {
+    /// Verifies a payment authorization without settling it.
+    ///
+    /// This checks that the payment is properly signed, matches the requirements,
+    /// and the payer has sufficient funds.
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError>;
+
+    /// Settles a verified payment on-chain.
+    ///
+    /// This submits the payment transaction to the blockchain and waits
+    /// for confirmation.
     async fn settle(
         &self,
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError>;
+
+    /// Returns the payment methods supported by this handler.
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError>;
 }
 
+/// Marker trait for types that are both identifiable and buildable.
+///
+/// This combines [`X402SchemeId`] and [`X402SchemeFacilitatorBuilder`] for
+/// use in the blueprint registry.
 pub trait X402SchemeBlueprint: X402SchemeId + X402SchemeFacilitatorBuilder {}
 impl<T> X402SchemeBlueprint for T where T: X402SchemeId + X402SchemeFacilitatorBuilder {}
 
+/// Trait for identifying a payment scheme.
+///
+/// Each scheme has a unique identifier composed of the protocol version,
+/// chain namespace, and scheme name.
 pub trait X402SchemeId {
+    /// Returns the x402 protocol version (1 or 2).
     fn x402_version(&self) -> u8 {
         2
     }
+    /// Returns the chain namespace (e.g., "eip155", "solana").
     fn namespace(&self) -> &str;
+    /// Returns the scheme name (e.g., "exact").
     fn scheme(&self) -> &str;
+    /// Returns the full scheme identifier (e.g., "v2-eip155-exact").
     fn id(&self) -> String {
         format!(
             "v{}-{}-{}",
@@ -50,7 +109,14 @@ pub trait X402SchemeId {
     }
 }
 
+/// Trait for building scheme handlers from chain providers.
 pub trait X402SchemeFacilitatorBuilder {
+    /// Creates a new scheme handler for the given chain provider.
+    ///
+    /// # Arguments
+    ///
+    /// * `provider` - The chain provider to use for on-chain operations
+    /// * `config` - Optional scheme-specific configuration
     fn build(
         &self,
         provider: ChainProvider,
@@ -58,10 +124,13 @@ pub trait X402SchemeFacilitatorBuilder {
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>>;
 }
 
+/// Errors that can occur during scheme operations.
 #[derive(Debug, thiserror::Error)]
 pub enum X402SchemeFacilitatorError {
+    /// Payment verification failed.
     #[error(transparent)]
     PaymentVerification(#[from] PaymentVerificationError),
+    /// On-chain operation failed.
     #[error("Onchain error: {0}")]
     OnchainFailure(String),
 }
@@ -77,6 +146,10 @@ impl AsPaymentProblem for X402SchemeFacilitatorError {
     }
 }
 
+/// Registry of scheme blueprints (factories).
+///
+/// Blueprints are used to create scheme handlers for specific chain providers.
+/// Register blueprints at startup, then use them to build handlers.
 #[derive(Default)]
 pub struct SchemeBlueprints(HashMap<String, Box<dyn X402SchemeBlueprint>>);
 
@@ -88,10 +161,18 @@ impl Debug for SchemeBlueprints {
 }
 
 impl SchemeBlueprints {
+    /// Creates an empty blueprint registry.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Creates a registry with all built-in schemes registered.
+    ///
+    /// This includes:
+    /// - V1 EIP-155 exact
+    /// - V1 Solana exact
+    /// - V2 EIP-155 exact
+    /// - V2 Solana exact
     pub fn full() -> Self {
         Self::new()
             .and_register(V1Eip155Exact)
@@ -100,28 +181,39 @@ impl SchemeBlueprints {
             .and_register(V2SolanaExact)
     }
 
+    /// Registers a blueprint and returns self for chaining.
     pub fn and_register<B: X402SchemeBlueprint + 'static>(mut self, blueprint: B) -> Self {
         self.register(blueprint);
         self
     }
 
+    /// Registers a scheme blueprint.
     pub fn register<B: X402SchemeBlueprint + 'static>(&mut self, blueprint: B) {
         self.0.insert(blueprint.id(), Box::new(blueprint));
     }
 
+    /// Gets a blueprint by its ID.
     pub fn get(&self, id: &str) -> Option<&dyn X402SchemeBlueprint> {
         self.0.get(id).map(|v| v.deref())
     }
 }
 
+/// Unique identifier for a scheme handler instance.
+///
+/// Combines the chain ID, protocol version, and scheme name to uniquely
+/// identify a handler that can process payments for a specific combination.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct SchemeHandlerSlug {
+    /// The chain this handler operates on.
     pub chain_id: ChainId,
+    /// The x402 protocol version.
     pub x402_version: u8,
+    /// The scheme name (e.g., "exact").
     pub name: String,
 }
 
 impl SchemeHandlerSlug {
+    /// Creates a new scheme handler slug.
     pub fn new(chain_id: ChainId, x402_version: u8, name: String) -> Self {
         Self {
             chain_id,
@@ -141,6 +233,10 @@ impl Display for SchemeHandlerSlug {
     }
 }
 
+/// Registry of active scheme handlers.
+///
+/// Maps chain+scheme combinations to their handlers. Built from blueprints
+/// and chain providers based on configuration.
 #[derive(Default)]
 pub struct SchemeRegistry(HashMap<SchemeHandlerSlug, Box<dyn X402SchemeFacilitator>>);
 
@@ -152,6 +248,10 @@ impl Debug for SchemeRegistry {
 }
 
 impl SchemeRegistry {
+    /// Builds a scheme registry from blueprints and configuration.
+    ///
+    /// For each enabled scheme in the config, this finds the matching blueprint
+    /// and chain provider, then builds a handler.
     pub fn build(
         chains: ChainRegistry,
         blueprints: SchemeBlueprints,
@@ -200,11 +300,13 @@ impl SchemeRegistry {
         Self(handlers)
     }
 
+    /// Gets a handler by its slug.
     pub fn by_slug(&self, slug: &SchemeHandlerSlug) -> Option<&dyn X402SchemeFacilitator> {
         let handler = self.0.get(slug)?.deref();
         Some(handler)
     }
 
+    /// Returns an iterator over all registered handlers.
     pub fn values(&self) -> impl Iterator<Item = &dyn X402SchemeFacilitator> {
         self.0.values().map(|v| v.deref())
     }

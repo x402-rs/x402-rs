@@ -1,3 +1,8 @@
+//! Type definitions for the V2 EIP-155 "exact" payment scheme.
+//!
+//! This module re-exports types from V1 and defines V2-specific wire format
+//! types for ERC-3009 based payments on EVM chains.
+
 pub use crate::scheme::v1_eip155_exact::types::ExactScheme;
 
 use crate::chain::eip155::{ChecksummedAddress, TokenAmount};

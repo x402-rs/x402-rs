@@ -1,3 +1,27 @@
+//! Graceful shutdown signal handling.
+//!
+//! This module provides [`SigDown`], a utility for handling Unix shutdown
+//! signals (SIGTERM and SIGINT) and coordinating graceful shutdown across
+//! multiple subsystems using cancellation tokens.
+//!
+//! # Example
+//!
+//! ```ignore
+//! use x402::util::SigDown;
+//!
+//! let sig_down = SigDown::try_new()?;
+//! let token = sig_down.cancellation_token();
+//!
+//! // Pass token to subsystems
+//! tokio::spawn(async move {
+//!     token.cancelled().await;
+//!     println!("Shutting down...");
+//! });
+//!
+//! // Wait for shutdown signal
+//! sig_down.recv().await;
+//! ```
+
 use tokio::signal::unix::SignalKind;
 use tokio::signal::unix::signal;
 use tokio_util::sync::CancellationToken;

@@ -1,3 +1,10 @@
+//! Nonce management for concurrent EVM transaction submission.
+//!
+//! This module provides [`PendingNonceManager`], a custom nonce manager that improves
+//! upon Alloy's default implementation by querying pending transactions when fetching
+//! the initial nonce. This prevents "nonce too low" errors when the application restarts
+//! while transactions are still in the mempool.
+
 use alloy_primitives::Address;
 use alloy_provider::Provider;
 use alloy_provider::fillers::NonceManager;
@@ -7,7 +14,7 @@ use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-/// A nonce manager that caches nonces locally and checks pending transactions on initialization.
+/// A nonce manager that caches nonces locally and queries pending transactions on initialization.
 ///
 /// This implementation attempts to improve upon Alloy's `CachedNonceManager` by using `.pending()` when
 /// fetching the initial nonce, which includes pending transactions in the mempool. This prevents

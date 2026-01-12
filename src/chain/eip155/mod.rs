@@ -1,3 +1,42 @@
+//! EVM chain support for x402 payments via EIP-155.
+//!
+//! This module provides types and providers for interacting with EVM-compatible blockchains
+//! in the x402 protocol. It supports ERC-3009 `transferWithAuthorization` for gasless
+//! token transfers, which is the foundation of x402 payments on EVM chains.
+//!
+//! # Key Types
+//!
+//! - [`Eip155ChainReference`] - A numeric chain ID for EVM networks (e.g., `8453` for Base)
+//! - [`Eip155ChainProvider`] - Provider for interacting with EVM chains
+//! - [`Eip155TokenDeployment`] - Token deployment information including address and decimals
+//! - [`MetaTransaction`] - Parameters for sending meta-transactions
+//!
+//! # Submodules
+//!
+//! - [`types`] - Wire format types like [`ChecksummedAddress`](types::ChecksummedAddress) and [`TokenAmount`](types::TokenAmount)
+//! - [`pending_nonce_manager`] - Nonce management for concurrent transaction submission
+//!
+//! # ERC-3009 Support
+//!
+//! The x402 protocol uses ERC-3009 `transferWithAuthorization` for payments. This allows
+//! users to sign payment authorizations off-chain, which the facilitator then submits
+//! on-chain. The facilitator pays the gas fees and is reimbursed through the payment.
+//!
+//! # Example
+//!
+//! ```ignore
+//! use x402_rs::chain::eip155::{Eip155ChainReference, Eip155TokenDeployment};
+//! use x402_rs::networks::{KnownNetworkEip155, USDC};
+//!
+//! // Get USDC deployment on Base
+//! let usdc = USDC::base();
+//! assert_eq!(usdc.decimals, 6);
+//!
+//! // Parse a human-readable amount
+//! let amount = usdc.parse("10.50").unwrap();
+//! // amount.amount is now 10_500_000 (10.50 * 10^6)
+//! ```
+
 pub mod pending_nonce_manager;
 pub mod types;
 
@@ -46,12 +85,29 @@ pub type InnerProvider = FillProvider<
     RootProvider,
 >;
 
+/// The CAIP-2 namespace for EVM-compatible chains.
 pub const EIP155_NAMESPACE: &str = "eip155";
 
+/// A numeric chain ID for EVM-compatible networks.
+///
+/// This type wraps the numeric chain ID used by EVM networks (e.g., `1` for Ethereum mainnet,
+/// `8453` for Base). It can be converted to/from a [`ChainId`] for use with the x402 protocol.
+///
+/// # Example
+///
+/// ```
+/// use x402_rs::chain::eip155::Eip155ChainReference;
+/// use x402_rs::chain::ChainId;
+///
+/// let base = Eip155ChainReference::new(8453);
+/// let chain_id: ChainId = base.into();
+/// assert_eq!(chain_id.to_string(), "eip155:8453");
+/// ```
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Eip155ChainReference(u64);
 
 impl Eip155ChainReference {
+    /// Converts this chain reference to a CAIP-2 [`ChainId`].
     pub fn as_chain_id(&self) -> ChainId {
         ChainId::new(EIP155_NAMESPACE, self.0.to_string())
     }
@@ -101,18 +157,24 @@ impl TryFrom<&ChainId> for Eip155ChainReference {
     }
 }
 
+/// Error returned when converting a [`ChainId`] to an [`Eip155ChainReference`].
 #[derive(Debug, thiserror::Error)]
 pub enum Eip155ChainReferenceFormatError {
+    /// The chain ID namespace is not `eip155`.
     #[error("Invalid namespace {0}, expected eip155")]
     InvalidNamespace(String),
+    /// The chain reference is not a valid numeric value.
     #[error("Invalid eip155 chain reference {0}")]
     InvalidReference(String),
 }
 
 impl Eip155ChainReference {
+    /// Creates a new chain reference from a numeric chain ID.
     pub fn new(chain_id: u64) -> Self {
         Self(chain_id)
     }
+
+    /// Returns the numeric chain ID.
     pub fn inner(&self) -> u64 {
         self.0
     }
@@ -124,17 +186,43 @@ impl Display for Eip155ChainReference {
     }
 }
 
+/// Information about a token deployment on an EVM chain.
+///
+/// This type contains all the information needed to interact with a token contract,
+/// including its address, decimal places, and optional EIP-712 domain parameters
+/// for signature verification.
+///
+/// # Example
+///
+/// ```ignore
+/// use x402_rs::networks::{KnownNetworkEip155, USDC};
+///
+/// // Get USDC deployment on Base
+/// let usdc = USDC::base();
+/// assert_eq!(usdc.decimals, 6);
+///
+/// // Parse a human-readable amount to token units
+/// let amount = usdc.parse("10.50").unwrap();
+/// assert_eq!(amount.amount, U256::from(10_500_000u64));
+/// ```
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct Eip155TokenDeployment {
+    /// The chain this token is deployed on.
     pub chain_reference: Eip155ChainReference,
+    /// The token contract address.
     pub address: Address,
+    /// Number of decimal places for the token (e.g., 6 for USDC, 18 for most ERC-20s).
     pub decimals: u8,
+    /// Optional EIP-712 domain parameters for signature verification.
     pub eip712: Option<TokenDeploymentEip712>,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
 impl Eip155TokenDeployment {
+    /// Creates a token amount from a raw value.
+    ///
+    /// The value should already be in the token's smallest unit (e.g., wei).
     pub fn amount<V: Into<TokenAmount>>(
         &self,
         v: V,
@@ -145,6 +233,28 @@ impl Eip155TokenDeployment {
         }
     }
 
+    /// Parses a human-readable amount string into token units.
+    ///
+    /// Accepts formats like `"10.50"`, `"$10.50"`, `"1,000"`, etc.
+    /// The amount is scaled by the token's decimal places.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The input cannot be parsed as a number
+    /// - The input has more decimal places than the token supports
+    /// - The value is out of range
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use x402_rs::networks::{KnownNetworkEip155, USDC};
+    ///
+    /// let usdc = USDC::base();
+    /// let amount = usdc.parse("10.50").unwrap();
+    /// // 10.50 USDC = 10,500,000 units (6 decimals)
+    /// assert_eq!(amount.amount, U256::from(10_500_000u64));
+    /// ```
     pub fn parse<V>(
         &self,
         v: V,
@@ -173,13 +283,38 @@ impl Eip155TokenDeployment {
     }
 }
 
+/// EIP-712 domain parameters for a token deployment.
+///
+/// These parameters are used when verifying EIP-712 typed data signatures
+/// for ERC-3009 `transferWithAuthorization` calls.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct TokenDeploymentEip712 {
+    /// The token name as specified in the EIP-712 domain.
     pub name: String,
+    /// The token version as specified in the EIP-712 domain.
     pub version: String,
 }
 
+/// Provider for interacting with EVM-compatible blockchains.
+///
+/// This provider handles:
+/// - Transaction signing with multiple signers (round-robin selection)
+/// - Nonce management with automatic reset on failures
+/// - Gas estimation and pricing (EIP-1559 and legacy)
+/// - Transaction receipt fetching with configurable timeouts
+///
+/// # Multiple Signers
+///
+/// The provider supports multiple signers for load distribution. When sending
+/// transactions, signers are selected in round-robin fashion to distribute
+/// the transaction load and avoid nonce conflicts.
+///
+/// # Nonce Management
+///
+/// Uses [`PendingNonceManager`] to track nonces locally and query pending
+/// transactions on initialization. If a transaction fails, the nonce is
+/// automatically reset to force a fresh query on the next transaction.
 #[derive(Debug)]
 pub struct Eip155ChainProvider {
     chain: Eip155ChainReference,
@@ -196,6 +331,16 @@ pub struct Eip155ChainProvider {
 }
 
 impl Eip155ChainProvider {
+    /// Creates a new provider from configuration.
+    ///
+    /// Initializes signers, RPC transports, and the nonce manager.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No signers are configured
+    /// - Signer private keys are invalid
+    /// - RPC transport initialization fails
     pub async fn from_config(
         config: &Eip155ChainConfig,
     ) -> Result<Self, Box<dyn std::error::Error>> {

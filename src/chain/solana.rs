@@ -1,3 +1,36 @@
+//! Solana chain support for x402 payments.
+//!
+//! This module provides types and providers for interacting with the Solana blockchain
+//! in the x402 protocol. It supports SPL token transfers for payment settlement.
+//!
+//! # Key Types
+//!
+//! - [`SolanaChainReference`] - A 32-character genesis hash identifying a Solana network
+//! - [`SolanaChainProvider`] - Provider for interacting with Solana chains
+//! - [`SolanaTokenDeployment`] - Token deployment information including mint address and decimals
+//! - [`Address`] - A Solana public key (base58-encoded)
+//!
+//! # Solana Networks
+//!
+//! Solana networks are identified by the first 32 characters of their genesis block hash:
+//! - Mainnet: `5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`
+//! - Devnet: `EtWTRABZaYq6iMfeYKouRu166VU2xqa1`
+//!
+//! # Example
+//!
+//! ```ignore
+//! use x402_rs::chain::solana::{SolanaChainReference, SolanaTokenDeployment};
+//! use x402_rs::networks::{KnownNetworkSolana, USDC};
+//!
+//! // Get USDC deployment on Solana mainnet
+//! let usdc = USDC::solana();
+//! assert_eq!(usdc.decimals, 6);
+//!
+//! // Parse a human-readable amount
+//! let amount = usdc.parse("10.50").unwrap();
+//! // amount.amount is now 10_500_000 (10.50 * 10^6)
+//! ```
+
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_account::Account;
 use solana_client::client_error::{ClientError, ClientErrorKind};
@@ -27,16 +60,39 @@ use crate::networks::KnownNetworkSolana;
 use crate::scheme::X402SchemeFacilitatorError;
 use crate::util::money_amount::{MoneyAmount, MoneyAmountParseError};
 
+/// The CAIP-2 namespace for Solana chains.
 pub const SOLANA_NAMESPACE: &str = "solana";
 
 /// A Solana chain reference consisting of 32 ASCII characters.
-/// The genesis hash is the first 32 characters of the base58-encoded genesis block hash.
+///
+/// The reference is the first 32 characters of the base58-encoded genesis block hash,
+/// which uniquely identifies a Solana network. This follows the CAIP-2 standard for
+/// Solana chain identification.
+///
+/// # Well-Known References
+///
+/// - Mainnet: `5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`
+/// - Devnet: `EtWTRABZaYq6iMfeYKouRu166VU2xqa1`
+///
+/// # Example
+///
+/// ```
+/// use x402::chain::solana::SolanaChainReference;
+/// use x402::networks::KnownNetworkSolana;
+///
+/// let mainnet = SolanaChainReference::solana();
+/// assert_eq!(mainnet.as_str(), "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+/// ```
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SolanaChainReference([u8; 32]);
 
 impl SolanaChainReference {
-    /// Creates a new SolanaChainReference from a 32-byte array.
-    /// Returns None if any byte is not a valid ASCII character.
+    /// Creates a new [`SolanaChainReference`] from a 32-byte ASCII array.
+    ///
+    /// # Panics
+    ///
+    /// This function does not validate that the bytes are valid ASCII.
+    /// Use [`FromStr`] for validated parsing.
     #[allow(dead_code)]
     pub const fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
@@ -134,23 +190,54 @@ impl TryFrom<ChainId> for SolanaChainReference {
     }
 }
 
+/// Error type for parsing Solana chain references.
 #[derive(Debug, thiserror::Error)]
 pub enum SolanaChainReferenceFormatError {
+    /// The namespace was not "solana".
     #[error("Invalid namespace {0}, expected solana")]
     InvalidNamespace(String),
+    /// The reference was not a valid 32-character ASCII string.
     #[error("Invalid solana chain reference {0}")]
     InvalidReference(String),
 }
 
+/// Information about an SPL token deployment on a Solana network.
+///
+/// This type contains all the information needed to interact with a specific
+/// token on a specific Solana network, including the mint address and decimal
+/// precision.
+///
+/// # Example
+///
+/// ```
+/// use x402::chain::solana::{SolanaChainReference, SolanaTokenDeployment, Address};
+/// use x402::networks::KnownNetworkSolana;
+/// use std::str::FromStr;
+///
+/// // USDC on Solana mainnet
+/// let usdc = SolanaTokenDeployment::new(
+///     SolanaChainReference::solana(),
+///     Address::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+///     6,
+/// );
+///
+/// // Parse a human-readable amount
+/// let amount = usdc.parse("10.50").unwrap();
+/// assert_eq!(amount.amount, 10_500_000); // 10.50 * 10^6
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct SolanaTokenDeployment {
+    /// The Solana network where this token is deployed.
     pub chain_reference: SolanaChainReference,
+    /// The SPL token mint address.
     pub address: Address,
+    /// The number of decimal places for this token.
     pub decimals: u8,
 }
 
 impl SolanaTokenDeployment {
+    /// Creates a new token deployment.
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn new(chain_reference: SolanaChainReference, address: Address, decimals: u8) -> Self {
         Self {
@@ -201,14 +288,19 @@ impl SolanaTokenDeployment {
     }
 }
 
+/// Errors that can occur when interacting with a Solana chain provider.
 #[derive(thiserror::Error, Debug)]
 pub enum SolanaChainProviderError {
+    /// Failed to sign a transaction.
     #[error(transparent)]
     Signer(#[from] SignerError),
+    /// The transaction was invalid or failed simulation.
     #[error("Invalid transaction: {0}")]
     InvalidTransaction(#[from] UiTransactionError),
+    /// RPC transport error.
     #[error(transparent)]
     Transport(Box<ClientErrorKind>),
+    /// WebSocket pubsub transport error.
     #[error(transparent)]
     PubsubTransport(#[from] PubsubClientError),
 }
@@ -225,12 +317,41 @@ impl From<SolanaChainProviderError> for X402SchemeFacilitatorError {
     }
 }
 
+/// Provider for interacting with a Solana blockchain.
+///
+/// This provider handles transaction signing, simulation, and submission for
+/// Solana-based x402 payments. It supports both RPC polling and WebSocket
+/// subscriptions for transaction confirmation.
+///
+/// # Configuration
+///
+/// The provider requires:
+/// - A keypair for signing transactions (the fee payer)
+/// - An RPC endpoint URL
+/// - Optionally, a WebSocket pubsub URL for faster confirmations
+/// - Compute unit limits and prices for transaction prioritization
+///
+/// # Example
+///
+/// ```ignore
+/// use x402::chain::solana::SolanaChainProvider;
+/// use x402::config::SolanaChainConfig;
+///
+/// let provider = SolanaChainProvider::from_config(&config).await?;
+/// println!("Fee payer: {}", provider.fee_payer());
+/// ```
 pub struct SolanaChainProvider {
+    /// The Solana network this provider connects to.
     chain: SolanaChainReference,
+    /// The keypair used for signing transactions.
     keypair: Arc<Keypair>,
+    /// The RPC client for sending requests.
     rpc_client: Arc<RpcClient>,
+    /// Optional WebSocket client for subscriptions.
     pubsub_client: Arc<Option<PubsubClient>>,
+    /// Maximum compute units allowed per transaction.
     max_compute_unit_limit: u32,
+    /// Maximum price per compute unit (in micro-lamports).
     max_compute_unit_price: u64,
 }
 
@@ -451,10 +572,25 @@ impl ChainProviderOps for SolanaChainProvider {
     }
 }
 
+/// A Solana public key address.
+///
+/// This is a wrapper around [`Pubkey`] that provides serialization as a
+/// base58-encoded string, suitable for use in x402 protocol messages.
+///
+/// # Example
+///
+/// ```
+/// use x402::chain::solana::Address;
+/// use std::str::FromStr;
+///
+/// let addr = Address::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap();
+/// assert_eq!(addr.to_string(), "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+/// ```
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Address(Pubkey);
 
 impl Address {
+    /// Creates a new address from a [`Pubkey`].
     pub const fn new(pubkey: Pubkey) -> Self {
         Self(pubkey)
     }
