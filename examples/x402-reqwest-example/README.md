@@ -11,34 +11,36 @@ An example client that uses [`x402-reqwest`](https://crates.io/crates/x402-reqwe
 This small demo shows how to configure a reqwest client to:
 - Interact with x402-protected endpoints
 - Apply token preferences and per-token payment caps
+- Support multiple chains (EVM and Solana) and multiple schemes (v1 and v2 protocols)
 
 ## What it does
 
 On startup, this example:
-- Reads your private key from env variable `PRIVATE_KEY`
+- Reads your private keys from env variables `EVM_PRIVATE_KEY` and `SOLANA_PRIVATE_KEY`
 - Builds a `reqwest` client using [`reqwest-middleware`](https://crates.io/crates/reqwest-middleware) and  [`x402-reqwest`](https://crates.io/crates/x402-reqwest)
+- Registers both V1 and V2 scheme clients for both EVM and Solana chains
 - Sends a request to a protected endpoint
 
 If the server responds with a 402 Payment Required, the client:
--	Parses the server’s requirements
--	Selects a supported token (e.g. USDC on Base Sepolia)
--	Signs a `TransferWithAuthorization`
--	Retries with the signed payment attached
+- Parses the server’s requirements (supports both V1 and V2 protocols)
+- Selects a supported token (e.g. USDC on Base Sepolia or Solana)
+- Signs a `TransferWithAuthorization` (EVM) or SPL token transfer (Solana)
+- Retries with the signed payment attached
 
 The best part? **You don’t have to worry about any of this.**
 Just set your token preferences and treat it like any other `reqwest` HTTP client.
 
 # Prerequisites
-- A private key with testnet funds (Base Sepolia USDC)
--	Rust + Cargo
--	`PRIVATE_KEY` set in your environment (or in `.env` file, see `.env.example`)
+- Private keys with testnet funds (Base Sepolia USDC for EVM, Solana Devnet USDC for Solana)
+- Rust + Cargo
+- `EVM_PRIVATE_KEY` and/or `SOLANA_PRIVATE_KEY` set in your environment (or in `.env` file, see `.env.example`)
 
 ## Running the Example
 ```shell
 # 1. Clone the repo and cd into this example folder
 # 2. Create `.env` file
 cp .env.example .env
-# 3. Set your PRIVATE_KEY inside `.env`
+# 3. Set your EVM_PRIVATE_KEY and/or SOLANA_PRIVATE_KEY inside `.env`
 # 4. Run
 cargo run
 ```

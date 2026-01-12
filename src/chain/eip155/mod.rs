@@ -2,7 +2,7 @@ pub mod pending_nonce_manager;
 pub mod types;
 
 use alloy_network::{Ethereum as AlloyEthereum, EthereumWallet, NetworkWallet, TransactionBuilder};
-use alloy_primitives::{Address, B256, Bytes};
+use alloy_primitives::{Address, B256, Bytes, U256};
 use alloy_provider::fillers::{
     BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
 };
@@ -16,15 +16,18 @@ use alloy_signer_local::PrivateKeySigner;
 use alloy_transport::TransportError;
 use alloy_transport::layers::{FallbackLayer, ThrottleLayer};
 use alloy_transport_http::Http;
+use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::num::NonZeroUsize;
+use std::ops::Mul;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
 use tracing::Instrument;
 
-use crate::chain::{ChainId, ChainProviderOps};
+use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::config::Eip155ChainConfig;
+use crate::util::money_amount::{MoneyAmount, MoneyAmountParseError};
 pub use pending_nonce_manager::*;
 pub use types::*;
 
@@ -130,7 +133,47 @@ pub struct Eip155TokenDeployment {
     pub eip712: Option<TokenDeploymentEip712>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
+impl Eip155TokenDeployment {
+    pub fn amount<V: Into<TokenAmount>>(
+        &self,
+        v: V,
+    ) -> DeployedTokenAmount<U256, Eip155TokenDeployment> {
+        DeployedTokenAmount {
+            amount: v.into().0,
+            token: self.clone(),
+        }
+    }
+
+    pub fn parse<V>(
+        &self,
+        v: V,
+    ) -> Result<DeployedTokenAmount<U256, Eip155TokenDeployment>, MoneyAmountParseError>
+    where
+        V: TryInto<MoneyAmount>,
+        MoneyAmountParseError: From<<V as TryInto<MoneyAmount>>::Error>,
+    {
+        let money_amount = v.try_into()?;
+        let scale = money_amount.scale();
+        let token_scale = self.decimals as u32;
+        if scale > token_scale {
+            return Err(MoneyAmountParseError::WrongPrecision {
+                money: scale,
+                token: token_scale,
+            });
+        }
+        let scale_diff = token_scale - scale;
+        let multiplier = U256::from(10).pow(U256::from(scale_diff));
+        let digits = money_amount.mantissa();
+        let value = U256::from(digits).mul(multiplier);
+        Ok(DeployedTokenAmount {
+            amount: value,
+            token: self.clone(),
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct TokenDeploymentEip712 {
     pub name: String,
@@ -434,4 +477,138 @@ pub trait Eip155MetaTransactionProvider {
         &self,
         tx: MetaTransaction,
     ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chain::solana::{
+        Address as SolanaAddress, SolanaChainReference, SolanaTokenDeployment,
+    };
+    use crate::networks::KnownNetworkSolana;
+    use std::str::FromStr;
+
+    fn create_test_deployment(decimals: u8) -> Eip155TokenDeployment {
+        let chain_ref = Eip155ChainReference::new(1); // Mainnet
+        Eip155TokenDeployment {
+            chain_reference: chain_ref,
+            address: alloy_primitives::Address::ZERO,
+            decimals,
+            eip712: None,
+        }
+    }
+
+    #[test]
+    fn test_parse_whole_number() {
+        let deployment = create_test_deployment(6); // 6 decimals like USDC
+        let result = deployment.parse("100");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(100_000_000u64)); // 100 * 10^6
+    }
+
+    #[test]
+    fn test_parse_with_decimals() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("1.50");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(1_500_000u64)); // 1.50 * 10^6
+    }
+
+    #[test]
+    fn test_parse_zero_decimals() {
+        let deployment = create_test_deployment(0);
+        let result = deployment.parse("42");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(42u64));
+    }
+
+    #[test]
+    fn test_parse_precision_too_high() {
+        let deployment = create_test_deployment(2); // Only 2 decimals
+        let result = deployment.parse("1.234"); // 3 decimals - should fail
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, MoneyAmountParseError::WrongPrecision { .. }));
+    }
+
+    #[test]
+    fn test_parse_exact_precision() {
+        let deployment = create_test_deployment(9); // 9 decimals
+        let result = deployment.parse("0.123456789");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(123_456_789u64));
+    }
+
+    #[test]
+    fn test_parse_smallest_amount() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("0.000001");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(1u64));
+    }
+
+    #[test]
+    fn test_parse_with_currency_symbol() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("$10.50");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(10_500_000u64));
+    }
+
+    #[test]
+    fn test_parse_with_commas() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("1,000");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(1_000_000_000u64));
+    }
+
+    #[test]
+    fn test_parse_large_amount() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("999999999");
+        assert!(result.is_ok());
+        // 999999999 * 10^6 = 999999999000000
+        assert_eq!(result.unwrap().amount, U256::from(999_999_999_000_000u64));
+    }
+
+    #[test]
+    fn test_parse_very_large_amount_with_high_decimals() {
+        // EIP155 uses U256, so we can handle much larger amounts than Solana
+        let deployment = create_test_deployment(18); // 18 decimals like ETH
+        let result = deployment.parse("999999999"); // 9 digits, 0 decimals
+        assert!(result.is_ok());
+        // 999999999 * 10^18 = 999999999000000000000000000
+        let expected = U256::from(999_999_999u64) * U256::from(10).pow(U256::from(18));
+        assert_eq!(result.unwrap().amount, expected);
+    }
+
+    #[test]
+    fn test_parse_matches_solana_behavior() {
+        // Create equivalent deployments with same decimals
+        let eip155_deployment = create_test_deployment(6);
+
+        let solana_chain = SolanaChainReference::solana();
+        let solana_deployment = SolanaTokenDeployment::new(
+            solana_chain,
+            SolanaAddress::from_str("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZ5nc4pb").unwrap(),
+            6,
+        );
+
+        // Test various amounts
+        let test_cases = ["1", "1.5", "0.01", "100", "999.999"];
+
+        for amount in test_cases {
+            let eip155_result = eip155_deployment.parse(amount);
+            let solana_result = solana_deployment.parse(amount);
+
+            assert_eq!(eip155_result.is_ok(), solana_result.is_ok());
+
+            if let (Ok(eip155), Ok(solana)) = (eip155_result, solana_result) {
+                // EIP155 uses U256, Solana uses u64
+                let eip155_value: u64 = eip155.amount.try_into().unwrap();
+                assert_eq!(eip155_value, solana.amount);
+            }
+        }
+    }
 }

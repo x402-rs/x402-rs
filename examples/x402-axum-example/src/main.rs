@@ -1,160 +1,122 @@
+use alloy_primitives::address;
 use axum::Router;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use dotenvy::dotenv;
-use opentelemetry::trace::Status;
-use serde_json::json;
+use solana_pubkey::pubkey;
 use std::env;
-use tower_http::trace::TraceLayer;
 use tracing::instrument;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
-use x402_axum::{IntoPriceTag, X402Middleware};
-use x402_rs::network::{Network, USDCDeployment};
-use x402_rs::telemetry::Telemetry;
-use x402_rs::{address_evm, address_sol};
+use x402_axum::X402Middleware;
+use x402_rs::networks::{KnownNetworkEip155, KnownNetworkSolana, USDC};
+use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
+use x402_rs::scheme::v1_solana_exact::V1SolanaExact;
+use x402_rs::scheme::v2_eip155_exact::V2Eip155Exact;
+use x402_rs::scheme::v2_solana_exact::V2SolanaExact;
+use x402_rs::util::Telemetry;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
-    let _telemetry = Telemetry::new()
+    let telemetry = Telemetry::new()
         .with_name(env!("CARGO_PKG_NAME"))
         .with_version(env!("CARGO_PKG_VERSION"))
         .register();
 
     let facilitator_url =
-        env::var("FACILITATOR_URL").unwrap_or_else(|_| "https://facilitator.x402.rs".to_string());
+        env::var("FACILITATOR_URL").unwrap_or("https://facilitator.x402.rs".to_string());
 
-    let x402 = X402Middleware::try_from(facilitator_url)
-        .unwrap()
-        .with_base_url(url::Url::parse("https://localhost:3000/").unwrap());
-    let usdc_base_sepolia = USDCDeployment::by_network(Network::BaseSepolia)
-        .pay_to(address_evm!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"));
-    let usdc_solana = USDCDeployment::by_network(Network::Solana)
-        .pay_to(address_sol!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV"));
+    let x402 = X402Middleware::try_from(facilitator_url)?;
 
     let app = Router::new()
         .route(
-            "/protected-route",
+            "/static-price-v1",
             get(my_handler).layer(
-                x402.with_description("Premium API - Discoverable")
-                    .with_mime_type("application/json")
-                    .with_input_schema(serde_json::json!({
-                        "type": "http",
-                        "method": "GET",
-                        "discoverable": true,
-                        "description": "Access premium content"
-                    }))
-                    .with_output_schema(serde_json::json!({
-                        "type": "string",
-                        "description": "VIP content response"
-                    }))
-                    .with_price_tag(usdc_solana.amount(0.0025).unwrap())
-                    .or_price_tag(usdc_base_sepolia.amount(0.0025).unwrap()),
+                x402.with_price_tag(V1Eip155Exact::price_tag(
+                    address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"),
+                    USDC::base_sepolia().parse("0.01")?,
+                ))
+                .with_price_tag(V1SolanaExact::price_tag(
+                    pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV"),
+                    USDC::solana().amount(100),
+                )),
             ),
         )
         .route(
-            "/api/weather",
-            get(weather_handler).layer(
-                x402.with_description("Weather API - Public endpoint with query params")
-                    .with_mime_type("application/json")
-                    .with_input_schema(serde_json::json!({
-                        "type": "http",
-                        "method": "GET",
-                        "discoverable": true,
-                        "queryParams": {
-                            "location": {
-                                "type": "string",
-                                "description": "City name or coordinates",
-                                "required": true
-                            },
-                            "units": {
-                                "type": "string",
-                                "enum": ["metric", "imperial"],
-                                "default": "metric"
-                            }
-                        }
-                    }))
-                    .with_output_schema(serde_json::json!({
-                        "type": "object",
-                        "properties": {
-                            "temperature": { "type": "number", "description": "Current temperature" },
-                            "conditions": { "type": "string", "description": "Weather conditions" },
-                            "humidity": { "type": "number", "description": "Humidity percentage" }
-                        },
-                        "required": ["temperature", "conditions"]
-                    }))
-                    .with_price_tag(usdc_base_sepolia.amount(0.001).unwrap()),
+            "/static-price-v2",
+            get(my_handler).layer(
+                x402.with_price_tag(V2Eip155Exact::price_tag(
+                    address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"),
+                    USDC::base_sepolia().amount(10u64),
+                ))
+                .with_price_tag(V2SolanaExact::price_tag(
+                    pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV"),
+                    USDC::solana().amount(100),
+                )),
             ),
         )
+        // Dynamic pricing: adjust price based on request parameters
+        // GET /dynamic-price-v2 -> 100 units
+        // GET /dynamic-price-v2?discount -> 50 units (discounted)
         .route(
-            "/api/internal",
-            get(internal_handler).layer(
-                x402.with_description("Internal API - Private endpoint")
-                    .with_mime_type("application/json")
-                    .with_input_schema(serde_json::json!({
-                        "type": "http",
-                        "method": "GET",
-                        "discoverable": false,
-                        "description": "Internal admin functions - direct access only"
-                    }))
-                    .with_output_schema(serde_json::json!({
-                        "type": "object",
-                        "properties": {
-                            "status": { "type": "string" }
-                        }
-                    }))
-                    .with_price_tag(usdc_base_sepolia.amount(1.00).unwrap()),
-            ),
+            "/dynamic-price-v2",
+            get(my_handler).layer(x402.with_dynamic_price(|_headers, uri, _base_url| {
+                // Check if "discount" query parameter is present (before async block)
+                let has_discount = uri.query().map(|q| q.contains("discount")).unwrap_or(false);
+                let amount: u64 = if has_discount { 50 } else { 100 };
+
+                async move {
+                    vec![
+                        // V2 EIP155 (Base Sepolia) price tag
+                        V2Eip155Exact::price_tag(
+                            address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"),
+                            USDC::base_sepolia().amount(amount),
+                        ),
+                        // V2 Solana price tag
+                        V2SolanaExact::price_tag(
+                            pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV"),
+                            USDC::solana().amount(amount),
+                        ),
+                    ]
+                }
+            })),
         )
-        .layer(
-            // Usual HTTP tracing
-            TraceLayer::new_for_http()
-                .make_span_with(|request: &axum::http::Request<_>| {
-                    tracing::info_span!(
-                        "http_request",
-                        otel.kind = "server",
-                        otel.name = %format!("{} {}", request.method(), request.uri()),
-                        method = %request.method(),
-                        uri = %request.uri(),
-                        version = ?request.version(),
-                    )
-                })
-                .on_response(
-                    |response: &axum::http::Response<_>,
-                     latency: std::time::Duration,
-                     span: &tracing::Span| {
-                        span.record("status", tracing::field::display(response.status()));
-                        span.record("latency", tracing::field::display(latency.as_millis()));
-                        span.record(
-                            "http.status_code",
-                            tracing::field::display(response.status().as_u16()),
-                        );
+        // Conditional free access: bypass payment when "free" query parameter is present
+        // GET /conditional-free-v2 -> requires payment (402)
+        // GET /conditional-free-v2?free -> bypasses payment, returns content directly
+        //
+        // This demonstrates returning an empty price tags vector to skip payment enforcement.
+        // Useful for implementing free tiers, promotional access, or conditional pricing.
+        .route(
+            "/conditional-free-v2",
+            get(my_handler).layer(x402.with_dynamic_price(|_headers, uri, _base_url| {
+                // Check if "free" query parameter is present - if so, bypass payment
+                let is_free = uri.query().map(|q| q.contains("free")).unwrap_or(false);
 
-                        // OpenTelemetry span status
-                        if response.status().is_success()
-                            || response.status() == StatusCode::PAYMENT_REQUIRED
-                        {
-                            span.set_status(Status::Ok);
-                        } else {
-                            span.set_status(Status::error(
-                                response
-                                    .status()
-                                    .canonical_reason()
-                                    .unwrap_or("unknown")
-                                    .to_string(),
-                            ));
-                        }
-
-                        tracing::info!(
-                            "status={} elapsed={}ms",
-                            response.status().as_u16(),
-                            latency.as_millis()
-                        );
-                    },
-                ),
-        );
+                async move {
+                    if is_free {
+                        // Return empty vector to bypass payment enforcement entirely.
+                        // The middleware will forward the request directly to the handler
+                        // without requiring any payment.
+                        vec![]
+                    } else {
+                        // Normal pricing - payment required
+                        vec![
+                            V2Eip155Exact::price_tag(
+                                address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"),
+                                USDC::base_sepolia().amount(100u64),
+                            ),
+                            V2SolanaExact::price_tag(
+                                pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV"),
+                                USDC::solana().amount(100),
+                            ),
+                        ]
+                    }
+                }
+            })),
+        )
+        .layer(telemetry.http_tracing());
 
     tracing::info!("Using facilitator on {}", x402.facilitator_url());
 
@@ -163,31 +125,11 @@ async fn main() {
         .expect("Can not start server");
     tracing::info!("Listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
+
+    Ok(())
 }
 
 #[instrument(skip_all)]
 async fn my_handler() -> impl IntoResponse {
     (StatusCode::OK, "This is a VIP content!")
-}
-
-#[instrument(skip_all)]
-async fn weather_handler() -> impl IntoResponse {
-    (
-        StatusCode::OK,
-        axum::Json(json!({
-            "temperature": 72,
-            "conditions": "sunny",
-            "humidity": 45
-        })),
-    )
-}
-
-#[instrument(skip_all)]
-async fn internal_handler() -> impl IntoResponse {
-    (
-        StatusCode::OK,
-        axum::Json(json!({
-            "status": "admin_access_granted"
-        })),
-    )
 }

@@ -1,6 +1,7 @@
 pub mod client;
 pub mod types;
 
+use alloy_primitives::U256;
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
@@ -9,9 +10,10 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::chain::eip155::{
-    Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
+    ChecksummedAddress, Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
+    Eip155TokenDeployment,
 };
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
+use crate::chain::{ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::proto::v2;
@@ -27,6 +29,33 @@ use crate::scheme::{
 pub use types::*;
 
 pub struct V2Eip155Exact;
+
+impl V2Eip155Exact {
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn price_tag<A: Into<ChecksummedAddress>>(
+        pay_to: A,
+        asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,
+    ) -> v2::PriceTag {
+        let chain_id: ChainId = asset.token.chain_reference.into();
+        let extra = asset
+            .token
+            .eip712
+            .and_then(|eip712| serde_json::to_value(&eip712).ok());
+        let requirements = v2::PaymentRequirements {
+            scheme: ExactScheme.to_string(),
+            pay_to: pay_to.into().to_string(),
+            asset: asset.token.address.to_string(),
+            network: chain_id,
+            amount: asset.amount.to_string(),
+            max_timeout_seconds: 300,
+            extra,
+        };
+        v2::PriceTag {
+            requirements,
+            enricher: None,
+        }
+    }
+}
 
 impl X402SchemeId for V2Eip155Exact {
     fn namespace(&self) -> &str {
@@ -108,8 +137,8 @@ impl X402SchemeFacilitator for V2Eip155ExactFacilitator {
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
         let kinds = vec![proto::SupportedPaymentKind {
-            x402_version: proto::X402Version::v2().into(),
-            scheme: types::ExactScheme.to_string(),
+            x402_version: v2::X402Version2.into(),
+            scheme: ExactScheme.to_string(),
             network: chain_id.clone().into(),
             extra: None,
         }];

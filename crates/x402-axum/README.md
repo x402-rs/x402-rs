@@ -9,319 +9,361 @@
 </td></tr></table>
 </div>
 
-Axum middleware for protecting routes with [x402 protocol](https://www.x402.org) payments.
+**Axum middleware for protecting routes with [x402 protocol](https://www.x402.org) payments.**
 
 This crate provides a drop-in `tower::Layer` that intercepts incoming requests,
-validates `X-Payment` headers using a configured x402 facilitator,
-and settles the payment before responding.
+validates payment headers using a configured x402 facilitator,
+and settles the payment before or after request execution (configurable).
 
 If no valid payment is provided, a `402 Payment Required` response is returned with details about accepted assets and amounts.
 
 ## Features
 
 - Built for [Axum](https://github.com/tokio-rs/axum)
-- Fluent builder API for composing payment requirements and prices
-- Enforces on-chain payment verification before executing protected handlers
+- Full Protocol v2 Support - Complete implementation of x402 protocol v2
+- Multi-chain Support - EVM (EIP-155) and Solana chains
+- Multi-scheme Architecture - Support for various payment schemes
+- Fluent builder API for configuring payment requirements
 - Configurable settlement timing (before or after request execution)
 - Returns standards-compliant `402 Payment Required` responses
 - Emits rich tracing spans with optional OpenTelemetry integration (`telemetry` feature)
-- Compatible with any x402 facilitator (remote or in-process)
+- Compatible with any x402 facilitator
+- Configurable facilitator cache TTL for performance optimization
 
 ## Installation
+
 Add to your `Cargo.toml`:
 
 ```toml
-x402-axum = "0.6"
+x402-axum = "0.7"
 ```
 
-If you want to enable tracing and OpenTelemetry support, use the telemetry feature (make sure to register a tracing subscriber in your application):
+If you want to enable tracing and OpenTelemetry support, use the telemetry feature:
+
 ```toml
-x402-axum = { version = "0.6", features = ["telemetry"] }
+x402-axum = { version = "0.7", features = ["telemetry"] }
 ```
 
-## Specifying Prices
+## Quickstart
 
-Prices in x402 are defined using the `PriceTag` struct. A `PriceTag` includes:
+```rust,no_run
+use axum::{Router, routing::get};
+use axum::response::IntoResponse;
+use http::StatusCode;
+use x402_axum::X402Middleware;
+use x402_rs::networks::{KnownNetworkEip155, USDC};
+use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
 
-- _Asset_ (`asset`) — the ERC-20 token used for payment
-- _Amount_ (`amount`) — the required token amount, either as an integer or a human-readable decimal
-- _Recipient_ (`pay_to`) — the address that will receive the tokens
+let x402 = X402Middleware::new("https://facilitator.x402.rs");
 
-You can construct `PriceTag`s directly or use fluent builder helpers that simplify common flows.
-
-### Asset
-
-**Bring Your Own Token**
-
-If you're integrating a custom token, define it using `TokenDeployment`. This includes token address, decimals, the network it lives on, and EIP-712 metadata (name/version):
-
-```rust
-use x402_rs::types::{TokenAsset, TokenDeployment, EvmAddress, TokenAssetEip712};
-use x402_rs::network::Network;
-
-let asset = TokenDeployment {
-    asset: TokenAsset {
-        address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e".parse().unwrap(),
-        network: Network::BaseSepolia,
-    },
-    decimals: 6,
-    eip712: TokenAssetEip712 {
-        name: "MyToken".into(),
-        version: "1".into(),
-    },
-};
-```
-
-**Known tokens (like USDC)**
-
-For common stablecoins like USDC, you can use the convenience struct `USDCDeployment`:
-
-```rust
-use x402_rs::network::{Network, USDCDeployment};
-
-let asset = USDCDeployment::by_network(Network::BaseSepolia);
-```
-
-### Amount
-
-**Human-Readable Amounts**
-
-Use `.amount("0.025")` on asset to define a price using a string or a number.
-This will be converted to the correct on-chain amount based on the asset’s decimals:
-
-```rust
-usdc.amount("0.025") // → 25000 for 0.025 USDC with 6 decimals 
-```
-
-**Raw Token Amounts**
-
-If you already know the amount in base units (e.g. 25000 for 0.025 USDC with 6 decimals), use `.token_amount(...)`:
-
-```rust
-usdc.token_amount(25000)
-```
-
-This will use the value onchain verbatim.
-
-### Recipient
-
-Use `.pay_to(...)` to set the address that should receive the payment.
-
-```rust
-let price_tag = usdc.amount(0.025).pay_to("0xYourAddress").unwrap();
-```
-
-### Integrating with Middleware
-
-Once you’ve created your PriceTag, pass it to the middleware:
-
-```rust
-let x402 = X402Middleware::try_from("https://x402.org/facilitator/").unwrap();
-let usdc = USDCDeployment::by_network(Network::BaseSepolia);
-
-let app = Router::new().route("/paid-content", get(handler).layer( 
-    // To allow multiple options (e.g., USDC or another token), chain them: 
-    x402
-        .with_price_tag(usdc.amount("0.025").pay_to("0xYourAddress").unwrap())
-        .or_price_tag(other_token.amount("0.035").pay_to("0xYourAddress").unwrap())
+let app: Router = Router::new().route(
+    "/protected",
+    get(my_handler).layer(
+        x402.with_price_tag(V1Eip155Exact::price_tag(
+            "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".parse().unwrap(),
+            USDC::base_sepolia().amount(10),
+        ))
     ),
 );
-```
 
-You can extract shared fields like the payment recipient, then vary prices per route:
-
-```rust
-let x402 = X402Middleware::try_from("https://x402.org/facilitator/").unwrap();
-let asset = USDCDeployment::by_network(Network::BaseSepolia)
-    .pay_to("0xYourAddress"); // Both /vip-content and /extra-vip-content are paid to 0xYourAddress
-
-let app: Router = Router::new()
-    .route(
-        "/vip-content",
-        get(my_handler).layer(x402.with_price_tag(asset.amount("0.025").unwrap())),
-    )
-    .route(
-        "/extra-vip-content",
-        get(my_handler).layer(x402.with_price_tag(asset.amount("0.25").unwrap())),
-    );
+async fn my_handler() -> impl IntoResponse {
+    (StatusCode::OK, "This is VIP content!")
+}
 ```
 
 ## Settlement Timing
 
-By default, the middleware settles payments **after** request execution. You can control this behavior with `settle_before_execution`.
+By default, the middleware settles payments **after** request execution. You can change this:
 
 ```rust
-let x402 = X402Middleware::try_from("https://x402.org/facilitator/").unwrap()
-    .settle_before_execution();
+let x402 = X402Middleware::new("https://facilitator.x402.rs")
+    .settle_before_execution();  // Settle before executing the handler
 ```
 
-This is useful when you want to:
+Or explicitly set settlement after execution (default behavior):
+
+```rust
+let x402 = X402Middleware::new("https://facilitator.x402.rs")
+    .settle_after_execution();  // Settle after successful request execution
+```
+
+## Dynamic Pricing
+
+The middleware supports dynamic pricing through the `with_dynamic_price` method, which allows you to compute prices per-request based on headers, URI, or other runtime factors:
+
+```rust,no_run
+use x402_axum::X402Middleware;
+use x402_rs::networks::{KnownNetworkEip155, USDC};
+use x402_rs::scheme::v2_eip155_exact::V2Eip155Exact;
+
+let x402 = X402Middleware::new("https://facilitator.x402.rs");
+
+let app = Router::new().route(
+    "/api/data",
+    get(handler).layer(x402.with_dynamic_price(|headers, uri, _base_url| {
+        // Check for discount query parameter
+        let has_discount = uri.query().map(|q| q.contains("discount")).unwrap_or(false);
+        let amount = if has_discount { 50 } else { 100 };
+
+        async move {
+            vec![V2Eip155Exact::price_tag(
+                "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".parse().unwrap(),
+                USDC::base_sepolia().amount(amount),
+            )]
+        }
+    })),
+);
+```
+
+### Conditional Free Access (Empty Price Tags)
+
+When the dynamic pricing callback returns an **empty vector**, the middleware bypasses payment enforcement entirely and forwards the request directly to the handler. This is useful for implementing:
+
+- Free tiers or promotional access
+- Conditional pricing based on user authentication
+- A/B testing with paid vs free access
+
+```rust,no_run
+use x402_axum::X402Middleware;
+use x402_rs::networks::{KnownNetworkEip155, USDC};
+use x402_rs::scheme::v2_eip155_exact::V2Eip155Exact;
+
+let x402 = X402Middleware::new("https://facilitator.x402.rs");
+
+let app = Router::new().route(
+    "/api/data",
+    get(handler).layer(x402.with_dynamic_price(|_headers, uri, _base_url| {
+        // Check if "free" query parameter is present
+        let is_free = uri.query().map(|q| q.contains("free")).unwrap_or(false);
+
+        async move {
+            if is_free {
+                // Return empty vector to bypass payment enforcement
+                vec![]
+            } else {
+                // Normal pricing - payment required
+                vec![V2Eip155Exact::price_tag(
+                    "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".parse().unwrap(),
+                    USDC::base_sepolia().amount(100),
+                )]
+            }
+        }
+    })),
+);
+```
+
+With this configuration:
+- `GET /api/data` → Returns 402 Payment Required
+- `GET /api/data?free` → Bypasses payment, returns content directly
+
+## Defining Prices
+
+Prices are defined using the scheme-specific price tag types from `x402_rs`. The crate includes
+built-in schemes for common protocols:
+
+- **`V1Eip155Exact::price_tag()`** - V1 EIP-155 exact payment on EVM chains (ERC-3009)
+- **`V2Eip155Exact::price_tag()`** - V2 EIP-155 exact payment on EVM chains (ERC-3009)
+- **`V1SolanaExact::price_tag()`** - V1 Solana exact payment (SPL token transfer)
+- **`V2SolanaExact::price_tag()`** - V2 Solana exact payment (SPL token transfer)
+
+### Built-in Schemes
+
+```rust,no_run
+use x402_axum::X402Middleware;
+use x402_rs::networks::{KnownNetworkEip155, KnownNetworkSolana, USDC};
+use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
+use x402_rs::scheme::v1_solana_exact::V1SolanaExact;
+
+let x402 = X402Middleware::new("https://facilitator.x402.rs");
+
+// Accept both EVM and Solana payments
+let app = Router::new().route(
+    "/premium",
+    get(handler).layer(
+        x402.with_price_tag(V1Eip155Exact::price_tag(
+            "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".parse().unwrap(),
+            USDC::base_sepolia().amount(10),
+        )).with_price_tag(V1SolanaExact::price_tag(
+            "EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV".parse().unwrap(),
+            USDC::solana().amount(100),
+        ))
+    ),
+);
+```
+
+### Custom Schemes
+
+You can implement custom payment schemes by implementing the [`PaygateProtocol`] trait from
+`x402_axum::paygate`. This allows you to support additional blockchains, payment mechanisms,
+or otherwise custom schemes.
+
+To create a custom scheme, you'll need to:
+
+1. **Define your scheme struct** - A unit struct that serves as a namespace for your scheme
+2. **Add a `price_tag` method** - A static method that constructs the protocol-specific price tag
+3. **Implement [`PaygateProtocol`]** - Handle verification, error responses, and facilitator enrichment
+
+Example structure for a custom scheme:
+
+```rust
+use axum_core::response::Response;
+use x402_axum::paygate::{PaygateError, PaygateProtocol, ResourceInfoBuilder, VerificationError};
+use x402_rs::proto::{self, v2, SupportedResponse};
+
+/// Your custom scheme struct
+pub struct MyCustomScheme;
+
+impl MyCustomScheme {
+    /// Create a price tag for this scheme
+    pub fn price_tag(
+        pay_to: String,
+        asset: String,
+        amount: u64,
+    ) -> v2::PriceTag {
+        v2::PriceTag {
+            requirements: v2::PaymentRequirements {
+                scheme: "my-custom-scheme".to_string(),
+                pay_to,
+                asset,
+                network: /* your chain id */,
+                amount: amount.to_string(),
+                max_timeout_seconds: 300,
+                extra: None,
+            },
+            enricher: None, // Or Some(Arc::new(your_enricher_fn)) if needed
+        }
+    }
+}
+
+// Implement PaygateProtocol for the price tag type (v2::PriceTag in this case)
+// Note: PaygateProtocol is already implemented for v1::PriceTag and v2::PriceTag
+// You only need to implement it if you're creating a completely custom price tag type
+```
+
+For a complete example, see the [How to Write a Scheme](docs/how-to-write-a-scheme.md) guide.
+
+## Settlement Timing
+
+By default, the middleware settles payments **after** request execution. You can change this:
+
+```rust
+let x402 = X402Middleware::new("https://facilitator.x402.rs")
+    .settle_before_execution();  // Settle before executing the handler
+```
+
+Settling before execution is useful when you want to:
 - Avoid failed settlements requiring external retry mechanisms
 - Prevent payment authorization expiration before final settlement
 - Ensure payment is settled before granting access to the resource
 
-## Example
+## Configuration
+
+### Base URL
+
+Set a base URL for computing resource URLs dynamically:
 
 ```rust
-use axum::{Router, routing::get, Json};
-use x402_axum::X402Middleware;
-use x402_axum::price::IntoPriceTag;
-use x402_rs::network::{Network, USDCDeployment};
-use http::StatusCode;
-use serde_json::json;
+use url::Url;
 
-#[tokio::main]
-async fn main() {
-  let x402 = X402Middleware::try_from("https://x402.org/facilitator/").unwrap();
-  let usdc = USDCDeployment::by_network(Network::BaseSepolia)
-    .pay_to("0xYourAddress");
+let x402 = X402Middleware::new("https://facilitator.x402.rs")
+    .with_base_url(Url::parse("https://api.example.com").unwrap());
+```
 
-  let app = Router::new().route(
-    "/paid-content",
+### Resource URL
+
+Set an explicit resource URL (recommended in production):
+
+```rust
+use url::Url;
+
+let app = Router::new().route(
+    "/premium-content",
     get(handler).layer(
-      x402.with_description("Access to /paid-content")
-        .with_price_tag(usdc.amount(0.01).unwrap())
+        x402.with_price_tag(V1Eip155Exact::price_tag(
+            recipient,
+            USDC::base_sepolia().amount(10),
+        )).with_resource(Url::parse("https://api.example.com/premium-content").unwrap())
     ),
-  ); 
-  
-  let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
-    .await
-    .expect("Failed to start server");
-  println!("Listening on {}", listener.local_addr().unwrap());
-  axum::serve(listener, app).await.unwrap();
-}
+);
+```
 
-async fn handler() -> (StatusCode, Json<serde_json::Value>) { 
-  (StatusCode::OK, Json(json!({ "message": "Hello, payer!" })))
-}
+### Description and MIME Type
+
+```rust
+let app = Router::new().route(
+    "/api/data",
+    get(handler).layer(
+        x402.with_price_tag(price_tag)
+            .with_description("Access to premium API")
+            .with_mime_type("application/json")
+    ),
+);
+```
+
+### Facilitator Cache TTL
+
+Configure the TTL for caching the facilitator's supported response:
+
+```rust
+use std::time::Duration;
+
+let x402 = X402Middleware::new("https://facilitator.x402.rs")
+    .with_supported_cache_ttl(Duration::from_secs(300)); // 5 minutes
+```
+
+To disable caching entirely:
+
+```rust
+let x402 = X402Middleware::new("https://facilitator.x402.rs")
+    .with_supported_cache_ttl(Duration::from_secs(0));
 ```
 
 ## HTTP Behavior
 
-If no valid payment is included, the middleware responds with:
+If no valid payment is included, the middleware responds with a 402 Payment Required:
 
-```json5
+**V1 Protocol:**
+```json
 // HTTP/1.1 402 Payment Required
 // Content-Type: application/json
 {
   "error": "X-PAYMENT header is required",
-  "accepts": [
-    // Payment Requirements
-  ],
-  "x402Version": 1
+  "accepts": [...],
+  "x402Version": "1"
 }
 ```
 
-## Configuring Input and Output Schemas
-
-You can provide detailed metadata about your API endpoints using `with_input_schema()` and `with_output_schema()`. These schemas are embedded in the `PaymentRequirements.outputSchema` field and can be used by discovery services, documentation generators, or clients to understand your API.
-
-### Input Schema
-
-The input schema describes the expected request format, including HTTP method, query parameters, headers, and whether the endpoint is publicly discoverable:
-
-```rust
-use serde_json::json;
-
-let x402 = X402Middleware::try_from("https://x402.org/facilitator/").unwrap();
-
-let app = Router::new().route(
-    "/api/weather",
-    get(handler).layer(
-        x402.with_description("Weather API")
-            .with_input_schema(json!({
-                "type": "http",
-                "method": "GET",
-                "discoverable": true,  // Endpoint appears in discovery services
-                "queryParams": {
-                    "location": {
-                        "type": "string",
-                        "description": "City name or coordinates",
-                        "required": true
-                    },
-                    "units": {
-                        "type": "string",
-                        "enum": ["metric", "imperial"],
-                        "default": "metric"
-                    }
-                }
-            }))
-            .with_price_tag(usdc.amount("0.001").unwrap())
-    ),
-);
+**V2 Protocol:**
+```
+// HTTP/1.1 402 Payment Required
+// Payment-Required: <base64-encoded PaymentRequired>
 ```
 
-### Output Schema
+## Error Handling
 
-The output schema describes the response format:
+The middleware provides detailed error information through the `VerificationError` and `PaygateError` types:
 
-```rust
-let app = Router::new().route(
-    "/api/weather",
-    get(handler).layer(
-        x402.with_output_schema(json!({
-            "type": "object",
-            "properties": {
-                "temperature": { "type": "number", "description": "Current temperature" },
-                "conditions": { "type": "string", "description": "Weather conditions" },
-                "humidity": { "type": "number", "description": "Humidity percentage" }
-            },
-            "required": ["temperature", "conditions"]
-        }))
-        .with_price_tag(usdc.amount("0.001").unwrap())
-    ),
-);
-```
+- `VerificationError::PaymentHeaderRequired`: Missing payment header
+- `VerificationError::InvalidPaymentHeader`: Malformed payment header
+- `VerificationError::NoPaymentMatching`: No matching payment requirements found
+- `VerificationError::VerificationFailed`: Payment verification failed
+- `PaygateError::Settlement`: Payment settlement failed
 
-### Discoverable vs Private Endpoints
-
-You can control whether your endpoint appears in public discovery services by setting the `discoverable` flag:
-
-```rust
-// Public endpoint - will appear in x402 Bazaar
-x402.with_input_schema(json!({
-    "type": "http",
-    "method": "GET",
-    "discoverable": true,
-    "description": "Public weather API"
-}))
-
-// Private endpoint - direct access only
-x402.with_input_schema(json!({
-    "type": "http",
-    "method": "GET",
-    "discoverable": false,
-    "description": "Internal admin API - private access only"
-}))
-```
-
-The combined input and output schemas are automatically embedded in `PaymentRequirements.outputSchema` as:
-
-```json
-{
-  "input": { /* your input schema */ },
-  "output": { /* your output schema */ }
-}
-```
+These errors are automatically converted to appropriate 402 Payment Required responses with detailed error messages.
 
 ## Optional Telemetry
 
-If the `telemetry` feature is enabled, the middleware emits structured tracing spans such as:
-- `x402.handle_request`,
-- `x402.verify_payment`,
-- `x402.settle_payment`,
+If the `telemetry` feature is enabled, the middleware emits structured tracing spans:
+- `x402.handle_request`
+- `x402.verify_payment`
+- `x402.settle_payment`
 
 You can connect these to OpenTelemetry exporters like Jaeger, Tempo, or Otel Collector.
 
-To enable:
+## Related Crates
 
-```toml
-[dependencies]
-x402-axum = { version = "0.6", features = ["telemetry"] }
-```
-
-## Related Crates	
 - [x402-rs](https://crates.io/crates/x402-rs): Core x402 types, facilitator traits, helpers.
+- [x402-reqwest](https://crates.io/crates/x402-reqwest): Reqwest middleware for paying x402 requests.
 
 ## License
 

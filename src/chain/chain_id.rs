@@ -117,9 +117,9 @@ impl ChainIdPattern {
         }
     }
 
-    pub fn set(namespace: String, references: HashSet<String>) -> Self {
+    pub fn set<N: Into<String>>(namespace: N, references: HashSet<String>) -> Self {
         Self::Set {
-            namespace,
+            namespace: namespace.into(),
             references,
         }
     }
@@ -204,7 +204,7 @@ impl FromStr for ChainIdPattern {
                 return Err(ChainIdFormatError(s.into()));
             }
 
-            return Ok(ChainIdPattern::set(namespace.into(), references));
+            return Ok(ChainIdPattern::set(namespace, references));
         }
 
         // Exact: eip155:1
@@ -317,7 +317,7 @@ mod tests {
 
     #[test]
     fn test_pattern_wildcard_matches() {
-        let pattern = ChainIdPattern::wildcard("eip155".into());
+        let pattern = ChainIdPattern::wildcard("eip155");
         assert!(pattern.matches(&ChainId::new("eip155", "1")));
         assert!(pattern.matches(&ChainId::new("eip155", "8453")));
         assert!(pattern.matches(&ChainId::new("eip155", "137")));
@@ -326,7 +326,7 @@ mod tests {
 
     #[test]
     fn test_pattern_exact_matches() {
-        let pattern = ChainIdPattern::exact("eip155".into(), "1".into());
+        let pattern = ChainIdPattern::exact("eip155", "1");
         assert!(pattern.matches(&ChainId::new("eip155", "1")));
         assert!(!pattern.matches(&ChainId::new("eip155", "8453")));
         assert!(!pattern.matches(&ChainId::new("solana", "1")));
@@ -338,7 +338,7 @@ mod tests {
             .into_iter()
             .map(String::from)
             .collect();
-        let pattern = ChainIdPattern::set("eip155".into(), references);
+        let pattern = ChainIdPattern::set("eip155", references);
         assert!(pattern.matches(&ChainId::new("eip155", "1")));
         assert!(pattern.matches(&ChainId::new("eip155", "8453")));
         assert!(pattern.matches(&ChainId::new("eip155", "137")));
@@ -348,14 +348,14 @@ mod tests {
 
     #[test]
     fn test_pattern_namespace() {
-        let wildcard = ChainIdPattern::wildcard("eip155".into());
+        let wildcard = ChainIdPattern::wildcard("eip155");
         assert_eq!(wildcard.namespace(), "eip155");
 
-        let exact = ChainIdPattern::exact("solana".into(), "mainnet".into());
+        let exact = ChainIdPattern::exact("solana", "mainnet");
         assert_eq!(exact.namespace(), "solana");
 
         let references: HashSet<String> = vec!["1"].into_iter().map(String::from).collect();
-        let set = ChainIdPattern::set("eip155".into(), references);
+        let set = ChainIdPattern::set("eip155", references);
         assert_eq!(set.namespace(), "eip155");
     }
 }

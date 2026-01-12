@@ -81,3 +81,10 @@ impl ChainRegistry {
         })
     }
 }
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
+pub struct DeployedTokenAmount<TAmount, TToken> {
+    pub amount: TAmount,
+    pub token: TToken,
+}

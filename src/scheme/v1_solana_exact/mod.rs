@@ -16,19 +16,46 @@ use std::error::Error;
 use std::sync::Arc;
 use tracing_core::Level;
 
-use crate::chain::solana::{Address, SolanaChainProvider, SolanaChainProviderError};
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
+use crate::chain::solana::{
+    Address, SolanaChainProvider, SolanaChainProviderError, SolanaTokenDeployment,
+};
+use crate::chain::{ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
-use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
+use crate::proto::v1;
 use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 use crate::util::Base64Bytes;
 
+pub use types::*;
+
 pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 pub struct V1SolanaExact;
+
+impl V1SolanaExact {
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn price_tag<A: Into<Address>>(
+        pay_to: A,
+        asset: DeployedTokenAmount<u64, SolanaTokenDeployment>,
+    ) -> v1::PriceTag {
+        let chain_id: ChainId = asset.token.chain_reference.into();
+        let network = chain_id
+            .as_network_name()
+            .unwrap_or_else(|| panic!("Can not get network name for chain id {}", chain_id));
+        v1::PriceTag {
+            scheme: ExactScheme.to_string(),
+            pay_to: pay_to.into().to_string(),
+            asset: asset.token.address.to_string(),
+            network: network.to_string(),
+            amount: asset.amount.to_string(),
+            max_timeout_seconds: 300,
+            extra: None,
+            enricher: Some(Arc::new(solana_fee_payer_enricher)),
+        }
+    }
+}
 
 impl X402SchemeId for V1SolanaExact {
     fn x402_version(&self) -> u8 {
@@ -48,19 +75,26 @@ impl X402SchemeFacilitatorBuilder for V1SolanaExact {
     fn build(
         &self,
         provider: ChainProvider,
-        _config: Option<serde_json::Value>,
+        config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
         let provider = if let ChainProvider::Solana(provider) = provider {
             provider
         } else {
             return Err("V1SolanaExact::build: provider must be a SolanaChainProvider".into());
         };
-        Ok(Box::new(V1SolanaExactFacilitator { provider }))
+
+        let config = config
+            .map(serde_json::from_value::<V1SolanaExactFacilitatorConfig>)
+            .transpose()?
+            .unwrap_or_default();
+
+        Ok(Box::new(V1SolanaExactFacilitator { provider, config }))
     }
 }
 
 pub struct V1SolanaExactFacilitator {
     provider: Arc<SolanaChainProvider>,
+    config: V1SolanaExactFacilitatorConfig,
 }
 
 #[async_trait::async_trait]
@@ -70,8 +104,8 @@ impl X402SchemeFacilitator for V1SolanaExactFacilitator {
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
         let request = types::VerifyRequest::from_proto(request.clone())?;
-        let verification = verify_transfer(&self.provider, &request).await?;
-        Ok(proto::v1::VerifyResponse::valid(verification.payer.to_string()).into())
+        let verification = verify_transfer(&self.provider, &request, &self.config).await?;
+        Ok(v1::VerifyResponse::valid(verification.payer.to_string()).into())
     }
 
     async fn settle(
@@ -79,10 +113,10 @@ impl X402SchemeFacilitator for V1SolanaExactFacilitator {
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError> {
         let request = types::SettleRequest::from_proto(request.clone())?;
-        let verification = verify_transfer(&self.provider, &request).await?;
+        let verification = verify_transfer(&self.provider, &request, &self.config).await?;
         let payer = verification.payer.to_string();
         let tx_sig = settle_transaction(&self.provider, verification).await?;
-        Ok(proto::v1::SettleResponse::Success {
+        Ok(v1::SettleResponse::Success {
             payer,
             transaction: tx_sig.to_string(),
             network: self.provider.chain_id().to_string(),
@@ -279,6 +313,7 @@ pub struct VerifyTransferResult {
 pub struct TransferCheckedInstruction {
     pub amount: u64,
     pub source: Pubkey,
+    pub mint: Pubkey,
     pub destination: Pubkey,
     pub authority: Pubkey,
     pub token_program: Pubkey,
@@ -336,59 +371,74 @@ pub fn verify_compute_price_instruction(
     Ok(())
 }
 
-pub fn verify_create_ata_instruction(
+/// Validates the instruction structure of the transaction.
+///
+/// Required structure:
+/// - Index 0: SetComputeUnitLimit instruction
+/// - Index 1: SetComputeUnitPrice instruction
+/// - Index 2: TransferChecked instruction (Token or Token-2022)
+/// - Index 3+: Additional instructions (only if allow_additional_instructions is true)
+///
+/// NOTE: CreateATA is NOT supported. The destination ATA must exist before payment.
+pub fn validate_instructions(
     transaction: &VersionedTransaction,
-    index: usize,
-    transfer_requirement: &TransferRequirement,
-) -> Result<(), PaymentVerificationError> {
-    let tx = TransactionInt::new(transaction.clone());
-    let instruction = tx.instruction(index)?;
-    instruction.assert_not_empty()?;
+    config: &V1SolanaExactFacilitatorConfig,
+) -> Result<(), SolanaExactError> {
+    let instructions = transaction.message.instructions();
 
-    // Verify program ID is the Associated Token Account Program
-    let program_id = instruction.program_id();
-    if program_id != ATA_PROGRAM_PUBKEY {
-        return Err(SolanaExactError::InvalidCreateATAInstruction.into());
+    // Minimum: ComputeLimit + ComputePrice + TransferChecked
+    if instructions.len() < 3 {
+        return Err(SolanaExactError::TooFewInstructions);
     }
 
-    // Verify instruction discriminator
-    // The ATA program's Create instruction has discriminator 0 (Create) or 1 (CreateIdempotent)
-    let data = instruction.data_slice();
-    if data.is_empty() || (data[0] != 0 && data[0] != 1) {
-        return Err(SolanaExactError::InvalidCreateATAInstruction.into());
+    // Check maximum instruction count
+    if instructions.len() > config.max_instruction_count {
+        return Err(SolanaExactError::InstructionCountExceedsMax(
+            config.max_instruction_count,
+        ));
     }
 
-    // Verify account count (must have at least 6 accounts)
-    if instruction.instruction.accounts.len() < 6 {
-        return Err(SolanaExactError::InvalidCreateATAInstruction.into());
+    // Verify instruction at index 2 is a token transfer (NOT CreateATA)
+    let ix2_program = get_program_id(transaction, 2);
+    if ix2_program == Some(ATA_PROGRAM_PUBKEY) {
+        return Err(SolanaExactError::CreateATANotSupported);
     }
 
-    // Payer = 0
-    instruction.account(0)?;
-    // ATA = 1
-    instruction.account(1)?;
-    // Owner = 2
-    let owner = instruction.account(2)?;
-    // Mint = 3
-    let mint = instruction.account(3)?;
-    // SystemProgram = 4
-    instruction.account(4)?;
-    // TokenProgram = 5
-    instruction.account(5)?;
+    // Validate additional instructions (if any beyond the required 3)
+    if instructions.len() > 3 {
+        if !config.allow_additional_instructions {
+            return Err(SolanaExactError::AdditionalInstructionsNotAllowed);
+        }
 
-    // verify that the ATA is created for the expected payee
-    if Address::new(owner) != *transfer_requirement.pay_to {
-        return Err(PaymentVerificationError::RecipientMismatch);
+        // Validate each additional instruction (starting at index 3)
+        for i in 3..instructions.len() {
+            if let Some(program_id) = get_program_id(transaction, i) {
+                // Check blocked list first (takes precedence)
+                if config.is_blocked(&program_id) {
+                    return Err(SolanaExactError::BlockedProgram(program_id));
+                }
+
+                // Check allowed list - must be explicitly whitelisted
+                if !config.is_allowed(&program_id) {
+                    return Err(SolanaExactError::ProgramNotAllowed(program_id));
+                }
+            }
+        }
     }
-    if Address::new(mint) != *transfer_requirement.asset {
-        return Err(PaymentVerificationError::AssetMismatch);
-    }
+
     Ok(())
+}
+
+fn get_program_id(transaction: &VersionedTransaction, index: usize) -> Option<Pubkey> {
+    let instruction = transaction.message.instructions().get(index)?;
+    let account_keys = transaction.message.static_account_keys();
+    Some(*instruction.program_id(account_keys))
 }
 
 pub async fn verify_transfer(
     provider: &SolanaChainProvider,
     request: &types::VerifyRequest,
+    config: &V1SolanaExactFacilitatorConfig,
 ) -> Result<VerifyTransferResult, PaymentVerificationError> {
     let payload = &request.payment_payload;
     let requirements = &request.payment_requirements;
@@ -411,8 +461,13 @@ pub async fn verify_transfer(
         asset: &requirements.asset,
         amount: requirements.max_amount_required.inner(),
     };
-    let result =
-        verify_transaction(provider, transaction_b64_string, &transfer_requirement).await?;
+    let result = verify_transaction(
+        provider,
+        transaction_b64_string,
+        &transfer_requirement,
+        config,
+    )
+    .await?;
     Ok(result)
 }
 
@@ -420,6 +475,7 @@ pub async fn verify_transaction(
     provider: &SolanaChainProvider,
     transaction_b64_string: String,
     transfer_requirement: &TransferRequirement<'_>,
+    config: &V1SolanaExactFacilitatorConfig,
 ) -> Result<VerifyTransferResult, PaymentVerificationError> {
     let bytes = Base64Bytes::from(transaction_b64_string.as_bytes())
         .decode()
@@ -427,51 +483,46 @@ pub async fn verify_transaction(
     let transaction = bincode::deserialize::<VersionedTransaction>(bytes.as_slice())
         .map_err(|e| SolanaExactError::TransactionDecoding(e.to_string()))?;
 
-    // perform transaction introspection to validate the transaction structure and details
-    let instructions = transaction.message.instructions();
+    // Verify compute instructions
     let compute_units = verify_compute_limit_instruction(&transaction, 0)?;
     if compute_units > provider.max_compute_unit_limit() {
         return Err(SolanaExactError::MaxComputeUnitLimitExceeded.into());
     }
     tracing::debug!(compute_units = compute_units, "Verified compute unit limit");
     verify_compute_price_instruction(provider.max_compute_unit_price(), &transaction, 1)?;
-    let transfer_instruction = if instructions.len() == 3 {
-        // verify that the transfer instruction is valid
-        // this expects the destination ATA to already exist
-        verify_transfer_instruction(provider, &transaction, 2, transfer_requirement, false).await?
-    } else if instructions.len() == 4 {
-        // verify that the transfer instruction is valid
-        // this expects the destination ATA to be created in the same transaction
-        verify_create_ata_instruction(&transaction, 2, transfer_requirement)?;
-        verify_transfer_instruction(provider, &transaction, 3, transfer_requirement, true).await?
-    } else {
-        return Err(SolanaExactError::InvalidTransactionInstructionsCount.into());
-    };
 
-    // Rule 2: Fee payer safety check
-    // Verify that the fee payer is not included in any instruction's accounts
-    // This single check covers all cases: authority, source, or any other role
-    let fee_payer_pubkey = provider.pubkey();
-    for instruction in transaction.message.instructions().iter() {
-        for account_idx in instruction.accounts.iter() {
-            let account = transaction
-                .message
-                .static_account_keys()
-                .get(*account_idx as usize)
-                .ok_or(SolanaExactError::NoAccountAtIndex(*account_idx))?;
+    // Flexible instruction validation (replaces old instruction count check)
+    validate_instructions(&transaction, config)?;
 
-            if *account == fee_payer_pubkey {
-                return Err(SolanaExactError::FeePayerIncludedInInstructionAccounts.into());
+    // Transfer instruction is ALWAYS at index 2 (CreateATA no longer supported)
+    let transfer_instruction =
+        verify_transfer_instruction(provider, &transaction, 2, transfer_requirement).await?;
+
+    // Fee payer safety check (configurable but defaults to enabled)
+    if config.require_fee_payer_not_in_instructions {
+        let fee_payer_pubkey = provider.pubkey();
+        for instruction in transaction.message.instructions().iter() {
+            for account_idx in instruction.accounts.iter() {
+                let account = transaction
+                    .message
+                    .static_account_keys()
+                    .get(*account_idx as usize)
+                    .ok_or(SolanaExactError::NoAccountAtIndex(*account_idx))?;
+
+                if *account == fee_payer_pubkey {
+                    return Err(SolanaExactError::FeePayerIncludedInInstructionAccounts.into());
+                }
             }
         }
     }
 
+    // Sign and simulate transaction
     let tx = TransactionInt::new(transaction.clone()).sign(provider)?;
     let cfg = RpcSimulateTransactionConfig {
         sig_verify: false,
         replace_recent_blockhash: false,
         commitment: Some(CommitmentConfig::confirmed()),
-        encoding: None, // optional; client handles encoding
+        encoding: None,
         accounts: None,
         inner_instructions: false,
         min_context_slot: None,
@@ -494,7 +545,6 @@ pub async fn verify_transfer_instruction(
     transaction: &VersionedTransaction,
     instruction_index: usize,
     transfer_requirement: &TransferRequirement<'_>,
-    has_dest_ata: bool,
 ) -> Result<TransferCheckedInstruction, PaymentVerificationError> {
     let tx = TransactionInt::new(transaction.clone());
     let instruction = tx.instruction(instruction_index)?;
@@ -514,7 +564,7 @@ pub async fn verify_transfer_instruction(
         // Source = 0
         let source = instruction.account(0)?;
         // Mint = 1
-        let _mint = instruction.account(1)?;
+        let mint = instruction.account(1)?;
         // Destination = 2
         let destination = instruction.account(2)?;
         // Authority = 3
@@ -522,6 +572,7 @@ pub async fn verify_transfer_instruction(
         TransferCheckedInstruction {
             amount,
             source,
+            mint,
             destination,
             authority,
             token_program: spl_token::ID,
@@ -540,7 +591,7 @@ pub async fn verify_transfer_instruction(
         // Source = 0
         let source = instruction.account(0)?;
         // Mint = 1
-        let _mint = instruction.account(1)?;
+        let mint = instruction.account(1)?;
         // Destination = 2
         let destination = instruction.account(2)?;
         // Authority = 3
@@ -548,6 +599,7 @@ pub async fn verify_transfer_instruction(
         TransferCheckedInstruction {
             amount,
             source,
+            mint,
             destination,
             authority,
             token_program: spl_token_2022::ID,
@@ -560,6 +612,11 @@ pub async fn verify_transfer_instruction(
     let fee_payer_pubkey = provider.pubkey();
     if transfer_checked_instruction.authority == fee_payer_pubkey {
         return Err(SolanaExactError::FeePayerTransferringFunds.into());
+    }
+
+    // Verify that the mint matches the expected asset
+    if Address::new(transfer_checked_instruction.mint) != *transfer_requirement.asset {
+        return Err(PaymentVerificationError::AssetMismatch);
     }
 
     let token_program = transfer_checked_instruction.token_program;
@@ -582,8 +639,9 @@ pub async fn verify_transfer_instruction(
     if is_sender_missing {
         return Err(SolanaExactError::MissingSenderAccount.into());
     }
+    // Destination ATA must exist (CreateATA no longer supported)
     let is_receiver_missing = accounts.get(1).cloned().is_none_or(|a| a.is_none());
-    if is_receiver_missing && !has_dest_ata {
+    if is_receiver_missing {
         return Err(PaymentVerificationError::RecipientMismatch);
     }
     let instruction_amount = transfer_checked_instruction.amount;
@@ -619,8 +677,18 @@ pub enum SolanaExactError {
     MaxComputeUnitLimitExceeded,
     #[error("Compute unit price exceeds facilitator maximum")]
     MaxComputeUnitPriceExceeded,
-    #[error("Invalid transaction instructions count")]
-    InvalidTransactionInstructionsCount,
+    #[error("Too few instructions in transaction")]
+    TooFewInstructions,
+    #[error("Additional instructions not allowed")]
+    AdditionalInstructionsNotAllowed,
+    #[error("Instruction count exceeds maximum: {0}")]
+    InstructionCountExceedsMax(usize),
+    #[error("Blocked program in transaction: {0}")]
+    BlockedProgram(Pubkey),
+    #[error("Program not in allowed list: {0}")]
+    ProgramNotAllowed(Pubkey),
+    #[error("CreateATA instruction not supported - destination ATA must exist")]
+    CreateATANotSupported,
     #[error("Fee payer included in instruction accounts")]
     FeePayerIncludedInInstructionAccounts,
     #[error("Fee payer found transferring funds")]
@@ -635,8 +703,6 @@ pub enum SolanaExactError {
     InvalidComputeLimitInstruction,
     #[error("Invalid compute price instruction")]
     InvalidComputePriceInstruction,
-    #[error("Invalid Create ATA instruction")]
-    InvalidCreateATAInstruction,
     #[error("Invalid token instruction")]
     InvalidTokenInstruction,
     #[error("Missing sender account in transaction")]
@@ -649,10 +715,14 @@ impl From<SolanaExactError> for PaymentVerificationError {
             SolanaExactError::TransactionDecoding(_) => {
                 PaymentVerificationError::InvalidFormat(e.to_string())
             }
-            SolanaExactError::InvalidCreateATAInstruction
-            | SolanaExactError::MaxComputeUnitLimitExceeded
+            SolanaExactError::MaxComputeUnitLimitExceeded
             | SolanaExactError::MaxComputeUnitPriceExceeded
-            | SolanaExactError::InvalidTransactionInstructionsCount
+            | SolanaExactError::TooFewInstructions
+            | SolanaExactError::AdditionalInstructionsNotAllowed
+            | SolanaExactError::InstructionCountExceedsMax(_)
+            | SolanaExactError::BlockedProgram(_)
+            | SolanaExactError::ProgramNotAllowed(_)
+            | SolanaExactError::CreateATANotSupported
             | SolanaExactError::FeePayerIncludedInInstructionAccounts
             | SolanaExactError::NoInstructionAtIndex(_)
             | SolanaExactError::InvalidComputeLimitInstruction
@@ -671,5 +741,33 @@ impl From<SolanaExactError> for PaymentVerificationError {
 impl From<SolanaChainProviderError> for PaymentVerificationError {
     fn from(value: SolanaChainProviderError) -> Self {
         Self::TransactionSimulation(value.to_string())
+    }
+}
+
+/// Enricher function for Solana price tags - adds fee_payer to extra field
+#[allow(dead_code)]
+pub fn solana_fee_payer_enricher(
+    price_tag: &mut v1::PriceTag,
+    capabilities: &proto::SupportedResponse,
+) {
+    if price_tag.extra.is_some() {
+        return;
+    }
+
+    // Find the matching kind and deserialize the whole extra into SupportedPaymentKindExtra
+    let extra = capabilities
+        .kinds
+        .iter()
+        .find(|kind| {
+            v1::X402Version1 == kind.x402_version
+                && kind.scheme == ExactScheme.to_string()
+                && kind.network == price_tag.network
+        })
+        .and_then(|kind| kind.extra.as_ref())
+        .and_then(|extra| serde_json::from_value::<SupportedPaymentKindExtra>(extra.clone()).ok());
+
+    // Serialize the whole extra back to Value
+    if let Some(extra) = extra {
+        price_tag.extra = serde_json::to_value(&extra).ok();
     }
 }

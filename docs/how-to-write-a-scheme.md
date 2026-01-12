@@ -1,6 +1,6 @@
 # How to Write a Scheme for x402-rs
 
-This guide explains how to create a custom payment scheme for the x402-rs facilitator.
+This guide explains how to create a custom payment scheme for the x402-rs **facilitator** (server-side). Schemes define how the facilitator verifies and settles payments on behalf of resource servers.
 
 ## What is a Scheme?
 
@@ -221,7 +221,7 @@ impl X402SchemeFacilitator for V2SolanaMyschemeFacilitator {
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
         let kinds = vec![proto::SupportedPaymentKind {
-            x402_version: proto::X402Version::v2().into(),
+            x402_version: proto::v2::X402Version2.into(),
             scheme: "myscheme".to_string(),
             network: chain_id.to_string(),
             extra: None,

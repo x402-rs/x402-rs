@@ -14,6 +14,17 @@ macro_rules! lit_str {
             }
         }
 
+        impl std::str::FromStr for $struct_name {
+            type Err = String;
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                if s == Self::VALUE {
+                    Ok($struct_name)
+                } else {
+                    Err(format!("expected '{}', got '{}'", Self::VALUE, s))
+                }
+            }
+        }
+
         impl serde::Serialize for $struct_name {
             fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
                 serializer.serialize_str(Self::VALUE)

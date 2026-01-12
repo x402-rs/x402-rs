@@ -33,6 +33,7 @@
         "chains": "eip155:*"
       },
       {
+        "_comment": "Solana schemes allow Phantom Lighthouse program by default",
         "id": "v1-solana-exact",
         "chains": "solana:*"
       },

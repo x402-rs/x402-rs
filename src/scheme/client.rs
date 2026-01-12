@@ -5,6 +5,8 @@ use crate::chain::{ChainId, ChainIdPattern};
 use crate::proto;
 use crate::scheme::X402SchemeId;
 
+// TODO: Update x402-rs README for axum example, reqwest example
+
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct PaymentCandidate {
     pub chain_id: ChainId,
@@ -23,7 +25,7 @@ impl PaymentCandidate {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub trait X402SchemeClient: X402SchemeId + Send + Sync {
     fn accept(&self, payment_required: &proto::PaymentRequired) -> Vec<PaymentCandidate>;
@@ -52,12 +54,6 @@ pub enum X402Error {
 
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
-}
-
-#[allow(dead_code)] // Public for consumption by downstream crates.
-pub enum HttpTransport<A> {
-    V1(A),
-    V2(A),
 }
 
 // ============================================================================

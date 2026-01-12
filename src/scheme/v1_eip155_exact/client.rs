@@ -3,14 +3,15 @@ use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
 use rand::{Rng, rng};
-use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::chain::ChainId;
 use crate::chain::eip155::Eip155ChainReference;
 use crate::proto::PaymentRequired;
-use crate::proto::client::{PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient};
 use crate::proto::v1::X402Version1;
+use crate::scheme::client::{
+    PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
+};
 use crate::scheme::v1_eip155_exact::{
     ExactEvmPayload, ExactEvmPayloadAuthorization, ExactScheme, PaymentRequirementsExtra,
     TransferWithAuthorization, types,
@@ -57,7 +58,7 @@ where
             .accepts
             .iter()
             .filter_map(|v| {
-                let requirements = types::PaymentRequirements::deserialize(v).ok()?;
+                let requirements: types::PaymentRequirements = v.as_concrete()?;
                 let chain_id = ChainId::from_network_name(&requirements.network)?;
                 let chain_reference = Eip155ChainReference::try_from(chain_id.clone()).ok()?;
                 let candidate = PaymentCandidate {

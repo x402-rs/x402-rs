@@ -26,10 +26,3 @@ pub mod proto;
 pub mod scheme;
 pub mod timestamp;
 pub mod util;
-
-// Hidden re-exports just for macro expansion.
-#[doc(hidden)]
-pub mod __reexports {
-    pub use alloy_primitives;
-    pub use solana_pubkey;
-}

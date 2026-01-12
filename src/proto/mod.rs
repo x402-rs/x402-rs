@@ -1,18 +1,29 @@
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
+use serde_with::{VecSkipError, serde_as};
 use std::collections::HashMap;
-use std::fmt;
-use std::fmt::Display;
 use std::str::FromStr;
 
 use crate::chain::ChainId;
 use crate::scheme::SchemeHandlerSlug;
 
-pub mod client;
 pub mod util;
 pub mod v1;
 pub mod v2;
 
-pub type SettleRequest = VerifyRequest;
+pub trait ProtocolV {
+    type V1;
+    type V2;
+}
+
+pub enum ProtocolVersioned<T>
+where
+    T: ProtocolV,
+{
+    #[allow(dead_code)]
+    V1(T::V1),
+    #[allow(dead_code)]
+    V2(T::V2),
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,10 +35,12 @@ pub struct SupportedPaymentKind {
     pub extra: Option<serde_json::Value>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde_as]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct SupportedResponse {
+    #[serde_as(as = "VecSkipError<_>")]
     pub kinds: Vec<SupportedPaymentKind>,
     #[serde(default)]
     pub extensions: Vec<String>,
@@ -35,93 +48,18 @@ pub struct SupportedResponse {
     pub signers: HashMap<ChainId, Vec<String>>,
 }
 
-/// Represents the protocol version. Versions 1 and 2 are supported.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum X402Version {
-    /// Version `1`.
-    V1(v1::X402Version1),
-    /// Version `2`.
-    V2(v2::X402Version2),
-}
-
-impl X402Version {
-    pub fn v1() -> X402Version {
-        X402Version::V1(v1::X402Version1)
-    }
-    pub fn v2() -> X402Version {
-        X402Version::V2(v2::X402Version2)
-    }
-}
-
-impl From<X402Version> for u8 {
-    fn from(version: X402Version) -> Self {
-        match version {
-            X402Version::V1(v) => v.into(),
-            X402Version::V2(v) => v.into(),
-        }
-    }
-}
-
-impl TryFrom<u64> for X402Version {
-    type Error = X402VersionError;
-
-    fn try_from(value: u64) -> Result<Self, Self::Error> {
-        match value {
-            1 => Ok(X402Version::V1(v1::X402Version1)),
-            2 => Ok(X402Version::V2(v2::X402Version2)),
-            _ => Err(X402VersionError(value)),
-        }
-    }
-}
-
-impl Serialize for X402Version {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            X402Version::V1(v) => v.serialize(serializer),
-            X402Version::V2(v) => v.serialize(serializer),
-        }
-    }
-}
-
-impl Display for X402Version {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            X402Version::V1(v) => Display::fmt(v, f),
-            X402Version::V2(v) => Display::fmt(v, f),
-        }
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("Unsupported x402 version: {0}")]
-pub struct X402VersionError(pub u64);
-
-impl TryFrom<u8> for X402Version {
-    type Error = X402VersionError;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            v1::X402Version1::VALUE => Ok(X402Version::v1()),
-            v2::X402Version2::VALUE => Ok(X402Version::v2()),
-            _ => Err(X402VersionError(value.into())),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for X402Version {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let num = u8::deserialize(deserializer)?;
-        X402Version::try_from(num).map_err(serde::de::Error::custom)
-    }
-}
-
 /// Wrapper for a payment payload and requirements sent by the client to a facilitator
 /// to be verified.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifyRequest(serde_json::Value);
+
+pub type SettleRequest = VerifyRequest;
+
+impl From<serde_json::Value> for VerifyRequest {
+    fn from(value: serde_json::Value) -> Self {
+        Self(value)
+    }
+}
 
 impl VerifyRequest {
     pub fn into_json(self) -> serde_json::Value {
@@ -129,17 +67,16 @@ impl VerifyRequest {
     }
 
     pub fn scheme_handler_slug(&self) -> Option<SchemeHandlerSlug> {
-        let x402_version = self.0.get("x402Version")?.as_u64()?;
-        let x402_version = X402Version::try_from(x402_version).ok()?;
+        let x402_version: u8 = self.0.get("x402Version")?.as_u64()?.try_into().ok()?;
         match x402_version {
-            X402Version::V1(_) => {
+            v1::X402Version1::VALUE => {
                 let network_name = self.0.get("paymentPayload")?.get("network")?.as_str()?;
                 let chain_id = ChainId::from_network_name(network_name)?;
                 let scheme = self.0.get("paymentPayload")?.get("scheme")?.as_str()?;
                 let slug = SchemeHandlerSlug::new(chain_id, 1, scheme.into());
                 Some(slug)
             }
-            X402Version::V2(_) => {
+            v2::X402Version2::VALUE => {
                 let chain_id_string = self
                     .0
                     .get("paymentPayload")?
@@ -156,17 +93,18 @@ impl VerifyRequest {
                 let slug = SchemeHandlerSlug::new(chain_id, 2, scheme.into());
                 Some(slug)
             }
+            _ => None,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VerifyResponse(serde_json::Value);
+pub struct VerifyResponse(pub serde_json::Value);
 
 /// Wrapper for a payment payload and requirements sent by the client to a facilitator
 /// to be verified.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SettleResponse(serde_json::Value);
+pub struct SettleResponse(pub serde_json::Value);
 
 #[derive(Debug, thiserror::Error)]
 pub enum PaymentVerificationError {
@@ -269,9 +207,11 @@ impl PaymentProblem {
     }
 }
 
-#[derive(Debug, Clone)]
-#[allow(dead_code)] // Public for consumption by downstream crates.
-pub enum PaymentRequired {
-    V1(v1::PaymentRequired),
-    V2(v2::PaymentRequired),
+pub struct PaymentRequiredV;
+
+impl ProtocolV for PaymentRequiredV {
+    type V1 = v1::PaymentRequired;
+    type V2 = v2::PaymentRequired;
 }
+
+pub type PaymentRequired = ProtocolVersioned<PaymentRequiredV>;

@@ -3,7 +3,7 @@ pub mod v1_solana_exact;
 pub mod v2_eip155_exact;
 pub mod v2_solana_exact;
 
-pub use v1_eip155_exact::V1Eip155Exact;
+pub mod client;
 
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
@@ -13,6 +13,7 @@ use crate::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
 use crate::config::SchemeConfig;
 use crate::proto;
 use crate::proto::{AsPaymentProblem, ErrorReason, PaymentProblem, PaymentVerificationError};
+use crate::scheme::v1_eip155_exact::V1Eip155Exact;
 use crate::scheme::v1_solana_exact::V1SolanaExact;
 use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_solana_exact::V2SolanaExact;

@@ -5,13 +5,20 @@ edition = "2024"
 publish = false
 
 [dependencies]
-x402-rs = { version = "0.10" }
-x402-axum = { version = "0.6", features = ["telemetry"] }
+x402-rs = { version = "0.11", path = "../../" }
+x402-axum = { version = "0.7", path = "../../crates/x402-axum", features = ["telemetry"] }
+http = { version = "1.4.0" }
+reqwest = { version = "0.12.25" }
+thiserror = { version = "2.0.17" }
+serde = { version = "1.0.228", features = ["derive"] }
+tower = { version = "0.5.2" }
 
-axum = { version = "0.8.4" }
-tokio = { version = "1.45.0" }
+axum = { version = "0.8.7" }
+tokio = { version = "1.48.0" }
 dotenvy = { version = "0.15.7" }
 serde_json = { version = "1.0" }
+alloy-primitives = { version = "1.4.1" }
+solana-pubkey = { version = "4.0.0" }
 
 # Tracing and OpenTelemetry
 tracing = { version = "0.1.41" }
@@ -19,3 +26,4 @@ opentelemetry = { version = "0.30.0" }
 tower-http = { version = "0.6.4" }
 tracing-opentelemetry = { version = "0.31.0" }
 url = { version = "2.5.4" }
+once_cell = "1.21.3"

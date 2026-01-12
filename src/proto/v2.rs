@@ -1,10 +1,14 @@
-use crate::chain::ChainId;
-use crate::proto;
-use crate::proto::v1;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
+use std::sync::Arc;
+
+use crate::chain::ChainId;
+use crate::proto;
+use crate::proto::SupportedResponse;
+use crate::proto::v1;
 
 /// Version 2 of the x402 protocol.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
@@ -12,6 +16,12 @@ pub struct X402Version2;
 
 impl X402Version2 {
     pub const VALUE: u8 = 2;
+}
+
+impl PartialEq<u8> for X402Version2 {
+    fn eq(&self, other: &u8) -> bool {
+        *other == Self::VALUE
+    }
 }
 
 impl From<X402Version2> for u8 {
@@ -92,7 +102,12 @@ pub struct PaymentPayload<TAccepted, TPayload> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct PaymentRequirements<TScheme, TAmount, TAddress, TExtra> {
+pub struct PaymentRequirements<
+    TScheme = String,
+    TAmount = String,
+    TAddress = String,
+    TExtra = serde_json::Value,
+> {
     pub scheme: TScheme,
     pub network: ChainId,
     pub amount: TAmount,
@@ -103,12 +118,93 @@ pub struct PaymentRequirements<TScheme, TAmount, TAddress, TExtra> {
     pub extra: Option<TExtra>,
 }
 
+impl PaymentRequirements {
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn as_concrete<
+        TScheme: FromStr,
+        TAmount: FromStr,
+        TAddress: FromStr,
+        TExtra: DeserializeOwned,
+    >(
+        &self,
+    ) -> Option<PaymentRequirements<TScheme, TAmount, TAddress, TExtra>> {
+        let scheme = self.scheme.parse::<TScheme>().ok()?;
+        let amount = self.amount.parse::<TAmount>().ok()?;
+        let pay_to = self.pay_to.parse::<TAddress>().ok()?;
+        let asset = self.asset.parse::<TAddress>().ok()?;
+        let extra = self
+            .extra
+            .as_ref()
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+        Some(PaymentRequirements {
+            scheme,
+            network: self.network.clone(),
+            amount,
+            pay_to,
+            max_timeout_seconds: self.max_timeout_seconds,
+            asset,
+            extra,
+        })
+    }
+}
+
 /// Structured representation of a V2 Payment-Required header.
 /// This provides proper typing for the payment required response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentRequired {
     pub x402_version: X402Version2,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
     pub resource: ResourceInfo,
-    pub accepts: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub accepts: Vec<PaymentRequirements>,
+}
+
+#[derive(Clone)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
+pub struct PriceTag {
+    pub requirements: PaymentRequirements,
+    /// Optional enrichment function provided by concrete price tags
+    #[doc(hidden)]
+    pub enricher: Option<Enricher>,
+}
+
+impl fmt::Debug for PriceTag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PriceTag")
+            .field("requirements", &self.requirements)
+            .finish()
+    }
+}
+
+/// Type alias for price tag enrichment functions.
+/// The function takes a mutable reference to the price tag and the facilitator's
+/// supported capabilities, and enriches the price tag (e.g., adds fee_payer for Solana).
+pub type Enricher = Arc<dyn Fn(&mut PriceTag, &SupportedResponse) + Send + Sync>;
+
+impl PriceTag {
+    /// Apply the stored enrichment function if present.
+    #[allow(dead_code)]
+    pub fn enrich(&mut self, capabilities: &SupportedResponse) {
+        if let Some(enricher) = self.enricher.clone() {
+            enricher(self, capabilities);
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn with_timeout(mut self, seconds: u64) -> Self {
+        self.requirements.max_timeout_seconds = seconds;
+        self
+    }
+}
+
+/// Custom PartialEq to compare `PriceTag` with `PaymentRequirements`.
+///
+/// Since `Value` implements `PartialEq`, we can compare the `extra` field directly.
+impl PartialEq<PaymentRequirements> for PriceTag {
+    fn eq(&self, b: &PaymentRequirements) -> bool {
+        let a = &self.requirements;
+        a == b
+    }
 }
