@@ -190,19 +190,19 @@ Create a `config.json` file with your chain and scheme configuration:
   },
   "schemes": [
     {
-      "slug": "v1:eip155:exact",
+      "id": "v1-eip155-exact",
       "chains": "eip155:*"
     },
     {
-      "slug": "v2:eip155:exact",
+      "id": "v2-eip155-exact",
       "chains": "eip155:*"
     },
     {
-      "slug": "v1:solana:exact",
+      "id": "v1-solana-exact",
       "chains": "solana:*"
     },
     {
-      "slug": "v2:solana:exact",
+      "id": "v2-solana-exact",
       "chains": "solana:*"
     }
   ]
@@ -215,7 +215,7 @@ Create a `config.json` file with your chain and scheme configuration:
   - EVM chains (`eip155:*`): Configure `signers` (array of private keys), `rpc` endpoints, and optional `eip1559`/`flashblocks` flags
   - Solana chains (`solana:*`): Configure `signer` (single private key), `rpc` endpoint, and optional `pubsub` endpoint
 - **`schemes`**: List of payment schemes to enable
-  - `slug`: Scheme identifier in format `v{version}:{namespace}:{name}` (e.g., `v2:eip155:exact`)
+  - `id`: Scheme identifier in format `v{version}-{namespace}-{name}` (e.g., `v2-eip155-exact`)
   - `chains`: Chain pattern to match (e.g., `eip155:*` for all EVM chains, `eip155:84532` for specific chain)
 
 **Environment variable references:**
@@ -427,7 +427,7 @@ The service reads configuration from a JSON file (`config.json` by default) or v
   "schemes": [
     {
       "enabled": true,
-      "slug": "v2:eip155:exact",
+      "id": "v2-eip155-exact",
       "chains": "eip155:*",
       "config": {}
     }
@@ -435,20 +435,20 @@ The service reads configuration from a JSON file (`config.json` by default) or v
 }
 ```
 
-| Option    | Type    | Required | Default | Description                                                 |
-|:----------|:--------|:---------|:--------|:------------------------------------------------------------|
-| `enabled` | boolean | ❌        | `true`  | Whether this scheme is enabled                              |
-| `slug`    | string  | ✅        | -       | Scheme identifier: `v{version}:{namespace}:{name}`          |
-| `chains`  | string  | ✅        | -       | Chain pattern: `eip155:*`, `solana:*`, or specific chain ID |
-| `config`  | object  | ❌        | -       | Scheme-specific configuration                               |
+| Option | Type | Required | Default | Description |
+|:-------|:-----|:---------|:--------|:------------|
+| `enabled` | boolean | ❌ | `true` | Whether this scheme is enabled |
+| `id` | string | ✅ | - | Scheme identifier: `v{version}-{namespace}-{name}` |
+| `chains` | string | ✅ | - | Chain pattern: `eip155:*`, `solana:*`, or specific chain ID |
+| `config` | object | ❌ | - | Scheme-specific configuration |
 
 **Important:** Schemes must be explicitly listed in the `schemes` array to be enabled. If a scheme is not in the configuration, it will not be available for payment verification or settlement.
 
 **Available schemes:**
-- `v1:eip155:exact` - ERC-3009 transferWithAuthorization for EVM chains (protocol v1)
-- `v2:eip155:exact` - ERC-3009 transferWithAuthorization for EVM chains (protocol v2)
-- `v1:solana:exact` - SPL token transfer for Solana (protocol v1)
-- `v2:solana:exact` - SPL token transfer for Solana (protocol v2)
+- `v1-eip155-exact` - ERC-3009 transferWithAuthorization for EVM chains (protocol v1)
+- `v2-eip155-exact` - ERC-3009 transferWithAuthorization for EVM chains (protocol v2)
+- `v1-solana-exact` - SPL token transfer for Solana (protocol v1)
+- `v2-solana-exact` - SPL token transfer for Solana (protocol v2)
 
 #### Environment Variables
 
