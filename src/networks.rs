@@ -170,6 +170,12 @@ pub trait KnownNetworkEip155<A> {
 
     /// Returns the instance for IoTeX (eip155:4689)
     fn iotex() -> A;
+
+    /// Returns the instance for Celo mainnet (eip155:42220)
+    fn celo() -> A;
+
+    /// Returns the instance for Celo testnet (eip155:11142220)
+    fn celo_sepolia() -> A;
 }
 
 /// Trait providing convenient methods to get instances for well-known Solana networks.
@@ -264,6 +270,14 @@ impl KnownNetworkEip155<ChainId> for ChainId {
 
     fn iotex() -> ChainId {
         ChainId::new("eip155", "4689")
+    }
+
+    fn celo() -> ChainId {
+        ChainId::new("eip155", "42220")
+    }
+
+    fn celo_sepolia() -> ChainId {
+        ChainId::new("eip155", "11142220")
     }
 }
 
@@ -365,6 +379,17 @@ static KNOWN_NETWORKS: &[NetworkInfo] = &[
         name: "iotex",
         namespace: "eip155",
         reference: "4689",
+    },
+    // Celo Networks
+    NetworkInfo {
+        name: "celo",
+        namespace: "eip155",
+        reference: "42220",
+    },
+    NetworkInfo {
+        name: "celo-sepolia",
+        namespace: "eip155",
+        reference: "11142220",
     },
     // Solana Networks
     NetworkInfo {
@@ -648,6 +673,30 @@ impl KnownNetworkEip155<eip155::Eip155TokenDeployment> for USDC {
             }),
         }
     }
+
+    fn celo() -> eip155::Eip155TokenDeployment {
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(42220),
+            address: alloy_primitives::address!("0xcebA9300f2b948710d2653dD7B07f33A8B32118C"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "USDC".into(),
+                version: "2".into(),
+            }),
+        }
+    }
+
+    fn celo_sepolia() -> eip155::Eip155TokenDeployment {
+        eip155::Eip155TokenDeployment {
+            chain_reference: eip155::Eip155ChainReference::new(11142220),
+            address: alloy_primitives::address!("0x01C5C0122039549AD1493B8220cABEdD739BC44E"),
+            decimals: 6,
+            eip712: Some(eip155::TokenDeploymentEip712 {
+                name: "USDC".into(),
+                version: "2".into(),
+            }),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -655,7 +704,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_known_networks_by_name() {
+    fn test_chain_id_from_network_name() {
         let base = chain_id_by_network_name("base").unwrap();
         assert_eq!(base.namespace, "eip155");
         assert_eq!(base.reference, "8453");
@@ -664,18 +713,34 @@ mod tests {
         assert_eq!(base_sepolia.namespace, "eip155");
         assert_eq!(base_sepolia.reference, "84532");
 
+        let polygon = chain_id_by_network_name("polygon").unwrap();
+        assert_eq!(polygon.namespace, "eip155");
+        assert_eq!(polygon.reference, "137");
+
+        let celo = chain_id_by_network_name("celo").unwrap();
+        assert_eq!(celo.namespace, "eip155");
+        assert_eq!(celo.reference, "42220");
+
         let solana = chain_id_by_network_name("solana").unwrap();
         assert_eq!(solana.namespace, "solana");
         assert_eq!(solana.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
 
-        assert!(chain_id_by_network_name("unknown-network").is_none());
+        assert!(chain_id_by_network_name("unknown").is_none());
     }
 
     #[test]
-    fn test_known_networks_by_chain_id() {
+    fn test_network_name_by_chain_id() {
         let chain_id = ChainId::new("eip155", "8453");
         let network_name = network_name_by_chain_id(&chain_id).unwrap();
         assert_eq!(network_name, "base");
+
+        let celo_chain_id = ChainId::new("eip155", "42220");
+        let network_name = network_name_by_chain_id(&celo_chain_id).unwrap();
+        assert_eq!(network_name, "celo");
+
+        let celo_sepolia_chain_id = ChainId::new("eip155", "11142220");
+        let network_name = network_name_by_chain_id(&celo_sepolia_chain_id).unwrap();
+        assert_eq!(network_name, "celo-sepolia");
 
         let solana_chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
         let network_name = network_name_by_chain_id(&solana_chain_id).unwrap();
@@ -686,37 +751,17 @@ mod tests {
     }
 
     #[test]
-    fn test_chain_id_from_network_name() {
-        let chain_id = chain_id_by_network_name("base").unwrap();
-        assert_eq!(chain_id.namespace, "eip155");
-        assert_eq!(chain_id.reference, "8453");
-
-        let solana_chain_id = chain_id_by_network_name("solana").unwrap();
-        assert_eq!(solana_chain_id.namespace, "solana");
-        assert_eq!(
-            solana_chain_id.reference,
-            "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
-        );
-
-        assert!(chain_id_by_network_name("unknown").is_none());
-    }
-
-    #[test]
     fn test_chain_id_as_network_name() {
         let chain_id = ChainId::new("eip155", "8453");
         assert_eq!(chain_id.as_network_name(), Some("base"));
+
+        let celo_chain_id = ChainId::new("eip155", "42220");
+        assert_eq!(celo_chain_id.as_network_name(), Some("celo"));
 
         let solana_chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
         assert_eq!(solana_chain_id.as_network_name(), Some("solana"));
 
         let unknown_chain_id = ChainId::new("eip155", "999999");
         assert!(unknown_chain_id.as_network_name().is_none());
-    }
-
-    #[test]
-    fn test_network_info_chain_id() {
-        let chain_id = chain_id_by_network_name("polygon").unwrap();
-        assert_eq!(chain_id.namespace, "eip155");
-        assert_eq!(chain_id.reference, "137");
     }
 }
