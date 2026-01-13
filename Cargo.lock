@@ -8272,7 +8272,7 @@ dependencies = [
 
 [[package]]
 name = "x402-rs"
-version = "0.11.2"
+version = "0.11.3"
 dependencies = [
  "alloy-contract",
  "alloy-network",
