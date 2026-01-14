@@ -173,20 +173,10 @@ impl ChainRegistry {
         self.0.get(&chain_id).cloned()
     }
 
-    /// Finds the first provider matching the given chain ID pattern.
-    ///
-    /// Useful for finding any provider within a namespace (e.g., any EVM chain)
-    /// or within a specific set of chains.
-    ///
-    /// Returns `None` if no provider matches the pattern.
-    pub fn by_chain_id_pattern(&self, pattern: &ChainIdPattern) -> Option<ChainProvider> {
-        self.0.iter().find_map(|(chain_id, provider)| {
-            if pattern.matches(chain_id) {
-                Some(provider.clone())
-            } else {
-                None
-            }
-        })
+    pub fn by_chain_id_pattern(&self, pattern: &ChainIdPattern) -> Vec<ChainProvider> {
+        self.0.iter().filter(|(chain_id, _)| pattern.matches(chain_id))
+            .map(|(_, provider)| provider.clone())
+            .collect()
     }
 }
 
