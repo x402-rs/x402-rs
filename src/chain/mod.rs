@@ -173,9 +173,9 @@ impl ChainRegistry {
         self.0.get(&chain_id).cloned()
     }
 
-    pub fn by_chain_id_pattern(&self, pattern: &ChainIdPattern) -> Vec<ChainProvider> {
-        self.0.iter().filter(|(chain_id, _)| pattern.matches(chain_id))
-            .map(|(_, provider)| provider.clone())
+    pub fn by_chain_id_pattern(&self, pattern: &ChainIdPattern) -> Vec<&ChainProvider> {
+        self.0.iter().filter_map(|(chain_id, provider)| pattern.matches(chain_id)
+            .then_some(provider))
             .collect()
     }
 }

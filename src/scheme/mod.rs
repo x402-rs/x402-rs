@@ -282,7 +282,7 @@ impl SchemeRegistry {
 
             for chain_provider in chain_providers {
                 let chain_id = chain_provider.chain_id();
-                let handler = match blueprint.build(chain_provider, config.config.clone()) {
+                let handler = match blueprint.build(chain_provider.clone(), config.config.clone()) {
                     Ok(handler) => handler,
                     Err(err) => {
                         tracing::error!("Error building scheme handler for {}: {}", config.id, err);
