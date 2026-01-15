@@ -141,10 +141,11 @@ let client = X402Client::new()
 ## Optional Features
 
 - `telemetry`: Enables tracing annotations for richer observability
+- `json`: Enables JSON support for the reqwest-middleware, allowing `.json()` calls when making a HTTP request
 
-Enable it via:
+Enable them via:
 ```toml
-x402-reqwest = { version = "0.5", features = ["telemetry"] }
+x402-reqwest = { version = "0.5", features = ["telemetry", "json"] }
 ```
 
 ## Telemetry

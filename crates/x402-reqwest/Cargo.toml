@@ -1,6 +1,6 @@
 [package]
 name = "x402-reqwest"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 description = "Wrapper for reqwest for transparent x402 payments"
 license = "Apache-2.0"
@@ -29,3 +29,4 @@ alloy-signer-local = { version = "1.4" }
 [features]
 default = []
 telemetry = ["dep:tracing", "x402-rs/telemetry"]
+json = ["reqwest-middleware/json"]

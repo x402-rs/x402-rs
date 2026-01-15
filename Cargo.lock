@@ -8245,7 +8245,7 @@ dependencies = [
 
 [[package]]
 name = "x402-reqwest"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "alloy-signer-local",
  "async-trait",
