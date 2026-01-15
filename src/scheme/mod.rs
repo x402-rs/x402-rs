@@ -274,28 +274,29 @@ impl SchemeRegistry {
                     continue;
                 }
             };
-            let chain_provider = match chains.by_chain_id_pattern(&config.chains) {
-                Some(chain_provider) => chain_provider,
-                None => {
-                    tracing::warn!("No chain provider found for {}", config.chains);
-                    continue;
-                }
-            };
-            let chain_id = chain_provider.chain_id();
-            let handler = match blueprint.build(chain_provider, config.config.clone()) {
-                Ok(handler) => handler,
-                Err(err) => {
-                    tracing::error!("Error building scheme handler for {}: {}", config.id, err);
-                    continue;
-                }
-            };
-            let slug = SchemeHandlerSlug::new(
-                chain_id.clone(),
-                blueprint.x402_version(),
-                blueprint.scheme().to_string(),
-            );
-            tracing::info!(chain_id = %chain_id, scheme = %blueprint.scheme(), id=blueprint.id(), "Registered scheme handler");
-            handlers.insert(slug, handler);
+            let chain_providers = chains.by_chain_id_pattern(&config.chains);
+            if chain_providers.is_empty() {
+                tracing::warn!("No chain provider found for {}", config.chains);
+                continue;
+            }
+
+            for chain_provider in chain_providers {
+                let chain_id = chain_provider.chain_id();
+                let handler = match blueprint.build(chain_provider.clone(), config.config.clone()) {
+                    Ok(handler) => handler,
+                    Err(err) => {
+                        tracing::error!("Error building scheme handler for {}: {}", config.id, err);
+                        continue;
+                    }
+                };
+                let slug = SchemeHandlerSlug::new(
+                    chain_id.clone(),
+                    blueprint.x402_version(),
+                    blueprint.scheme().to_string(),
+                );
+                tracing::info!(chain_id = %chain_id, scheme = %blueprint.scheme(), id=blueprint.id(), "Registered scheme handler");
+                handlers.insert(slug, handler);
+            }
         }
         Self(handlers)
     }
