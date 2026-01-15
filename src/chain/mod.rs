@@ -173,9 +173,35 @@ impl ChainRegistry {
         self.0.get(&chain_id).cloned()
     }
 
+    /// Looks up providers by chain ID pattern matching.
+    ///
+    /// Returns all providers whose chain IDs match the given pattern.
+    /// The pattern can be:
+    /// - Wildcard: Matches any chain within a namespace (e.g., `eip155:*`)
+    /// - Exact: Matches a specific chain (e.g., `eip155:8453`)
+    /// - Set: Matches any chain from a set of references (e.g., `eip155:{1,8453,137}`)
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use x402_rs::chain::{ChainRegistry, ChainIdPattern};
+    /// use x402_rs::config::Config;
+    ///
+    /// let config = Config::load()?;
+    /// let registry = ChainRegistry::from_config(config.chains()).await?;
+    ///
+    /// // Find all EVM chain providers
+    /// let evm_providers = registry.by_chain_id_pattern(&ChainIdPattern::wildcard("eip155"));
+    /// assert!(!evm_providers.is_empty());
+    ///
+    /// // Find providers for specific chains
+    /// let mainnet_chains = ChainIdPattern::set("eip155", ["1", "8453", "137"].into_iter().map(String::from).collect());
+    /// let mainnet_providers = registry.by_chain_id_pattern(&mainnet_chains);
+    /// ```
     pub fn by_chain_id_pattern(&self, pattern: &ChainIdPattern) -> Vec<&ChainProvider> {
-        self.0.iter().filter_map(|(chain_id, provider)| pattern.matches(chain_id)
-            .then_some(provider))
+        self.0
+            .iter()
+            .filter_map(|(chain_id, provider)| pattern.matches(chain_id).then_some(provider))
             .collect()
     }
 }
