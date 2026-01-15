@@ -8247,6 +8247,7 @@ dependencies = [
 name = "x402-reqwest"
 version = "0.5.0"
 dependencies = [
+ "alloy-signer-local",
  "async-trait",
  "http 1.4.0",
  "reqwest",

@@ -23,6 +23,9 @@ serde_json = { version = "1.0" }
 # Telemetry
 tracing = { version = "0.1", optional = true }
 
+[dev-dependencies]
+alloy-signer-local = { version = "1.4" }
+
 [features]
 default = []
 telemetry = ["dep:tracing", "x402-rs/telemetry"]

@@ -25,7 +25,7 @@ use tracing::{debug, info, instrument, trace};
 ///
 /// ## Creating an X402Client
 ///
-/// ```rust,no_run
+/// ```rust
 /// use x402_reqwest::X402Client;
 ///
 /// let client = X402Client::new();
@@ -35,13 +35,14 @@ use tracing::{debug, info, instrument, trace};
 ///
 /// To handle payments on different chains, register scheme clients:
 ///
-/// ```rust,no_run
+/// ```rust
 /// use x402_reqwest::X402Client;
 /// use x402_rs::scheme::v1_eip155_exact::client::V1Eip155ExactClient;
 /// use alloy_signer_local::PrivateKeySigner;
 /// use std::sync::Arc;
 ///
-/// let signer = Arc::new("PRIVATE_KEY".parse::<PrivateKeySigner>().unwrap());
+/// let private_key_hex = "0x0000000000000000000000000000000000000000000000000000000000000001";
+/// let signer = Arc::new(private_key_hex.parse::<PrivateKeySigner>().unwrap());
 /// let client = X402Client::new()
 ///     .register(V1Eip155ExactClient::new(signer));
 /// ```
@@ -89,13 +90,14 @@ impl<TSelector> X402Client<TSelector> {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust
     /// use x402_reqwest::X402Client;
     /// use x402_rs::scheme::v1_eip155_exact::client::V1Eip155ExactClient;
     /// use alloy_signer_local::PrivateKeySigner;
     /// use std::sync::Arc;
     ///
-    /// let signer = Arc::new("PRIVATE_KEY".parse::<PrivateKeySigner>().unwrap());
+    /// let private_key_hex = "0x0000000000000000000000000000000000000000000000000000000000000001";
+    /// let signer = Arc::new(private_key_hex.parse::<PrivateKeySigner>().unwrap());
     /// let client = X402Client::new()
     ///     .register(V1Eip155ExactClient::new(signer));
     /// ```

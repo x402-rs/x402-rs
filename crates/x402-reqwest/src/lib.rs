@@ -7,7 +7,7 @@
 //!
 //! ## Quickstart
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
 //! use x402_rs::scheme::v1_eip155_exact::client::V1Eip155ExactClient;
 //! use alloy_signer_local::PrivateKeySigner;

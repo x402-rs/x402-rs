@@ -169,8 +169,8 @@ impl ChainRegistry {
     ///
     /// Returns `None` if no provider is configured for the given chain.
     #[allow(dead_code)]
-    pub fn by_chain_id(&self, chain_id: ChainId) -> Option<ChainProvider> {
-        self.0.get(&chain_id).cloned()
+    pub fn by_chain_id(&self, chain_id: ChainId) -> Option<&ChainProvider> {
+        self.0.get(&chain_id)
     }
 
     /// Looks up providers by chain ID pattern matching.

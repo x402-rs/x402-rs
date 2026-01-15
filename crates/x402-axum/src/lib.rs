@@ -45,16 +45,22 @@
 //!
 //! For dynamic pricing based on request context, use [`X402Middleware::with_dynamic_price`]:
 //!
-//! ```rust,ignore
+//! ```rust
+//! use axum::Router;
+//! use axum::routing::get;
+//! use axum::response::IntoResponse;
+//! use axum::http::StatusCode;
+//! use alloy_primitives::address;
 //! use x402_axum::X402Middleware;
 //! use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
+//! use x402_rs::networks::{KnownNetworkEip155, USDC};
 //!
 //! let x402 = X402Middleware::new("https://facilitator.x402.rs");
 //!
 //! let app: Router = Router::new().route(
 //!     "/protected",
 //!     get(my_handler).layer(
-//!         x402.with_dynamic_price(|headers, uri, base_url| async move {
+//!         x402.with_dynamic_price(|headers, uri, base_url| {
 //!             // Compute price based on request context
 //!             let is_premium = headers
 //!                 .get("X-User-Tier")
@@ -63,10 +69,16 @@
 //!                 .unwrap_or(false);
 //!
 //!             let amount = if is_premium { "0.005" } else { "0.01" };
-//!             vec![V1Eip155Exact::price_tag(pay_to, USDC::base_sepolia().parse(amount).unwrap())]
+//!             async move {
+//!                 vec![V1Eip155Exact::price_tag(address!("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"), USDC::base_sepolia().parse(amount).unwrap())]
+//!             }
 //!         })
 //!     ),
 //! );
+//!
+//! async fn my_handler() -> impl IntoResponse {
+//!     (StatusCode::OK, "This is a VIP content!")
+//! }
 //! ```
 //!
 //! ## Settlement Timing
