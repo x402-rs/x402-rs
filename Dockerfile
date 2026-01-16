@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM rust:bullseye AS builder
+FROM --platform=$BUILDPLATFORM rust:trixie AS builder
 
 ENV PORT=8080
 
@@ -13,11 +13,9 @@ COPY . ./
 RUN cargo build --release --locked
 
 # --- Stage 2 ---
-FROM --platform=$BUILDPLATFORM debian:bullseye-slim
+FROM --platform=$BUILDPLATFORM debian:trixie-slim
 
 ENV PORT=8080
-
-# much smaller than full ubuntu (~22MB compressed)
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*
