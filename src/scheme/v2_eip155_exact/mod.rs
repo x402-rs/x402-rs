@@ -43,11 +43,12 @@ use std::error::Error;
 use std::sync::Arc;
 use tracing::instrument;
 
+use crate::chain::FromChainProvider;
 use crate::chain::eip155::{
     ChecksummedAddress, Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
     Eip155TokenDeployment,
 };
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::proto::v2;
@@ -101,18 +102,23 @@ impl X402SchemeId for V2Eip155Exact {
     }
 }
 
-impl X402SchemeFacilitatorBuilder for V2Eip155Exact {
+impl<P> X402SchemeFacilitatorBuilder<P> for V2Eip155Exact
+where
+    // The extractor constraint - we can extract an Arc<Eip155ChainProvider> from P
+    Arc<Eip155ChainProvider>: FromChainProvider<P>,
+{
     fn build(
         &self,
-        provider: ChainProvider,
+        provider: &P,
         _config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
-        let provider = if let ChainProvider::Eip155(provider) = provider {
-            provider
-        } else {
-            return Err("V2Eip155Exact::build: provider must be an Eip155ChainProvider".into());
-        };
-        Ok(Box::new(V2Eip155ExactFacilitator { provider }))
+        // Use the extractor to get what we need
+        let eip155_provider = Arc::<Eip155ChainProvider>::from_chain_provider(provider)
+            .ok_or("V2Eip155Exact::build: provider must be an Eip155ChainProvider")?;
+
+        Ok(Box::new(V2Eip155ExactFacilitator {
+            provider: eip155_provider,
+        }))
     }
 }
 

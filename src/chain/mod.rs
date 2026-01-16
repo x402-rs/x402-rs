@@ -47,6 +47,20 @@ use crate::config::ChainConfig;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Trait for extracting a specific provider type from a chain provider.
+///
+/// This is similar to Axum's `FromRequest` trait - it allows types to
+/// define how they can be extracted from a generic chain provider.
+///
+/// Returns `Option<Self>` - `None` if this provider type cannot be
+/// extracted from the given chain provider (e.g., trying to extract
+/// an EIP-155 provider from a Solana-only chain provider).
+pub trait FromChainProvider<P>: Sized {
+    /// Attempt to extract Self from the chain provider.
+    /// Returns `None` if extraction is not possible.
+    fn from_chain_provider(provider: &P) -> Option<Self>;
+}
+
 /// A blockchain provider that can interact with either EVM or Solana chains.
 ///
 /// This enum wraps chain-specific providers and provides a unified interface
@@ -127,10 +141,14 @@ impl ChainProviderOps for ChainProvider {
 /// The registry is built from configuration and provides lookup methods
 /// for finding providers by exact chain ID or by pattern matching.
 ///
+/// # Type Parameters
+///
+/// - `P` - The chain provider type (e.g., [`ChainProvider`] or a custom provider type)
+///
 /// # Example
 ///
 /// ```ignore
-/// use x402_rs::chain::{ChainRegistry, ChainIdPattern};
+/// use x402_rs::chain::{ChainRegistry, ChainIdPattern, ChainProvider};
 /// use x402_rs::config::Config;
 ///
 /// let config = Config::load()?;
@@ -143,9 +161,9 @@ impl ChainProviderOps for ChainProvider {
 /// let any_evm = registry.by_chain_id_pattern(&ChainIdPattern::wildcard("eip155"));
 /// ```
 #[derive(Debug)]
-pub struct ChainRegistry(HashMap<ChainId, ChainProvider>);
+pub struct ChainRegistry<P>(HashMap<ChainId, P>);
 
-impl ChainRegistry {
+impl ChainRegistry<ChainProvider> {
     /// Creates a new chain registry from configuration.
     ///
     /// Initializes providers for all configured chains. Each chain configuration
@@ -164,12 +182,14 @@ impl ChainRegistry {
         }
         Ok(Self(providers))
     }
+}
 
+impl<P> ChainRegistry<P> {
     /// Looks up a provider by exact chain ID.
     ///
     /// Returns `None` if no provider is configured for the given chain.
     #[allow(dead_code)]
-    pub fn by_chain_id(&self, chain_id: ChainId) -> Option<&ChainProvider> {
+    pub fn by_chain_id(&self, chain_id: ChainId) -> Option<&P> {
         self.0.get(&chain_id)
     }
 
@@ -198,7 +218,7 @@ impl ChainRegistry {
     /// let mainnet_chains = ChainIdPattern::set("eip155", ["1", "8453", "137"].into_iter().map(String::from).collect());
     /// let mainnet_providers = registry.by_chain_id_pattern(&mainnet_chains);
     /// ```
-    pub fn by_chain_id_pattern(&self, pattern: &ChainIdPattern) -> Vec<&ChainProvider> {
+    pub fn by_chain_id_pattern(&self, pattern: &ChainIdPattern) -> Vec<&P> {
         self.0
             .iter()
             .filter_map(|(chain_id, provider)| pattern.matches(chain_id).then_some(provider))

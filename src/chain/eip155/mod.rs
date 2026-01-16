@@ -64,7 +64,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
 use tracing::Instrument;
 
-use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{
+    ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount, FromChainProvider,
+};
 use crate::config::Eip155ChainConfig;
 use crate::util::money_amount::{MoneyAmount, MoneyAmountParseError};
 pub use pending_nonce_manager::*;
@@ -294,6 +296,19 @@ pub struct TokenDeploymentEip712 {
     pub name: String,
     /// The token version as specified in the EIP-712 domain.
     pub version: String,
+}
+
+/// Extractor implementation for [`ChainProvider`].
+///
+/// Extracts an [`Arc<Eip155ChainProvider>`] from a [`ChainProvider`] enum.
+/// Returns `None` if the provider is a Solana provider.
+impl FromChainProvider<ChainProvider> for Arc<Eip155ChainProvider> {
+    fn from_chain_provider(provider: &ChainProvider) -> Option<Self> {
+        match provider {
+            ChainProvider::Eip155(p) => Some(Arc::clone(p)),
+            _ => None,
+        }
+    }
 }
 
 /// Provider for interacting with EVM-compatible blockchains.

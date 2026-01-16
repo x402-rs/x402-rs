@@ -54,7 +54,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{
+    ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount, FromChainProvider,
+};
 use crate::config::SolanaChainConfig;
 use crate::networks::KnownNetworkSolana;
 use crate::scheme::X402SchemeFacilitatorError;
@@ -314,6 +316,19 @@ impl From<ClientError> for SolanaChainProviderError {
 impl From<SolanaChainProviderError> for X402SchemeFacilitatorError {
     fn from(value: SolanaChainProviderError) -> Self {
         Self::OnchainFailure(value.to_string())
+    }
+}
+
+/// Extractor implementation for [`ChainProvider`].
+///
+/// Extracts an [`Arc<SolanaChainProvider>`] from a [`ChainProvider`] enum.
+/// Returns `None` if the provider is an EIP-155 provider.
+impl FromChainProvider<ChainProvider> for Arc<SolanaChainProvider> {
+    fn from_chain_provider(provider: &ChainProvider) -> Option<Self> {
+        match provider {
+            ChainProvider::Solana(p) => Some(Arc::clone(p)),
+            _ => None,
+        }
     }
 }
 

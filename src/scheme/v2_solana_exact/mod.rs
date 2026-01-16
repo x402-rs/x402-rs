@@ -39,8 +39,9 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 
+use crate::chain::FromChainProvider;
 use crate::chain::solana::{Address, SolanaChainProvider, SolanaTokenDeployment};
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::v2;
 use crate::scheme::v1_solana_exact::types::ExactScheme;
@@ -88,24 +89,29 @@ impl X402SchemeId for V2SolanaExact {
     }
 }
 
-impl X402SchemeFacilitatorBuilder for V2SolanaExact {
+impl<P> X402SchemeFacilitatorBuilder<P> for V2SolanaExact
+where
+    // The extractor constraint - we can extract an Arc<SolanaChainProvider> from P
+    Arc<SolanaChainProvider>: FromChainProvider<P>,
+{
     fn build(
         &self,
-        provider: ChainProvider,
+        provider: &P,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
-        let provider = if let ChainProvider::Solana(provider) = provider {
-            provider
-        } else {
-            return Err("V2SolanaExact::build: provider must be a SolanaChainProvider".into());
-        };
+        // Use the extractor to get what we need
+        let solana_provider = Arc::<SolanaChainProvider>::from_chain_provider(provider)
+            .ok_or("V2SolanaExact::build: provider must be a SolanaChainProvider")?;
 
         let config = config
             .map(serde_json::from_value::<V2SolanaExactFacilitatorConfig>)
             .transpose()?
             .unwrap_or_default();
 
-        Ok(Box::new(V2SolanaExactFacilitator { provider, config }))
+        Ok(Box::new(V2SolanaExactFacilitator {
+            provider: solana_provider,
+            config,
+        }))
     }
 }
 

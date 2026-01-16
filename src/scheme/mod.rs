@@ -39,6 +39,7 @@ pub mod client;
 
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
+use std::marker::PhantomData;
 use std::ops::Deref;
 
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
@@ -82,8 +83,8 @@ pub trait X402SchemeFacilitator: Send + Sync {
 ///
 /// This combines [`X402SchemeId`] and [`X402SchemeFacilitatorBuilder`] for
 /// use in the blueprint registry.
-pub trait X402SchemeBlueprint: X402SchemeId + X402SchemeFacilitatorBuilder {}
-impl<T> X402SchemeBlueprint for T where T: X402SchemeId + X402SchemeFacilitatorBuilder {}
+pub trait X402SchemeBlueprint<P>: X402SchemeId + X402SchemeFacilitatorBuilder<P> {}
+impl<T, P> X402SchemeBlueprint<P> for T where T: X402SchemeId + X402SchemeFacilitatorBuilder<P> {}
 
 /// Trait for identifying a payment scheme.
 ///
@@ -110,7 +111,10 @@ pub trait X402SchemeId {
 }
 
 /// Trait for building scheme handlers from chain providers.
-pub trait X402SchemeFacilitatorBuilder {
+///
+/// The type parameter `P` represents the chain provider type.
+/// Implementations use ['FromChainProvider'] trait to get the specific provider they need.
+pub trait X402SchemeFacilitatorBuilder<P> {
     /// Creates a new scheme handler for the given chain provider.
     ///
     /// # Arguments
@@ -119,7 +123,7 @@ pub trait X402SchemeFacilitatorBuilder {
     /// * `config` - Optional scheme-specific configuration
     fn build(
         &self,
-        provider: ChainProvider,
+        provider: &P,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>>;
 }
@@ -150,51 +154,60 @@ impl AsPaymentProblem for X402SchemeFacilitatorError {
 ///
 /// Blueprints are used to create scheme handlers for specific chain providers.
 /// Register blueprints at startup, then use them to build handlers.
+///
+/// # Type Parameters
+///
+/// - `P` - The chain provider type that blueprints can extract from using [`FromChainProvider`]
 #[derive(Default)]
-pub struct SchemeBlueprints(HashMap<String, Box<dyn X402SchemeBlueprint>>);
+pub struct SchemeBlueprints<P>(
+    HashMap<String, Box<dyn X402SchemeBlueprint<P>>>,
+    PhantomData<P>,
+);
 
-impl Debug for SchemeBlueprints {
+impl<P> Debug for SchemeBlueprints<P> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let slugs: Vec<String> = self.0.keys().map(|s| s.to_string()).collect();
         f.debug_tuple("SchemeBlueprints").field(&slugs).finish()
     }
 }
 
-impl SchemeBlueprints {
+impl<P> SchemeBlueprints<P> {
     /// Creates an empty blueprint registry.
     pub fn new() -> Self {
-        Self::default()
+        Self(HashMap::new(), PhantomData)
     }
 
-    /// Creates a registry with all built-in schemes registered.
-    ///
-    /// This includes:
-    /// - V1 EIP-155 exact
-    /// - V1 Solana exact
-    /// - V2 EIP-155 exact
-    /// - V2 Solana exact
+    /// Registers a blueprint and returns self for chaining.
+    pub fn and_register<B: X402SchemeBlueprint<P> + 'static>(mut self, blueprint: B) -> Self {
+        self.register(blueprint);
+        self
+    }
+
+    /// Registers a scheme blueprint.
+    pub fn register<B: X402SchemeBlueprint<P> + 'static>(&mut self, blueprint: B) {
+        self.0.insert(blueprint.id(), Box::new(blueprint));
+    }
+
+    /// Gets a blueprint by its ID.
+    pub fn get(&self, id: &str) -> Option<&dyn X402SchemeBlueprint<P>> {
+        self.0.get(id).map(|v| v.deref())
+    }
+}
+
+/// Creates a registry with all built-in schemes registered.
+///
+/// This includes:
+/// - V1 EIP-155 exact
+/// - V1 Solana exact
+/// - V2 EIP-155 exact
+/// - V2 Solana exact
+impl SchemeBlueprints<ChainProvider> {
     pub fn full() -> Self {
         Self::new()
             .and_register(V1Eip155Exact)
             .and_register(V1SolanaExact)
             .and_register(V2Eip155Exact)
             .and_register(V2SolanaExact)
-    }
-
-    /// Registers a blueprint and returns self for chaining.
-    pub fn and_register<B: X402SchemeBlueprint + 'static>(mut self, blueprint: B) -> Self {
-        self.register(blueprint);
-        self
-    }
-
-    /// Registers a scheme blueprint.
-    pub fn register<B: X402SchemeBlueprint + 'static>(&mut self, blueprint: B) {
-        self.0.insert(blueprint.id(), Box::new(blueprint));
-    }
-
-    /// Gets a blueprint by its ID.
-    pub fn get(&self, id: &str) -> Option<&dyn X402SchemeBlueprint> {
-        self.0.get(id).map(|v| v.deref())
     }
 }
 
@@ -252,9 +265,9 @@ impl SchemeRegistry {
     ///
     /// For each enabled scheme in the config, this finds the matching blueprint
     /// and chain provider, then builds a handler.
-    pub fn build(
-        chains: ChainRegistry,
-        blueprints: SchemeBlueprints,
+    pub fn build<P: ChainProviderOps>(
+        chains: ChainRegistry<P>,
+        blueprints: SchemeBlueprints<P>,
         config: &Vec<SchemeConfig>,
     ) -> Self {
         let mut handlers = HashMap::with_capacity(config.len());
@@ -282,7 +295,7 @@ impl SchemeRegistry {
 
             for chain_provider in chain_providers {
                 let chain_id = chain_provider.chain_id();
-                let handler = match blueprint.build(chain_provider.clone(), config.config.clone()) {
+                let handler = match blueprint.build(chain_provider, config.config.clone()) {
                     Ok(handler) => handler,
                     Err(err) => {
                         tracing::error!("Error building scheme handler for {}: {}", config.id, err);
