@@ -466,6 +466,50 @@ impl Eip155MetaTransactionProvider for &Eip155ChainProvider {
     }
 }
 
+impl Eip155MetaTransactionProvider for Arc<Eip155ChainProvider> {
+    type Error = MetaTransactionSendError;
+    type Inner = InnerProvider;
+    fn inner(&self) -> &Self::Inner {
+        (**self).inner()
+    }
+    fn chain(&self) -> &Eip155ChainReference {
+        (**self).chain()
+    }
+    fn send_transaction(
+        &self,
+        tx: MetaTransaction,
+    ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send {
+        (**self).send_transaction(tx)
+    }
+}
+
+impl ChainProviderOps for Arc<Eip155ChainProvider> {
+    fn signer_addresses(&self) -> Vec<String> {
+        (**self).signer_addresses()
+    }
+
+    fn chain_id(&self) -> ChainId {
+        (**self).chain_id()
+    }
+}
+
+impl Eip155MetaTransactionProvider for &Arc<Eip155ChainProvider> {
+    type Error = MetaTransactionSendError;
+    type Inner = InnerProvider;
+    fn inner(&self) -> &Self::Inner {
+        (***self).inner()
+    }
+    fn chain(&self) -> &Eip155ChainReference {
+        (***self).chain()
+    }
+    fn send_transaction(
+        &self,
+        tx: MetaTransaction,
+    ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send {
+        (***self).send_transaction(tx)
+    }
+}
+
 impl Eip155MetaTransactionProvider for Eip155ChainProvider {
     type Error = MetaTransactionSendError;
     type Inner = InnerProvider;
