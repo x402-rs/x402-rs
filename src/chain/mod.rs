@@ -61,13 +61,13 @@ pub trait FromChainProvider<P>: Sized {
     fn from_chain_provider(provider: &P) -> Option<Self>;
 }
 
+// FIXME doc comments
 #[async_trait::async_trait]
 pub trait FromConfig<TConfig>
 where
     Self: Sized,
 {
-    type Error;
-    async fn from_config(chains: &TConfig) -> Result<Self, Self::Error>;
+    async fn from_config(chains: &TConfig) -> Result<Self, Box<dyn std::error::Error>>;
 }
 
 /// A blockchain provider that can interact with either EVM or Solana chains.
@@ -100,9 +100,7 @@ pub enum ChainProvider {
 /// - Required configuration is missing
 #[async_trait::async_trait]
 impl FromConfig<ChainConfig> for ChainProvider {
-    type Error = Box<dyn std::error::Error>;
-
-    async fn from_config(chains: &ChainConfig) -> Result<Self, Self::Error> {
+    async fn from_config(chains: &ChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let provider = match chains {
             ChainConfig::Eip155(config) => {
                 let provider = eip155::Eip155ChainProvider::from_config(config).await?;
@@ -184,13 +182,14 @@ pub struct ChainRegistry<P>(HashMap<ChainId, P>);
 ///
 /// Returns an error if any chain provider fails to initialize.
 #[async_trait::async_trait]
-impl FromConfig<ChainsConfig> for ChainRegistry<ChainProvider> {
-    type Error = Box<dyn std::error::Error>;
-
-    async fn from_config(chains: &ChainsConfig) -> Result<Self, Self::Error> {
+impl<TChainProvider> FromConfig<ChainsConfig> for ChainRegistry<TChainProvider>
+where
+    TChainProvider: ChainProviderOps + FromConfig<ChainConfig> + Send,
+{
+    async fn from_config(chains: &ChainsConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let mut providers = HashMap::new();
         for chain in chains.iter() {
-            let chain_provider = ChainProvider::from_config(chain).await?;
+            let chain_provider = TChainProvider::from_config(chain).await?;
             providers.insert(chain_provider.chain_id(), chain_provider);
         }
         Ok(Self(providers))
