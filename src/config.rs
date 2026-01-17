@@ -71,7 +71,7 @@ mod scheme_config_defaults {
 #[derive(Debug, Clone)]
 pub enum ChainConfig {
     /// EVM chain configuration (for chains with "eip155:" prefix).
-    Eip155(Eip155ChainConfig),
+    Eip155(Box<Eip155ChainConfig>),
     /// Solana chain configuration (for chains with "solana:" prefix).
     Solana(Box<SolanaChainConfig>),
 }
@@ -544,7 +544,7 @@ impl<'de> Deserialize<'de> for ChainsConfig {
                                     .map_err(|e| serde::de::Error::custom(format!("{}", e)))?,
                                 inner,
                             };
-                            ChainConfig::Eip155(config)
+                            ChainConfig::Eip155(Box::new(config))
                         }
                         solana::SOLANA_NAMESPACE => {
                             let inner: SolanaChainConfigInner = access.next_value()?;
