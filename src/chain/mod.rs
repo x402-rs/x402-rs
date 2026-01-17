@@ -61,6 +61,15 @@ pub trait FromChainProvider<P>: Sized {
     fn from_chain_provider(provider: &P) -> Option<Self>;
 }
 
+#[async_trait::async_trait]
+pub trait FromConfig<TConfig>
+where
+    Self: Sized,
+{
+    type Error;
+    async fn from_config(chains: &TConfig) -> Result<Self, Self::Error>;
+}
+
 /// A blockchain provider that can interact with either EVM or Solana chains.
 ///
 /// This enum wraps chain-specific providers and provides a unified interface
@@ -78,20 +87,23 @@ pub enum ChainProvider {
     Solana(Arc<solana::SolanaChainProvider>),
 }
 
-impl ChainProvider {
-    /// Creates a new chain provider from configuration.
-    ///
-    /// This factory method inspects the configuration type and creates the appropriate
-    /// chain-specific provider (EVM or Solana).
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - RPC connection fails
-    /// - Signer configuration is invalid
-    /// - Required configuration is missing
-    pub async fn from_config(config: &ChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
-        let provider = match config {
+/// Creates a new chain provider from configuration.
+///
+/// This factory method inspects the configuration type and creates the appropriate
+/// chain-specific provider (EVM or Solana).
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - RPC connection fails
+/// - Signer configuration is invalid
+/// - Required configuration is missing
+#[async_trait::async_trait]
+impl FromConfig<ChainConfig> for ChainProvider {
+    type Error = Box<dyn std::error::Error>;
+
+    async fn from_config(chains: &ChainConfig) -> Result<Self, Self::Error> {
+        let provider = match chains {
             ChainConfig::Eip155(config) => {
                 let provider = eip155::Eip155ChainProvider::from_config(config).await?;
                 ChainProvider::Eip155(Arc::new(provider))
