@@ -175,16 +175,19 @@ impl ChainProviderOps for ChainProvider {
 #[derive(Debug)]
 pub struct ChainRegistry<P>(HashMap<ChainId, P>);
 
-impl ChainRegistry<ChainProvider> {
-    /// Creates a new chain registry from configuration.
-    ///
-    /// Initializes providers for all configured chains. Each chain configuration
-    /// is processed and a corresponding provider is created and stored.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any chain provider fails to initialize.
-    pub async fn from_config(chains: &ChainsConfig) -> Result<Self, Box<dyn std::error::Error>> {
+/// Creates a new chain registry from configuration.
+///
+/// Initializes providers for all configured chains. Each chain configuration
+/// is processed and a corresponding provider is created and stored.
+///
+/// # Errors
+///
+/// Returns an error if any chain provider fails to initialize.
+#[async_trait::async_trait]
+impl FromConfig<ChainsConfig> for ChainRegistry<ChainProvider> {
+    type Error = Box<dyn std::error::Error>;
+
+    async fn from_config(chains: &ChainsConfig) -> Result<Self, Self::Error> {
         let mut providers = HashMap::new();
         for chain in chains.iter() {
             let chain_provider = ChainProvider::from_config(chain).await?;
