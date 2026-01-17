@@ -43,7 +43,7 @@ pub mod solana;
 
 pub use chain_id::*;
 
-use crate::config::ChainConfig;
+use crate::config::{ChainConfig, ChainsConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -173,10 +173,10 @@ impl ChainRegistry<ChainProvider> {
     ///
     /// Returns an error if any chain provider fails to initialize.
     pub async fn from_config(
-        chains: &Vec<ChainConfig>,
+        chains: &ChainsConfig,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut providers = HashMap::new();
-        for chain in chains {
+        for chain in chains.iter() {
             let chain_provider = ChainProvider::from_config(chain).await?;
             providers.insert(chain_provider.chain_id(), chain_provider);
         }
