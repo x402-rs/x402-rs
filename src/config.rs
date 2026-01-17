@@ -656,6 +656,13 @@ impl<TChainsConfig> Config<TChainsConfig> {
     pub fn schemes(&self) -> &Vec<SchemeConfig> {
         &self.schemes
     }
+
+    /// Get the chains configuration map.
+    ///
+    /// Keys are CAIP-2 chain identifiers (e.g., "eip155:84532", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").
+    pub fn chains(&self) -> &TChainsConfig {
+        &self.chains
+    }
 }
 
 impl Config {
@@ -683,12 +690,5 @@ impl Config {
             }
             None => Ok(Config::default()),
         }
-    }
-
-    /// Get the chains configuration map.
-    ///
-    /// Keys are CAIP-2 chain identifiers (e.g., "eip155:84532", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").
-    pub fn chains(&self) -> &Vec<ChainConfig> {
-        &self.chains
     }
 }
