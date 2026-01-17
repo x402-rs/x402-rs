@@ -351,8 +351,8 @@ impl Deref for SolanaSignerConfig {
 
 #[derive(Debug, Clone)]
 pub struct Eip155ChainConfig {
-    chain_reference: eip155::Eip155ChainReference,
-    inner: Eip155ChainConfigInner,
+    pub chain_reference: eip155::Eip155ChainReference,
+    pub inner: Eip155ChainConfigInner,
 }
 
 impl Eip155ChainConfig {
@@ -381,8 +381,8 @@ impl Eip155ChainConfig {
 
 #[derive(Debug, Clone)]
 pub struct SolanaChainConfig {
-    chain_reference: solana::SolanaChainReference,
-    inner: SolanaChainConfigInner,
+    pub chain_reference: solana::SolanaChainReference,
+    pub inner: SolanaChainConfigInner,
 }
 
 impl SolanaChainConfig {
@@ -400,6 +400,9 @@ impl SolanaChainConfig {
     }
     pub fn chain_reference(&self) -> solana::SolanaChainReference {
         self.chain_reference
+    }
+    pub fn chain_id(&self) -> ChainId {
+        self.chain_reference.into()
     }
     pub fn pubsub(&self) -> &Option<Url> {
         &self.inner.pubsub
@@ -568,7 +571,7 @@ impl Default for Config {
     }
 }
 
-mod config_defaults {
+pub mod config_defaults {
     use std::env;
     use std::net::IpAddr;
 
