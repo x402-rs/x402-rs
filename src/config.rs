@@ -574,12 +574,15 @@ impl<'de> Deserialize<'de> for ChainsConfig {
     }
 }
 
-impl Default for Config {
+impl<TChainsConfig> Default for Config<TChainsConfig>
+where
+    TChainsConfig: Default,
+{
     fn default() -> Self {
         Config {
             port: config_defaults::default_port(),
             host: config_defaults::default_host(),
-            chains: ChainsConfig::default(),
+            chains: TChainsConfig::default(),
             schemes: Vec::new(),
         }
     }
@@ -618,33 +621,7 @@ pub enum ConfigError {
     JsonParse(#[from] serde_json::Error),
 }
 
-impl Config {
-    /// Load configuration from CLI arguments and JSON file.
-    ///
-    /// The config file path is determined by:
-    /// 1. `--config <path>` CLI argument
-    /// 2. `./config.json` (if it exists)
-    ///
-    /// Values not present in the config file will be resolved via
-    /// environment variables or defaults during deserialization.
-    pub fn load() -> Result<Self, ConfigError> {
-        let cli_args = CliArgs::parse();
-        let config_path = Self::get_config_path(cli_args.config);
-        Self::load_from_path(config_path)
-    }
-
-    /// Load configuration from a specific path (or use defaults if None).
-    fn load_from_path(path: Option<PathBuf>) -> Result<Self, ConfigError> {
-        match path {
-            Some(p) => {
-                let content = fs::read_to_string(&p)?;
-                let config: Config = serde_json::from_str(&content)?;
-                Ok(config)
-            }
-            None => Ok(Config::default()),
-        }
-    }
-
+impl<TChainsConfig> Config<TChainsConfig> {
     /// Get the config file path from CLI arguments or default to `./config.json`.
     fn get_config_path(cli_config: Option<PathBuf>) -> Option<PathBuf> {
         // If --config was provided via CLI, use it
@@ -673,17 +650,45 @@ impl Config {
         self.host
     }
 
-    /// Get the chains configuration map.
-    ///
-    /// Keys are CAIP-2 chain identifiers (e.g., "eip155:84532", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").
-    pub fn chains(&self) -> &Vec<ChainConfig> {
-        &self.chains
-    }
-
     /// Get the schemes configuration list.
     ///
     /// Each entry specifies a scheme and the chains it applies to.
     pub fn schemes(&self) -> &Vec<SchemeConfig> {
         &self.schemes
+    }
+}
+
+impl Config {
+    /// Load configuration from CLI arguments and JSON file.
+    ///
+    /// The config file path is determined by:
+    /// 1. `--config <path>` CLI argument
+    /// 2. `./config.json` (if it exists)
+    ///
+    /// Values not present in the config file will be resolved via
+    /// environment variables or defaults during deserialization.
+    pub fn load() -> Result<Self, ConfigError> {
+        let cli_args = CliArgs::parse();
+        let config_path = Self::get_config_path(cli_args.config);
+        Self::load_from_path(config_path)
+    }
+
+    /// Load configuration from a specific path (or use defaults if None).
+    fn load_from_path(path: Option<PathBuf>) -> Result<Self, ConfigError> {
+        match path {
+            Some(p) => {
+                let content = fs::read_to_string(&p)?;
+                let config: Config = serde_json::from_str(&content)?;
+                Ok(config)
+            }
+            None => Ok(Config::default()),
+        }
+    }
+
+    /// Get the chains configuration map.
+    ///
+    /// Keys are CAIP-2 chain identifiers (e.g., "eip155:84532", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").
+    pub fn chains(&self) -> &Vec<ChainConfig> {
+        &self.chains
     }
 }
