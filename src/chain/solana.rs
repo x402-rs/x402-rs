@@ -55,7 +55,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::chain::{
-    ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount, FromChainProvider,
+    ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount, FromChainProvider, FromConfig,
 };
 use crate::config::SolanaChainConfig;
 use crate::networks::KnownNetworkSolana;
@@ -381,27 +381,6 @@ impl Debug for SolanaChainProvider {
 }
 
 impl SolanaChainProvider {
-    pub async fn from_config(
-        config: &SolanaChainConfig,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let rpc_url = config.rpc();
-        let pubsub_url = config.pubsub().clone().map(|url| url.to_string());
-        let keypair = Keypair::from_base58_string(&config.signer().to_string());
-        let max_compute_unit_limit = config.max_compute_unit_limit();
-        let max_compute_unit_price = config.max_compute_unit_price();
-        let chain = config.chain_reference();
-        let provider = Self::new(
-            keypair,
-            rpc_url.to_string(),
-            pubsub_url,
-            chain,
-            max_compute_unit_limit,
-            max_compute_unit_price,
-        )
-        .await?;
-        Ok(provider)
-    }
-
     pub async fn new(
         keypair: Keypair,
         rpc_url: String,
@@ -574,6 +553,28 @@ impl SolanaChainProvider {
                 tokio::time::sleep(Duration::from_millis(200)).await;
             }
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl FromConfig<SolanaChainConfig> for SolanaChainProvider {
+    async fn from_config(config: &SolanaChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
+        let rpc_url = config.rpc();
+        let pubsub_url = config.pubsub().clone().map(|url| url.to_string());
+        let keypair = Keypair::from_base58_string(&config.signer().to_string());
+        let max_compute_unit_limit = config.max_compute_unit_limit();
+        let max_compute_unit_price = config.max_compute_unit_price();
+        let chain = config.chain_reference();
+        let provider = Self::new(
+            keypair,
+            rpc_url.to_string(),
+            pubsub_url,
+            chain,
+            max_compute_unit_limit,
+            max_compute_unit_price,
+        )
+        .await?;
+        Ok(provider)
     }
 }
 
