@@ -67,7 +67,7 @@ pub trait FromConfig<TConfig>
 where
     Self: Sized,
 {
-    async fn from_config(chains: &TConfig) -> Result<Self, Box<dyn std::error::Error>>;
+    async fn from_config(config: &TConfig) -> Result<Self, Box<dyn std::error::Error>>;
 }
 
 /// A blockchain provider that can interact with either EVM or Solana chains.

@@ -65,7 +65,7 @@ use tower::ServiceBuilder;
 use tracing::Instrument;
 
 use crate::chain::{
-    ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount, FromChainProvider,
+    ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount, FromChainProvider, FromConfig,
 };
 use crate::config::Eip155ChainConfig;
 use crate::util::money_amount::{MoneyAmount, MoneyAmountParseError};
@@ -346,19 +346,32 @@ pub struct Eip155ChainProvider {
 }
 
 impl Eip155ChainProvider {
-    /// Creates a new provider from configuration.
-    ///
-    /// Initializes signers, RPC transports, and the nonce manager.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - No signers are configured
-    /// - Signer private keys are invalid
-    /// - RPC transport initialization fails
-    pub async fn from_config(
-        config: &Eip155ChainConfig,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    /// Round-robin selection of next signer from wallet.
+    fn next_signer_address(&self) -> Address {
+        debug_assert!(!self.signer_addresses.is_empty());
+        if self.signer_addresses.len() == 1 {
+            self.signer_addresses[0]
+        } else {
+            let next =
+                self.signer_cursor.fetch_add(1, Ordering::Relaxed) % self.signer_addresses.len();
+            self.signer_addresses[next]
+        }
+    }
+}
+
+/// Creates a new provider from configuration.
+///
+/// Initializes signers, RPC transports, and the nonce manager.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - No signers are configured
+/// - Signer private keys are invalid
+/// - RPC transport initialization fails
+#[async_trait::async_trait]
+impl FromConfig<Eip155ChainConfig> for Eip155ChainProvider {
+    async fn from_config(config: &Eip155ChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
         // 1. Signers
         let signers = config
             .signers()
@@ -449,18 +462,6 @@ impl Eip155ChainProvider {
             signer_cursor,
             nonce_manager,
         })
-    }
-
-    /// Round-robin selection of next signer from wallet.
-    fn next_signer_address(&self) -> Address {
-        debug_assert!(!self.signer_addresses.is_empty());
-        if self.signer_addresses.len() == 1 {
-            self.signer_addresses[0]
-        } else {
-            let next =
-                self.signer_cursor.fetch_add(1, Ordering::Relaxed) % self.signer_addresses.len();
-            self.signer_addresses[next]
-        }
     }
 }
 
