@@ -172,9 +172,7 @@ impl ChainRegistry<ChainProvider> {
     /// # Errors
     ///
     /// Returns an error if any chain provider fails to initialize.
-    pub async fn from_config(
-        chains: &ChainsConfig,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn from_config(chains: &ChainsConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let mut providers = HashMap::new();
         for chain in chains.iter() {
             let chain_provider = ChainProvider::from_config(chain).await?;

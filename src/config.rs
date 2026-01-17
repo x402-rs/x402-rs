@@ -665,7 +665,10 @@ impl<TChainsConfig> Config<TChainsConfig> {
     }
 }
 
-impl Config {
+impl<TChainsConfig> Config<TChainsConfig>
+where
+    TChainsConfig: Default + for<'de> Deserialize<'de>,
+{
     /// Load configuration from CLI arguments and JSON file.
     ///
     /// The config file path is determined by:
@@ -685,7 +688,7 @@ impl Config {
         match path {
             Some(p) => {
                 let content = fs::read_to_string(&p)?;
-                let config: Config = serde_json::from_str(&content)?;
+                let config: Config<TChainsConfig> = serde_json::from_str(&content)?;
                 Ok(config)
             }
             None => Ok(Config::default()),
