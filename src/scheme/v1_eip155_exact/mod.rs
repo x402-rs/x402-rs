@@ -1087,6 +1087,7 @@ impl From<MetaTransactionSendError> for Eip155ExactError {
         match e {
             MetaTransactionSendError::Transport(e) => Self::Transport(e),
             MetaTransactionSendError::PendingTransaction(e) => Self::PendingTransaction(e),
+            MetaTransactionSendError::Custom(e) => Self::ContractCall(e),
         }
     }
 }

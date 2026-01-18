@@ -640,6 +640,9 @@ pub enum MetaTransactionSendError {
     Transport(#[from] TransportError),
     #[error(transparent)]
     PendingTransaction(#[from] PendingTransactionError),
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    #[error("{0}")]
+    Custom(String),
 }
 
 impl ChainProviderOps for Eip155ChainProvider {
