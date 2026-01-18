@@ -67,7 +67,7 @@ use tracing::Instrument;
 use crate::chain::{
     ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount, FromChainProvider, FromConfig,
 };
-use crate::config::Eip155ChainConfig;
+use crate::config::{Eip155ChainConfig, RpcConfig};
 use crate::util::money_amount::{MoneyAmount, MoneyAmountParseError};
 pub use pending_nonce_manager::*;
 pub use types::*;
@@ -346,6 +346,35 @@ pub struct Eip155ChainProvider {
 }
 
 impl Eip155ChainProvider {
+    pub fn rpc_client(chain_id: ChainId, rpc: &Vec<RpcConfig>) -> RpcClient {
+        let transports = rpc
+            .iter()
+            .filter_map(|provider_config| {
+                let scheme = provider_config.http.scheme();
+                let is_http = scheme == "http" || scheme == "https";
+                if !is_http {
+                    return None;
+                }
+                let rpc_url = provider_config.http.clone();
+                tracing::info!(chain=%chain_id, rpc_url=%rpc_url, rate_limit=?provider_config.rate_limit, "Using HTTP transport");
+                let rate_limit = provider_config.rate_limit.unwrap_or(u32::MAX);
+                let service = ServiceBuilder::new()
+                    .layer(ThrottleLayer::new(rate_limit))
+                    .service(Http::new(rpc_url));
+                Some(service)
+            })
+            .collect::<Vec<_>>();
+        let fallback = ServiceBuilder::new()
+            .layer(
+                FallbackLayer::default().with_active_transport_count(
+                    NonZeroUsize::new(transports.len())
+                        .expect("Non-zero amount of stateless transports"),
+                ),
+            )
+            .service(transports);
+        RpcClient::new(fallback, false)
+    }
+
     /// Round-robin selection of next signer from wallet.
     fn next_signer_address(&self) -> Address {
         debug_assert!(!self.signer_addresses.is_empty());
@@ -402,33 +431,7 @@ impl FromConfig<Eip155ChainConfig> for Eip155ChainProvider {
         let signer_cursor = Arc::new(AtomicUsize::new(0));
 
         // 2. Transports
-        let transports = config
-            .rpc()
-            .iter()
-            .filter_map(|provider_config| {
-                let scheme = provider_config.http.scheme();
-                let is_http = scheme == "http" || scheme == "https";
-                if !is_http {
-                    return None;
-                }
-                let rpc_url = provider_config.http.clone();
-                tracing::info!(chain=%config.chain_id(), rpc_url=%rpc_url, rate_limit=?provider_config.rate_limit, "Using HTTP transport");
-                let rate_limit = provider_config.rate_limit.unwrap_or(u32::MAX);
-                let service = ServiceBuilder::new()
-                    .layer(ThrottleLayer::new(rate_limit))
-                    .service(Http::new(rpc_url));
-                Some(service)
-            })
-            .collect::<Vec<_>>();
-        let fallback = ServiceBuilder::new()
-            .layer(
-                FallbackLayer::default().with_active_transport_count(
-                    NonZeroUsize::new(transports.len())
-                        .expect("Non-zero amount of stateless transports"),
-                ),
-            )
-            .service(transports);
-        let client = RpcClient::new(fallback, false);
+        let client = Self::rpc_client(config.chain_id(), config.rpc());
 
         // 3. Provider
         // Create nonce manager explicitly so we can store a reference for error handling
