@@ -52,11 +52,11 @@ use std::error::Error;
 use std::sync::Arc;
 use tracing_core::Level;
 
-use crate::chain::FromChainProvider;
 use crate::chain::solana::{
     Address, SolanaChainProvider, SolanaChainProviderError, SolanaTokenDeployment,
 };
 use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{ChainProvider, FromChainProvider};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::proto::v1;
@@ -108,14 +108,10 @@ impl X402SchemeId for V1SolanaExact {
     }
 }
 
-impl<P> X402SchemeFacilitatorBuilder<P> for V1SolanaExact
-where
-    // The extractor constraint - we can extract an Arc<SolanaChainProvider> from P
-    Arc<SolanaChainProvider>: FromChainProvider<P>,
-{
+impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1SolanaExact {
     fn build(
         &self,
-        provider: &P,
+        provider: &ChainProvider,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
         // Use the extractor to get what we need

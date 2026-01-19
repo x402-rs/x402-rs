@@ -83,8 +83,14 @@ pub trait X402SchemeFacilitator: Send + Sync {
 ///
 /// This combines [`X402SchemeId`] and [`X402SchemeFacilitatorBuilder`] for
 /// use in the blueprint registry.
-pub trait X402SchemeBlueprint<P>: X402SchemeId + X402SchemeFacilitatorBuilder<P> {}
-impl<T, P> X402SchemeBlueprint<P> for T where T: X402SchemeId + X402SchemeFacilitatorBuilder<P> {}
+pub trait X402SchemeBlueprint<P>:
+    X402SchemeId + for<'a> X402SchemeFacilitatorBuilder<&'a P>
+{
+}
+impl<T, P> X402SchemeBlueprint<P> for T where
+    T: X402SchemeId + for<'a> X402SchemeFacilitatorBuilder<&'a P>
+{
+}
 
 /// Trait for identifying a payment scheme.
 ///
@@ -123,7 +129,7 @@ pub trait X402SchemeFacilitatorBuilder<P> {
     /// * `config` - Optional scheme-specific configuration
     fn build(
         &self,
-        provider: &P,
+        provider: P,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>>;
 }

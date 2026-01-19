@@ -52,6 +52,7 @@ use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, 
 use alloy_transport::TransportError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use tracing::Instrument;
 use tracing::instrument;
 use tracing_core::Level;
@@ -119,14 +120,14 @@ impl X402SchemeId for V1Eip155Exact {
     }
 }
 
-impl X402SchemeFacilitatorBuilder<ChainProvider> for V1Eip155Exact {
+impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1Eip155Exact {
     fn build(
         &self,
         provider: &ChainProvider,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
         let eip155_provider = if let ChainProvider::Eip155(provider) = provider {
-            provider
+            Arc::clone(provider)
         } else {
             return Err("V1Eip155Exact::build: provider must be an Eip155ChainProvider".into());
         };
@@ -136,15 +137,15 @@ impl X402SchemeFacilitatorBuilder<ChainProvider> for V1Eip155Exact {
 
 impl<P> X402SchemeFacilitatorBuilder<P> for V1Eip155Exact
 where
-    P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync + Clone + 'static,
+    P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync + 'static,
     Eip155ExactError: From<P::Error>,
 {
     fn build(
         &self,
-        provider: &P,
+        provider: P,
         _config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        Ok(Box::new(V1Eip155ExactFacilitator::new(provider.clone())))
+        Ok(Box::new(V1Eip155ExactFacilitator::new(provider)))
     }
 }
 
