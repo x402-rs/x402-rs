@@ -47,21 +47,6 @@ use crate::config::{ChainConfig, ChainsConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// Trait for extracting a specific provider type from a chain provider.
-///
-/// This is similar to Axum's `FromRequest` trait - it allows types to
-/// define how they can be extracted from a generic chain provider.
-///
-/// Returns `Option<Self>` - `None` if this provider type cannot be
-/// extracted from the given chain provider (e.g., trying to extract
-/// an EIP-155 provider from a Solana-only chain provider).
-// FIXME Remove??
-pub trait FromChainProvider<P>: Sized {
-    /// Attempt to extract Self from the chain provider.
-    /// Returns `None` if extraction is not possible.
-    fn from_chain_provider(provider: &P) -> Option<Self>;
-}
-
 // FIXME doc comments
 #[async_trait::async_trait]
 pub trait FromConfig<TConfig>
