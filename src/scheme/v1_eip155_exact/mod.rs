@@ -52,7 +52,6 @@ use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, 
 use alloy_transport::TransportError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use tracing::Instrument;
 use tracing::instrument;
 use tracing_core::Level;
@@ -60,10 +59,10 @@ use tracing_core::Level;
 pub mod client;
 pub mod types;
 
-use crate::chain::FromChainProvider;
+use crate::chain::ChainProvider;
 use crate::chain::eip155::{
-    ChecksummedAddress, Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
-    Eip155TokenDeployment, MetaTransaction, MetaTransactionSendError,
+    ChecksummedAddress, Eip155ChainReference, Eip155MetaTransactionProvider, Eip155TokenDeployment,
+    MetaTransaction, MetaTransactionSendError,
 };
 use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
@@ -120,21 +119,32 @@ impl X402SchemeId for V1Eip155Exact {
     }
 }
 
+impl X402SchemeFacilitatorBuilder<ChainProvider> for V1Eip155Exact {
+    fn build(
+        &self,
+        provider: &ChainProvider,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        let eip155_provider = if let ChainProvider::Eip155(provider) = provider {
+            provider
+        } else {
+            return Err("V1Eip155Exact::build: provider must be an Eip155ChainProvider".into());
+        };
+        self.build(eip155_provider, config)
+    }
+}
+
 impl<P> X402SchemeFacilitatorBuilder<P> for V1Eip155Exact
 where
-    // The extractor constraint - we can extract an Arc<Eip155ChainProvider> from P
-    Arc<Eip155ChainProvider>: FromChainProvider<P>,
+    P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync + Clone + 'static,
+    Eip155ExactError: From<P::Error>,
 {
     fn build(
         &self,
         provider: &P,
         _config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        // Use the extractor to get what we need
-        let eip155_provider = Arc::<Eip155ChainProvider>::from_chain_provider(provider)
-            .ok_or("V1Eip155Exact::build: provider must be an Eip155ChainProvider")?;
-
-        Ok(Box::new(V1Eip155ExactFacilitator::new(eip155_provider)))
+        Ok(Box::new(V1Eip155ExactFacilitator::new(provider.clone())))
     }
 }
 
