@@ -55,6 +55,7 @@ use std::sync::Arc;
 /// Returns `Option<Self>` - `None` if this provider type cannot be
 /// extracted from the given chain provider (e.g., trying to extract
 /// an EIP-155 provider from a Solana-only chain provider).
+// FIXME Remove??
 pub trait FromChainProvider<P>: Sized {
     /// Attempt to extract Self from the chain provider.
     /// Returns `None` if extraction is not possible.
