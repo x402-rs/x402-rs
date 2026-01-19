@@ -116,6 +116,15 @@ pub trait ChainProviderOps {
     fn chain_id(&self) -> ChainId;
 }
 
+impl<T: ChainProviderOps> ChainProviderOps for Arc<T> {
+    fn signer_addresses(&self) -> Vec<String> {
+        (**self).signer_addresses()
+    }
+    fn chain_id(&self) -> ChainId {
+        (**self).chain_id()
+    }
+}
+
 impl ChainProviderOps for ChainProvider {
     fn signer_addresses(&self) -> Vec<String> {
         match self {

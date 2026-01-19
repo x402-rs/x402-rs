@@ -332,7 +332,7 @@ pub struct Eip155ChainProvider {
 }
 
 impl Eip155ChainProvider {
-    pub fn rpc_client(chain_id: ChainId, rpc: &Vec<RpcConfig>) -> RpcClient {
+    pub fn rpc_client(chain_id: ChainId, rpc: &[RpcConfig]) -> RpcClient {
         let transports = rpc
             .iter()
             .filter_map(|provider_config| {
@@ -451,67 +451,6 @@ impl FromConfig<Eip155ChainConfig> for Eip155ChainProvider {
             signer_cursor,
             nonce_manager,
         })
-    }
-}
-
-impl Eip155MetaTransactionProvider for &Eip155ChainProvider {
-    type Error = MetaTransactionSendError;
-    type Inner = InnerProvider;
-    fn inner(&self) -> &Self::Inner {
-        (*self).inner()
-    }
-    fn chain(&self) -> &Eip155ChainReference {
-        (*self).chain()
-    }
-    fn send_transaction(
-        &self,
-        tx: MetaTransaction,
-    ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send {
-        (*self).send_transaction(tx)
-    }
-}
-
-impl Eip155MetaTransactionProvider for Arc<Eip155ChainProvider> {
-    type Error = MetaTransactionSendError;
-    type Inner = InnerProvider;
-    fn inner(&self) -> &Self::Inner {
-        (**self).inner()
-    }
-    fn chain(&self) -> &Eip155ChainReference {
-        (**self).chain()
-    }
-    fn send_transaction(
-        &self,
-        tx: MetaTransaction,
-    ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send {
-        (**self).send_transaction(tx)
-    }
-}
-
-impl ChainProviderOps for Arc<Eip155ChainProvider> {
-    fn signer_addresses(&self) -> Vec<String> {
-        (**self).signer_addresses()
-    }
-
-    fn chain_id(&self) -> ChainId {
-        (**self).chain_id()
-    }
-}
-
-impl Eip155MetaTransactionProvider for &Arc<Eip155ChainProvider> {
-    type Error = MetaTransactionSendError;
-    type Inner = InnerProvider;
-    fn inner(&self) -> &Self::Inner {
-        (***self).inner()
-    }
-    fn chain(&self) -> &Eip155ChainReference {
-        (***self).chain()
-    }
-    fn send_transaction(
-        &self,
-        tx: MetaTransaction,
-    ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send {
-        (***self).send_transaction(tx)
     }
 }
 
@@ -674,6 +613,26 @@ pub trait Eip155MetaTransactionProvider {
         &self,
         tx: MetaTransaction,
     ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send;
+}
+
+impl<T: Eip155MetaTransactionProvider> Eip155MetaTransactionProvider for Arc<T> {
+    type Error = T::Error;
+    type Inner = T::Inner;
+
+    fn inner(&self) -> &Self::Inner {
+        (**self).inner()
+    }
+
+    fn chain(&self) -> &Eip155ChainReference {
+        (**self).chain()
+    }
+
+    fn send_transaction(
+        &self,
+        tx: MetaTransaction,
+    ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send {
+        (**self).send_transaction(tx)
+    }
 }
 
 #[cfg(test)]
