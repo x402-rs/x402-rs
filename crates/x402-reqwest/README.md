@@ -28,13 +28,13 @@ Add the dependency:
 
 ```toml
 # Cargo.toml
-x402-reqwest = "0.5"
+x402-reqwest = "0.6"
 ```
 
 To enable tracing:
 
 ```toml
-x402-reqwest = { version = "0.5", features = ["telemetry"] }
+x402-reqwest = { version = "0.6", features = ["telemetry"] }
 ```
 
 ## Quickstart
@@ -145,7 +145,7 @@ let client = X402Client::new()
 
 Enable them via:
 ```toml
-x402-reqwest = { version = "0.5", features = ["telemetry", "json"] }
+x402-reqwest = { version = "0.6", features = ["telemetry", "json"] }
 ```
 
 ## Telemetry
