@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::net::IpAddr;
 use std::ops::{Deref, DerefMut};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use url::Url;
 
@@ -20,8 +20,8 @@ use crate::chain::{ChainId, ChainIdPattern};
 #[command(about = "x402 Facilitator HTTP server")]
 struct CliArgs {
     /// Path to the JSON configuration file
-    #[arg(long = "config", short = 'c')]
-    config: Option<PathBuf>,
+    #[arg(long, short, env = "CONFIG", default_value = "config.json")]
+    config: PathBuf,
 }
 
 /// Server configuration.
@@ -615,29 +615,13 @@ pub mod config_defaults {
 /// Configuration error types.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
-    #[error("Failed to read config file: {0}")]
-    FileRead(#[from] std::io::Error),
+    #[error("Failed to read config file at {0}: {1}")]
+    FileRead(PathBuf, std::io::Error),
     #[error("Failed to parse config file: {0}")]
     JsonParse(#[from] serde_json::Error),
 }
 
 impl<TChainsConfig> Config<TChainsConfig> {
-    /// Get the config file path from CLI arguments or default to `./config.json`.
-    fn get_config_path(cli_config: Option<PathBuf>) -> Option<PathBuf> {
-        // If --config was provided via CLI, use it
-        if let Some(path) = cli_config {
-            return Some(path);
-        }
-
-        // Default to ./config.json if it exists
-        let default_path = PathBuf::from("config.json");
-        if default_path.exists() {
-            Some(default_path)
-        } else {
-            None
-        }
-    }
-
     /// Get the port value.
     pub fn port(&self) -> u16 {
         self.port
@@ -679,19 +663,16 @@ where
     /// environment variables or defaults during deserialization.
     pub fn load() -> Result<Self, ConfigError> {
         let cli_args = CliArgs::parse();
-        let config_path = Self::get_config_path(cli_args.config);
+        let config_path = Path::new(&cli_args.config)
+            .canonicalize()
+            .map_err(|e| ConfigError::FileRead(cli_args.config, e))?;
         Self::load_from_path(config_path)
     }
 
     /// Load configuration from a specific path (or use defaults if None).
-    fn load_from_path(path: Option<PathBuf>) -> Result<Self, ConfigError> {
-        match path {
-            Some(p) => {
-                let content = fs::read_to_string(&p)?;
-                let config: Config<TChainsConfig> = serde_json::from_str(&content)?;
-                Ok(config)
-            }
-            None => Ok(Config::default()),
-        }
+    fn load_from_path(path: PathBuf) -> Result<Self, ConfigError> {
+        let content = fs::read_to_string(&path).map_err(|e| ConfigError::FileRead(path, e))?;
+        let config: Config<TChainsConfig> = serde_json::from_str(&content)?;
+        Ok(config)
     }
 }

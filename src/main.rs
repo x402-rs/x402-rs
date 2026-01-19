@@ -35,6 +35,7 @@ use axum::Router;
 use axum::http::Method;
 use dotenvy::dotenv;
 use std::net::SocketAddr;
+use std::process;
 use std::sync::Arc;
 use tower_http::cors;
 
@@ -53,8 +54,7 @@ use crate::util::{SigDown, Telemetry};
 /// - Starts an Axum HTTP server with the x402 protocol handlers.
 ///
 /// Binds to the address specified by the `HOST` and `PORT` env vars.
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Load .env variables
     dotenv().ok();
 
@@ -101,4 +101,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     Ok(())
+}
+
+#[tokio::main]
+async fn main() {
+    let result = run().await;
+    if let Err(e) = result {
+        println!("{e}");
+        process::exit(1)
+    }
 }
