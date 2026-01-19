@@ -384,7 +384,7 @@ impl SolanaChainProvider {
                 signers = ?signer_addresses,
                 max_compute_unit_limit,
                 max_compute_unit_price,
-                "Initialized Solana provider"
+                "Using Solana provider"
             );
         }
         let rpc_client = RpcClient::new(rpc_url);

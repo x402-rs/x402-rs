@@ -439,7 +439,7 @@ impl FromConfig<Eip155ChainConfig> for Eip155ChainProvider {
             .wallet(wallet)
             .connect_client(client);
 
-        tracing::info!(chain=%config.chain_id(), signers=?signer_addresses, "Initialized EVM provider");
+        tracing::info!(chain=%config.chain_id(), signers=?signer_addresses, "Using EVM provider");
 
         Ok(Self {
             chain: config.chain_reference(),
