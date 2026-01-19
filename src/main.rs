@@ -39,6 +39,7 @@ use std::sync::Arc;
 use tower_http::cors;
 
 use crate::chain::ChainRegistry;
+use crate::chain::FromConfig;
 use crate::config::Config;
 use crate::facilitator_local::FacilitatorLocal;
 use crate::scheme::{SchemeBlueprints, SchemeRegistry};

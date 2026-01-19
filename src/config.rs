@@ -29,13 +29,13 @@ struct CliArgs {
 /// Fields use serde defaults that fall back to environment variables,
 /// then to hardcoded defaults.
 #[derive(Debug, Clone, Deserialize)]
-pub struct Config {
+pub struct Config<TChainsConfig = ChainsConfig> {
     #[serde(default = "config_defaults::default_port")]
     port: u16,
     #[serde(default = "config_defaults::default_host")]
     host: IpAddr,
-    #[serde(default, with = "chains_serde")]
-    chains: Vec<ChainConfig>,
+    #[serde(default)]
+    chains: TChainsConfig,
     #[serde(default)]
     schemes: Vec<SchemeConfig>,
 }
@@ -71,7 +71,7 @@ mod scheme_config_defaults {
 #[derive(Debug, Clone)]
 pub enum ChainConfig {
     /// EVM chain configuration (for chains with "eip155:" prefix).
-    Eip155(Eip155ChainConfig),
+    Eip155(Box<Eip155ChainConfig>),
     /// Solana chain configuration (for chains with "solana:" prefix).
     Solana(Box<SolanaChainConfig>),
 }
@@ -351,8 +351,8 @@ impl Deref for SolanaSignerConfig {
 
 #[derive(Debug, Clone)]
 pub struct Eip155ChainConfig {
-    chain_reference: eip155::Eip155ChainReference,
-    inner: Eip155ChainConfigInner,
+    pub chain_reference: eip155::Eip155ChainReference,
+    pub inner: Eip155ChainConfigInner,
 }
 
 impl Eip155ChainConfig {
@@ -381,8 +381,8 @@ impl Eip155ChainConfig {
 
 #[derive(Debug, Clone)]
 pub struct SolanaChainConfig {
-    chain_reference: solana::SolanaChainReference,
-    inner: SolanaChainConfigInner,
+    pub chain_reference: solana::SolanaChainReference,
+    pub inner: SolanaChainConfigInner,
 }
 
 impl SolanaChainConfig {
@@ -400,6 +400,9 @@ impl SolanaChainConfig {
     }
     pub fn chain_reference(&self) -> solana::SolanaChainReference {
         self.chain_reference
+    }
+    pub fn chain_id(&self) -> ChainId {
+        self.chain_reference.into()
     }
     pub fn pubsub(&self) -> &Option<Url> {
         &self.inner.pubsub
@@ -465,30 +468,39 @@ mod solana_chain_config {
     }
 }
 
-/// Custom serde module for deserializing the chains map with type discrimination
-/// based on the CAIP-2 chain identifier prefix.
-mod chains_serde {
-    use super::*;
-    use serde::de::{MapAccess, Visitor};
-    use serde::ser::SerializeMap;
-    use serde::{Deserializer, Serializer};
-    use std::fmt;
+/// Configuration for chains.
+///
+/// This is a wrapper around Vec<ChainConfig> that provides custom serialization
+/// as a map where keys are CAIP-2 chain identifiers.
+#[derive(Debug, Clone, Default)]
+pub struct ChainsConfig(pub Vec<ChainConfig>);
 
-    #[allow(dead_code)]
-    pub fn serialize<S>(chains: &Vec<ChainConfig>, serializer: S) -> Result<S::Ok, S::Error>
+impl Deref for ChainsConfig {
+    type Target = Vec<ChainConfig>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Serialize for ChainsConfig {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer,
+        S: serde::Serializer,
     {
+        use serde::ser::SerializeMap;
+
+        let chains = &self.0;
         let mut map = serializer.serialize_map(Some(chains.len()))?;
         for chain_config in chains {
             match chain_config {
                 ChainConfig::Eip155(config) => {
-                    let chain_id: ChainId = config.chain_reference.into();
+                    let chain_id = config.chain_id();
                     let inner = &config.inner;
                     map.serialize_entry(&chain_id, inner)?;
                 }
                 ChainConfig::Solana(config) => {
-                    let chain_id: ChainId = config.chain_reference.into();
+                    let chain_id = config.chain_id();
                     let inner = &config.inner;
                     map.serialize_entry(&chain_id, inner)?;
                 }
@@ -496,15 +508,20 @@ mod chains_serde {
         }
         map.end()
     }
+}
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<ChainConfig>, D::Error>
+impl<'de> Deserialize<'de> for ChainsConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: serde::Deserializer<'de>,
     {
+        use serde::de::{MapAccess, Visitor};
+        use std::fmt;
+
         struct ChainsVisitor;
 
         impl<'de> Visitor<'de> for ChainsVisitor {
-            type Value = Vec<ChainConfig>;
+            type Value = ChainsConfig;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a map of chain identifiers to chain configurations")
@@ -527,7 +544,7 @@ mod chains_serde {
                                     .map_err(|e| serde::de::Error::custom(format!("{}", e)))?,
                                 inner,
                             };
-                            ChainConfig::Eip155(config)
+                            ChainConfig::Eip155(Box::new(config))
                         }
                         solana::SOLANA_NAMESPACE => {
                             let inner: SolanaChainConfigInner = access.next_value()?;
@@ -549,7 +566,7 @@ mod chains_serde {
                     chains.push(config)
                 }
 
-                Ok(chains)
+                Ok(ChainsConfig(chains))
             }
         }
 
@@ -557,18 +574,21 @@ mod chains_serde {
     }
 }
 
-impl Default for Config {
+impl<TChainsConfig> Default for Config<TChainsConfig>
+where
+    TChainsConfig: Default,
+{
     fn default() -> Self {
         Config {
             port: config_defaults::default_port(),
             host: config_defaults::default_host(),
-            chains: Vec::new(),
+            chains: TChainsConfig::default(),
             schemes: Vec::new(),
         }
     }
 }
 
-mod config_defaults {
+pub mod config_defaults {
     use std::env;
     use std::net::IpAddr;
 
@@ -601,33 +621,7 @@ pub enum ConfigError {
     JsonParse(#[from] serde_json::Error),
 }
 
-impl Config {
-    /// Load configuration from CLI arguments and JSON file.
-    ///
-    /// The config file path is determined by:
-    /// 1. `--config <path>` CLI argument
-    /// 2. `./config.json` (if it exists)
-    ///
-    /// Values not present in the config file will be resolved via
-    /// environment variables or defaults during deserialization.
-    pub fn load() -> Result<Self, ConfigError> {
-        let cli_args = CliArgs::parse();
-        let config_path = Self::get_config_path(cli_args.config);
-        Self::load_from_path(config_path)
-    }
-
-    /// Load configuration from a specific path (or use defaults if None).
-    fn load_from_path(path: Option<PathBuf>) -> Result<Self, ConfigError> {
-        match path {
-            Some(p) => {
-                let content = fs::read_to_string(&p)?;
-                let config: Config = serde_json::from_str(&content)?;
-                Ok(config)
-            }
-            None => Ok(Config::default()),
-        }
-    }
-
+impl<TChainsConfig> Config<TChainsConfig> {
     /// Get the config file path from CLI arguments or default to `./config.json`.
     fn get_config_path(cli_config: Option<PathBuf>) -> Option<PathBuf> {
         // If --config was provided via CLI, use it
@@ -656,17 +650,48 @@ impl Config {
         self.host
     }
 
-    /// Get the chains configuration map.
-    ///
-    /// Keys are CAIP-2 chain identifiers (e.g., "eip155:84532", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").
-    pub fn chains(&self) -> &Vec<ChainConfig> {
-        &self.chains
-    }
-
     /// Get the schemes configuration list.
     ///
     /// Each entry specifies a scheme and the chains it applies to.
     pub fn schemes(&self) -> &Vec<SchemeConfig> {
         &self.schemes
+    }
+
+    /// Get the chains configuration map.
+    ///
+    /// Keys are CAIP-2 chain identifiers (e.g., "eip155:84532", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").
+    pub fn chains(&self) -> &TChainsConfig {
+        &self.chains
+    }
+}
+
+impl<TChainsConfig> Config<TChainsConfig>
+where
+    TChainsConfig: Default + for<'de> Deserialize<'de>,
+{
+    /// Load configuration from CLI arguments and JSON file.
+    ///
+    /// The config file path is determined by:
+    /// 1. `--config <path>` CLI argument
+    /// 2. `./config.json` (if it exists)
+    ///
+    /// Values not present in the config file will be resolved via
+    /// environment variables or defaults during deserialization.
+    pub fn load() -> Result<Self, ConfigError> {
+        let cli_args = CliArgs::parse();
+        let config_path = Self::get_config_path(cli_args.config);
+        Self::load_from_path(config_path)
+    }
+
+    /// Load configuration from a specific path (or use defaults if None).
+    fn load_from_path(path: Option<PathBuf>) -> Result<Self, ConfigError> {
+        match path {
+            Some(p) => {
+                let content = fs::read_to_string(&p)?;
+                let config: Config<TChainsConfig> = serde_json::from_str(&content)?;
+                Ok(config)
+            }
+            None => Ok(Config::default()),
+        }
     }
 }

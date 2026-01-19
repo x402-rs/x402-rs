@@ -43,9 +43,18 @@ pub mod solana;
 
 pub use chain_id::*;
 
-use crate::config::ChainConfig;
+use crate::config::{ChainConfig, ChainsConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
+
+// FIXME doc comments
+#[async_trait::async_trait]
+pub trait FromConfig<TConfig>
+where
+    Self: Sized,
+{
+    async fn from_config(config: &TConfig) -> Result<Self, Box<dyn std::error::Error>>;
+}
 
 /// A blockchain provider that can interact with either EVM or Solana chains.
 ///
@@ -64,20 +73,21 @@ pub enum ChainProvider {
     Solana(Arc<solana::SolanaChainProvider>),
 }
 
-impl ChainProvider {
-    /// Creates a new chain provider from configuration.
-    ///
-    /// This factory method inspects the configuration type and creates the appropriate
-    /// chain-specific provider (EVM or Solana).
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - RPC connection fails
-    /// - Signer configuration is invalid
-    /// - Required configuration is missing
-    pub async fn from_config(config: &ChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
-        let provider = match config {
+/// Creates a new chain provider from configuration.
+///
+/// This factory method inspects the configuration type and creates the appropriate
+/// chain-specific provider (EVM or Solana).
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - RPC connection fails
+/// - Signer configuration is invalid
+/// - Required configuration is missing
+#[async_trait::async_trait]
+impl FromConfig<ChainConfig> for ChainProvider {
+    async fn from_config(chains: &ChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
+        let provider = match chains {
             ChainConfig::Eip155(config) => {
                 let provider = eip155::Eip155ChainProvider::from_config(config).await?;
                 ChainProvider::Eip155(Arc::new(provider))
@@ -106,6 +116,15 @@ pub trait ChainProviderOps {
     fn chain_id(&self) -> ChainId;
 }
 
+impl<T: ChainProviderOps> ChainProviderOps for Arc<T> {
+    fn signer_addresses(&self) -> Vec<String> {
+        (**self).signer_addresses()
+    }
+    fn chain_id(&self) -> ChainId {
+        (**self).chain_id()
+    }
+}
+
 impl ChainProviderOps for ChainProvider {
     fn signer_addresses(&self) -> Vec<String> {
         match self {
@@ -127,10 +146,14 @@ impl ChainProviderOps for ChainProvider {
 /// The registry is built from configuration and provides lookup methods
 /// for finding providers by exact chain ID or by pattern matching.
 ///
+/// # Type Parameters
+///
+/// - `P` - The chain provider type (e.g., [`ChainProvider`] or a custom provider type)
+///
 /// # Example
 ///
 /// ```ignore
-/// use x402_rs::chain::{ChainRegistry, ChainIdPattern};
+/// use x402_rs::chain::{ChainRegistry, ChainIdPattern, ChainProvider};
 /// use x402_rs::config::Config;
 ///
 /// let config = Config::load()?;
@@ -143,33 +166,40 @@ impl ChainProviderOps for ChainProvider {
 /// let any_evm = registry.by_chain_id_pattern(&ChainIdPattern::wildcard("eip155"));
 /// ```
 #[derive(Debug)]
-pub struct ChainRegistry(HashMap<ChainId, ChainProvider>);
+pub struct ChainRegistry<P>(HashMap<ChainId, P>);
 
-impl ChainRegistry {
-    /// Creates a new chain registry from configuration.
-    ///
-    /// Initializes providers for all configured chains. Each chain configuration
-    /// is processed and a corresponding provider is created and stored.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any chain provider fails to initialize.
-    pub async fn from_config(
-        chains: &Vec<ChainConfig>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+impl<P> ChainRegistry<P> {
+    pub fn new(providers: HashMap<ChainId, P>) -> Self {
+        Self(providers)
+    }
+}
+
+/// Creates a new chain registry from configuration.
+///
+/// Initializes providers for all configured chains. Each chain configuration
+/// is processed and a corresponding provider is created and stored.
+///
+/// # Errors
+///
+/// Returns an error if any chain provider fails to initialize.
+#[async_trait::async_trait]
+impl FromConfig<ChainsConfig> for ChainRegistry<ChainProvider> {
+    async fn from_config(chains: &ChainsConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let mut providers = HashMap::new();
-        for chain in chains {
+        for chain in chains.iter() {
             let chain_provider = ChainProvider::from_config(chain).await?;
             providers.insert(chain_provider.chain_id(), chain_provider);
         }
-        Ok(Self(providers))
+        Ok(Self::new(providers))
     }
+}
 
+impl<P> ChainRegistry<P> {
     /// Looks up a provider by exact chain ID.
     ///
     /// Returns `None` if no provider is configured for the given chain.
     #[allow(dead_code)]
-    pub fn by_chain_id(&self, chain_id: ChainId) -> Option<&ChainProvider> {
+    pub fn by_chain_id(&self, chain_id: ChainId) -> Option<&P> {
         self.0.get(&chain_id)
     }
 
@@ -198,7 +228,7 @@ impl ChainRegistry {
     /// let mainnet_chains = ChainIdPattern::set("eip155", ["1", "8453", "137"].into_iter().map(String::from).collect());
     /// let mainnet_providers = registry.by_chain_id_pattern(&mainnet_chains);
     /// ```
-    pub fn by_chain_id_pattern(&self, pattern: &ChainIdPattern) -> Vec<&ChainProvider> {
+    pub fn by_chain_id_pattern(&self, pattern: &ChainIdPattern) -> Vec<&P> {
         self.0
             .iter()
             .filter_map(|(chain_id, provider)| pattern.matches(chain_id).then_some(provider))

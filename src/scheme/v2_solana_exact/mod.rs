@@ -36,11 +36,11 @@ pub mod client;
 pub mod types;
 
 use std::collections::HashMap;
-use std::error::Error;
 use std::sync::Arc;
 
+use crate::chain::ChainProvider;
 use crate::chain::solana::{Address, SolanaChainProvider, SolanaTokenDeployment};
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::v2;
 use crate::scheme::v1_solana_exact::types::ExactScheme;
@@ -84,34 +84,49 @@ impl X402SchemeId for V2SolanaExact {
     }
 
     fn scheme(&self) -> &str {
-        types::ExactScheme.as_ref()
+        ExactScheme.as_ref()
     }
 }
 
-impl X402SchemeFacilitatorBuilder for V2SolanaExact {
+impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2SolanaExact {
     fn build(
         &self,
-        provider: ChainProvider,
+        provider: &ChainProvider,
         config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
-        let provider = if let ChainProvider::Solana(provider) = provider {
-            provider
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        let solana_provider = if let ChainProvider::Solana(provider) = provider {
+            Arc::clone(provider)
         } else {
             return Err("V2SolanaExact::build: provider must be a SolanaChainProvider".into());
         };
+        self.build(solana_provider, config)
+    }
+}
 
+impl X402SchemeFacilitatorBuilder<Arc<SolanaChainProvider>> for V2SolanaExact {
+    fn build(
+        &self,
+        provider: Arc<SolanaChainProvider>,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
         let config = config
             .map(serde_json::from_value::<V2SolanaExactFacilitatorConfig>)
             .transpose()?
             .unwrap_or_default();
 
-        Ok(Box::new(V2SolanaExactFacilitator { provider, config }))
+        Ok(Box::new(V2SolanaExactFacilitator::new(provider, config)))
     }
 }
 
 pub struct V2SolanaExactFacilitator {
     provider: Arc<SolanaChainProvider>,
     config: V2SolanaExactFacilitatorConfig,
+}
+
+impl V2SolanaExactFacilitator {
+    pub fn new(provider: Arc<SolanaChainProvider>, config: V2SolanaExactFacilitatorConfig) -> Self {
+        Self { provider, config }
+    }
 }
 
 #[async_trait::async_trait]

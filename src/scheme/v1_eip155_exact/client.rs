@@ -13,13 +13,6 @@
 //! let client = V1Eip155ExactClient::new(signer);
 //! ```
 
-use alloy_primitives::{Address, FixedBytes, Signature, U256};
-use alloy_signer_local::PrivateKeySigner;
-use alloy_sol_types::{SolStruct, eip712_domain};
-use async_trait::async_trait;
-use rand::{Rng, rng};
-use std::sync::Arc;
-
 use crate::chain::ChainId;
 use crate::chain::eip155::Eip155ChainReference;
 use crate::proto::PaymentRequired;
@@ -34,6 +27,12 @@ use crate::scheme::v1_eip155_exact::{
 use crate::scheme::{V1Eip155Exact, X402SchemeId};
 use crate::timestamp::UnixTimestamp;
 use crate::util::Base64Bytes;
+use alloy_primitives::{Address, FixedBytes, Signature, U256};
+use alloy_signer_local::PrivateKeySigner;
+use alloy_sol_types::{SolStruct, eip712_domain};
+use async_trait::async_trait;
+use rand::{Rng, rng};
+use std::sync::Arc;
 
 #[derive(Debug)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
@@ -256,12 +255,12 @@ impl SignerLike for PrivateKeySigner {
 }
 
 #[async_trait]
-impl SignerLike for Arc<PrivateKeySigner> {
+impl<T: SignerLike + Send + Sync> SignerLike for Arc<T> {
     fn address(&self) -> Address {
-        PrivateKeySigner::address(self.as_ref())
+        (**self).address()
     }
 
     async fn sign_hash(&self, hash: &FixedBytes<32>) -> Result<Signature, alloy_signer::Error> {
-        alloy_signer::Signer::sign_hash(self.as_ref(), hash).await
+        (**self).sign_hash(hash).await
     }
 }

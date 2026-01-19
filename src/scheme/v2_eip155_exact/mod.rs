@@ -39,15 +39,14 @@ use alloy_primitives::U256;
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
-use std::error::Error;
 use std::sync::Arc;
 use tracing::instrument;
 
+use crate::chain::ChainProvider;
 use crate::chain::eip155::{
-    ChecksummedAddress, Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
-    Eip155TokenDeployment,
+    ChecksummedAddress, Eip155ChainReference, Eip155MetaTransactionProvider, Eip155TokenDeployment,
 };
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::proto::v2;
@@ -101,27 +100,53 @@ impl X402SchemeId for V2Eip155Exact {
     }
 }
 
-impl X402SchemeFacilitatorBuilder for V2Eip155Exact {
+impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2Eip155Exact {
     fn build(
         &self,
-        provider: ChainProvider,
-        _config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn Error>> {
-        let provider = if let ChainProvider::Eip155(provider) = provider {
-            provider
+        provider: &ChainProvider,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        let eip155_provider = if let ChainProvider::Eip155(provider) = provider {
+            Arc::clone(provider)
         } else {
             return Err("V2Eip155Exact::build: provider must be an Eip155ChainProvider".into());
         };
-        Ok(Box::new(V2Eip155ExactFacilitator { provider }))
+        self.build(eip155_provider, config)
     }
 }
 
-pub struct V2Eip155ExactFacilitator {
-    provider: Arc<Eip155ChainProvider>,
+impl<P> X402SchemeFacilitatorBuilder<P> for V2Eip155Exact
+where
+    P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync + 'static,
+    Eip155ExactError: From<P::Error>,
+{
+    fn build(
+        &self,
+        provider: P,
+        _config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        Ok(Box::new(V2Eip155ExactFacilitator::new(provider)))
+    }
+}
+
+pub struct V2Eip155ExactFacilitator<P> {
+    provider: P,
+}
+
+impl<P> V2Eip155ExactFacilitator<P> {
+    /// Creates a new facilitator with the given provider.
+    pub fn new(provider: P) -> Self {
+        Self { provider }
+    }
 }
 
 #[async_trait::async_trait]
-impl X402SchemeFacilitator for V2Eip155ExactFacilitator {
+impl<P> X402SchemeFacilitator for V2Eip155ExactFacilitator<P>
+where
+    P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync,
+    P::Inner: Provider,
+    Eip155ExactError: From<P::Error>,
+{
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
@@ -157,8 +182,7 @@ impl X402SchemeFacilitator for V2Eip155ExactFacilitator {
         )
         .await?;
 
-        let tx_hash =
-            settle_payment(self.provider.as_ref(), &contract, &payment, &eip712_domain).await?;
+        let tx_hash = settle_payment(&self.provider, &contract, &payment, &eip712_domain).await?;
 
         Ok(v2::SettleResponse::Success {
             payer: payment.from.to_string(),

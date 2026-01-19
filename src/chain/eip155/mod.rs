@@ -64,9 +64,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
 use tracing::Instrument;
 
-use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
-use crate::config::Eip155ChainConfig;
+use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount, FromConfig};
+use crate::config::{Eip155ChainConfig, RpcConfig};
 use crate::util::money_amount::{MoneyAmount, MoneyAmountParseError};
+
 pub use pending_nonce_manager::*;
 pub use types::*;
 
@@ -331,19 +332,61 @@ pub struct Eip155ChainProvider {
 }
 
 impl Eip155ChainProvider {
-    /// Creates a new provider from configuration.
-    ///
-    /// Initializes signers, RPC transports, and the nonce manager.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - No signers are configured
-    /// - Signer private keys are invalid
-    /// - RPC transport initialization fails
-    pub async fn from_config(
-        config: &Eip155ChainConfig,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn rpc_client(chain_id: ChainId, rpc: &[RpcConfig]) -> RpcClient {
+        let transports = rpc
+            .iter()
+            .filter_map(|provider_config| {
+                let scheme = provider_config.http.scheme();
+                let is_http = scheme == "http" || scheme == "https";
+                if !is_http {
+                    return None;
+                }
+                let rpc_url = provider_config.http.clone();
+                tracing::info!(chain=%chain_id, rpc_url=%rpc_url, rate_limit=?provider_config.rate_limit, "Using HTTP transport");
+                let rate_limit = provider_config.rate_limit.unwrap_or(u32::MAX);
+                let service = ServiceBuilder::new()
+                    .layer(ThrottleLayer::new(rate_limit))
+                    .service(Http::new(rpc_url));
+                Some(service)
+            })
+            .collect::<Vec<_>>();
+        let fallback = ServiceBuilder::new()
+            .layer(
+                FallbackLayer::default().with_active_transport_count(
+                    NonZeroUsize::new(transports.len())
+                        .expect("Non-zero amount of stateless transports"),
+                ),
+            )
+            .service(transports);
+        RpcClient::new(fallback, false)
+    }
+
+    /// Round-robin selection of next signer from wallet.
+    fn next_signer_address(&self) -> Address {
+        debug_assert!(!self.signer_addresses.is_empty());
+        if self.signer_addresses.len() == 1 {
+            self.signer_addresses[0]
+        } else {
+            let next =
+                self.signer_cursor.fetch_add(1, Ordering::Relaxed) % self.signer_addresses.len();
+            self.signer_addresses[next]
+        }
+    }
+}
+
+/// Creates a new provider from configuration.
+///
+/// Initializes signers, RPC transports, and the nonce manager.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - No signers are configured
+/// - Signer private keys are invalid
+/// - RPC transport initialization fails
+#[async_trait::async_trait]
+impl FromConfig<Eip155ChainConfig> for Eip155ChainProvider {
+    async fn from_config(config: &Eip155ChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
         // 1. Signers
         let signers = config
             .signers()
@@ -374,33 +417,7 @@ impl Eip155ChainProvider {
         let signer_cursor = Arc::new(AtomicUsize::new(0));
 
         // 2. Transports
-        let transports = config
-            .rpc()
-            .iter()
-            .filter_map(|provider_config| {
-                let scheme = provider_config.http.scheme();
-                let is_http = scheme == "http" || scheme == "https";
-                if !is_http {
-                    return None;
-                }
-                let rpc_url = provider_config.http.clone();
-                tracing::info!(chain=%config.chain_id(), rpc_url=%rpc_url, rate_limit=?provider_config.rate_limit, "Using HTTP transport");
-                let rate_limit = provider_config.rate_limit.unwrap_or(u32::MAX);
-                let service = ServiceBuilder::new()
-                    .layer(ThrottleLayer::new(rate_limit))
-                    .service(Http::new(rpc_url));
-                Some(service)
-            })
-            .collect::<Vec<_>>();
-        let fallback = ServiceBuilder::new()
-            .layer(
-                FallbackLayer::default().with_active_transport_count(
-                    NonZeroUsize::new(transports.len())
-                        .expect("Non-zero amount of stateless transports"),
-                ),
-            )
-            .service(transports);
-        let client = RpcClient::new(fallback, false);
+        let client = Self::rpc_client(config.chain_id(), config.rpc());
 
         // 3. Provider
         // Create nonce manager explicitly so we can store a reference for error handling
@@ -422,7 +439,7 @@ impl Eip155ChainProvider {
             .wallet(wallet)
             .connect_client(client);
 
-        tracing::info!(chain=%config.chain_id(), signers=?signer_addresses, "Initialized EVM provider");
+        tracing::info!(chain=%config.chain_id(), signers=?signer_addresses, "Using EVM provider");
 
         Ok(Self {
             chain: config.chain_reference(),
@@ -434,35 +451,6 @@ impl Eip155ChainProvider {
             signer_cursor,
             nonce_manager,
         })
-    }
-
-    /// Round-robin selection of next signer from wallet.
-    fn next_signer_address(&self) -> Address {
-        debug_assert!(!self.signer_addresses.is_empty());
-        if self.signer_addresses.len() == 1 {
-            self.signer_addresses[0]
-        } else {
-            let next =
-                self.signer_cursor.fetch_add(1, Ordering::Relaxed) % self.signer_addresses.len();
-            self.signer_addresses[next]
-        }
-    }
-}
-
-impl Eip155MetaTransactionProvider for &Eip155ChainProvider {
-    type Error = MetaTransactionSendError;
-    type Inner = InnerProvider;
-    fn inner(&self) -> &Self::Inner {
-        (*self).inner()
-    }
-    fn chain(&self) -> &Eip155ChainReference {
-        (*self).chain()
-    }
-    fn send_transaction(
-        &self,
-        tx: MetaTransaction,
-    ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send {
-        (*self).send_transaction(tx)
     }
 }
 
@@ -580,6 +568,9 @@ pub enum MetaTransactionSendError {
     Transport(#[from] TransportError),
     #[error(transparent)]
     PendingTransaction(#[from] PendingTransactionError),
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    #[error("{0}")]
+    Custom(String),
 }
 
 impl ChainProviderOps for Eip155ChainProvider {
@@ -622,6 +613,26 @@ pub trait Eip155MetaTransactionProvider {
         &self,
         tx: MetaTransaction,
     ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send;
+}
+
+impl<T: Eip155MetaTransactionProvider> Eip155MetaTransactionProvider for Arc<T> {
+    type Error = T::Error;
+    type Inner = T::Inner;
+
+    fn inner(&self) -> &Self::Inner {
+        (**self).inner()
+    }
+
+    fn chain(&self) -> &Eip155ChainReference {
+        (**self).chain()
+    }
+
+    fn send_transaction(
+        &self,
+        tx: MetaTransaction,
+    ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send {
+        (**self).send_transaction(tx)
+    }
 }
 
 #[cfg(test)]

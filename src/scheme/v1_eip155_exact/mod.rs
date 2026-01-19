@@ -60,11 +60,12 @@ use tracing_core::Level;
 pub mod client;
 pub mod types;
 
+use crate::chain::ChainProvider;
 use crate::chain::eip155::{
-    ChecksummedAddress, Eip155ChainProvider, Eip155ChainReference, Eip155MetaTransactionProvider,
-    Eip155TokenDeployment, MetaTransaction, MetaTransactionSendError,
+    ChecksummedAddress, Eip155ChainReference, Eip155MetaTransactionProvider, Eip155TokenDeployment,
+    MetaTransaction, MetaTransactionSendError,
 };
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::{PaymentVerificationError, v1};
 use crate::scheme::{
@@ -119,27 +120,53 @@ impl X402SchemeId for V1Eip155Exact {
     }
 }
 
-impl X402SchemeFacilitatorBuilder for V1Eip155Exact {
+impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1Eip155Exact {
     fn build(
         &self,
-        provider: ChainProvider,
-        _config: Option<serde_json::Value>,
+        provider: &ChainProvider,
+        config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        let provider = if let ChainProvider::Eip155(provider) = provider {
-            provider
+        let eip155_provider = if let ChainProvider::Eip155(provider) = provider {
+            Arc::clone(provider)
         } else {
             return Err("V1Eip155Exact::build: provider must be an Eip155ChainProvider".into());
         };
-        Ok(Box::new(V1Eip155ExactFacilitator { provider }))
+        self.build(eip155_provider, config)
     }
 }
 
-pub struct V1Eip155ExactFacilitator {
-    provider: Arc<Eip155ChainProvider>,
+impl<P> X402SchemeFacilitatorBuilder<P> for V1Eip155Exact
+where
+    P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync + 'static,
+    Eip155ExactError: From<P::Error>,
+{
+    fn build(
+        &self,
+        provider: P,
+        _config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        Ok(Box::new(V1Eip155ExactFacilitator::new(provider)))
+    }
+}
+
+pub struct V1Eip155ExactFacilitator<P> {
+    provider: P,
+}
+
+impl<P> V1Eip155ExactFacilitator<P> {
+    /// Creates a new facilitator with the given provider.
+    pub fn new(provider: P) -> Self {
+        Self { provider }
+    }
 }
 
 #[async_trait::async_trait]
-impl X402SchemeFacilitator for V1Eip155ExactFacilitator {
+impl<P> X402SchemeFacilitator for V1Eip155ExactFacilitator<P>
+where
+    P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync,
+    P::Inner: Provider,
+    Eip155ExactError: From<P::Error>,
+{
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
@@ -176,8 +203,7 @@ impl X402SchemeFacilitator for V1Eip155ExactFacilitator {
         )
         .await?;
 
-        let tx_hash =
-            settle_payment(self.provider.as_ref(), &contract, &payment, &eip712_domain).await?;
+        let tx_hash = settle_payment(&self.provider, &contract, &payment, &eip712_domain).await?;
         Ok(v1::SettleResponse::Success {
             payer: payment.from.to_string(),
             transaction: tx_hash.to_string(),
@@ -258,12 +284,19 @@ sol! {
 /// - Sufficient on-chain balance.
 /// - Sufficient value in payload.
 #[instrument(skip_all, err)]
-async fn assert_valid_payment<P: Provider>(
-    provider: P,
+async fn assert_valid_payment<'a, P: Provider>(
+    provider: &'a P,
     chain: &Eip155ChainReference,
     payload: &types::PaymentPayload,
     requirements: &types::PaymentRequirements,
-) -> Result<(IEIP3009::IEIP3009Instance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
+) -> Result<
+    (
+        IEIP3009::IEIP3009Instance<&'a P>,
+        ExactEvmPayment,
+        Eip712Domain,
+    ),
+    Eip155ExactError,
+> {
     let chain_id: ChainId = chain.into();
     let payload_chain_id = ChainId::from_network_name(&payload.network)
         .ok_or(PaymentVerificationError::UnsupportedChain)?;
@@ -755,7 +788,7 @@ pub struct TransferWithAuthorizationCall<P, TCall, TSignature> {
 /// deployment to confirm visibility on the sending RPC before submitting a
 /// follow-up transaction.
 async fn is_contract_deployed<P: Provider>(
-    provider: P,
+    provider: &P,
     address: &Address,
 ) -> Result<bool, TransportError> {
     let bytes = provider
@@ -770,8 +803,8 @@ async fn is_contract_deployed<P: Provider>(
 }
 
 pub async fn verify_payment<P: Provider>(
-    provider: P,
-    contract: &IEIP3009::IEIP3009Instance<P>,
+    provider: &P,
+    contract: &IEIP3009::IEIP3009Instance<&P>,
     payment: &ExactEvmPayment,
     eip712_domain: &Eip712Domain,
 ) -> Result<Address, Eip155ExactError> {
@@ -870,7 +903,7 @@ pub async fn verify_payment<P: Provider>(
 }
 
 pub async fn settle_payment<P, E>(
-    provider: P,
+    provider: &P,
     contract: &IEIP3009::IEIP3009Instance<&P::Inner>,
     payment: &ExactEvmPayment,
     eip712_domain: &Eip712Domain,
@@ -894,7 +927,7 @@ where
             if is_contract_deployed {
                 // transferWithAuthorization with inner signature
                 Eip155MetaTransactionProvider::send_transaction(
-                    &provider,
+                    provider,
                     MetaTransaction {
                         to: transfer_call.tx.target(),
                         calldata: transfer_call.tx.calldata().clone(),
@@ -931,7 +964,7 @@ where
                     calls: vec![deployment_call, transfer_with_authorization_call],
                 };
                 Eip155MetaTransactionProvider::send_transaction(
-                    &provider,
+                    provider,
                     MetaTransaction {
                         to: MULTICALL3_ADDRESS,
                         calldata: aggregate_call.abi_encode().into(),
@@ -960,7 +993,7 @@ where
             let transfer_call = transfer_call.0;
             // transferWithAuthorization with eip1271 signature
             Eip155MetaTransactionProvider::send_transaction(
-                &provider,
+                provider,
                 MetaTransaction {
                     to: transfer_call.tx.target(),
                     calldata: transfer_call.tx.calldata().clone(),
@@ -985,7 +1018,7 @@ where
             let transfer_call = transfer_call.0;
             // transferWithAuthorization with EOA signature
             Eip155MetaTransactionProvider::send_transaction(
-                &provider,
+                provider,
                 MetaTransaction {
                     to: transfer_call.tx.target(),
                     calldata: transfer_call.tx.calldata().clone(),
@@ -1065,6 +1098,7 @@ impl From<MetaTransactionSendError> for Eip155ExactError {
         match e {
             MetaTransactionSendError::Transport(e) => Self::Transport(e),
             MetaTransactionSendError::PendingTransaction(e) => Self::PendingTransaction(e),
+            MetaTransactionSendError::Custom(e) => Self::ContractCall(e),
         }
     }
 }
