@@ -303,6 +303,9 @@ pub enum SolanaChainProviderError {
     /// WebSocket pubsub transport error.
     #[error(transparent)]
     PubsubTransport(#[from] PubsubClientError),
+    #[error("{0}")]
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    Custom(String),
 }
 
 impl From<ClientError> for SolanaChainProviderError {
@@ -348,7 +351,7 @@ pub struct SolanaChainProvider {
     /// The RPC client for sending requests.
     rpc_client: Arc<RpcClient>,
     /// Optional WebSocket client for subscriptions.
-    pubsub_client: Arc<Option<PubsubClient>>,
+    pubsub_client: Option<Arc<PubsubClient>>,
     /// Maximum compute units allowed per transaction.
     max_compute_unit_limit: u32,
     /// Maximum price per compute unit (in micro-lamports).
@@ -398,10 +401,20 @@ impl SolanaChainProvider {
             keypair: Arc::new(keypair),
             chain,
             rpc_client: Arc::new(rpc_client),
-            pubsub_client: Arc::new(pubsub_client),
+            pubsub_client: pubsub_client.map(Arc::new),
             max_compute_unit_limit,
             max_compute_unit_price,
         })
+    }
+
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn rpc_client(&self) -> Arc<RpcClient> {
+        Arc::clone(&self.rpc_client)
+    }
+
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn pubsub_client(&self) -> Option<Arc<PubsubClient>> {
+        self.pubsub_client.clone()
     }
 
     pub async fn send(
