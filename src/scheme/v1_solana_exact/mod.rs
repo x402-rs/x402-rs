@@ -53,7 +53,8 @@ use tracing_core::Level;
 
 use crate::chain::ChainProvider;
 use crate::chain::solana::{
-    Address, SolanaChainProvider, SolanaChainProviderError, SolanaTokenDeployment,
+    Address, SolanaChainProvider, SolanaChainProviderError, SolanaChainProviderLike,
+    SolanaTokenDeployment,
 };
 use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
@@ -137,19 +138,22 @@ impl X402SchemeFacilitatorBuilder<Arc<SolanaChainProvider>> for V1SolanaExact {
     }
 }
 
-pub struct V1SolanaExactFacilitator {
-    provider: Arc<SolanaChainProvider>,
+pub struct V1SolanaExactFacilitator<P> {
+    provider: P,
     config: V1SolanaExactFacilitatorConfig,
 }
 
-impl V1SolanaExactFacilitator {
-    pub fn new(provider: Arc<SolanaChainProvider>, config: V1SolanaExactFacilitatorConfig) -> Self {
+impl<P> V1SolanaExactFacilitator<P> {
+    pub fn new(provider: P, config: V1SolanaExactFacilitatorConfig) -> Self {
         Self { provider, config }
     }
 }
 
 #[async_trait::async_trait]
-impl X402SchemeFacilitator for V1SolanaExactFacilitator {
+impl<P> X402SchemeFacilitator for V1SolanaExactFacilitator<P>
+where
+    P: SolanaChainProviderLike + ChainProviderOps + Send + Sync,
+{
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
@@ -291,7 +295,10 @@ impl TransactionInt {
         true
     }
 
-    pub fn sign(self, provider: &SolanaChainProvider) -> Result<Self, SolanaChainProviderError> {
+    pub fn sign<P: SolanaChainProviderLike>(
+        self,
+        provider: &P,
+    ) -> Result<Self, SolanaChainProviderError> {
         let tx = provider.sign(self.inner)?;
         Ok(Self { inner: tx })
     }
@@ -326,9 +333,9 @@ impl TransactionInt {
         Ok(Self { inner: tx })
     }
 
-    pub async fn send_and_confirm(
+    pub async fn send_and_confirm<P: SolanaChainProviderLike>(
         &self,
-        provider: &SolanaChainProvider,
+        provider: &P,
         commitment_config: CommitmentConfig,
     ) -> Result<Signature, SolanaChainProviderError> {
         provider
@@ -486,8 +493,8 @@ fn get_program_id(transaction: &VersionedTransaction, index: usize) -> Option<Pu
     Some(*instruction.program_id(account_keys))
 }
 
-pub async fn verify_transfer(
-    provider: &SolanaChainProvider,
+pub async fn verify_transfer<P: SolanaChainProviderLike + ChainProviderOps>(
+    provider: &P,
     request: &types::VerifyRequest,
     config: &V1SolanaExactFacilitatorConfig,
 ) -> Result<VerifyTransferResult, PaymentVerificationError> {
@@ -522,8 +529,8 @@ pub async fn verify_transfer(
     Ok(result)
 }
 
-pub async fn verify_transaction(
-    provider: &SolanaChainProvider,
+pub async fn verify_transaction<P: SolanaChainProviderLike>(
+    provider: &P,
     transaction_b64_string: String,
     transfer_requirement: &TransferRequirement<'_>,
     config: &V1SolanaExactFacilitatorConfig,
@@ -591,8 +598,8 @@ pub struct TransferRequirement<'a> {
     pub amount: u64,
 }
 
-pub async fn verify_transfer_instruction(
-    provider: &SolanaChainProvider,
+pub async fn verify_transfer_instruction<P: SolanaChainProviderLike>(
+    provider: &P,
     transaction: &VersionedTransaction,
     instruction_index: usize,
     transfer_requirement: &TransferRequirement<'_>,
@@ -702,8 +709,8 @@ pub async fn verify_transfer_instruction(
     Ok(transfer_checked_instruction)
 }
 
-pub async fn settle_transaction(
-    provider: &SolanaChainProvider,
+pub async fn settle_transaction<P: SolanaChainProviderLike>(
+    provider: &P,
     verification: VerifyTransferResult,
 ) -> Result<Signature, SolanaChainProviderError> {
     let tx = TransactionInt::new(verification.transaction).sign(provider)?;

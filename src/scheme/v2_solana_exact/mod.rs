@@ -39,7 +39,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::chain::ChainProvider;
-use crate::chain::solana::{Address, SolanaChainProvider, SolanaTokenDeployment};
+use crate::chain::solana::{
+    Address, SolanaChainProvider, SolanaChainProviderLike, SolanaTokenDeployment,
+};
 use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::v2;
@@ -118,19 +120,22 @@ impl X402SchemeFacilitatorBuilder<Arc<SolanaChainProvider>> for V2SolanaExact {
     }
 }
 
-pub struct V2SolanaExactFacilitator {
-    provider: Arc<SolanaChainProvider>,
+pub struct V2SolanaExactFacilitator<P> {
+    provider: P,
     config: V2SolanaExactFacilitatorConfig,
 }
 
-impl V2SolanaExactFacilitator {
-    pub fn new(provider: Arc<SolanaChainProvider>, config: V2SolanaExactFacilitatorConfig) -> Self {
+impl<P> V2SolanaExactFacilitator<P> {
+    pub fn new(provider: P, config: V2SolanaExactFacilitatorConfig) -> Self {
         Self { provider, config }
     }
 }
 
 #[async_trait::async_trait]
-impl X402SchemeFacilitator for V2SolanaExactFacilitator {
+impl<P> X402SchemeFacilitator for V2SolanaExactFacilitator<P>
+where
+    P: SolanaChainProviderLike + ChainProviderOps + Send + Sync,
+{
     async fn verify(
         &self,
         request: &proto::VerifyRequest,
@@ -182,8 +187,8 @@ impl X402SchemeFacilitator for V2SolanaExactFacilitator {
     }
 }
 
-pub async fn verify_transfer(
-    provider: &SolanaChainProvider,
+pub async fn verify_transfer<P: SolanaChainProviderLike + ChainProviderOps>(
+    provider: &P,
     request: &types::VerifyRequest,
     config: &V2SolanaExactFacilitatorConfig,
 ) -> Result<VerifyTransferResult, proto::PaymentVerificationError> {

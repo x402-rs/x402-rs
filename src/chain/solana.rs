@@ -404,23 +404,122 @@ impl SolanaChainProvider {
         })
     }
 
-    pub fn fee_payer(&self) -> Address {
-        Address(self.keypair.pubkey())
+    pub async fn send(
+        &self,
+        tx: &VersionedTransaction,
+    ) -> Result<Signature, SolanaChainProviderError> {
+        let signature = self
+            .rpc_client
+            .send_transaction_with_config(
+                tx,
+                RpcSendTransactionConfig {
+                    skip_preflight: true,
+                    ..RpcSendTransactionConfig::default()
+                },
+            )
+            .await?;
+        Ok(signature)
+    }
+}
+
+#[async_trait::async_trait]
+impl FromConfig<SolanaChainConfig> for SolanaChainProvider {
+    async fn from_config(config: &SolanaChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
+        let rpc_url = config.rpc();
+        let pubsub_url = config.pubsub().clone().map(|url| url.to_string());
+        let keypair = Keypair::from_base58_string(&config.signer().to_string());
+        let max_compute_unit_limit = config.max_compute_unit_limit();
+        let max_compute_unit_price = config.max_compute_unit_price();
+        let chain = config.chain_reference();
+        let provider = Self::new(
+            keypair,
+            rpc_url.to_string(),
+            pubsub_url,
+            chain,
+            max_compute_unit_limit,
+            max_compute_unit_price,
+        )
+        .await?;
+        Ok(provider)
+    }
+}
+
+impl ChainProviderOps for SolanaChainProvider {
+    fn signer_addresses(&self) -> Vec<String> {
+        vec![self.fee_payer().to_string()]
     }
 
-    pub fn max_compute_unit_limit(&self) -> u32 {
+    fn chain_id(&self) -> ChainId {
+        self.chain.into()
+    }
+}
+
+pub trait SolanaChainProviderLike {
+    fn simulate_transaction_with_config(
+        &self,
+        tx: &VersionedTransaction,
+        cfg: RpcSimulateTransactionConfig,
+    ) -> impl Future<Output = Result<(), SolanaChainProviderError>> + Send;
+    fn get_multiple_accounts(
+        &self,
+        pubkeys: &[Pubkey],
+    ) -> impl Future<Output = Result<Vec<Option<Account>>, SolanaChainProviderError>> + Send;
+    fn max_compute_unit_limit(&self) -> u32;
+    fn max_compute_unit_price(&self) -> u64;
+    fn pubkey(&self) -> Pubkey;
+    fn fee_payer(&self) -> Address;
+    fn sign(
+        &self,
+        tx: VersionedTransaction,
+    ) -> Result<VersionedTransaction, SolanaChainProviderError>;
+    fn send_and_confirm(
+        &self,
+        tx: &VersionedTransaction,
+        commitment_config: CommitmentConfig,
+    ) -> impl Future<Output = Result<Signature, SolanaChainProviderError>> + Send;
+}
+
+impl SolanaChainProviderLike for SolanaChainProvider {
+    async fn simulate_transaction_with_config(
+        &self,
+        tx: &VersionedTransaction,
+        cfg: RpcSimulateTransactionConfig,
+    ) -> Result<(), SolanaChainProviderError> {
+        let sim = self
+            .rpc_client
+            .simulate_transaction_with_config(tx, cfg)
+            .await?;
+        match sim.value.err {
+            None => Ok(()),
+            Some(e) => Err(SolanaChainProviderError::InvalidTransaction(e)),
+        }
+    }
+
+    async fn get_multiple_accounts(
+        &self,
+        pubkeys: &[Pubkey],
+    ) -> Result<Vec<Option<Account>>, SolanaChainProviderError> {
+        let accounts = self.rpc_client.get_multiple_accounts(pubkeys).await?;
+        Ok(accounts)
+    }
+
+    fn max_compute_unit_limit(&self) -> u32 {
         self.max_compute_unit_limit
     }
 
-    pub fn max_compute_unit_price(&self) -> u64 {
+    fn max_compute_unit_price(&self) -> u64 {
         self.max_compute_unit_price
     }
 
-    pub fn pubkey(&self) -> Pubkey {
+    fn pubkey(&self) -> Pubkey {
         self.keypair.pubkey()
     }
 
-    pub fn sign(
+    fn fee_payer(&self) -> Address {
+        Address(self.keypair.pubkey())
+    }
+
+    fn sign(
         &self,
         tx: VersionedTransaction,
     ) -> Result<VersionedTransaction, SolanaChainProviderError> {
@@ -446,47 +545,7 @@ impl SolanaChainProvider {
         Ok(tx)
     }
 
-    pub async fn simulate_transaction_with_config(
-        &self,
-        tx: &VersionedTransaction,
-        cfg: RpcSimulateTransactionConfig,
-    ) -> Result<(), SolanaChainProviderError> {
-        let sim = self
-            .rpc_client
-            .simulate_transaction_with_config(tx, cfg)
-            .await?;
-        match sim.value.err {
-            None => Ok(()),
-            Some(e) => Err(SolanaChainProviderError::InvalidTransaction(e)),
-        }
-    }
-
-    pub async fn get_multiple_accounts(
-        &self,
-        pubkeys: &[Pubkey],
-    ) -> Result<Vec<Option<Account>>, SolanaChainProviderError> {
-        let accounts = self.rpc_client.get_multiple_accounts(pubkeys).await?;
-        Ok(accounts)
-    }
-
-    pub async fn send(
-        &self,
-        tx: &VersionedTransaction,
-    ) -> Result<Signature, SolanaChainProviderError> {
-        let signature = self
-            .rpc_client
-            .send_transaction_with_config(
-                tx,
-                RpcSendTransactionConfig {
-                    skip_preflight: true,
-                    ..RpcSendTransactionConfig::default()
-                },
-            )
-            .await?;
-        Ok(signature)
-    }
-
-    pub async fn send_and_confirm(
+    async fn send_and_confirm(
         &self,
         tx: &VersionedTransaction,
         commitment_config: CommitmentConfig,
@@ -541,35 +600,51 @@ impl SolanaChainProvider {
     }
 }
 
-#[async_trait::async_trait]
-impl FromConfig<SolanaChainConfig> for SolanaChainProvider {
-    async fn from_config(config: &SolanaChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
-        let rpc_url = config.rpc();
-        let pubsub_url = config.pubsub().clone().map(|url| url.to_string());
-        let keypair = Keypair::from_base58_string(&config.signer().to_string());
-        let max_compute_unit_limit = config.max_compute_unit_limit();
-        let max_compute_unit_price = config.max_compute_unit_price();
-        let chain = config.chain_reference();
-        let provider = Self::new(
-            keypair,
-            rpc_url.to_string(),
-            pubsub_url,
-            chain,
-            max_compute_unit_limit,
-            max_compute_unit_price,
-        )
-        .await?;
-        Ok(provider)
-    }
-}
-
-impl ChainProviderOps for SolanaChainProvider {
-    fn signer_addresses(&self) -> Vec<String> {
-        vec![self.fee_payer().to_string()]
+impl<T: SolanaChainProviderLike> SolanaChainProviderLike for Arc<T> {
+    fn simulate_transaction_with_config(
+        &self,
+        tx: &VersionedTransaction,
+        cfg: RpcSimulateTransactionConfig,
+    ) -> impl Future<Output = Result<(), SolanaChainProviderError>> + Send {
+        (**self).simulate_transaction_with_config(tx, cfg)
     }
 
-    fn chain_id(&self) -> ChainId {
-        self.chain.into()
+    fn get_multiple_accounts(
+        &self,
+        pubkeys: &[Pubkey],
+    ) -> impl Future<Output = Result<Vec<Option<Account>>, SolanaChainProviderError>> + Send {
+        (**self).get_multiple_accounts(pubkeys)
+    }
+
+    fn max_compute_unit_limit(&self) -> u32 {
+        (**self).max_compute_unit_limit()
+    }
+
+    fn max_compute_unit_price(&self) -> u64 {
+        (**self).max_compute_unit_price()
+    }
+
+    fn pubkey(&self) -> Pubkey {
+        (**self).pubkey()
+    }
+
+    fn fee_payer(&self) -> Address {
+        (**self).fee_payer()
+    }
+
+    fn sign(
+        &self,
+        tx: VersionedTransaction,
+    ) -> Result<VersionedTransaction, SolanaChainProviderError> {
+        (**self).sign(tx)
+    }
+
+    fn send_and_confirm(
+        &self,
+        tx: &VersionedTransaction,
+        commitment_config: CommitmentConfig,
+    ) -> impl Future<Output = Result<Signature, SolanaChainProviderError>> + Send {
+        (**self).send_and_confirm(tx, commitment_config)
     }
 }
 
