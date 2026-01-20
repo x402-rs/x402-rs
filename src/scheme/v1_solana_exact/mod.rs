@@ -53,8 +53,7 @@ use tracing_core::Level;
 
 use crate::chain::ChainProvider;
 use crate::chain::solana::{
-    Address, SolanaChainProvider, SolanaChainProviderError, SolanaChainProviderLike,
-    SolanaTokenDeployment,
+    Address, SolanaChainProviderError, SolanaChainProviderLike, SolanaTokenDeployment,
 };
 use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
@@ -123,10 +122,13 @@ impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1SolanaExact {
     }
 }
 
-impl X402SchemeFacilitatorBuilder<Arc<SolanaChainProvider>> for V1SolanaExact {
+impl<P> X402SchemeFacilitatorBuilder<P> for V1SolanaExact
+where
+    P: SolanaChainProviderLike + ChainProviderOps + Send + Sync + 'static,
+{
     fn build(
         &self,
-        provider: Arc<SolanaChainProvider>,
+        provider: P,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
         let config = config

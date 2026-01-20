@@ -39,9 +39,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::chain::ChainProvider;
-use crate::chain::solana::{
-    Address, SolanaChainProvider, SolanaChainProviderLike, SolanaTokenDeployment,
-};
+use crate::chain::solana::{Address, SolanaChainProviderLike, SolanaTokenDeployment};
 use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::v2;
@@ -105,10 +103,13 @@ impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2SolanaExact {
     }
 }
 
-impl X402SchemeFacilitatorBuilder<Arc<SolanaChainProvider>> for V2SolanaExact {
+impl<P> X402SchemeFacilitatorBuilder<P> for V2SolanaExact
+where
+    P: SolanaChainProviderLike + ChainProviderOps + Send + Sync + 'static,
+{
     fn build(
         &self,
-        provider: Arc<SolanaChainProvider>,
+        provider: P,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
         let config = config
