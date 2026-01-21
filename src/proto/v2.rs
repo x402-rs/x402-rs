@@ -152,7 +152,7 @@ pub struct PaymentPayload<TAccepted, TPayload> {
     /// The scheme-specific signed payload.
     pub payload: TPayload,
     /// Information about the resource being paid for.
-    pub resource: ResourceInfo,
+    pub resource: Option<ResourceInfo>,
     /// Protocol version (always 2).
     pub x402_version: X402Version2,
 }
