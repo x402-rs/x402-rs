@@ -569,6 +569,9 @@ impl AptosChainConfig {
     pub fn rpc(&self) -> &Url {
         self.inner.rpc.inner()
     }
+    pub fn api_key(&self) -> Option<&str> {
+        self.inner.api_key.as_ref().map(|k| k.inner().as_str())
+    }
     pub fn sponsor_gas(&self) -> bool {
         *self.inner.sponsor_gas.inner()
     }
@@ -587,12 +590,14 @@ impl AptosChainConfig {
 /// ```toml
 /// [aptos."aptos:1"]
 /// rpc = "$APTOS_RPC_URL"
+/// api_key = "$APTOS_API_KEY"
 /// sponsor_gas = "$APTOS_SPONSOR_GAS"
 /// signer = { private_key = "$APTOS_PRIVATE_KEY" }
 /// ```
 ///
 /// Set these environment variables:
 /// - `APTOS_RPC_URL="https://fullnode.mainnet.aptoslabs.com/v1"`
+/// - `APTOS_API_KEY="your-api-key"` (optional, sent as Bearer token)
 /// - `APTOS_SPONSOR_GAS="true"`
 /// - `APTOS_PRIVATE_KEY="0x..."`
 ///
@@ -608,8 +613,12 @@ impl AptosChainConfig {
 pub struct AptosChainConfigInner {
     /// RPC provider URL for this chain (required).
     /// Supports literal URLs or environment variable references like "$APTOS_RPC_URL".
-    /// For paid RPC providers, include API key in URL: "https://provider.com/v1/YOUR_KEY"
     pub rpc: LiteralOrEnv<Url>,
+    /// Optional API key for authenticated RPC access (e.g., Geomi nodes).
+    /// If provided, sent as `Authorization: Bearer {api_key}` header with all RPC requests.
+    /// Supports literal strings or environment variable references like "$APTOS_API_KEY".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<LiteralOrEnv<String>>,
     /// Signer configuration for this chain (optional, required only if sponsor_gas is true).
     /// A hex-encoded private key (32 or 64 bytes) or env var reference like "$APTOS_PRIVATE_KEY".
     #[serde(default, skip_serializing_if = "Option::is_none")]
