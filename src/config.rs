@@ -581,12 +581,30 @@ impl AptosChainConfig {
 }
 
 /// Configuration specific to Aptos chains.
+///
+/// # Example - Sponsored transactions (facilitator pays gas)
+///
+/// ```toml
+/// [aptos."aptos:1"]
+/// rpc = "https://fullnode.mainnet.aptoslabs.com/v1"
+/// sponsor_gas = true
+/// signer = { private_key = "$APTOS_PRIVATE_KEY" }
+/// ```
+///
+/// # Example - Non-sponsored transactions (client pays gas)
+///
+/// ```toml
+/// [aptos."aptos:1"]
+/// rpc = "https://fullnode.mainnet.aptoslabs.com/v1"
+/// sponsor_gas = false
+/// # No signer needed - facilitator just relays transactions
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AptosChainConfigInner {
     /// RPC provider URL for this chain (required).
     pub rpc: Url,
     /// Signer configuration for this chain (optional, required only if sponsor_gas is true).
-    /// A hex-encoded private key (32 or 64 bytes) or env var reference.
+    /// A hex-encoded private key (32 or 64 bytes) or env var reference like "$APTOS_PRIVATE_KEY".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signer: Option<AptosSignerConfig>,
     /// Whether the facilitator should sponsor gas fees for transactions (default: false).
