@@ -186,7 +186,15 @@ impl AptosChainProvider {
             (None, None)
         };
 
-        let rest_client = AptosClient::new(rpc_url.clone());
+        // Create REST client with optional API key
+        let rest_client = if let Some(api_key) = config.api_key() {
+            use aptos_rest_client::AptosBaseUrl;
+            AptosClient::builder(AptosBaseUrl::Custom(rpc_url.clone()))
+                .api_key(api_key)?
+                .build()
+        } else {
+            AptosClient::new(rpc_url.clone())
+        };
 
         let provider = Self::new(chain, sponsor_gas, fee_payer_address, fee_payer_private_key, rest_client);
         Ok(provider)
