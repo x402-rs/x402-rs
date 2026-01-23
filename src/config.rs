@@ -567,10 +567,10 @@ impl AptosChainConfig {
         self.inner.signer.as_ref()
     }
     pub fn rpc(&self) -> &Url {
-        &self.inner.rpc
+        self.inner.rpc.inner()
     }
     pub fn sponsor_gas(&self) -> bool {
-        self.inner.sponsor_gas
+        *self.inner.sponsor_gas.inner()
     }
     pub fn chain_reference(&self) -> aptos::AptosChainReference {
         self.chain_reference
@@ -582,7 +582,21 @@ impl AptosChainConfig {
 
 /// Configuration specific to Aptos chains.
 ///
-/// # Example - Sponsored transactions (facilitator pays gas)
+/// # Example - Using environment variables (recommended for deployments)
+///
+/// ```toml
+/// [aptos."aptos:1"]
+/// rpc = "$APTOS_RPC_URL"
+/// sponsor_gas = "$APTOS_SPONSOR_GAS"
+/// signer = { private_key = "$APTOS_PRIVATE_KEY" }
+/// ```
+///
+/// Set these environment variables:
+/// - `APTOS_RPC_URL="https://fullnode.mainnet.aptoslabs.com/v1"`
+/// - `APTOS_SPONSOR_GAS="true"`
+/// - `APTOS_PRIVATE_KEY="0x..."`
+///
+/// # Example - Literal values in config
 ///
 /// ```toml
 /// [aptos."aptos:1"]
@@ -590,27 +604,36 @@ impl AptosChainConfig {
 /// sponsor_gas = true
 /// signer = { private_key = "$APTOS_PRIVATE_KEY" }
 /// ```
-///
-/// # Example - Non-sponsored transactions (client pays gas)
-///
-/// ```toml
-/// [aptos."aptos:1"]
-/// rpc = "https://fullnode.mainnet.aptoslabs.com/v1"
-/// sponsor_gas = false
-/// # No signer needed - facilitator just relays transactions
-/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AptosChainConfigInner {
     /// RPC provider URL for this chain (required).
-    pub rpc: Url,
+    /// Supports literal URLs or environment variable references like "$APTOS_RPC_URL".
+    /// For paid RPC providers, include API key in URL: "https://provider.com/v1/YOUR_KEY"
+    pub rpc: LiteralOrEnv<Url>,
     /// Signer configuration for this chain (optional, required only if sponsor_gas is true).
     /// A hex-encoded private key (32 or 64 bytes) or env var reference like "$APTOS_PRIVATE_KEY".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signer: Option<AptosSignerConfig>,
     /// Whether the facilitator should sponsor gas fees for transactions (default: false).
     /// If true, facilitator signs as fee payer and pays gas. If false, users pay their own gas.
-    #[serde(default)]
-    pub sponsor_gas: bool,
+    /// Supports literal booleans or environment variable references like "$APTOS_SPONSOR_GAS".
+    #[serde(default = "aptos_chain_config::default_sponsor_gas")]
+    pub sponsor_gas: LiteralOrEnv<bool>,
+}
+
+mod aptos_chain_config {
+    use super::LiteralOrEnv;
+
+    pub fn default_sponsor_gas() -> LiteralOrEnv<bool> {
+        // Default to false when field is missing
+        LiteralOrEnv::from_literal(false)
+    }
+}
+
+impl LiteralOrEnv<bool> {
+    fn from_literal(value: bool) -> Self {
+        Self(value)
+    }
 }
 
 /// Configuration for chains.
