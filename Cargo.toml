@@ -40,10 +40,10 @@ reqwest = { version = "0.12", features = ["json"] }
 sha3 = { version = "0.10" }
 
 # Aptos
-aptos-types = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
-aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
-aptos-rest-client = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
-move-core-types = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+aptos-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
+aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
+aptos-rest-client = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
+move-core-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
 bcs = { version = "0.1" }
 hex = { version = "0.4" }
 
