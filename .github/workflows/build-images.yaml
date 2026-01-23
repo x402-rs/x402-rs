@@ -1,0 +1,64 @@
+name: Build x402-rs Images
+on:
+  workflow_dispatch: # allows manual triggering of workflow via Github UI or CLI
+    inputs:
+      git_sha:
+        description: "The git sha to deploy"
+        required: true
+  pull_request: # allows triggering of workflow on PR events. It inherits the permissions of the user that triggers it.
+  push: # trigger on push to select branches
+    branches:
+      - main
+
+# cancel redundant builds
+concurrency:
+  # For `push` and `workflow_dispatch` events we use `github.sha` in the concurrency group and don't really cancel each other out/limit concurrency
+  # For `pull_request` events newer jobs cancel earlier jobs to save on CI etc.
+  #
+  # Variables reference, since it can be a bit tricky to understand: https://docs.github.com/en/actions/learn-github-actions/contexts#github-context
+  # The values that we use and care about here are:
+  #   - github.sha = the commit hash that triggered the workflow. For `push` this is the commit hash of the branch/tag pushed to, and for `workflow_dispatch`, this is the commit hash of the branch that the workflow was triggered from.
+  #   - github.head_ref = source branch of the PR (only for PR triggers)
+  #   - github.ref = the fully-formed git ref that triggered the event. This is a fallback
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.sha || github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write # required for GCP Workload Identity federation which we use to login into Google Artifact Registry
+  contents: read # because permissions are manually set due to id-token: write, we need to explicitly set contents: read
+
+env:
+  # GIT_SHA is used as part of the docker tag / cache key inside our docker-bake.hcl docker bake files.
+  # The git commit hash is used as a unique identifier for all docker images built from the same commit.
+  #
+  # In case of pull_request events, by default github actions merges the PR target branch (e.g. main) into the PR branch and then runs the tests etc
+  # on the prospective merge result instead of only on the tip of the PR.
+  # For more info also see https://github.com/actions/checkout#checkout-pull-request-head-commit-instead-of-merge-commit
+  GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  build-and-push-images:
+    runs-on: runs-on,cpu=64,family=c7,hdd=200,image=ubuntu22-full-x64,run-id=${{ github.run_id }}
+    env:
+      DOCKER_DEFAULT_PLATFORM: linux/amd64
+      TARGET_REGISTRY: "us-docker.pkg.dev/aptos-registry/docker/x402-rs"
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ env.GIT_SHA }} # checkout the commit that triggered the workflow, and for PRs, this is the tip of the PR branch (rather than a merge commit)
+
+      # Related setups from our public shared actions repository: https://github.com/aptos-labs/actions
+      - uses: aptos-labs/actions/docker-setup@main
+      - uses: aptos-labs/actions/gar-auth@main
+        with:
+          # These are variables (not secrets!) that enable us to authenticate with GCP using Workload Identity Federation.
+          # They are defined here: https://github.com/aptos-labs/actions/settings/variables/actions
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT_EMAIL: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - name: Build and Push Images
+        run: |
+          docker buildx build --file ./Dockerfile --push --tag $TARGET_REGISTRY:$GIT_SHA \
+          --cache-from type=s3,blobs_prefix=cache/${{ github.repository }}/,manifests_prefix=cache/${{ github.repository }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }} \
+          --cache-to type=s3,blobs_prefix=cache/${{ github.repository }}/,manifests_prefix=cache/${{ github.repository }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }},mode=max \
+          .
