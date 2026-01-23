@@ -563,11 +563,14 @@ pub struct AptosChainConfig {
 }
 
 impl AptosChainConfig {
-    pub fn signer(&self) -> &AptosSignerConfig {
-        &self.inner.signer
+    pub fn signer(&self) -> Option<&AptosSignerConfig> {
+        self.inner.signer.as_ref()
     }
     pub fn rpc(&self) -> &Url {
         &self.inner.rpc
+    }
+    pub fn sponsor_gas(&self) -> bool {
+        self.inner.sponsor_gas
     }
     pub fn chain_reference(&self) -> aptos::AptosChainReference {
         self.chain_reference
@@ -580,11 +583,16 @@ impl AptosChainConfig {
 /// Configuration specific to Aptos chains.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AptosChainConfigInner {
-    /// Signer configuration for this chain (required).
-    /// A hex-encoded private key (32 or 64 bytes) or env var reference.
-    pub signer: AptosSignerConfig,
     /// RPC provider URL for this chain (required).
     pub rpc: Url,
+    /// Signer configuration for this chain (optional, required only if sponsor_gas is true).
+    /// A hex-encoded private key (32 or 64 bytes) or env var reference.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signer: Option<AptosSignerConfig>,
+    /// Whether the facilitator should sponsor gas fees for transactions (default: false).
+    /// If true, facilitator signs as fee payer and pays gas. If false, users pay their own gas.
+    #[serde(default)]
+    pub sponsor_gas: bool,
 }
 
 /// Configuration for chains.
