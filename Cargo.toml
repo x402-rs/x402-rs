@@ -33,6 +33,20 @@ rust_decimal = { version = "1.39.0" }
 serde_with = { version = "3.16.1" }
 regex = { version = "1.12.2" }
 
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
+
+# Hashing
+sha3 = { version = "0.10" }
+
+# Aptos
+aptos-types = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+aptos-rest-client = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+move-core-types = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+bcs = { version = "0.1" }
+hex = { version = "0.4" }
+
 # EVM: Alloy
 alloy-primitives = { version = "1.4.1" }
 alloy-network = { version = "1.1.3" }
@@ -76,6 +90,12 @@ opentelemetry-stdout = { version = "0.31", features = ["trace", "metrics"] }
 
 [features]
 telemetry = []
+
+[patch.crates-io]
+merlin = { git = "https://github.com/aptos-labs/merlin" }
+
+[patch."https://github.com/aptos-labs/aptos-core"]
+aptos-runtimes = { path = "patches/aptos-runtimes" }
 
 [workspace]
 members = [

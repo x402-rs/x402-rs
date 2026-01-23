@@ -37,6 +37,7 @@
 //! assert!(mainnet_chains.matches(&base));
 //! ```
 
+pub mod aptos;
 mod chain_id;
 pub mod eip155;
 pub mod solana;
@@ -56,7 +57,7 @@ where
     async fn from_config(config: &TConfig) -> Result<Self, Box<dyn std::error::Error>>;
 }
 
-/// A blockchain provider that can interact with either EVM or Solana chains.
+/// A blockchain provider that can interact with EVM, Solana, or Aptos chains.
 ///
 /// This enum wraps chain-specific providers and provides a unified interface
 /// for the facilitator to interact with different blockchain networks.
@@ -65,18 +66,21 @@ where
 ///
 /// - `Eip155` - Provider for EVM-compatible chains (Ethereum, Base, Polygon, etc.)
 /// - `Solana` - Provider for the Solana blockchain
+/// - `Aptos` - Provider for the Aptos blockchain
 #[derive(Debug, Clone)]
 pub enum ChainProvider {
     /// EVM chain provider for EIP-155 compatible networks.
     Eip155(Arc<eip155::Eip155ChainProvider>),
     /// Solana chain provider.
     Solana(Arc<solana::SolanaChainProvider>),
+    /// Aptos chain provider.
+    Aptos(Arc<aptos::AptosChainProvider>),
 }
 
 /// Creates a new chain provider from configuration.
 ///
 /// This factory method inspects the configuration type and creates the appropriate
-/// chain-specific provider (EVM or Solana).
+/// chain-specific provider (EVM, Solana, or Aptos).
 ///
 /// # Errors
 ///
@@ -95,6 +99,10 @@ impl FromConfig<ChainConfig> for ChainProvider {
             ChainConfig::Solana(config) => {
                 let provider = solana::SolanaChainProvider::from_config(config).await?;
                 ChainProvider::Solana(Arc::new(provider))
+            }
+            ChainConfig::Aptos(config) => {
+                let provider = aptos::AptosChainProvider::from_config(config).await?;
+                ChainProvider::Aptos(Arc::new(provider))
             }
         };
         Ok(provider)
@@ -130,6 +138,7 @@ impl ChainProviderOps for ChainProvider {
         match self {
             ChainProvider::Eip155(provider) => provider.signer_addresses(),
             ChainProvider::Solana(provider) => provider.signer_addresses(),
+            ChainProvider::Aptos(provider) => provider.signer_addresses(),
         }
     }
 
@@ -137,6 +146,7 @@ impl ChainProviderOps for ChainProvider {
         match self {
             ChainProvider::Eip155(provider) => provider.chain_id(),
             ChainProvider::Solana(provider) => provider.chain_id(),
+            ChainProvider::Aptos(provider) => provider.chain_id(),
         }
     }
 }
