@@ -1,6 +1,7 @@
 //! Configuration module for the x402 facilitator server.
 
 use alloy_primitives::B256;
+use alloy_primitives::hex;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -10,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use url::Url;
 
+use crate::chain::aptos;
 use crate::chain::eip155;
 use crate::chain::solana;
 use crate::chain::{ChainId, ChainIdPattern};
@@ -66,14 +68,16 @@ mod scheme_config_defaults {
 /// Configuration for a specific chain.
 ///
 /// This enum represents chain-specific configuration that varies by chain family
-/// (EVM vs Solana). The chain family is determined by the CAIP-2 prefix of the
-/// chain identifier key (e.g., "eip155:" for EVM, "solana:" for Solana).
+/// (EVM vs Solana vs Aptos). The chain family is determined by the CAIP-2 prefix of the
+/// chain identifier key (e.g., "eip155:" for EVM, "solana:" for Solana, "aptos:" for Aptos).
 #[derive(Debug, Clone)]
 pub enum ChainConfig {
     /// EVM chain configuration (for chains with "eip155:" prefix).
     Eip155(Box<Eip155ChainConfig>),
     /// Solana chain configuration (for chains with "solana:" prefix).
     Solana(Box<SolanaChainConfig>),
+    /// Aptos chain configuration (for chains with "aptos:" prefix).
+    Aptos(Box<AptosChainConfig>),
 }
 
 /// RPC provider configuration for a single provider.
@@ -468,6 +472,121 @@ mod solana_chain_config {
     }
 }
 
+// ============================================================================
+// Aptos Private Key
+// ============================================================================
+
+/// A validated Aptos private key (32 or 64 bytes).
+///
+/// This type represents an Aptos private key which can be either:
+/// - 32 bytes: Ed25519 seed
+/// - 64 bytes: Full Ed25519 keypair (seed + public key)
+///
+/// The key is stored and parsed as a hex-encoded string with 0x prefix.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AptosPrivateKey(Vec<u8>);
+
+impl AptosPrivateKey {
+    /// Parse a hex string into a private key.
+    pub fn from_hex(s: &str) -> Result<Self, String> {
+        let s = s.strip_prefix("0x").unwrap_or(s);
+        let bytes = hex::decode(s).map_err(|e| format!("Invalid hex: {}", e))?;
+
+        if bytes.len() != 32 && bytes.len() != 64 {
+            return Err(format!(
+                "Private key must be 32 or 64 bytes, got {} bytes",
+                bytes.len()
+            ));
+        }
+
+        Ok(Self(bytes))
+    }
+
+    /// Encode the private key as hex.
+    pub fn to_hex(&self) -> String {
+        format!("0x{}", hex::encode(&self.0))
+    }
+}
+
+impl Serialize for AptosPrivateKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_hex())
+    }
+}
+
+impl FromStr for AptosPrivateKey {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_hex(s)
+    }
+}
+
+impl std::fmt::Display for AptosPrivateKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_hex())
+    }
+}
+
+/// Type alias for Aptos signer configuration.
+///
+/// Uses `LiteralOrEnv` to support both literal hex keys and environment variable references.
+///
+/// Example JSON:
+/// ```json
+/// {
+///   "signer": "$APTOS_FACILITATOR_KEY"
+/// }
+/// ```
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AptosSignerConfig(LiteralOrEnv<AptosPrivateKey>);
+
+impl Deref for AptosSignerConfig {
+    type Target = AptosPrivateKey;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.inner()
+    }
+}
+
+// ============================================================================
+// Aptos Chain Configuration
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub struct AptosChainConfig {
+    pub chain_reference: aptos::AptosChainReference,
+    pub inner: AptosChainConfigInner,
+}
+
+impl AptosChainConfig {
+    pub fn signer(&self) -> &AptosSignerConfig {
+        &self.inner.signer
+    }
+    pub fn rpc(&self) -> &Url {
+        &self.inner.rpc
+    }
+    pub fn chain_reference(&self) -> aptos::AptosChainReference {
+        self.chain_reference
+    }
+    pub fn chain_id(&self) -> ChainId {
+        self.chain_reference.into()
+    }
+}
+
+/// Configuration specific to Aptos chains.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AptosChainConfigInner {
+    /// Signer configuration for this chain (required).
+    /// A hex-encoded private key (32 or 64 bytes) or env var reference.
+    pub signer: AptosSignerConfig,
+    /// RPC provider URL for this chain (required).
+    pub rpc: Url,
+}
+
 /// Configuration for chains.
 ///
 /// This is a wrapper around Vec<ChainConfig> that provides custom serialization
@@ -500,6 +619,11 @@ impl Serialize for ChainsConfig {
                     map.serialize_entry(&chain_id, inner)?;
                 }
                 ChainConfig::Solana(config) => {
+                    let chain_id = config.chain_id();
+                    let inner = &config.inner;
+                    map.serialize_entry(&chain_id, inner)?;
+                }
+                ChainConfig::Aptos(config) => {
                     let chain_id = config.chain_id();
                     let inner = &config.inner;
                     map.serialize_entry(&chain_id, inner)?;
@@ -555,6 +679,16 @@ impl<'de> Deserialize<'de> for ChainsConfig {
                                 inner,
                             };
                             ChainConfig::Solana(Box::new(config))
+                        }
+                        aptos::APTOS_NAMESPACE => {
+                            let inner: AptosChainConfigInner = access.next_value()?;
+                            let config = AptosChainConfig {
+                                chain_reference: chain_id
+                                    .try_into()
+                                    .map_err(|e| serde::de::Error::custom(format!("{}", e)))?,
+                                inner,
+                            };
+                            ChainConfig::Aptos(Box::new(config))
                         }
                         _ => {
                             return Err(serde::de::Error::custom(format!(
