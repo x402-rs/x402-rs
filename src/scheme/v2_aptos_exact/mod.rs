@@ -108,11 +108,19 @@ impl X402SchemeFacilitator for V2AptosExactFacilitator {
 
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
+
+        // Include extra.sponsored if the facilitator is configured to sponsor gas
+        let extra = if self.provider.sponsor_gas() {
+            Some(serde_json::json!({ "sponsored": true }))
+        } else {
+            None
+        };
+
         let kinds: Vec<proto::SupportedPaymentKind> = vec![proto::SupportedPaymentKind {
             x402_version: proto::v2::X402Version2.into(),
             scheme: ExactScheme.to_string(),
             network: chain_id.to_string(),
-            extra: None,
+            extra,
         }];
         let signers = {
             let mut signers = HashMap::with_capacity(1);
@@ -217,41 +225,63 @@ pub async fn settle_transaction(
             ))
         })?;
 
-    // For sponsored transactions, sign as fee payer
-    let fee_payer_address = provider.account_address();
-    let fee_payer_private_key = provider.private_key();
-    let fee_payer_public_key: Ed25519PublicKey = fee_payer_private_key.into();
-
-    // Create the message that the fee payer needs to sign
-    // This is the same message the sender signed: RawTransactionWithData::new_fee_payer
-    let fee_payer_message = RawTransactionWithData::new_fee_payer(
-        verification.raw_transaction.clone(),
-        vec![], // No secondary signers
-        fee_payer_address,
-    );
-
-    // Sign as fee payer - sign the message directly (it implements CryptoHash)
-    let fee_payer_signature = fee_payer_private_key
-        .sign(&fee_payer_message)
-        .map_err(|e| {
-            PaymentVerificationError::InvalidSignature(format!(
-                "Failed to sign as fee payer: {}",
-                e
-            ))
+    let signed_txn = if provider.sponsor_gas() {
+        // Sponsored transaction: facilitator signs as fee payer
+        let fee_payer_address = provider.account_address().ok_or_else(|| {
+            PaymentVerificationError::InvalidFormat(
+                "Fee payer address not configured for sponsored transaction".to_string(),
+            )
         })?;
+        let fee_payer_private_key = provider.private_key().ok_or_else(|| {
+            PaymentVerificationError::InvalidFormat(
+                "Fee payer private key not configured for sponsored transaction".to_string(),
+            )
+        })?;
+        let fee_payer_public_key: Ed25519PublicKey = fee_payer_private_key.into();
 
-    let fee_payer_authenticator =
-        AccountAuthenticator::ed25519(fee_payer_public_key.clone(), fee_payer_signature);
+        // Create the message that the fee payer needs to sign
+        let fee_payer_message = RawTransactionWithData::new_fee_payer(
+            verification.raw_transaction.clone(),
+            vec![], // No secondary signers
+            fee_payer_address,
+        );
 
-    // Create fee payer signed transaction
-    let signed_txn = SignedTransaction::new_fee_payer(
-        verification.raw_transaction.clone(),
-        sender_authenticator,
-        vec![], // No secondary signer addresses
-        vec![], // No secondary signers
-        fee_payer_address,
-        fee_payer_authenticator,
-    );
+        // Sign as fee payer
+        let fee_payer_signature = fee_payer_private_key
+            .sign(&fee_payer_message)
+            .map_err(|e| {
+                PaymentVerificationError::InvalidSignature(format!(
+                    "Failed to sign as fee payer: {}",
+                    e
+                ))
+            })?;
+
+        let fee_payer_authenticator =
+            AccountAuthenticator::ed25519(fee_payer_public_key.clone(), fee_payer_signature);
+
+        // Create fee payer signed transaction
+        SignedTransaction::new_fee_payer(
+            verification.raw_transaction.clone(),
+            sender_authenticator,
+            vec![], // No secondary signer addresses
+            vec![], // No secondary signers
+            fee_payer_address,
+            fee_payer_authenticator,
+        )
+    } else {
+        // Non-sponsored transaction: client pays own gas, just submit their fully-signed transaction
+        // Extract public key and signature from the sender's authenticator
+        let (public_key, signature) = match sender_authenticator {
+            AccountAuthenticator::Ed25519 { public_key, signature } => (public_key, signature),
+            _ => {
+                return Err(PaymentVerificationError::InvalidFormat(
+                    "Only Ed25519 signatures are supported for non-sponsored transactions".to_string(),
+                ));
+            }
+        };
+
+        SignedTransaction::new(verification.raw_transaction.clone(), public_key, signature)
+    };
 
     // Compute transaction hash after signing
     let tx_hash = signed_txn.committed_hash();
