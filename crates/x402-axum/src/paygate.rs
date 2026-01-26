@@ -41,8 +41,8 @@ use std::sync::Arc;
 use tower::Service;
 use url::Url;
 use x402_rs::facilitator::Facilitator;
-use x402_rs::proto;
-use x402_rs::proto::{SupportedResponse, v1, v2};
+use x402_types::proto;
+use x402_types::proto::{SupportedResponse, v1, v2};
 
 #[cfg(feature = "telemetry")]
 use tracing::Instrument;

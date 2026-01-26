@@ -19,11 +19,11 @@ use alloy_primitives::U256;
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use solana_signer::Signer;
+use x402_types::proto::PaymentRequired;
+use x402_types::proto::v2::ResourceInfo;
+use x402_types::proto::v2::X402Version2;
 use x402_types::util::Base64Bytes;
 
-use crate::proto::PaymentRequired;
-use crate::proto::v2::ResourceInfo;
-use crate::proto::v2::X402Version2;
 use crate::scheme::X402SchemeId;
 use crate::scheme::client::{
     PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,

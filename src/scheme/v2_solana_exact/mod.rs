@@ -38,12 +38,12 @@ pub mod types;
 use std::collections::HashMap;
 use std::sync::Arc;
 use x402_types::chain::ChainId;
+use x402_types::proto;
+use x402_types::proto::v2;
 
 use crate::chain::ChainProvider;
 use crate::chain::solana::{Address, SolanaChainProviderLike, SolanaTokenDeployment};
 use crate::chain::{ChainProviderOps, DeployedTokenAmount};
-use crate::proto;
-use crate::proto::v2;
 use crate::scheme::v1_solana_exact::types::ExactScheme;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::v1_solana_exact::{

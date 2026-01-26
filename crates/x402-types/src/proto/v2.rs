@@ -20,16 +20,16 @@
 //! - [`ResourceInfo`] - Metadata about the paid resource
 //! - [`PriceTag`] - Builder for creating payment requirements
 
+use crate::chain::ChainId;
+use crate::proto;
+use crate::proto::SupportedResponse;
+use crate::proto::v1;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
-use x402_types::chain::ChainId;
-use crate::proto;
-use crate::proto::SupportedResponse;
-use crate::proto::v1;
 
 /// Version marker for x402 protocol version 2.
 ///

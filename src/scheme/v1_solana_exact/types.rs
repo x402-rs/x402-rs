@@ -6,10 +6,10 @@
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
+use x402_types::proto;
+use x402_types::proto::util::U64String;
 
 use crate::chain::solana::Address;
-use crate::proto;
-use crate::proto::util::U64String;
 pub use crate::scheme::v1_eip155_exact::ExactScheme;
 
 /// Phantom Lighthouse program ID - security program injected by Phantom wallet on mainnet

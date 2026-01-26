@@ -1,3 +1,5 @@
+// FIXME feature gate client, server, facilitator
+
 //! Client-side payment scheme support.
 //!
 //! This module provides types for client applications (buyers) to select and
@@ -19,9 +21,9 @@
 
 use alloy_primitives::U256;
 use async_trait::async_trait;
-use x402_types::chain::{ChainId, ChainIdPattern};
-use x402_types::proto;
 
+use crate::chain::{ChainId, ChainIdPattern};
+use crate::proto;
 use crate::scheme::X402SchemeId;
 
 /// A payment option that can be signed and submitted.

@@ -1,5 +1,6 @@
 build-all:
   cargo build
+  cd crates/x402-types && cargo build
   cd crates/x402-axum && cargo build
   cd crates/x402-reqwest && cargo build
   cd examples/x402-axum-example && cargo build
@@ -7,6 +8,7 @@ build-all:
 
 format-all:
   cargo fmt
+  cd crates/x402-types && cargo fmt
   cd crates/x402-axum && cargo fmt
   cd crates/x402-reqwest && cargo fmt
   cd examples/x402-axum-example && cargo fmt
@@ -16,6 +18,7 @@ fmt-all: format-all
 
 clippy-all:
   cargo clippy
+  cd crates/x402-types && cargo clippy
   cd crates/x402-axum && cargo clippy
   cd crates/x402-reqwest && cargo clippy
   cd examples/x402-axum-example && cargo clippy
@@ -23,6 +26,7 @@ clippy-all:
 
 check-all:
   cargo check
+  cd crates/x402-types && cargo check
   cd crates/x402-axum && cargo check
   cd crates/x402-reqwest && cargo check
   cd examples/x402-axum-example && cargo check

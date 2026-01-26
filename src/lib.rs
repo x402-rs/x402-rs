@@ -55,7 +55,6 @@ pub mod facilitator;
 pub mod facilitator_local;
 pub mod handlers;
 pub mod networks;
-pub mod proto;
 pub mod scheme;
 pub mod timestamp;
 pub mod util;
