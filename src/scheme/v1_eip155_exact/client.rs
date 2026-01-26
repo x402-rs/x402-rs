@@ -19,6 +19,7 @@ use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
 use rand::{Rng, rng};
 use std::sync::Arc;
+use x402_eip155::chain::Eip155ChainReference;
 use x402_types::chain::ChainId;
 use x402_types::proto::PaymentRequired;
 use x402_types::proto::v1::X402Version1;
@@ -29,7 +30,6 @@ use x402_types::scheme::client::{
 use x402_types::timestamp::UnixTimestamp;
 use x402_types::util::Base64Bytes;
 
-use crate::chain::eip155::Eip155ChainReference;
 use crate::scheme::v1_eip155_exact::{
     ExactEvmPayload, ExactEvmPayloadAuthorization, ExactScheme, PaymentRequirementsExtra,
     TransferWithAuthorization, V1Eip155Exact, types,

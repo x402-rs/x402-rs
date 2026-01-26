@@ -13157,6 +13157,25 @@ dependencies = [
 [[package]]
 name = "x402-eip155"
 version = "0.1.0"
+dependencies = [
+ "alloy-network",
+ "alloy-primitives",
+ "alloy-provider",
+ "alloy-rpc-client",
+ "alloy-rpc-types-eth",
+ "alloy-signer",
+ "alloy-signer-local",
+ "alloy-transport",
+ "alloy-transport-http",
+ "async-trait",
+ "dashmap 6.1.0",
+ "serde",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "x402-types",
+]
 
 [[package]]
 name = "x402-reqwest"
@@ -13252,6 +13271,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber 0.3.22",
  "url",
+ "x402-eip155",
  "x402-types",
 ]
 
@@ -13269,6 +13289,7 @@ dependencies = [
  "serde_with",
  "thiserror 2.0.18",
  "tracing",
+ "url",
 ]
 
 [[package]]

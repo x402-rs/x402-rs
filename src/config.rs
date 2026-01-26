@@ -1,18 +1,19 @@
 //! Configuration module for the x402 facilitator server.
 
-use alloy_primitives::B256;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::net::IpAddr;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use url::Url;
+use x402_eip155::chain as eip155;
+use x402_eip155::chain::config::{Eip155ChainConfig, Eip155ChainConfigInner};
 use x402_types::chain::ChainId;
+use x402_types::config::LiteralOrEnv;
 use x402_types::scheme::SchemeConfig;
 
-use crate::chain::eip155;
 use crate::chain::solana;
 
 #[cfg(feature = "aptos")]
@@ -59,187 +60,6 @@ pub enum ChainConfig {
     #[cfg(feature = "aptos")]
     Aptos(Box<AptosChainConfig>),
 }
-
-/// RPC provider configuration for a single provider.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct RpcConfig {
-    /// HTTP URL for the RPC endpoint.
-    pub http: Url,
-    /// Rate limit for requests per second (optional).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rate_limit: Option<u32>,
-}
-
-// ============================================================================
-// Environment Variable Resolution
-// ============================================================================
-
-/// A transparent wrapper that resolves environment variables during deserialization.
-///
-/// Supports both literal values and environment variable references:
-/// - Literal: `"http://localhost:8083"`
-/// - Simple env var: `"$TREASURY_URL"`
-/// - Braced env var: `"${TREASURY_URL}"`
-///
-/// The wrapper implements `Deref` to provide transparent access to the inner type.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LiteralOrEnv<T>(T);
-
-impl<T> LiteralOrEnv<T> {
-    /// Get a reference to the inner value
-    #[allow(dead_code)]
-    pub fn inner(&self) -> &T {
-        &self.0
-    }
-
-    /// Consume the wrapper and return the inner value
-    #[allow(dead_code)]
-    pub fn into_inner(self) -> T {
-        self.0
-    }
-
-    /// Parse environment variable syntax from a string.
-    /// Returns the variable name if the string matches `$VAR` or `${VAR}` syntax.
-    fn parse_env_var_syntax(s: &str) -> Option<String> {
-        if s.starts_with("${") && s.ends_with('}') {
-            // ${VAR} syntax
-            Some(s[2..s.len() - 1].to_string())
-        } else if s.starts_with('$') && s.len() > 1 {
-            // $VAR syntax - extract until first non-alphanumeric/underscore character
-            let var_name = &s[1..];
-            if var_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                Some(var_name.to_string())
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-}
-
-impl<T> Deref for LiteralOrEnv<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> DerefMut for LiteralOrEnv<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<'de, T> Deserialize<'de> for LiteralOrEnv<T>
-where
-    T: FromStr,
-    T::Err: std::fmt::Display,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-
-        // Check if it's an environment variable reference
-        let value = if let Some(var_name) = Self::parse_env_var_syntax(&s) {
-            std::env::var(&var_name).map_err(|_| {
-                serde::de::Error::custom(format!(
-                    "Environment variable '{}' not found (referenced as '{}')",
-                    var_name, s
-                ))
-            })?
-        } else {
-            s
-        };
-
-        // Parse the value as type T
-        let parsed = value
-            .parse::<T>()
-            .map_err(|e| serde::de::Error::custom(format!("Failed to parse value: {}", e)))?;
-
-        Ok(LiteralOrEnv(parsed))
-    }
-}
-
-impl<T> serde::Serialize for LiteralOrEnv<T>
-where
-    T: Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.0.serialize(serializer)
-    }
-}
-
-// impl<T: PartialEq> PartialEq for LiteralOrEnv<T> {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.0 == other.0
-//     }
-// }
-
-// ============================================================================
-// EVM Private Key
-// ============================================================================
-
-/// A validated EVM private key (32 bytes).
-///
-/// This type represents a raw private key that has been validated as a proper
-/// 32-byte hex value. It can be converted to a `PrivateKeySigner` when needed.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct EvmPrivateKey(B256);
-
-impl EvmPrivateKey {
-    /// Get the raw 32 bytes of the private key.
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        self.0.as_ref()
-    }
-}
-
-impl PartialEq for EvmPrivateKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl FromStr for EvmPrivateKey {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        B256::from_str(s)
-            .map(Self)
-            .map_err(|e| format!("Invalid evm private key: {}", e))
-    }
-}
-
-// ============================================================================
-// EVM Signers Configuration
-// ============================================================================
-
-/// Configuration for EVM signers.
-///
-/// Deserializes an array of private key strings (hex format, 0x-prefixed) and
-/// validates them as valid 32-byte private keys. The `EthereumWallet` is created
-/// lazily when needed via the `wallet()` method.
-///
-/// Each string can be:
-/// - A literal hex private key: `"0xcafe..."`
-/// - An environment variable reference: `"$PRIVATE_KEY"` or `"${PRIVATE_KEY}"`
-///
-/// Example JSON:
-/// ```json
-/// {
-///   "signers": [
-///     "$HOT_WALLET_KEY",
-///     "0xcafe000000000000000000000000000000000000000000000000000000000001"
-///   ]
-/// }
-/// ```
-pub type Eip155SignersConfig = Vec<LiteralOrEnv<EvmPrivateKey>>;
 
 // ============================================================================
 // Solana Private Key
@@ -334,36 +154,6 @@ impl Deref for SolanaSignerConfig {
 // ============================================================================
 
 #[derive(Debug, Clone)]
-pub struct Eip155ChainConfig {
-    pub chain_reference: eip155::Eip155ChainReference,
-    pub inner: Eip155ChainConfigInner,
-}
-
-impl Eip155ChainConfig {
-    pub fn chain_id(&self) -> ChainId {
-        self.chain_reference.into()
-    }
-    pub fn eip1559(&self) -> bool {
-        self.inner.eip1559
-    }
-    pub fn flashblocks(&self) -> bool {
-        self.inner.flashblocks
-    }
-    pub fn receipt_timeout_secs(&self) -> u64 {
-        self.inner.receipt_timeout_secs
-    }
-    pub fn signers(&self) -> &Eip155SignersConfig {
-        &self.inner.signers
-    }
-    pub fn rpc(&self) -> &Vec<RpcConfig> {
-        &self.inner.rpc
-    }
-    pub fn chain_reference(&self) -> eip155::Eip155ChainReference {
-        self.chain_reference
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct SolanaChainConfig {
     pub chain_reference: solana::SolanaChainReference,
     pub inner: SolanaChainConfigInner,
@@ -390,37 +180,6 @@ impl SolanaChainConfig {
     }
     pub fn pubsub(&self) -> &Option<Url> {
         &self.inner.pubsub
-    }
-}
-
-/// Configuration specific to EVM-compatible chains.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Eip155ChainConfigInner {
-    /// Whether the chain supports EIP-1559 gas pricing.
-    #[serde(default = "eip155_chain_config::default_eip1559")]
-    pub eip1559: bool,
-    /// Whether the chain supports flashblocks.
-    #[serde(default = "eip155_chain_config::default_flashblocks")]
-    pub flashblocks: bool,
-    /// Signer configuration for this chain (required).
-    /// Array of private keys (hex format) or env var references.
-    pub signers: Eip155SignersConfig,
-    /// RPC provider configuration for this chain (required).
-    pub rpc: Vec<RpcConfig>,
-    /// How long to wait till the transaction receipt is available (optional)
-    #[serde(default = "eip155_chain_config::default_receipt_timeout_secs")]
-    pub receipt_timeout_secs: u64,
-}
-
-mod eip155_chain_config {
-    pub fn default_eip1559() -> bool {
-        true
-    }
-    pub fn default_flashblocks() -> bool {
-        false
-    }
-    pub fn default_receipt_timeout_secs() -> u64 {
-        30
     }
 }
 
@@ -627,13 +386,6 @@ mod aptos_chain_config {
     pub fn default_sponsor_gas() -> LiteralOrEnv<bool> {
         // Default to false when field is missing
         LiteralOrEnv::from_literal(false)
-    }
-}
-
-#[cfg(feature = "aptos")]
-impl LiteralOrEnv<bool> {
-    fn from_literal(value: bool) -> Self {
-        Self(value)
     }
 }
 

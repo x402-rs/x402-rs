@@ -1,4 +1,5 @@
 pub mod chain;
+pub mod config;
 pub mod facilitator;
 pub mod networks;
 pub mod proto;

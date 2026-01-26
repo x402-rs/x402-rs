@@ -17,7 +17,6 @@
 //!
 //! # Submodules
 //!
-//! - [`eip155`] - EVM chain support including transaction signing and ERC-3009 transfers
 //! - [`solana`] - Solana chain support including SPL token transfers
 //!
 //! # Example
@@ -39,9 +38,9 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use x402_eip155::chain as eip155;
 use x402_types::chain::{ChainId, ChainProviderOps, ChainRegistry, FromConfig};
 
-pub mod eip155;
 pub mod solana;
 
 #[cfg(feature = "aptos")]
