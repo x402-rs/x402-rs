@@ -13214,6 +13214,7 @@ dependencies = [
  "x402-eip155",
  "x402-reqwest",
  "x402-rs",
+ "x402-solana",
 ]
 
 [[package]]

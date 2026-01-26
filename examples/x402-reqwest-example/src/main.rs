@@ -8,8 +8,8 @@ use std::sync::Arc;
 use x402_eip155::V1Eip155ExactClient;
 use x402_eip155::V2Eip155ExactClient;
 use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
-use x402_rs::scheme::v1_solana_exact::client::V1SolanaExactClient;
-use x402_rs::scheme::v2_solana_exact::client::V2SolanaExactClient;
+use x402_solana::V1SolanaExactClient;
+use x402_solana::V2SolanaExactClient;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
