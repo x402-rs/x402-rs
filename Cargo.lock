@@ -4219,6 +4219,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "facilitator"
+version = "0.1.0"
+
+[[package]]
 name = "fail"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13148,6 +13152,10 @@ dependencies = [
  "x402-axum",
  "x402-rs",
 ]
+
+[[package]]
+name = "x402-core"
+version = "0.1.0"
 
 [[package]]
 name = "x402-reqwest"
