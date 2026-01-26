@@ -37,18 +37,37 @@ use std::sync::Arc;
 use tower_http::cors;
 use x402_types::chain::ChainRegistry;
 use x402_types::chain::FromConfig;
-use x402_types::scheme::{SchemeBlueprints, SchemeRegistry};
+use x402_types::scheme::{
+    SchemeBlueprints, SchemeRegistry, X402SchemeFacilitator, X402SchemeFacilitatorBuilder,
+};
 
+use crate::chain::ChainProvider;
 use crate::config::Config;
 use crate::facilitator_local::FacilitatorLocal;
-use crate::scheme::v1_eip155_exact::V1Eip155Exact;
 use crate::scheme::v1_solana_exact::V1SolanaExact;
 use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_solana_exact::V2SolanaExact;
 use crate::util::{SigDown, Telemetry};
 
+use x402_eip155::v1_eip155_exact::V1Eip155Exact;
+
 #[cfg(feature = "aptos")]
 use crate::scheme::v2_aptos_exact::V2AptosExact;
+
+impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1Eip155Exact {
+    fn build(
+        &self,
+        provider: &ChainProvider,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        let eip155_provider = if let ChainProvider::Eip155(provider) = provider {
+            Arc::clone(provider)
+        } else {
+            return Err("V1Eip155Exact::build: provider must be an Eip155ChainProvider".into());
+        };
+        self.build(eip155_provider, config)
+    }
+}
 
 /// Initializes the x402 facilitator server.
 ///

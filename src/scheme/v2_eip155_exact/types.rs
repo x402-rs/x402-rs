@@ -6,9 +6,9 @@
 use x402_eip155::chain::{ChecksummedAddress, TokenAmount};
 use x402_types::proto::v2;
 
-pub use crate::scheme::v1_eip155_exact::types::ExactScheme;
+pub use x402_eip155::v1_eip155_exact::types::ExactScheme;
 
-use crate::scheme::v1_eip155_exact::types::{ExactEvmPayload, PaymentRequirementsExtra};
+use x402_eip155::v1_eip155_exact::types::{ExactEvmPayload, PaymentRequirementsExtra};
 
 pub type VerifyRequest = v2::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;

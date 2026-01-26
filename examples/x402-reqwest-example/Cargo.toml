@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+x402-eip155 = { path = "../../crates/x402-eip155" }
 x402-rs = { version = "0.12" }
 x402-reqwest = { version = "0.6", features = ["telemetry"] }
 reqwest = { version = "0.13" }

@@ -15,6 +15,9 @@
 
 use async_trait::async_trait;
 use x402_eip155::chain::Eip155ChainReference;
+use x402_eip155::v1_eip155_exact::client::{
+    Eip3009SigningParams, SignerLike, sign_erc3009_authorization,
+};
 use x402_types::proto::v2::ResourceInfo;
 use x402_types::proto::{PaymentRequired, v2};
 use x402_types::scheme::X402SchemeId;
@@ -23,9 +26,6 @@ use x402_types::scheme::client::{
 };
 use x402_types::util::Base64Bytes;
 
-use crate::scheme::v1_eip155_exact::client::{
-    Eip3009SigningParams, SignerLike, sign_erc3009_authorization,
-};
 use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_eip155_exact::types;
 
