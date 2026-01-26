@@ -54,12 +54,12 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use x402_types::chain::ChainId;
+use x402_types::chain::{ChainProviderOps, DeployedTokenAmount, FromConfig};
+use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::util::money_amount::{MoneyAmount, MoneyAmountParseError};
 
-use crate::chain::{ChainProviderOps, DeployedTokenAmount, FromConfig};
 use crate::config::SolanaChainConfig;
 use crate::networks::KnownNetworkSolana;
-use crate::scheme::X402SchemeFacilitatorError;
 
 /// The CAIP-2 namespace for Solana chains.
 pub const SOLANA_NAMESPACE: &str = "solana";

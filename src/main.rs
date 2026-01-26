@@ -37,13 +37,20 @@ use std::net::SocketAddr;
 use std::process;
 use std::sync::Arc;
 use tower_http::cors;
+use x402_types::chain::ChainRegistry;
+use x402_types::chain::FromConfig;
+use x402_types::scheme::{SchemeBlueprints, SchemeRegistry};
 
-use crate::chain::ChainRegistry;
-use crate::chain::FromConfig;
 use crate::config::Config;
 use crate::facilitator_local::FacilitatorLocal;
-use crate::scheme::{SchemeBlueprints, SchemeRegistry};
+use crate::scheme::v1_eip155_exact::V1Eip155Exact;
+use crate::scheme::v1_solana_exact::V1SolanaExact;
+use crate::scheme::v2_eip155_exact::V2Eip155Exact;
+use crate::scheme::v2_solana_exact::V2SolanaExact;
 use crate::util::{SigDown, Telemetry};
+
+#[cfg(feature = "aptos")]
+use crate::scheme::v2_aptos_exact::V2AptosExact;
 
 /// Initializes the x402 facilitator server.
 ///
@@ -69,7 +76,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load()?;
 
     let chain_registry = ChainRegistry::from_config(config.chains()).await?;
-    let scheme_blueprints = SchemeBlueprints::full();
+    let scheme_blueprints = {
+        let blueprints = SchemeBlueprints::new()
+            .and_register(V1Eip155Exact)
+            .and_register(V2Eip155Exact)
+            .and_register(V1SolanaExact)
+            .and_register(V2SolanaExact);
+        #[cfg(feature = "aptos")]
+        let blueprints = blueprints.and_register(V2AptosExact);
+        blueprints
+    };
     let scheme_registry =
         SchemeRegistry::build(chain_registry, scheme_blueprints, config.schemes());
 

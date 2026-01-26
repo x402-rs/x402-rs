@@ -22,12 +22,12 @@ use solana_signer::Signer;
 use x402_types::proto::PaymentRequired;
 use x402_types::proto::v2::ResourceInfo;
 use x402_types::proto::v2::X402Version2;
-use x402_types::util::Base64Bytes;
-
-use crate::scheme::X402SchemeId;
-use crate::scheme::client::{
+use x402_types::scheme::X402SchemeId;
+use x402_types::scheme::client::{
     PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
 };
+use x402_types::util::Base64Bytes;
+
 use crate::scheme::v1_solana_exact::client::{RpcClientLike, build_signed_transfer_transaction};
 use crate::scheme::v1_solana_exact::types::ExactSolanaPayload;
 use crate::scheme::v2_solana_exact::V2SolanaExact;

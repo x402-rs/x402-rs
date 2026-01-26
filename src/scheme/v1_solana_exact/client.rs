@@ -43,11 +43,12 @@ use x402_types::proto::PaymentRequired;
 use x402_types::proto::v1::X402Version1;
 use x402_types::util::Base64Bytes;
 
-use crate::chain::solana::Address;
-use crate::scheme::X402SchemeId;
-use crate::scheme::client::{
+use x402_types::scheme::X402SchemeId;
+use x402_types::scheme::client::{
     PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
 };
+
+use crate::chain::solana::Address;
 use crate::scheme::v1_solana_exact::types::{
     ExactScheme, ExactSolanaPayload, PaymentPayload, PaymentRequirements,
 };

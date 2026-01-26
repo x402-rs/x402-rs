@@ -63,14 +63,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
 use tracing::Instrument;
+use x402_types::chain::{ChainId, ChainProviderOps, DeployedTokenAmount, FromConfig};
 use x402_types::util::money_amount::{MoneyAmount, MoneyAmountParseError};
 
-use crate::chain::{ChainProviderOps, DeployedTokenAmount, FromConfig};
 use crate::config::{Eip155ChainConfig, RpcConfig};
 
 pub use pending_nonce_manager::*;
 pub use types::*;
-use x402_types::chain::ChainId;
 
 /// Combined filler type for gas, blob gas, nonce, and chain ID.
 pub type InnerFiller = JoinFill<

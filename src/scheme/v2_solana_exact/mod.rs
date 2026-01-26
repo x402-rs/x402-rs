@@ -38,19 +38,19 @@ pub mod types;
 use std::collections::HashMap;
 use std::sync::Arc;
 use x402_types::chain::ChainId;
+use x402_types::chain::{ChainProviderOps, DeployedTokenAmount};
 use x402_types::proto;
 use x402_types::proto::v2;
+use x402_types::scheme::{
+    X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
+};
 
 use crate::chain::ChainProvider;
 use crate::chain::solana::{Address, SolanaChainProviderLike, SolanaTokenDeployment};
-use crate::chain::{ChainProviderOps, DeployedTokenAmount};
 use crate::scheme::v1_solana_exact::types::ExactScheme;
 use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
 use crate::scheme::v1_solana_exact::{
     TransferRequirement, VerifyTransferResult, settle_transaction, verify_transaction,
-};
-use crate::scheme::{
-    X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 use types::V2SolanaExactFacilitatorConfig;
 
