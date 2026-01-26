@@ -66,10 +66,10 @@ use tracing::Instrument;
 
 use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount, FromConfig};
 use crate::config::{Eip155ChainConfig, RpcConfig};
-use crate::util::money_amount::{MoneyAmount, MoneyAmountParseError};
 
 pub use pending_nonce_manager::*;
 pub use types::*;
+use x402_core::util::money_amount::{MoneyAmount, MoneyAmountParseError};
 
 /// Combined filler type for gas, blob gas, nonce, and chain ID.
 pub type InnerFiller = JoinFill<

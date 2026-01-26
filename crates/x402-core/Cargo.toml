@@ -14,3 +14,6 @@ categories = ["cryptography", "finance", "network-programming", "web-programming
 
 [dependencies]
 base64 = { version = "0.22.1" }
+rust_decimal = { version = "1.39.0" }
+regex = { version = "1.12.2" }
+thiserror = { version = "2.0.12" }

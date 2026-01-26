@@ -22,6 +22,18 @@
 //! let client = V1SolanaExactClient::new(keypair, rpc);
 //! ```
 
+use crate::chain::ChainId;
+use crate::chain::solana::Address;
+use crate::proto::PaymentRequired;
+use crate::proto::v1::X402Version1;
+use crate::scheme::X402SchemeId;
+use crate::scheme::client::{
+    PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
+};
+use crate::scheme::v1_solana_exact::types::{
+    ExactScheme, ExactSolanaPayload, PaymentPayload, PaymentRequirements,
+};
+use crate::scheme::v1_solana_exact::{ATA_PROGRAM_PUBKEY, TransactionInt, V1SolanaExact};
 use alloy_primitives::U256;
 use async_trait::async_trait;
 use solana_account::Account;
@@ -39,18 +51,6 @@ use solana_transaction::Instruction;
 use solana_transaction::versioned::VersionedTransaction;
 use spl_token::solana_program::program_pack::Pack;
 use x402_core::util::Base64Bytes;
-use crate::chain::ChainId;
-use crate::chain::solana::Address;
-use crate::proto::PaymentRequired;
-use crate::proto::v1::X402Version1;
-use crate::scheme::X402SchemeId;
-use crate::scheme::client::{
-    PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
-};
-use crate::scheme::v1_solana_exact::types::{
-    ExactScheme, ExactSolanaPayload, PaymentPayload, PaymentRequirements,
-};
-use crate::scheme::v1_solana_exact::{ATA_PROGRAM_PUBKEY, TransactionInt, V1SolanaExact};
 
 /// Mint information for SPL tokens
 #[derive(Debug)]
