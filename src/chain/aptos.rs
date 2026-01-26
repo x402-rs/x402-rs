@@ -196,7 +196,13 @@ impl AptosChainProvider {
             AptosClient::new(rpc_url.clone())
         };
 
-        let provider = Self::new(chain, sponsor_gas, fee_payer_address, fee_payer_private_key, rest_client);
+        let provider = Self::new(
+            chain,
+            sponsor_gas,
+            fee_payer_address,
+            fee_payer_private_key,
+            rest_client,
+        );
         Ok(provider)
     }
 

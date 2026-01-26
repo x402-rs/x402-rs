@@ -55,6 +55,10 @@ use crate::util::{SigDown, Telemetry};
 ///
 /// Binds to the address specified by the `HOST` and `PORT` env vars.
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize rustls crypto provider (ring)
+    rustls::crypto::CryptoProvider::install_default(rustls::crypto::ring::default_provider())
+        .expect("Failed to initialize rustls crypto provider");
+
     // Load .env variables
     dotenv().ok();
 

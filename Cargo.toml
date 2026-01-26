@@ -32,6 +32,7 @@ rand = { version = "0.9.2" }
 rust_decimal = { version = "1.39.0" }
 serde_with = { version = "3.16.1" }
 regex = { version = "1.12.2" }
+rustls = { version = "0.23" }
 
 # Aptos
 aptos-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
@@ -97,5 +98,5 @@ members = [
   "examples/x402-axum-example",
   "crates/x402-reqwest",
   "examples/x402-reqwest-example",
-  "."
+  ".",
 ]

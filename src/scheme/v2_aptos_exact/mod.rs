@@ -272,10 +272,14 @@ pub async fn settle_transaction(
         // Non-sponsored transaction: client pays own gas, just submit their fully-signed transaction
         // Extract public key and signature from the sender's authenticator
         let (public_key, signature) = match sender_authenticator {
-            AccountAuthenticator::Ed25519 { public_key, signature } => (public_key, signature),
+            AccountAuthenticator::Ed25519 {
+                public_key,
+                signature,
+            } => (public_key, signature),
             _ => {
                 return Err(PaymentVerificationError::InvalidFormat(
-                    "Only Ed25519 signatures are supported for non-sponsored transactions".to_string(),
+                    "Only Ed25519 signatures are supported for non-sponsored transactions"
+                        .to_string(),
                 ));
             }
         };
