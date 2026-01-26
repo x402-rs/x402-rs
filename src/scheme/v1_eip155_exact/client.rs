@@ -13,7 +13,15 @@
 //! let client = V1Eip155ExactClient::new(signer);
 //! ```
 
-use crate::chain::ChainId;
+use alloy_primitives::{Address, FixedBytes, Signature, U256};
+use alloy_signer_local::PrivateKeySigner;
+use alloy_sol_types::{SolStruct, eip712_domain};
+use async_trait::async_trait;
+use rand::{Rng, rng};
+use std::sync::Arc;
+use x402_types::chain::ChainId;
+use x402_types::util::Base64Bytes;
+
 use crate::chain::eip155::Eip155ChainReference;
 use crate::proto::PaymentRequired;
 use crate::proto::v1::X402Version1;
@@ -26,13 +34,6 @@ use crate::scheme::v1_eip155_exact::{
 };
 use crate::scheme::{V1Eip155Exact, X402SchemeId};
 use crate::timestamp::UnixTimestamp;
-use alloy_primitives::{Address, FixedBytes, Signature, U256};
-use alloy_signer_local::PrivateKeySigner;
-use alloy_sol_types::{SolStruct, eip712_domain};
-use async_trait::async_trait;
-use rand::{Rng, rng};
-use std::sync::Arc;
-use x402_types::util::Base64Bytes;
 
 #[derive(Debug)]
 #[allow(dead_code)] // Public for consumption by downstream crates.

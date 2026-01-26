@@ -37,10 +37,11 @@ pub mod types;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use x402_types::chain::ChainId;
 
 use crate::chain::ChainProvider;
 use crate::chain::solana::{Address, SolanaChainProviderLike, SolanaTokenDeployment};
-use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::v2;
 use crate::scheme::v1_solana_exact::types::ExactScheme;

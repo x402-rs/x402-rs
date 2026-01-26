@@ -46,7 +46,7 @@ use crate::chain::ChainProvider;
 use crate::chain::eip155::{
     ChecksummedAddress, Eip155ChainReference, Eip155MetaTransactionProvider, Eip155TokenDeployment,
 };
-use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::proto::v2;
@@ -60,6 +60,7 @@ use crate::scheme::{
 
 #[allow(unused)]
 pub use types::*;
+use x402_types::chain::ChainId;
 
 pub struct V2Eip155Exact;
 

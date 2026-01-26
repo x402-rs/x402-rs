@@ -37,18 +37,15 @@
 //! assert!(mainnet_chains.matches(&base));
 //! ```
 
-mod chain_id;
 pub mod eip155;
 pub mod solana;
 
 #[cfg(feature = "aptos")]
 pub mod aptos;
 
-pub use chain_id::*;
-
 use std::collections::HashMap;
 use std::sync::Arc;
-
+use x402_types::chain::{ChainId, ChainIdPattern};
 use crate::config::{ChainConfig, ChainsConfig};
 
 /// Asynchronously constructs an instance of `Self` from a configuration type.

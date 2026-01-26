@@ -19,8 +19,8 @@
 
 use alloy_primitives::U256;
 use async_trait::async_trait;
+use x402_types::chain::{ChainId, ChainIdPattern};
 
-use crate::chain::{ChainId, ChainIdPattern};
 use crate::proto;
 use crate::scheme::X402SchemeId;
 

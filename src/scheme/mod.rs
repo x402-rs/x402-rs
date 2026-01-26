@@ -44,8 +44,8 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::ops::Deref;
-
-use crate::chain::{ChainId, ChainProvider, ChainProviderOps, ChainRegistry};
+use x402_types::chain::ChainId;
+use crate::chain::{ChainProvider, ChainProviderOps, ChainRegistry};
 use crate::config::SchemeConfig;
 use crate::proto;
 use crate::proto::{AsPaymentProblem, ErrorReason, PaymentProblem, PaymentVerificationError};

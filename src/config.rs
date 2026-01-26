@@ -9,10 +9,10 @@ use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use url::Url;
+use x402_types::chain::{ChainId, ChainIdPattern};
 
 use crate::chain::eip155;
 use crate::chain::solana;
-use crate::chain::{ChainId, ChainIdPattern};
 
 #[cfg(feature = "aptos")]
 use crate::chain::aptos;

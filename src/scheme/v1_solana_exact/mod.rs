@@ -56,7 +56,7 @@ use crate::chain::ChainProvider;
 use crate::chain::solana::{
     Address, SolanaChainProviderError, SolanaChainProviderLike, SolanaTokenDeployment,
 };
-use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::PaymentVerificationError;
 use crate::proto::v1;
@@ -65,6 +65,7 @@ use crate::scheme::{
 };
 
 pub use types::*;
+use x402_types::chain::ChainId;
 
 pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
