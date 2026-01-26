@@ -48,7 +48,20 @@ use crate::config::{ChainConfig, ChainsConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-// FIXME doc comments
+/// Asynchronously constructs an instance of `Self` from a configuration type.
+///
+/// This trait provides a generic mechanism for initializing structs from their
+/// corresponding configuration types. It is used throughout the x402-rs crate
+/// to build providers, registries, and other components from configuration files.
+///
+/// # Type Parameters
+///
+/// - `TConfig` - The configuration type that `Self` can be constructed from
+///
+/// Return an error if:
+/// - Configuration validation fails
+/// - Required external connections (RPC, etc.) cannot be established
+/// - Configuration values are invalid or missing
 #[async_trait::async_trait]
 pub trait FromConfig<TConfig>
 where
