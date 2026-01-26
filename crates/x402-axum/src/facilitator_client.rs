@@ -34,7 +34,7 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use url::Url;
 use x402_rs::facilitator::Facilitator;
-use x402_rs::proto::{
+use x402_types::proto::{
     SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse,
 };
 
@@ -523,10 +523,11 @@ mod tests {
     use std::collections::HashMap;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+    use x402_types::proto::SupportedPaymentKind;
 
     fn create_test_supported_response() -> SupportedResponse {
         SupportedResponse {
-            kinds: vec![x402_rs::proto::SupportedPaymentKind {
+            kinds: vec![SupportedPaymentKind {
                 x402_version: 1,
                 scheme: "eip155-exact".to_string(),
                 network: "1".to_string(),

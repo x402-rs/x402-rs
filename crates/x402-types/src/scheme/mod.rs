@@ -28,34 +28,18 @@
 //! 3. Implement [`X402SchemeFacilitator`] for the actual verification/settlement logic
 //! 4. Register your scheme with [`SchemeBlueprints::register`]
 //!
-//! See the [how-to-write-a-scheme](../../docs/how-to-write-a-scheme.md) guide for details.
-
-pub mod v1_eip155_exact;
-pub mod v1_solana_exact;
-pub mod v2_eip155_exact;
-pub mod v2_solana_exact;
-
-#[cfg(feature = "aptos")]
-pub mod v2_aptos_exact;
+//! See the [how-to-write-a-scheme](../../docs/how-to-write-a-scheme.md) guide for details. FIXME
 
 pub mod client;
 
+use crate::chain::{ChainId, ChainIdPattern, ChainProviderOps, ChainRegistry};
+use crate::proto;
+use crate::proto::{AsPaymentProblem, ErrorReason, PaymentProblem, PaymentVerificationError};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::ops::Deref;
-use x402_types::proto;
-use x402_types::proto::{AsPaymentProblem, ErrorReason, PaymentProblem, PaymentVerificationError};
-use x402_types::scheme::{SchemeConfig, SchemeHandlerSlug};
-
-use crate::chain::{ChainProvider, ChainProviderOps, ChainRegistry};
-use crate::scheme::v1_eip155_exact::V1Eip155Exact;
-use crate::scheme::v1_solana_exact::V1SolanaExact;
-use crate::scheme::v2_eip155_exact::V2Eip155Exact;
-use crate::scheme::v2_solana_exact::V2SolanaExact;
-
-#[cfg(feature = "aptos")]
-use crate::scheme::v2_aptos_exact::V2AptosExact;
 
 /// Trait for scheme handlers that process payment verification and settlement.
 ///
@@ -206,26 +190,61 @@ impl<P> SchemeBlueprints<P> {
     }
 }
 
-/// Creates a registry with all built-in schemes registered.
+// /// Creates a registry with all built-in schemes registered. FIXME Full
+// ///
+// /// This includes:
+// /// - V1 EIP-155 exact
+// /// - V1 Solana exact
+// /// - V2 EIP-155 exact
+// /// - V2 Solana exact
+// /// - V2 Aptos exact (when "aptos" feature is enabled)
+// impl SchemeBlueprints<ChainProvider> {
+//     pub fn full() -> Self {
+//         let blueprints = Self::new()
+//             .and_register(V1Eip155Exact)
+//             .and_register(V1SolanaExact)
+//             .and_register(V2Eip155Exact)
+//             .and_register(V2SolanaExact);
+//
+//         #[cfg(feature = "aptos")]
+//         let blueprints = blueprints.and_register(V2AptosExact);
+//
+//         blueprints
+//     }
+// }
+
+/// Unique identifier for a scheme handler instance.
 ///
-/// This includes:
-/// - V1 EIP-155 exact
-/// - V1 Solana exact
-/// - V2 EIP-155 exact
-/// - V2 Solana exact
-/// - V2 Aptos exact (when "aptos" feature is enabled)
-impl SchemeBlueprints<ChainProvider> {
-    pub fn full() -> Self {
-        let blueprints = Self::new()
-            .and_register(V1Eip155Exact)
-            .and_register(V1SolanaExact)
-            .and_register(V2Eip155Exact)
-            .and_register(V2SolanaExact);
+/// Combines the chain ID, protocol version, and scheme name to uniquely
+/// identify a handler that can process payments for a specific combination.
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct SchemeHandlerSlug {
+    /// The chain this handler operates on.
+    pub chain_id: ChainId,
+    /// The x402 protocol version.
+    pub x402_version: u8,
+    /// The scheme name (e.g., "exact").
+    pub name: String,
+}
 
-        #[cfg(feature = "aptos")]
-        let blueprints = blueprints.and_register(V2AptosExact);
+impl SchemeHandlerSlug {
+    /// Creates a new scheme handler slug.
+    pub fn new(chain_id: ChainId, x402_version: u8, name: String) -> Self {
+        Self {
+            chain_id,
+            x402_version,
+            name,
+        }
+    }
+}
 
-        blueprints
+impl Display for SchemeHandlerSlug {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}:{}:v{}:{}",
+            self.chain_id.namespace, self.chain_id.reference, self.x402_version, self.name
+        )
     }
 }
 
@@ -306,5 +325,28 @@ impl SchemeRegistry {
     /// Returns an iterator over all registered handlers.
     pub fn values(&self) -> impl Iterator<Item = &dyn X402SchemeFacilitator> {
         self.0.values().map(|v| v.deref())
+    }
+}
+
+/// Configuration for a specific scheme.
+///
+/// Each scheme entry specifies which scheme to use and which chains it applies to.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SchemeConfig {
+    /// Whether this scheme is enabled (defaults to true).
+    #[serde(default = "scheme_config_defaults::default_enabled")]
+    pub enabled: bool,
+    /// The scheme id (e.g., "v1-eip155-exact").
+    pub id: String,
+    /// The chain pattern this scheme applies to (e.g., "eip155:84532", "eip155:*", "eip155:{1,8453}").
+    pub chains: ChainIdPattern,
+    /// Scheme-specific configuration (optional).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<serde_json::Value>,
+}
+
+mod scheme_config_defaults {
+    pub fn default_enabled() -> bool {
+        true
     }
 }

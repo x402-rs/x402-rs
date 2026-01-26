@@ -50,6 +50,9 @@ use solana_transaction::versioned::VersionedTransaction;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing_core::Level;
+use x402_types::proto;
+use x402_types::proto::PaymentVerificationError;
+use x402_types::proto::v1;
 use x402_types::util::Base64Bytes;
 
 use crate::chain::ChainProvider;
@@ -57,9 +60,6 @@ use crate::chain::solana::{
     Address, SolanaChainProviderError, SolanaChainProviderLike, SolanaTokenDeployment,
 };
 use crate::chain::{ChainProviderOps, DeployedTokenAmount};
-use crate::proto;
-use crate::proto::PaymentVerificationError;
-use crate::proto::v1;
 use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };

@@ -43,10 +43,10 @@ pub mod solana;
 #[cfg(feature = "aptos")]
 pub mod aptos;
 
+use crate::config::{ChainConfig, ChainsConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
 use x402_types::chain::{ChainId, ChainIdPattern};
-use crate::config::{ChainConfig, ChainsConfig};
 
 /// Asynchronously constructs an instance of `Self` from a configuration type.
 ///

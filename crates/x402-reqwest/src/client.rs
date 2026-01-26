@@ -7,11 +7,11 @@ use http::{Extensions, HeaderMap, StatusCode};
 use reqwest::{Request, Response};
 use reqwest_middleware as rqm;
 use std::sync::Arc;
-use x402_rs::proto;
-use x402_rs::proto::{v1, v2};
 use x402_rs::scheme::client::{
     FirstMatch, PaymentCandidate, PaymentSelector, X402Error, X402SchemeClient,
 };
+use x402_types::proto;
+use x402_types::proto::{v1, v2};
 use x402_types::util::Base64Bytes;
 
 #[cfg(feature = "telemetry")]

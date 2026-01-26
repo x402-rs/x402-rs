@@ -20,11 +20,11 @@ use async_trait::async_trait;
 use rand::{Rng, rng};
 use std::sync::Arc;
 use x402_types::chain::ChainId;
+use x402_types::proto::PaymentRequired;
+use x402_types::proto::v1::X402Version1;
 use x402_types::util::Base64Bytes;
 
 use crate::chain::eip155::Eip155ChainReference;
-use crate::proto::PaymentRequired;
-use crate::proto::v1::X402Version1;
 use crate::scheme::client::{
     PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
 };

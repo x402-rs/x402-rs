@@ -13255,12 +13255,16 @@ dependencies = [
 name = "x402-types"
 version = "0.1.0"
 dependencies = [
+ "alloy-primitives",
+ "async-trait",
  "base64 0.22.1",
  "regex",
  "rust_decimal",
  "serde",
  "serde_json",
+ "serde_with",
  "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]

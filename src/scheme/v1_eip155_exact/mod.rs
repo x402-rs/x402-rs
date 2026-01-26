@@ -61,14 +61,15 @@ use x402_types::chain::ChainId;
 pub mod client;
 pub mod types;
 
+use x402_types::proto;
+use x402_types::proto::{PaymentVerificationError, v1};
+
 use crate::chain::ChainProvider;
 use crate::chain::eip155::{
     ChecksummedAddress, Eip155ChainReference, Eip155MetaTransactionProvider, Eip155TokenDeployment,
     MetaTransaction, MetaTransactionSendError,
 };
 use crate::chain::{ChainProviderOps, DeployedTokenAmount};
-use crate::proto;
-use crate::proto::{PaymentVerificationError, v1};
 use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };

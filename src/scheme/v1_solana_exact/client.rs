@@ -39,11 +39,11 @@ use solana_transaction::Instruction;
 use solana_transaction::versioned::VersionedTransaction;
 use spl_token::solana_program::program_pack::Pack;
 use x402_types::chain::ChainId;
+use x402_types::proto::PaymentRequired;
+use x402_types::proto::v1::X402Version1;
 use x402_types::util::Base64Bytes;
 
 use crate::chain::solana::Address;
-use crate::proto::PaymentRequired;
-use crate::proto::v1::X402Version1;
 use crate::scheme::X402SchemeId;
 use crate::scheme::client::{
     PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,

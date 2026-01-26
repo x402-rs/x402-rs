@@ -23,12 +23,11 @@
 //! let facilitator = FacilitatorLocal::new(registry);
 //! ```
 
-use std::collections::HashMap;
-
 use crate::facilitator::Facilitator;
-use crate::proto;
-use crate::proto::PaymentVerificationError;
 use crate::scheme::{SchemeRegistry, X402SchemeFacilitatorError};
+use std::collections::HashMap;
+use x402_types::proto;
+use x402_types::proto::PaymentVerificationError;
 
 /// A local [`Facilitator`] implementation that delegates to scheme handlers.
 ///

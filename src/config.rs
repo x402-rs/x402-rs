@@ -9,7 +9,8 @@ use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use url::Url;
-use x402_types::chain::{ChainId, ChainIdPattern};
+use x402_types::chain::ChainId;
+use x402_types::scheme::SchemeConfig;
 
 use crate::chain::eip155;
 use crate::chain::solana;
@@ -41,29 +42,6 @@ pub struct Config<TChainsConfig = ChainsConfig> {
     chains: TChainsConfig,
     #[serde(default)]
     schemes: Vec<SchemeConfig>,
-}
-
-/// Configuration for a specific scheme.
-///
-/// Each scheme entry specifies which scheme to use and which chains it applies to.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SchemeConfig {
-    /// Whether this scheme is enabled (defaults to true).
-    #[serde(default = "scheme_config_defaults::default_enabled")]
-    pub enabled: bool,
-    /// The scheme id (e.g., "v1-eip155-exact").
-    pub id: String,
-    /// The chain pattern this scheme applies to (e.g., "eip155:84532", "eip155:*", "eip155:{1,8453}").
-    pub chains: ChainIdPattern,
-    /// Scheme-specific configuration (optional).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub config: Option<serde_json::Value>,
-}
-
-mod scheme_config_defaults {
-    pub fn default_enabled() -> bool {
-        true
-    }
 }
 
 /// Configuration for a specific chain.
