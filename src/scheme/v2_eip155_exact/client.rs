@@ -14,7 +14,7 @@
 //! ```
 
 use async_trait::async_trait;
-use x402_core::util::Base64Bytes;
+use x402_types::util::Base64Bytes;
 
 use crate::chain::eip155::Eip155ChainReference;
 use crate::proto::v2::ResourceInfo;

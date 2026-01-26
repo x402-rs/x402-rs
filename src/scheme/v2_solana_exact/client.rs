@@ -15,6 +15,12 @@
 //! let client = V2SolanaExactClient::new(keypair, rpc);
 //! ```
 
+use alloy_primitives::U256;
+use async_trait::async_trait;
+use solana_pubkey::Pubkey;
+use solana_signer::Signer;
+use x402_types::util::Base64Bytes;
+
 use crate::proto::PaymentRequired;
 use crate::proto::v2::ResourceInfo;
 use crate::proto::v2::X402Version2;
@@ -26,11 +32,6 @@ use crate::scheme::v1_solana_exact::client::{RpcClientLike, build_signed_transfe
 use crate::scheme::v1_solana_exact::types::ExactSolanaPayload;
 use crate::scheme::v2_solana_exact::V2SolanaExact;
 use crate::scheme::v2_solana_exact::types::{PaymentPayload, PaymentRequirements};
-use alloy_primitives::U256;
-use async_trait::async_trait;
-use solana_pubkey::Pubkey;
-use solana_signer::Signer;
-use x402_core::util::Base64Bytes;
 
 /// Client for creating Solana payment payloads for the v2 exact scheme.
 #[derive(Clone)]

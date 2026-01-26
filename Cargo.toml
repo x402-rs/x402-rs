@@ -13,7 +13,7 @@ keywords = ["blockchain", "payments", "x402", "stablecoin", "http-402"]
 categories = ["cryptography", "finance", "network-programming", "web-programming::http-server"]
 
 [dependencies]
-x402-core = { path = "./crates/x402-core" }
+x402-types = { path = "crates/x402-types" }
 axum = { version = "0.8" }
 tokio = { version = "1.45", features = ["full"] }
 tokio-util = { version = "0.7.16", features = ["rt"] }
@@ -100,5 +100,5 @@ members = [
   "examples/x402-axum-example",
   "crates/x402-reqwest",
   "examples/x402-reqwest-example",
-  ".", "crates/x402-core", "facilitator",
+  ".", "crates/x402-types", "facilitator",
 ]
