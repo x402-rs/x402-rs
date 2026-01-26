@@ -13155,6 +13155,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "x402-eip155"
+version = "0.1.0"
+
+[[package]]
 name = "x402-reqwest"
 version = "0.6.0"
 dependencies = [
