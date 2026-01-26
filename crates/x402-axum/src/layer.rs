@@ -63,7 +63,7 @@ use std::time::Duration;
 use tower::util::BoxCloneSyncService;
 use tower::{Layer, Service};
 use url::Url;
-use x402_rs::facilitator::Facilitator;
+use x402_types::facilitator::Facilitator;
 
 use crate::facilitator_client::FacilitatorClient;
 use crate::paygate::{

@@ -33,7 +33,7 @@ use std::fmt::Display;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use url::Url;
-use x402_rs::facilitator::Facilitator;
+use x402_types::facilitator::Facilitator;
 use x402_types::proto::{
     SettleRequest, SettleResponse, SupportedResponse, VerifyRequest, VerifyResponse,
 };

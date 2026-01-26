@@ -5,7 +5,8 @@
 
 use std::fmt::{Debug, Display};
 use std::sync::Arc;
-use x402_types::proto;
+
+use crate::proto;
 
 /// Trait defining the asynchronous interface for x402 payment facilitators.
 ///

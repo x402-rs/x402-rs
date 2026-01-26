@@ -17,11 +17,11 @@ use axum::{Json, Router, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::instrument;
+use x402_types::facilitator::Facilitator;
 use x402_types::proto;
 use x402_types::proto::{AsPaymentProblem, ErrorReason};
 use x402_types::scheme::X402SchemeFacilitatorError;
 
-use crate::facilitator::Facilitator;
 use crate::facilitator_local::FacilitatorLocalError;
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.

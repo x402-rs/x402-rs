@@ -40,7 +40,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tower::Service;
 use url::Url;
-use x402_rs::facilitator::Facilitator;
+use x402_types::facilitator::Facilitator;
 use x402_types::proto;
 use x402_types::proto::{SupportedResponse, v1, v2};
 
@@ -49,6 +49,7 @@ use tracing::Instrument;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
 use x402_types::util::Base64Bytes;
+
 // ============================================================================
 // Common Types
 // ============================================================================
