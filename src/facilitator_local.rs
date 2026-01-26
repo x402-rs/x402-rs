@@ -24,11 +24,10 @@
 //! ```
 
 use std::collections::HashMap;
+use x402_types::facilitator::Facilitator;
 use x402_types::proto;
 use x402_types::proto::PaymentVerificationError;
 use x402_types::scheme::{SchemeRegistry, X402SchemeFacilitatorError};
-
-use crate::facilitator::Facilitator; // FIXME MOVE ALL THIS TO X402_TYPES
 
 /// A local [`Facilitator`] implementation that delegates to scheme handlers.
 ///
