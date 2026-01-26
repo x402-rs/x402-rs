@@ -9,9 +9,9 @@ use std::env;
 use tracing::instrument;
 use x402_axum::X402Middleware;
 use x402_eip155::V1Eip155Exact;
+use x402_eip155::V2Eip155Exact;
 use x402_rs::networks::{KnownNetworkEip155, KnownNetworkSolana, USDC};
 use x402_rs::scheme::v1_solana_exact::V1SolanaExact;
-use x402_rs::scheme::v2_eip155_exact::V2Eip155Exact;
 use x402_rs::scheme::v2_solana_exact::V2SolanaExact;
 use x402_rs::util::Telemetry;
 

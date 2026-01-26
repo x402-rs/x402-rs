@@ -3,12 +3,12 @@
 //! This module re-exports types from V1 and defines V2-specific wire format
 //! types for ERC-3009 based payments on EVM chains.
 
-use x402_eip155::chain::{ChecksummedAddress, TokenAmount};
+use crate::chain::{ChecksummedAddress, TokenAmount};
 use x402_types::proto::v2;
 
-pub use x402_eip155::v1_eip155_exact::types::ExactScheme;
+pub use crate::v1_eip155_exact::types::ExactScheme;
 
-use x402_eip155::v1_eip155_exact::types::{ExactEvmPayload, PaymentRequirementsExtra};
+use crate::v1_eip155_exact::types::{ExactEvmPayload, PaymentRequirementsExtra};
 
 pub type VerifyRequest = v2::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;

@@ -5,10 +5,10 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_keypair::Keypair;
 use std::env;
 use std::sync::Arc;
-use x402_eip155::v1_eip155_exact::client::V1Eip155ExactClient;
+use x402_eip155::V1Eip155ExactClient;
+use x402_eip155::V2Eip155ExactClient;
 use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
 use x402_rs::scheme::v1_solana_exact::client::V1SolanaExactClient;
-use x402_rs::scheme::v2_eip155_exact::client::V2Eip155ExactClient;
 use x402_rs::scheme::v2_solana_exact::client::V2SolanaExactClient;
 
 #[tokio::main]
