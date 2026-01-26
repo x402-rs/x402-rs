@@ -198,7 +198,47 @@ pub async fn verify_transfer(
         )));
     }
 
-    // TODO: Add more validation for function arguments (asset, recipient, amount)
+    // Validate function arguments (asset, recipient, amount)
+    // primary_fungible_store::transfer has 3 arguments:
+    // 1. asset: Object<Metadata> - the fungible asset metadata address
+    // 2. to: address - the recipient address
+    // 3. amount: u64 - the transfer amount
+    let args = entry_function.args();
+    if args.len() != 3 {
+        return Err(PaymentVerificationError::InvalidFormat(format!(
+            "Expected 3 arguments for transfer, got {}",
+            args.len()
+        )));
+    }
+
+    // Parse asset address from first argument (BCS-encoded address)
+    let asset_address: AccountAddress = bcs::from_bytes(&args[0]).map_err(|e| {
+        PaymentVerificationError::InvalidFormat(format!("Failed to parse asset address: {}", e))
+    })?;
+    let expected_asset = requirements.asset.inner();
+    if &asset_address != expected_asset {
+        return Err(PaymentVerificationError::AssetMismatch);
+    }
+
+    // Parse recipient address from second argument (BCS-encoded address)
+    let recipient_address: AccountAddress = bcs::from_bytes(&args[1]).map_err(|e| {
+        PaymentVerificationError::InvalidFormat(format!("Failed to parse recipient address: {}", e))
+    })?;
+    let expected_recipient = requirements.pay_to.inner();
+    if &recipient_address != expected_recipient {
+        return Err(PaymentVerificationError::RecipientMismatch);
+    }
+
+    // Parse amount from third argument (BCS-encoded u64)
+    let amount: u64 = bcs::from_bytes(&args[2]).map_err(|e| {
+        PaymentVerificationError::InvalidFormat(format!("Failed to parse amount: {}", e))
+    })?;
+    let expected_amount: u64 = requirements.amount.parse().map_err(|e| {
+        PaymentVerificationError::InvalidFormat(format!("Failed to parse expected amount: {}", e))
+    })?;
+    if amount != expected_amount {
+        return Err(PaymentVerificationError::InvalidPaymentAmount);
+    }
 
     Ok(VerifyTransferResult {
         payer,
