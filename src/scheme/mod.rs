@@ -32,9 +32,11 @@
 
 pub mod v1_eip155_exact;
 pub mod v1_solana_exact;
-pub mod v2_aptos_exact;
 pub mod v2_eip155_exact;
 pub mod v2_solana_exact;
+
+#[cfg(feature = "aptos")]
+pub mod v2_aptos_exact;
 
 pub mod client;
 
@@ -49,9 +51,11 @@ use crate::proto;
 use crate::proto::{AsPaymentProblem, ErrorReason, PaymentProblem, PaymentVerificationError};
 use crate::scheme::v1_eip155_exact::V1Eip155Exact;
 use crate::scheme::v1_solana_exact::V1SolanaExact;
-use crate::scheme::v2_aptos_exact::V2AptosExact;
 use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_solana_exact::V2SolanaExact;
+
+#[cfg(feature = "aptos")]
+use crate::scheme::v2_aptos_exact::V2AptosExact;
 
 /// Trait for scheme handlers that process payment verification and settlement.
 ///
@@ -209,15 +213,19 @@ impl<P> SchemeBlueprints<P> {
 /// - V1 Solana exact
 /// - V2 EIP-155 exact
 /// - V2 Solana exact
-/// - V2 Aptos exact
+/// - V2 Aptos exact (when "aptos" feature is enabled)
 impl SchemeBlueprints<ChainProvider> {
     pub fn full() -> Self {
-        Self::new()
+        let blueprints = Self::new()
             .and_register(V1Eip155Exact)
             .and_register(V1SolanaExact)
             .and_register(V2Eip155Exact)
-            .and_register(V2SolanaExact)
-            .and_register(V2AptosExact)
+            .and_register(V2SolanaExact);
+
+        #[cfg(feature = "aptos")]
+        let blueprints = blueprints.and_register(V2AptosExact);
+
+        blueprints
     }
 }
 

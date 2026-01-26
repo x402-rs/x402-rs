@@ -37,16 +37,19 @@
 //! assert!(mainnet_chains.matches(&base));
 //! ```
 
-pub mod aptos;
 mod chain_id;
 pub mod eip155;
 pub mod solana;
 
+#[cfg(feature = "aptos")]
+pub mod aptos;
+
 pub use chain_id::*;
 
-use crate::config::{ChainConfig, ChainsConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use crate::config::{ChainConfig, ChainsConfig};
 
 /// Asynchronously constructs an instance of `Self` from a configuration type.
 ///
@@ -87,6 +90,7 @@ pub enum ChainProvider {
     /// Solana chain provider.
     Solana(Arc<solana::SolanaChainProvider>),
     /// Aptos chain provider.
+    #[cfg(feature = "aptos")]
     Aptos(Arc<aptos::AptosChainProvider>),
 }
 
@@ -113,6 +117,7 @@ impl FromConfig<ChainConfig> for ChainProvider {
                 let provider = solana::SolanaChainProvider::from_config(config).await?;
                 ChainProvider::Solana(Arc::new(provider))
             }
+            #[cfg(feature = "aptos")]
             ChainConfig::Aptos(config) => {
                 let provider = aptos::AptosChainProvider::from_config(config).await?;
                 ChainProvider::Aptos(Arc::new(provider))
@@ -151,6 +156,7 @@ impl ChainProviderOps for ChainProvider {
         match self {
             ChainProvider::Eip155(provider) => provider.signer_addresses(),
             ChainProvider::Solana(provider) => provider.signer_addresses(),
+            #[cfg(feature = "aptos")]
             ChainProvider::Aptos(provider) => provider.signer_addresses(),
         }
     }
@@ -159,6 +165,7 @@ impl ChainProviderOps for ChainProvider {
         match self {
             ChainProvider::Eip155(provider) => provider.chain_id(),
             ChainProvider::Solana(provider) => provider.chain_id(),
+            #[cfg(feature = "aptos")]
             ChainProvider::Aptos(provider) => provider.chain_id(),
         }
     }

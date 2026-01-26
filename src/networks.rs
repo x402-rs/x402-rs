@@ -84,7 +84,10 @@ use once_cell::sync::Lazy;
 use solana_pubkey::pubkey;
 use std::collections::HashMap;
 
-use crate::chain::{ChainId, aptos, eip155, solana};
+use crate::chain::{eip155, solana, ChainId};
+
+#[cfg(feature = "aptos")]
+use crate::chain::aptos;
 
 /// A known network definition with its chain ID and human-readable name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -243,6 +246,7 @@ pub trait KnownNetworkSolana<A> {
 /// assert_eq!(testnet.namespace, "aptos");
 /// assert_eq!(testnet.reference, "2");
 /// ```
+#[cfg(feature = "aptos")]
 #[allow(dead_code)]
 pub trait KnownNetworkAptos<A> {
     /// Returns the instance for Aptos mainnet (aptos:1)
@@ -346,6 +350,7 @@ impl KnownNetworkSolana<ChainId> for ChainId {
 /// This is one example of implementing the KnownNetworkAptos trait. Other types
 /// (such as token address types) can also implement this trait to provide
 /// per-network instances with better developer experience.
+#[cfg(feature = "aptos")]
 impl KnownNetworkAptos<ChainId> for ChainId {
     fn aptos() -> ChainId {
         aptos::AptosChainReference::aptos().into()
@@ -766,6 +771,7 @@ impl KnownNetworkEip155<eip155::Eip155TokenDeployment> for USDC {
     }
 }
 
+#[cfg(feature = "aptos")]
 impl KnownNetworkAptos<aptos::AptosTokenDeployment> for USDC {
     fn aptos() -> aptos::AptosTokenDeployment {
         // USDC on Aptos mainnet (fungible asset metadata address)

@@ -1,7 +1,6 @@
 //! Configuration module for the x402 facilitator server.
 
 use alloy_primitives::B256;
-use alloy_primitives::hex;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -11,10 +10,12 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use url::Url;
 
-use crate::chain::aptos;
 use crate::chain::eip155;
 use crate::chain::solana;
 use crate::chain::{ChainId, ChainIdPattern};
+
+#[cfg(feature = "aptos")]
+use crate::chain::aptos;
 
 /// CLI arguments for the x402 facilitator server.
 #[derive(Parser, Debug)]
@@ -77,6 +78,7 @@ pub enum ChainConfig {
     /// Solana chain configuration (for chains with "solana:" prefix).
     Solana(Box<SolanaChainConfig>),
     /// Aptos chain configuration (for chains with "aptos:" prefix).
+    #[cfg(feature = "aptos")]
     Aptos(Box<AptosChainConfig>),
 }
 
@@ -483,9 +485,11 @@ mod solana_chain_config {
 /// - 64 bytes: Full Ed25519 keypair (seed + public key)
 ///
 /// The key is stored and parsed as a hex-encoded string with 0x prefix.
+#[cfg(feature = "aptos")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AptosPrivateKey(Vec<u8>);
 
+#[cfg(feature = "aptos")]
 impl AptosPrivateKey {
     /// Parse a hex string into a private key.
     pub fn from_hex(s: &str) -> Result<Self, String> {
@@ -508,6 +512,7 @@ impl AptosPrivateKey {
     }
 }
 
+#[cfg(feature = "aptos")]
 impl Serialize for AptosPrivateKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -517,6 +522,7 @@ impl Serialize for AptosPrivateKey {
     }
 }
 
+#[cfg(feature = "aptos")]
 impl FromStr for AptosPrivateKey {
     type Err = String;
 
@@ -525,6 +531,7 @@ impl FromStr for AptosPrivateKey {
     }
 }
 
+#[cfg(feature = "aptos")]
 impl std::fmt::Display for AptosPrivateKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_hex())
@@ -541,9 +548,11 @@ impl std::fmt::Display for AptosPrivateKey {
 ///   "signer": "$APTOS_FACILITATOR_KEY"
 /// }
 /// ```
+#[cfg(feature = "aptos")]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AptosSignerConfig(LiteralOrEnv<AptosPrivateKey>);
 
+#[cfg(feature = "aptos")]
 impl Deref for AptosSignerConfig {
     type Target = AptosPrivateKey;
 
@@ -556,12 +565,14 @@ impl Deref for AptosSignerConfig {
 // Aptos Chain Configuration
 // ============================================================================
 
+#[cfg(feature = "aptos")]
 #[derive(Debug, Clone)]
 pub struct AptosChainConfig {
     pub chain_reference: aptos::AptosChainReference,
     pub inner: AptosChainConfigInner,
 }
 
+#[cfg(feature = "aptos")]
 impl AptosChainConfig {
     pub fn signer(&self) -> Option<&AptosSignerConfig> {
         self.inner.signer.as_ref()
@@ -609,6 +620,7 @@ impl AptosChainConfig {
 /// sponsor_gas = true
 /// signer = { private_key = "$APTOS_PRIVATE_KEY" }
 /// ```
+#[cfg(feature = "aptos")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AptosChainConfigInner {
     /// RPC provider URL for this chain (required).
@@ -630,6 +642,7 @@ pub struct AptosChainConfigInner {
     pub sponsor_gas: LiteralOrEnv<bool>,
 }
 
+#[cfg(feature = "aptos")]
 mod aptos_chain_config {
     use super::LiteralOrEnv;
 
@@ -639,6 +652,7 @@ mod aptos_chain_config {
     }
 }
 
+#[cfg(feature = "aptos")]
 impl LiteralOrEnv<bool> {
     fn from_literal(value: bool) -> Self {
         Self(value)
@@ -681,6 +695,7 @@ impl Serialize for ChainsConfig {
                     let inner = &config.inner;
                     map.serialize_entry(&chain_id, inner)?;
                 }
+                #[cfg(feature = "aptos")]
                 ChainConfig::Aptos(config) => {
                     let chain_id = config.chain_id();
                     let inner = &config.inner;
@@ -738,6 +753,7 @@ impl<'de> Deserialize<'de> for ChainsConfig {
                             };
                             ChainConfig::Solana(Box::new(config))
                         }
+                        #[cfg(feature = "aptos")]
                         aptos::APTOS_NAMESPACE => {
                             let inner: AptosChainConfigInner = access.next_value()?;
                             let config = AptosChainConfig {

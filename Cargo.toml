@@ -33,14 +33,14 @@ rust_decimal = { version = "1.39.0" }
 serde_with = { version = "3.16.1" }
 regex = { version = "1.12.2" }
 rustls = { version = "0.23" }
-
-# Aptos
-aptos-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
-aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
-aptos-rest-client = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
-move-core-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
-bcs = { version = "0.1" }
 hex = { version = "0.4" }
+
+# Aptos (optional, enabled via "aptos" feature)
+aptos-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2", optional = true }
+aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2", optional = true }
+aptos-rest-client = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2", optional = true }
+move-core-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2", optional = true }
+bcs = { version = "0.1", optional = true }
 
 # EVM: Alloy
 alloy-primitives = { version = "1.4.1" }
@@ -85,6 +85,7 @@ opentelemetry-stdout = { version = "0.31", features = ["trace", "metrics"] }
 
 [features]
 telemetry = []
+aptos = ["dep:aptos-types", "dep:aptos-crypto", "dep:aptos-rest-client", "dep:move-core-types", "dep:bcs"]
 
 [patch.crates-io]
 merlin = { git = "https://github.com/aptos-labs/merlin" }
