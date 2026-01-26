@@ -17,7 +17,7 @@ use crate::client::X402Client;
 ///
 /// ```rust,no_run
 /// use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
-/// use x402_rs::scheme::v1_eip155_exact::client::V1Eip155ExactClient;
+/// use x402_eip155::V1Eip155ExactClient;
 /// use alloy_signer_local::PrivateKeySigner;
 /// use std::sync::Arc;
 /// use reqwest::Client;
