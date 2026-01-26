@@ -13156,6 +13156,9 @@ dependencies = [
 [[package]]
 name = "x402-core"
 version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+]
 
 [[package]]
 name = "x402-reqwest"
@@ -13250,6 +13253,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber 0.3.22",
  "url",
+ "x402-core",
 ]
 
 [[package]]
