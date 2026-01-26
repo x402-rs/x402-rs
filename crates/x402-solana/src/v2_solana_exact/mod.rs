@@ -37,7 +37,6 @@ pub mod types;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use x402_solana::chain::{Address, SolanaChainProviderLike, SolanaTokenDeployment};
 use x402_types::chain::ChainId;
 use x402_types::chain::{ChainProviderOps, DeployedTokenAmount};
 use x402_types::proto;
@@ -46,10 +45,10 @@ use x402_types::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 
-use crate::chain::ChainProvider;
-use crate::scheme::v1_solana_exact::types::ExactScheme;
-use crate::scheme::v1_solana_exact::types::SupportedPaymentKindExtra;
-use crate::scheme::v1_solana_exact::{
+use crate::chain::{Address, SolanaChainProviderLike, SolanaTokenDeployment};
+use crate::v1_solana_exact::types::ExactScheme;
+use crate::v1_solana_exact::types::SupportedPaymentKindExtra;
+use crate::v1_solana_exact::{
     TransferRequirement, VerifyTransferResult, settle_transaction, verify_transaction,
 };
 use types::V2SolanaExactFacilitatorConfig;
@@ -86,21 +85,6 @@ impl X402SchemeId for V2SolanaExact {
 
     fn scheme(&self) -> &str {
         ExactScheme.as_ref()
-    }
-}
-
-impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2SolanaExact {
-    fn build(
-        &self,
-        provider: &ChainProvider,
-        config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        let solana_provider = if let ChainProvider::Solana(provider) = provider {
-            Arc::clone(provider)
-        } else {
-            return Err("V2SolanaExact::build: provider must be a SolanaChainProvider".into());
-        };
-        self.build(solana_provider, config)
     }
 }
 

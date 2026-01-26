@@ -50,9 +50,6 @@ use solana_transaction::versioned::VersionedTransaction;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing_core::Level;
-use x402_solana::chain::{
-    Address, SolanaChainProviderError, SolanaChainProviderLike, SolanaTokenDeployment,
-};
 use x402_types::chain::ChainId;
 use x402_types::chain::{ChainProviderOps, DeployedTokenAmount};
 use x402_types::proto;
@@ -63,7 +60,9 @@ use x402_types::scheme::{
 };
 use x402_types::util::Base64Bytes;
 
-use crate::chain::ChainProvider;
+use crate::chain::{
+    Address, SolanaChainProviderError, SolanaChainProviderLike, SolanaTokenDeployment,
+};
 
 pub use types::*;
 
@@ -105,21 +104,6 @@ impl X402SchemeId for V1SolanaExact {
 
     fn scheme(&self) -> &str {
         types::ExactScheme.as_ref()
-    }
-}
-
-impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1SolanaExact {
-    fn build(
-        &self,
-        provider: &ChainProvider,
-        config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        let solana_provider = if let ChainProvider::Solana(provider) = provider {
-            Arc::clone(provider)
-        } else {
-            return Err("V1SolanaExact::build: provider must be a SolanaChainProvider".into());
-        };
-        self.build(solana_provider, config)
     }
 }
 
