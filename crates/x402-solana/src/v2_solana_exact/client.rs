@@ -28,10 +28,10 @@ use x402_types::scheme::client::{
 };
 use x402_types::util::Base64Bytes;
 
-use crate::scheme::v1_solana_exact::client::{RpcClientLike, build_signed_transfer_transaction};
-use crate::scheme::v1_solana_exact::types::ExactSolanaPayload;
-use crate::scheme::v2_solana_exact::V2SolanaExact;
-use crate::scheme::v2_solana_exact::types::{PaymentPayload, PaymentRequirements};
+use crate::v1_solana_exact::client::{RpcClientLike, build_signed_transfer_transaction};
+use crate::v1_solana_exact::types::ExactSolanaPayload;
+use crate::v2_solana_exact::V2SolanaExact;
+use crate::v2_solana_exact::types::{PaymentPayload, PaymentRequirements};
 
 /// Client for creating Solana payment payloads for the v2 exact scheme.
 #[derive(Clone)]

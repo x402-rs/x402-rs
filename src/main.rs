@@ -35,6 +35,7 @@ use std::net::SocketAddr;
 use std::process;
 use std::sync::Arc;
 use tower_http::cors;
+use x402_solana::{V1SolanaExact, V2SolanaExact};
 use x402_types::chain::ChainRegistry;
 use x402_types::chain::FromConfig;
 use x402_types::scheme::{
@@ -44,8 +45,6 @@ use x402_types::scheme::{
 use crate::chain::ChainProvider;
 use crate::config::Config;
 use crate::facilitator_local::FacilitatorLocal;
-use crate::scheme::v1_solana_exact::V1SolanaExact;
-use crate::scheme::v2_solana_exact::V2SolanaExact;
 use crate::util::{SigDown, Telemetry};
 
 use x402_eip155::v1_eip155_exact::V1Eip155Exact;
@@ -53,6 +52,36 @@ use x402_eip155::v2_eip155_exact::V2Eip155Exact;
 
 #[cfg(feature = "aptos")]
 use crate::scheme::v2_aptos_exact::V2AptosExact;
+
+impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1SolanaExact {
+    fn build(
+        &self,
+        provider: &ChainProvider,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        let solana_provider = if let ChainProvider::Solana(provider) = provider {
+            Arc::clone(provider)
+        } else {
+            return Err("V1SolanaExact::build: provider must be a SolanaChainProvider".into());
+        };
+        self.build(solana_provider, config)
+    }
+}
+
+impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2SolanaExact {
+    fn build(
+        &self,
+        provider: &ChainProvider,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        let solana_provider = if let ChainProvider::Solana(provider) = provider {
+            Arc::clone(provider)
+        } else {
+            return Err("V2SolanaExact::build: provider must be a SolanaChainProvider".into());
+        };
+        self.build(solana_provider, config)
+    }
+}
 
 impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2Eip155Exact {
     fn build(

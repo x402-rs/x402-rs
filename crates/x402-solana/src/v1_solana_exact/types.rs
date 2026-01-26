@@ -3,19 +3,19 @@
 //! This module defines the wire format types for SPL Token based payments
 //! on Solana using the V1 x402 protocol.
 
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
+use std::sync::LazyLock;
 use x402_types::proto::util::U64String;
 use x402_types::{lit_str, proto};
 
-use x402_solana::chain::Address;
+use crate::chain::Address;
 
 lit_str!(ExactScheme, "exact");
 
 /// Phantom Lighthouse program ID - security program injected by Phantom wallet on mainnet
 /// See: https://github.com/coinbase/x402/issues/828
-pub static PHANTOM_LIGHTHOUSE_PROGRAM: Lazy<Pubkey> = Lazy::new(|| {
+pub static PHANTOM_LIGHTHOUSE_PROGRAM: LazyLock<Pubkey> = LazyLock::new(|| {
     "L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95"
         .parse()
         .expect("Invalid Lighthouse program ID")

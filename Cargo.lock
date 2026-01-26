@@ -13290,11 +13290,13 @@ dependencies = [
 name = "x402-solana"
 version = "0.1.0"
 dependencies = [
+ "alloy-primitives",
  "async-trait",
  "bincode",
  "bs58",
  "futures-util",
  "serde",
+ "serde_json",
  "solana-account",
  "solana-client",
  "solana-commitment-config",
@@ -13310,6 +13312,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-core",
  "x402-types",
 ]
 

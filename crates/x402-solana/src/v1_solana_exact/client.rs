@@ -48,11 +48,11 @@ use x402_types::scheme::client::{
     PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
 };
 
-use crate::scheme::v1_solana_exact::types::{
+use crate::chain::Address;
+use crate::v1_solana_exact::types::{
     ExactScheme, ExactSolanaPayload, PaymentPayload, PaymentRequirements,
 };
-use crate::scheme::v1_solana_exact::{ATA_PROGRAM_PUBKEY, TransactionInt, V1SolanaExact};
-use x402_solana::chain::Address;
+use crate::v1_solana_exact::{ATA_PROGRAM_PUBKEY, TransactionInt, V1SolanaExact};
 
 /// Mint information for SPL tokens
 #[derive(Debug)]
