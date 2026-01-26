@@ -83,8 +83,8 @@
 use once_cell::sync::Lazy;
 use solana_pubkey::pubkey;
 use std::collections::HashMap;
-
-use crate::chain::{ChainId, eip155, solana};
+use x402_types::chain::ChainId;
+use crate::chain::{eip155, solana};
 
 #[cfg(feature = "aptos")]
 use crate::chain::aptos;

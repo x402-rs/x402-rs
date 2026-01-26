@@ -26,8 +26,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
-
-use crate::chain::ChainId;
+use x402_types::chain::ChainId;
 use crate::proto;
 use crate::proto::SupportedResponse;
 use crate::proto::v1;

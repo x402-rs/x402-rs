@@ -31,10 +31,6 @@
 //! // amount.amount is now 10_500_000 (10.50 * 10^6)
 //! ```
 
-use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount, FromConfig};
-use crate::config::SolanaChainConfig;
-use crate::networks::KnownNetworkSolana;
-use crate::scheme::X402SchemeFacilitatorError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_account::Account;
 use solana_client::client_error::{ClientError, ClientErrorKind};
@@ -57,7 +53,13 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use x402_types::chain::ChainId;
 use x402_types::util::money_amount::{MoneyAmount, MoneyAmountParseError};
+
+use crate::chain::{ChainProviderOps, DeployedTokenAmount, FromConfig};
+use crate::config::SolanaChainConfig;
+use crate::networks::KnownNetworkSolana;
+use crate::scheme::X402SchemeFacilitatorError;
 
 /// The CAIP-2 namespace for Solana chains.
 pub const SOLANA_NAMESPACE: &str = "solana";

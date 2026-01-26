@@ -56,6 +56,7 @@ use std::sync::Arc;
 use tracing::Instrument;
 use tracing::instrument;
 use tracing_core::Level;
+use x402_types::chain::ChainId;
 
 pub mod client;
 pub mod types;
@@ -65,7 +66,7 @@ use crate::chain::eip155::{
     ChecksummedAddress, Eip155ChainReference, Eip155MetaTransactionProvider, Eip155TokenDeployment,
     MetaTransaction, MetaTransactionSendError,
 };
-use crate::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
+use crate::chain::{ChainProviderOps, DeployedTokenAmount};
 use crate::proto;
 use crate::proto::{PaymentVerificationError, v1};
 use crate::scheme::{
