@@ -26,6 +26,7 @@ use x402_types::scheme::X402SchemeId;
 use x402_types::scheme::client::{
     PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
 };
+use x402_types::timestamp::UnixTimestamp;
 use x402_types::util::Base64Bytes;
 
 use crate::chain::eip155::Eip155ChainReference;
@@ -33,7 +34,6 @@ use crate::scheme::v1_eip155_exact::{
     ExactEvmPayload, ExactEvmPayloadAuthorization, ExactScheme, PaymentRequirementsExtra,
     TransferWithAuthorization, V1Eip155Exact, types,
 };
-use crate::timestamp::UnixTimestamp;
 
 #[derive(Debug)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
