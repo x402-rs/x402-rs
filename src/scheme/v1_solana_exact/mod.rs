@@ -50,6 +50,7 @@ use solana_transaction::versioned::VersionedTransaction;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing_core::Level;
+use x402_types::util::Base64Bytes;
 
 use crate::chain::ChainProvider;
 use crate::chain::solana::{
@@ -64,7 +65,6 @@ use crate::scheme::{
 };
 
 pub use types::*;
-use x402_core::util::Base64Bytes;
 
 pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 

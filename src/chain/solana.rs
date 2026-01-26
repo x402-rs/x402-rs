@@ -57,7 +57,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use x402_core::util::money_amount::{MoneyAmount, MoneyAmountParseError};
+use x402_types::util::money_amount::{MoneyAmount, MoneyAmountParseError};
 
 /// The CAIP-2 namespace for Solana chains.
 pub const SOLANA_NAMESPACE: &str = "solana";

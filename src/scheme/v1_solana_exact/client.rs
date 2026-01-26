@@ -50,7 +50,7 @@ use solana_signer::Signer;
 use solana_transaction::Instruction;
 use solana_transaction::versioned::VersionedTransaction;
 use spl_token::solana_program::program_pack::Pack;
-use x402_core::util::Base64Bytes;
+use x402_types::util::Base64Bytes;
 
 /// Mint information for SPL tokens
 #[derive(Debug)]

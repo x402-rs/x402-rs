@@ -32,7 +32,7 @@ use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
 use rand::{Rng, rng};
 use std::sync::Arc;
-use x402_core::util::Base64Bytes;
+use x402_types::util::Base64Bytes;
 
 #[derive(Debug)]
 #[allow(dead_code)] // Public for consumption by downstream crates.

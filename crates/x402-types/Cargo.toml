@@ -1,5 +1,5 @@
 [package]
-name = "x402-core"
+name = "x402-types"
 version = "0.1.0"
 edition = "2024"
 authors = ["Sergey Ukustov <sergey@ukstv.me>"]
