@@ -6,11 +6,12 @@
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
-use x402_types::proto;
 use x402_types::proto::util::U64String;
+use x402_types::{lit_str, proto};
 
 use crate::chain::solana::Address;
-pub use crate::scheme::v1_eip155_exact::ExactScheme;
+
+lit_str!(ExactScheme, "exact");
 
 /// Phantom Lighthouse program ID - security program injected by Phantom wallet on mainnet
 /// See: https://github.com/coinbase/x402/issues/828

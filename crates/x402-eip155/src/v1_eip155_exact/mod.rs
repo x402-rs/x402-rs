@@ -52,14 +52,9 @@ use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, 
 use alloy_transport::TransportError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use tracing::Instrument;
 use tracing::instrument;
 use tracing_core::Level;
-use x402_eip155::chain::{
-    ChecksummedAddress, Eip155ChainReference, Eip155MetaTransactionProvider, Eip155TokenDeployment,
-    MetaTransaction, MetaTransactionSendError,
-};
 use x402_types::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use x402_types::proto;
 use x402_types::proto::{PaymentVerificationError, v1};
@@ -71,7 +66,10 @@ use x402_types::timestamp::UnixTimestamp;
 pub mod client;
 pub mod types;
 
-use crate::chain::ChainProvider;
+use crate::chain::{
+    ChecksummedAddress, Eip155ChainReference, Eip155MetaTransactionProvider, Eip155TokenDeployment,
+    MetaTransaction, MetaTransactionSendError,
+};
 
 pub use types::*;
 
@@ -117,21 +115,6 @@ impl X402SchemeId for V1Eip155Exact {
     }
     fn scheme(&self) -> &str {
         ExactScheme.as_ref()
-    }
-}
-
-impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1Eip155Exact {
-    fn build(
-        &self,
-        provider: &ChainProvider,
-        config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        let eip155_provider = if let ChainProvider::Eip155(provider) = provider {
-            Arc::clone(provider)
-        } else {
-            return Err("V1Eip155Exact::build: provider must be an Eip155ChainProvider".into());
-        };
-        self.build(eip155_provider, config)
     }
 }
 

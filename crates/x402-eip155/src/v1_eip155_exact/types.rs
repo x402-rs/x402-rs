@@ -5,7 +5,6 @@
 
 use alloy_primitives::{Address, B256, Bytes, U256};
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
 use x402_types::lit_str;
 use x402_types::proto::v1;
 use x402_types::timestamp::UnixTimestamp;
