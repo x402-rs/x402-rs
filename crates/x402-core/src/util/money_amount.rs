@@ -89,15 +89,15 @@ pub enum MoneyAmountParseError {
 
 mod constants {
     use super::*;
-    use once_cell::sync::Lazy;
+    use std::sync::LazyLock;
 
     pub const MIN_STR: &str = "0.000000001";
     pub const MAX_STR: &str = "999999999";
 
-    pub static MIN: Lazy<Decimal> =
-        Lazy::new(|| Decimal::from_str(MIN_STR).expect("valid decimal"));
-    pub static MAX: Lazy<Decimal> =
-        Lazy::new(|| Decimal::from_str(MAX_STR).expect("valid decimal"));
+    pub static MIN: LazyLock<Decimal> =
+        LazyLock::new(|| Decimal::from_str(MIN_STR).expect("valid decimal"));
+    pub static MAX: LazyLock<Decimal> =
+        LazyLock::new(|| Decimal::from_str(MAX_STR).expect("valid decimal"));
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.

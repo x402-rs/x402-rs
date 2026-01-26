@@ -6,8 +6,8 @@
 use alloy_primitives::{Address, B256, Bytes, U256};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+use x402_core::lit_str;
 
-use crate::lit_str;
 use crate::proto::v1;
 use crate::timestamp::UnixTimestamp;
 

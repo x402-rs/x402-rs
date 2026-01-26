@@ -13158,6 +13158,9 @@ name = "x402-core"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "regex",
+ "rust_decimal",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
