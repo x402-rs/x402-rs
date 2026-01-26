@@ -39,15 +39,7 @@ use alloy_primitives::U256;
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
-use std::sync::Arc;
 use tracing::instrument;
-use x402_eip155::chain::{
-    ChecksummedAddress, Eip155ChainReference, Eip155MetaTransactionProvider, Eip155TokenDeployment,
-};
-use x402_eip155::v1_eip155_exact::{
-    Eip155ExactError, ExactEvmPayment, IEIP3009, assert_domain, assert_enough_balance,
-    assert_enough_value, assert_time, settle_payment, verify_payment,
-};
 use x402_types::chain::{ChainProviderOps, DeployedTokenAmount};
 use x402_types::proto;
 use x402_types::proto::PaymentVerificationError;
@@ -56,7 +48,13 @@ use x402_types::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 
-use crate::chain::ChainProvider;
+use crate::chain::{
+    ChecksummedAddress, Eip155ChainReference, Eip155MetaTransactionProvider, Eip155TokenDeployment,
+};
+use crate::v1_eip155_exact::{
+    Eip155ExactError, ExactEvmPayment, IEIP3009, assert_domain, assert_enough_balance,
+    assert_enough_value, assert_time, settle_payment, verify_payment,
+};
 
 #[allow(unused)]
 pub use types::*;
@@ -98,21 +96,6 @@ impl X402SchemeId for V2Eip155Exact {
 
     fn scheme(&self) -> &str {
         types::ExactScheme.as_ref()
-    }
-}
-
-impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2Eip155Exact {
-    fn build(
-        &self,
-        provider: &ChainProvider,
-        config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        let eip155_provider = if let ChainProvider::Eip155(provider) = provider {
-            Arc::clone(provider)
-        } else {
-            return Err("V2Eip155Exact::build: provider must be an Eip155ChainProvider".into());
-        };
-        self.build(eip155_provider, config)
     }
 }
 
