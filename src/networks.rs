@@ -81,9 +81,10 @@
 //! ```
 
 use solana_pubkey::pubkey;
+use x402_eip155::chain as eip155;
 use x402_types::chain::ChainId;
 
-use crate::chain::{eip155, solana};
+use crate::chain::solana;
 
 #[cfg(feature = "aptos")]
 use crate::chain::aptos;
@@ -556,6 +557,7 @@ impl KnownNetworkAptos<aptos::AptosTokenDeployment> for USDC {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use x402_types::networks::{chain_id_by_network_name, network_name_by_chain_id};
 
     #[test]
     fn test_chain_id_from_network_name() {

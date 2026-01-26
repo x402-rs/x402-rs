@@ -22,6 +22,7 @@ serde_json = { version = "1.0.149", features = ["raw_value"] }
 serde_with = { version = "3.16.1" }
 async-trait = { version = "0.1" }
 alloy-primitives = { version = "1.4.1" }
+url = { version = "2.5.4", features = ["serde"] }
 
 # Tracing
 tracing = { version = "0.1.41" } # Feature tracing

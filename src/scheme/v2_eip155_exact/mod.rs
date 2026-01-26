@@ -41,6 +41,9 @@ use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::instrument;
+use x402_eip155::chain::{
+    ChecksummedAddress, Eip155ChainReference, Eip155MetaTransactionProvider, Eip155TokenDeployment,
+};
 use x402_types::chain::{ChainProviderOps, DeployedTokenAmount};
 use x402_types::proto;
 use x402_types::proto::PaymentVerificationError;
@@ -50,9 +53,6 @@ use x402_types::scheme::{
 };
 
 use crate::chain::ChainProvider;
-use crate::chain::eip155::{
-    ChecksummedAddress, Eip155ChainReference, Eip155MetaTransactionProvider, Eip155TokenDeployment,
-};
 use crate::scheme::v1_eip155_exact::{
     Eip155ExactError, ExactEvmPayment, IEIP3009, assert_domain, assert_enough_balance,
     assert_enough_value, assert_time, settle_payment, verify_payment,
