@@ -22,17 +22,17 @@ use std::sync::Arc;
 use x402_types::chain::ChainId;
 use x402_types::proto::PaymentRequired;
 use x402_types::proto::v1::X402Version1;
+use x402_types::scheme::X402SchemeId;
+use x402_types::scheme::client::{
+    PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
+};
 use x402_types::util::Base64Bytes;
 
 use crate::chain::eip155::Eip155ChainReference;
-use crate::scheme::client::{
-    PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
-};
 use crate::scheme::v1_eip155_exact::{
     ExactEvmPayload, ExactEvmPayloadAuthorization, ExactScheme, PaymentRequirementsExtra,
-    TransferWithAuthorization, types,
+    TransferWithAuthorization, V1Eip155Exact, types,
 };
-use crate::scheme::{V1Eip155Exact, X402SchemeId};
 use crate::timestamp::UnixTimestamp;
 
 #[derive(Debug)]

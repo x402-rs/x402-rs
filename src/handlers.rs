@@ -9,9 +9,6 @@
 //! Each endpoint consumes or produces structured JSON payloads defined in `x402-rs`,
 //! and is compatible with official x402 client SDKs.
 
-use crate::facilitator::Facilitator;
-use crate::facilitator_local::FacilitatorLocalError;
-use crate::scheme::X402SchemeFacilitatorError;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -22,6 +19,10 @@ use serde_json::json;
 use tracing::instrument;
 use x402_types::proto;
 use x402_types::proto::{AsPaymentProblem, ErrorReason};
+use x402_types::scheme::X402SchemeFacilitatorError;
+
+use crate::facilitator::Facilitator;
+use crate::facilitator_local::FacilitatorLocalError;
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.
 ///

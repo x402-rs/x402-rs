@@ -16,13 +16,13 @@
 use async_trait::async_trait;
 use x402_types::proto::v2::ResourceInfo;
 use x402_types::proto::{PaymentRequired, v2};
+use x402_types::scheme::X402SchemeId;
+use x402_types::scheme::client::{
+    PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
+};
 use x402_types::util::Base64Bytes;
 
 use crate::chain::eip155::Eip155ChainReference;
-use crate::scheme::X402SchemeId;
-use crate::scheme::client::{
-    PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
-};
 use crate::scheme::v1_eip155_exact::client::{
     Eip3009SigningParams, SignerLike, sign_erc3009_authorization,
 };
