@@ -43,13 +43,12 @@ use url::Url;
 use x402_rs::facilitator::Facilitator;
 use x402_rs::proto;
 use x402_rs::proto::{SupportedResponse, v1, v2};
-use x402_rs::util::Base64Bytes;
 
 #[cfg(feature = "telemetry")]
 use tracing::Instrument;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
-
+use x402_types::util::Base64Bytes;
 // ============================================================================
 // Common Types
 // ============================================================================

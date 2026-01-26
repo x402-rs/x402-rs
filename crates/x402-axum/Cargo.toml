@@ -13,6 +13,7 @@ categories = ["web-programming::http-server", "authentication", "cryptography", 
 readme = "README.md"
 
 [dependencies]
+x402-types = { path = "../x402-types" }
 x402-rs = { version = "0.12", default-features = false }
 url = { version = "2.5", features = ["serde"] }
 serde_json = { version = "1.0" }

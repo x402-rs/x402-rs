@@ -12,7 +12,7 @@ use x402_rs::proto::{v1, v2};
 use x402_rs::scheme::client::{
     FirstMatch, PaymentCandidate, PaymentSelector, X402Error, X402SchemeClient,
 };
-use x402_rs::util::Base64Bytes;
+use x402_types::util::Base64Bytes;
 
 #[cfg(feature = "telemetry")]
 use tracing::{debug, info, instrument, trace};

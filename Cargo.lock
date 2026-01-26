@@ -13136,6 +13136,7 @@ dependencies = [
  "url",
  "wiremock",
  "x402-rs",
+ "x402-types",
 ]
 
 [[package]]
@@ -13165,6 +13166,7 @@ dependencies = [
  "serde_json",
  "tracing",
  "x402-rs",
+ "x402-types",
 ]
 
 [[package]]

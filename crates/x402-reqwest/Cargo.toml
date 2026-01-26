@@ -13,6 +13,7 @@ categories = ["web-programming::http-client", "authentication", "cryptography", 
 readme = "README.md"
 
 [dependencies]
+x402-types = { path = "../x402-types" }
 x402-rs = { version = "0.12", default-features = false }
 reqwest = { version = "0.13" }
 http = { version = "1.4" }

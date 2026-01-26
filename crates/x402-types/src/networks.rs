@@ -85,6 +85,8 @@ use std::sync::LazyLock;
 
 use crate::chain::ChainId;
 
+// FIXME This is only relevant for x402 v1.
+
 /// A known network definition with its chain ID and human-readable name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NetworkInfo {
@@ -222,7 +224,7 @@ pub static KNOWN_NETWORKS: &[NetworkInfo] = &[
 /// assert_eq!(base.namespace, "eip155");
 /// assert_eq!(base.reference, "8453");
 /// ```
-static NAME_TO_CHAIN_ID: LazyLock<HashMap<&'static str, ChainId>> = LazyLock::new(|| {
+pub static NAME_TO_CHAIN_ID: LazyLock<HashMap<&'static str, ChainId>> = LazyLock::new(|| {
     KNOWN_NETWORKS
         .iter()
         .map(|n| (n.name, n.chain_id()))
@@ -245,7 +247,7 @@ static NAME_TO_CHAIN_ID: LazyLock<HashMap<&'static str, ChainId>> = LazyLock::ne
 /// let name = network_name_by_chain_id(&chain_id).unwrap();
 /// assert_eq!(name, "polygon");
 /// ```
-static CHAIN_ID_TO_NAME: LazyLock<HashMap<ChainId, &'static str>> = LazyLock::new(|| {
+pub static CHAIN_ID_TO_NAME: LazyLock<HashMap<ChainId, &'static str>> = LazyLock::new(|| {
     KNOWN_NETWORKS
         .iter()
         .map(|n| (n.chain_id(), n.name))
