@@ -15,10 +15,6 @@
 //! - [`ChainProvider`] - Enum wrapping chain-specific providers
 //! - [`ChainRegistry`] - Registry of configured chain providers
 //!
-//! # Submodules
-//!
-//! - [`solana`] - Solana chain support including SPL token transfers
-//!
 //! # Example
 //!
 //! ```ignore
@@ -39,9 +35,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use x402_eip155::chain as eip155;
+use x402_solana::chain as solana;
 use x402_types::chain::{ChainId, ChainProviderOps, ChainRegistry, FromConfig};
-
-pub mod solana;
 
 #[cfg(feature = "aptos")]
 pub mod aptos;

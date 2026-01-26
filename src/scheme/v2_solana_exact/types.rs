@@ -3,10 +3,10 @@
 //! This module re-exports types from V1 and defines V2-specific wire format
 //! types for SPL Token based payments on Solana.
 
+use x402_solana::chain::Address;
 use x402_types::proto::util::U64String;
 use x402_types::proto::v2;
 
-use crate::chain::solana::Address;
 use crate::scheme::v1_solana_exact::types::V1SolanaExactFacilitatorConfig;
 use crate::scheme::v1_solana_exact::types::{ExactSolanaPayload, SupportedPaymentKindExtra};
 

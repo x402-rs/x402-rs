@@ -9,7 +9,7 @@ use solana_pubkey::Pubkey;
 use x402_types::proto::util::U64String;
 use x402_types::{lit_str, proto};
 
-use crate::chain::solana::Address;
+use x402_solana::chain::Address;
 
 lit_str!(ExactScheme, "exact");
 

@@ -13153,6 +13153,7 @@ dependencies = [
  "x402-axum",
  "x402-eip155",
  "x402-rs",
+ "x402-solana",
 ]
 
 [[package]]
@@ -13279,6 +13280,34 @@ dependencies = [
  "tracing-subscriber 0.3.22",
  "url",
  "x402-eip155",
+ "x402-solana",
+ "x402-types",
+]
+
+[[package]]
+name = "x402-solana"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "bs58",
+ "futures-util",
+ "serde",
+ "solana-account",
+ "solana-client",
+ "solana-commitment-config",
+ "solana-compute-budget-interface",
+ "solana-keypair",
+ "solana-message",
+ "solana-pubkey 4.0.0",
+ "solana-signature",
+ "solana-signer",
+ "solana-transaction",
+ "spl-token",
+ "spl-token-2022",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
  "x402-types",
 ]
 

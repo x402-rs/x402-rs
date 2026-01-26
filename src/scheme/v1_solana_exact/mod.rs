@@ -50,6 +50,9 @@ use solana_transaction::versioned::VersionedTransaction;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing_core::Level;
+use x402_solana::chain::{
+    Address, SolanaChainProviderError, SolanaChainProviderLike, SolanaTokenDeployment,
+};
 use x402_types::chain::ChainId;
 use x402_types::chain::{ChainProviderOps, DeployedTokenAmount};
 use x402_types::proto;
@@ -61,9 +64,6 @@ use x402_types::scheme::{
 use x402_types::util::Base64Bytes;
 
 use crate::chain::ChainProvider;
-use crate::chain::solana::{
-    Address, SolanaChainProviderError, SolanaChainProviderLike, SolanaTokenDeployment,
-};
 
 pub use types::*;
 
@@ -796,12 +796,6 @@ impl From<SolanaExactError> for PaymentVerificationError {
                 PaymentVerificationError::TransactionSimulation(e.to_string())
             }
         }
-    }
-}
-
-impl From<SolanaChainProviderError> for PaymentVerificationError {
-    fn from(value: SolanaChainProviderError) -> Self {
-        Self::TransactionSimulation(value.to_string())
     }
 }
 

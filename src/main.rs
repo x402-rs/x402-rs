@@ -48,8 +48,8 @@ use crate::scheme::v1_solana_exact::V1SolanaExact;
 use crate::scheme::v2_solana_exact::V2SolanaExact;
 use crate::util::{SigDown, Telemetry};
 
-use x402_eip155::v2_eip155_exact::V2Eip155Exact;
 use x402_eip155::v1_eip155_exact::V1Eip155Exact;
+use x402_eip155::v2_eip155_exact::V2Eip155Exact;
 
 #[cfg(feature = "aptos")]
 use crate::scheme::v2_aptos_exact::V2AptosExact;

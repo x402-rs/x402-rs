@@ -31,6 +31,10 @@
 //! // amount.amount is now 10_500_000 (10.50 * 10^6)
 //! ```
 
+pub mod config;
+
+use crate::chain::config::SolanaChainConfig;
+use crate::networks::KnownNetworkSolana;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_account::Account;
 use solana_client::client_error::{ClientError, ClientErrorKind};
@@ -55,11 +59,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use x402_types::chain::ChainId;
 use x402_types::chain::{ChainProviderOps, DeployedTokenAmount, FromConfig};
+use x402_types::proto::PaymentVerificationError;
 use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::util::money_amount::{MoneyAmount, MoneyAmountParseError};
-
-use crate::config::SolanaChainConfig;
-use crate::networks::KnownNetworkSolana;
 
 /// The CAIP-2 namespace for Solana chains.
 pub const SOLANA_NAMESPACE: &str = "solana";
@@ -318,6 +320,12 @@ impl From<ClientError> for SolanaChainProviderError {
 impl From<SolanaChainProviderError> for X402SchemeFacilitatorError {
     fn from(value: SolanaChainProviderError) -> Self {
         Self::OnchainFailure(value.to_string())
+    }
+}
+
+impl From<SolanaChainProviderError> for PaymentVerificationError {
+    fn from(value: SolanaChainProviderError) -> Self {
+        Self::TransactionSimulation(value.to_string())
     }
 }
 
@@ -842,37 +850,5 @@ mod tests {
             result.unwrap_err(),
             MoneyAmountParseError::OutOfRange
         ));
-    }
-
-    #[test]
-    fn test_parse_matches_eip155_behavior() {
-        use crate::chain::eip155::{Eip155ChainReference, Eip155TokenDeployment};
-
-        // Create equivalent deployments
-        let eip155_chain = Eip155ChainReference::new(1);
-        let eip155_deployment = Eip155TokenDeployment {
-            chain_reference: eip155_chain,
-            address: alloy_primitives::Address::ZERO,
-            decimals: 6,
-            eip712: None,
-        };
-
-        let solana_deployment = create_test_deployment(6);
-
-        // Test various amounts
-        let test_cases = ["1", "1.5", "0.01", "100", "999.999"];
-
-        for amount in test_cases {
-            let eip155_result = eip155_deployment.parse(amount);
-            let solana_result = solana_deployment.parse(amount);
-
-            assert_eq!(eip155_result.is_ok(), solana_result.is_ok());
-
-            if let (Ok(eip155), Ok(solana)) = (eip155_result, solana_result) {
-                // EIP155 uses U256, Solana uses u64
-                let eip155_value: u64 = eip155.amount.try_into().unwrap();
-                assert_eq!(eip155_value, solana.amount);
-            }
-        }
     }
 }

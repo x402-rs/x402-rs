@@ -10,10 +10,11 @@ use tracing::instrument;
 use x402_axum::X402Middleware;
 use x402_eip155::V1Eip155Exact;
 use x402_eip155::V2Eip155Exact;
-use x402_rs::networks::{KnownNetworkEip155, KnownNetworkSolana, USDC};
+use x402_rs::networks::{KnownNetworkEip155, USDC};
 use x402_rs::scheme::v1_solana_exact::V1SolanaExact;
 use x402_rs::scheme::v2_solana_exact::V2SolanaExact;
 use x402_rs::util::Telemetry;
+use x402_solana::KnownNetworkSolana;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
