@@ -34,6 +34,7 @@ axum = { version = "0.8 "}
 # Ensure x402-rs has tracing enabled for tests
 x402-rs = { version = "0.12", default-features = false, features = ["telemetry"] }
 alloy-primitives = { version = "1.4.1" }
+x402-eip155 = { path = "../x402-eip155" }
 
 [features]
 default = []

@@ -13,8 +13,8 @@
 //! use axum::response::IntoResponse;
 //! use http::StatusCode;
 //! use x402_axum::X402Middleware;
-//! use x402_rs::networks::{KnownNetworkEip155, USDC};
-//! use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
+//! use x402_eip155::{KnownNetworkEip155, V1Eip155Exact};
+//! use x402_rs::networks::USDC;
 //!
 //! let x402 = X402Middleware::new("https://facilitator.x402.rs");
 //!
