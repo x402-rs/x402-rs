@@ -8,12 +8,10 @@
 //! - [`sig_down`] - Graceful shutdown signal handling
 //! - [`telemetry`] - OpenTelemetry tracing setup
 
-pub mod b64;
 pub mod lit_str;
 pub mod money_amount;
 pub mod sig_down;
 pub mod telemetry;
 
-pub use b64::*;
 pub use sig_down::*;
 pub use telemetry::*;

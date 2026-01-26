@@ -13,6 +13,9 @@
 //! let client = V2Eip155ExactClient::new(signer);
 //! ```
 
+use async_trait::async_trait;
+use x402_core::util::Base64Bytes;
+
 use crate::chain::eip155::Eip155ChainReference;
 use crate::proto::v2::ResourceInfo;
 use crate::proto::{PaymentRequired, v2};
@@ -25,8 +28,6 @@ use crate::scheme::v1_eip155_exact::client::{
 };
 use crate::scheme::v2_eip155_exact::V2Eip155Exact;
 use crate::scheme::v2_eip155_exact::types;
-use crate::util::Base64Bytes;
-use async_trait::async_trait;
 
 #[derive(Debug)]
 #[allow(dead_code)] // Public for consumption by downstream crates.

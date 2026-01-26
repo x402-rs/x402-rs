@@ -38,7 +38,7 @@ use solana_signer::Signer;
 use solana_transaction::Instruction;
 use solana_transaction::versioned::VersionedTransaction;
 use spl_token::solana_program::program_pack::Pack;
-
+use x402_core::util::Base64Bytes;
 use crate::chain::ChainId;
 use crate::chain::solana::Address;
 use crate::proto::PaymentRequired;
@@ -51,7 +51,6 @@ use crate::scheme::v1_solana_exact::types::{
     ExactScheme, ExactSolanaPayload, PaymentPayload, PaymentRequirements,
 };
 use crate::scheme::v1_solana_exact::{ATA_PROGRAM_PUBKEY, TransactionInt, V1SolanaExact};
-use crate::util::Base64Bytes;
 
 /// Mint information for SPL tokens
 #[derive(Debug)]

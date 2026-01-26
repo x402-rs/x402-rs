@@ -62,9 +62,9 @@ use crate::proto::v1;
 use crate::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
-use crate::util::Base64Bytes;
 
 pub use types::*;
+use x402_core::util::Base64Bytes;
 
 pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
