@@ -29,12 +29,10 @@ tracing = { version = "0.1", optional = true }
 
 [dev-dependencies]
 wiremock = "0.6"
-axum = { version = "0.8 "}
-# Ensure x402-rs has tracing enabled for tests
-x402-rs = { version = "0.12", default-features = false, features = ["telemetry"] }
+axum = { version = "0.8" }
 alloy-primitives = { version = "1.4.1" }
 x402-chain-eip155 = { path = "../chains/x402-chain-eip155" }
 
 [features]
 default = []
-telemetry = ["dep:tracing", "x402-rs/telemetry"]
+telemetry = ["dep:tracing"]
