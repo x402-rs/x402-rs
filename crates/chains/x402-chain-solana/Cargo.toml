@@ -1,10 +1,10 @@
 [package]
-name = "x402-solana"
+name = "x402-chain-solana"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-x402-types = { path = "../x402-types" }
+x402-types = { path = "../../x402-types" }
 serde = { version = "1.0.219", features = ["derive"] }
 thiserror = { version = "2.0.12" }
 tokio = { version = "1.45" } # TODO: Can it be 1.35+

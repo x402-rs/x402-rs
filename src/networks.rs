@@ -81,9 +81,9 @@
 //! ```
 
 use solana_pubkey::pubkey;
-use x402_eip155::{KnownNetworkEip155, chain as eip155};
-use x402_solana::KnownNetworkSolana;
-use x402_solana::chain as solana;
+use x402_chain_eip155::{KnownNetworkEip155, chain as eip155};
+use x402_chain_solana::KnownNetworkSolana;
+use x402_chain_solana::chain as solana;
 use x402_types::chain::ChainId;
 
 #[cfg(feature = "aptos")]

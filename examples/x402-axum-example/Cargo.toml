@@ -6,8 +6,8 @@ publish = false
 
 [dependencies]
 x402-rs = { version = "0.12"  }
-x402-eip155 = { path = "../../crates/x402-eip155" }
-x402-solana = { path = "../../crates/x402-solana" }
+x402-chain-eip155 = { path = "../../crates/chains/x402-chain-eip155" }
+x402-chain-solana = { path = "../../crates/chains/x402-chain-solana" }
 x402-axum = { version = "0.8", features = ["telemetry"] }
 http = { version = "1.4.0" }
 

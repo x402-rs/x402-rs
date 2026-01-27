@@ -34,8 +34,8 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use x402_eip155::chain as eip155;
-use x402_solana::chain as solana;
+use x402_chain_eip155::chain as eip155;
+use x402_chain_solana::chain as solana;
 use x402_types::chain::{ChainId, ChainProviderOps, ChainRegistry, FromConfig};
 
 #[cfg(feature = "aptos")]
