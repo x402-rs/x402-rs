@@ -18,5 +18,5 @@ alloy-primitives = { version = "1.4.1" }
 solana-pubkey = { version = "4.0.0" }
 
 # Tracing and OpenTelemetry
-tracing = { version = "0.1.41" }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
