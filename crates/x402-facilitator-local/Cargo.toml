@@ -16,7 +16,7 @@ x402-types = { path = "../x402-types" }
 
 # Tracing and OpenTelemetry
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-subscriber = { workspace = true }
 opentelemetry = { version = "0.31" }
 opentelemetry_sdk = { version = "0.31" }
 opentelemetry-semantic-conventions = { version = "0.31", features = ["semconv_experimental"] }
