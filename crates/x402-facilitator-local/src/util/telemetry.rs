@@ -46,6 +46,8 @@ use tracing::Span;
 use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer, OpenTelemetrySpanExt};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
+// FIXME Feature axum-telemetry
+
 /// Supported telemetry transport protocols for exporting OTLP data.
 ///
 /// The default is HTTP if not explicitly configured.

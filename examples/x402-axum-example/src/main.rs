@@ -10,17 +10,12 @@ use tracing::instrument;
 use x402_axum::X402Middleware;
 use x402_chain_eip155::{KnownNetworkEip155, V1Eip155Exact, V2Eip155Exact};
 use x402_chain_solana::{KnownNetworkSolana, V1SolanaExact, V2SolanaExact};
-use x402_rs::util::Telemetry;
 use x402_types::networks::USDC;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
-
-    let telemetry = Telemetry::new()
-        .with_name(env!("CARGO_PKG_NAME"))
-        .with_version(env!("CARGO_PKG_VERSION"))
-        .register();
+    init_tracing();
 
     let facilitator_url =
         env::var("FACILITATOR_URL").unwrap_or("https://facilitator.x402.rs".to_string());
@@ -113,8 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             })),
-        )
-        .layer(telemetry.http_tracing());
+        );
 
     tracing::info!("Using facilitator on {}", x402.facilitator_url());
 
@@ -130,4 +124,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[instrument(skip_all)]
 async fn my_handler() -> impl IntoResponse {
     (StatusCode::OK, "This is a VIP content!")
+}
+
+fn init_tracing() {
+    use tracing_subscriber::{EnvFilter, fmt};
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("trace"));
+
+    fmt()
+        .with_env_filter(filter)
+        .with_target(false) // cleaner logs
+        .with_level(true)
+        .with_thread_ids(false)
+        .with_thread_names(false)
+        .init();
 }
