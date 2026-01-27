@@ -6,10 +6,10 @@ use std::fs;
 use std::net::IpAddr;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use x402_eip155::chain as eip155;
-use x402_eip155::chain::config::{Eip155ChainConfig, Eip155ChainConfigInner};
-use x402_solana::chain as solana;
-use x402_solana::chain::config::{SolanaChainConfig, SolanaChainConfigInner};
+use x402_chain_eip155::chain as eip155;
+use x402_chain_eip155::chain::config::{Eip155ChainConfig, Eip155ChainConfigInner};
+use x402_chain_solana::chain as solana;
+use x402_chain_solana::chain::config::{SolanaChainConfig, SolanaChainConfigInner};
 use x402_types::chain::ChainId;
 use x402_types::scheme::SchemeConfig;
 

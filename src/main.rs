@@ -35,7 +35,8 @@ use std::net::SocketAddr;
 use std::process;
 use std::sync::Arc;
 use tower_http::cors;
-use x402_solana::{V1SolanaExact, V2SolanaExact};
+use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact};
+use x402_chain_solana::{V1SolanaExact, V2SolanaExact};
 use x402_types::chain::ChainRegistry;
 use x402_types::chain::FromConfig;
 use x402_types::scheme::{
@@ -46,9 +47,6 @@ use crate::chain::ChainProvider;
 use crate::config::Config;
 use crate::facilitator_local::FacilitatorLocal;
 use crate::util::{SigDown, Telemetry};
-
-use x402_eip155::v1_eip155_exact::V1Eip155Exact;
-use x402_eip155::v2_eip155_exact::V2Eip155Exact;
 
 #[cfg(feature = "aptos")]
 use crate::scheme::v2_aptos_exact::V2AptosExact;

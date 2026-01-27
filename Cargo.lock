@@ -13135,7 +13135,7 @@ dependencies = [
  "tracing",
  "url",
  "wiremock",
- "x402-eip155",
+ "x402-chain-eip155",
  "x402-rs",
  "x402-types",
 ]
@@ -13152,13 +13152,13 @@ dependencies = [
  "tokio",
  "tracing",
  "x402-axum",
- "x402-eip155",
+ "x402-chain-eip155",
+ "x402-chain-solana",
  "x402-rs",
- "x402-solana",
 ]
 
 [[package]]
-name = "x402-eip155"
+name = "x402-chain-eip155"
 version = "0.1.0"
 dependencies = [
  "alloy-contract",
@@ -13186,6 +13186,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "x402-chain-solana"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "async-trait",
+ "bincode",
+ "bs58",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "solana-account",
+ "solana-client",
+ "solana-commitment-config",
+ "solana-compute-budget-interface",
+ "solana-keypair",
+ "solana-message",
+ "solana-pubkey 4.0.0",
+ "solana-signature",
+ "solana-signer",
+ "solana-transaction",
+ "spl-token",
+ "spl-token-2022",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-core",
+ "x402-types",
+]
+
+[[package]]
 name = "x402-reqwest"
 version = "0.6.0"
 dependencies = [
@@ -13196,7 +13226,7 @@ dependencies = [
  "reqwest-middleware 0.5.0",
  "serde_json",
  "tracing",
- "x402-eip155",
+ "x402-chain-eip155",
  "x402-rs",
  "x402-types",
 ]
@@ -13211,10 +13241,10 @@ dependencies = [
  "solana-client",
  "solana-keypair",
  "tokio",
- "x402-eip155",
+ "x402-chain-eip155",
+ "x402-chain-solana",
  "x402-reqwest",
  "x402-rs",
- "x402-solana",
 ]
 
 [[package]]
@@ -13282,38 +13312,8 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber 0.3.22",
  "url",
- "x402-eip155",
- "x402-solana",
- "x402-types",
-]
-
-[[package]]
-name = "x402-solana"
-version = "0.1.0"
-dependencies = [
- "alloy-primitives",
- "async-trait",
- "bincode",
- "bs58",
- "futures-util",
- "serde",
- "serde_json",
- "solana-account",
- "solana-client",
- "solana-commitment-config",
- "solana-compute-budget-interface",
- "solana-keypair",
- "solana-message",
- "solana-pubkey 4.0.0",
- "solana-signature",
- "solana-signer",
- "solana-transaction",
- "spl-token",
- "spl-token-2022",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "tracing-core",
+ "x402-chain-eip155",
+ "x402-chain-solana",
  "x402-types",
 ]
 
