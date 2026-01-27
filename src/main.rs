@@ -22,10 +22,7 @@
 
 mod chain;
 mod config;
-mod facilitator_local;
-mod handlers;
 mod networks;
-mod util;
 
 use axum::Router;
 use axum::http::Method;
@@ -37,6 +34,8 @@ use tower_http::cors;
 use x402_chain_aptos::V2AptosExact;
 use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact};
 use x402_chain_solana::{V1SolanaExact, V2SolanaExact};
+use x402_facilitator_local::util::{SigDown, Telemetry};
+use x402_facilitator_local::{FacilitatorLocal, handlers};
 use x402_types::chain::ChainRegistry;
 use x402_types::chain::FromConfig;
 use x402_types::scheme::{
@@ -45,8 +44,6 @@ use x402_types::scheme::{
 
 use crate::chain::ChainProvider;
 use crate::config::Config;
-use crate::facilitator_local::FacilitatorLocal;
-use crate::util::{SigDown, Telemetry};
 
 impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1SolanaExact {
     fn build(

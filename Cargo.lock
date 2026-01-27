@@ -13151,6 +13151,7 @@ dependencies = [
  "solana-pubkey 4.0.0",
  "tokio",
  "tracing",
+ "tracing-subscriber 0.3.22",
  "x402-axum",
  "x402-chain-eip155",
  "x402-chain-solana",
@@ -13241,10 +13242,21 @@ name = "x402-facilitator-local"
 version = "0.1.0"
 dependencies = [
  "axum 0.8.8",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry-semantic-conventions",
+ "opentelemetry-stdout",
+ "opentelemetry_sdk",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tower-http",
  "tracing",
+ "tracing-core",
+ "tracing-opentelemetry",
+ "tracing-subscriber 0.3.22",
  "x402-types",
 ]
 
@@ -13348,6 +13360,7 @@ dependencies = [
  "x402-chain-aptos",
  "x402-chain-eip155",
  "x402-chain-solana",
+ "x402-facilitator-local",
  "x402-types",
 ]
 
