@@ -1,0 +1,13 @@
+[package]
+name = "x402-facilitator-local"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+thiserror = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+axum = { version = "0.8" }
+x402-types = { path = "../x402-types" }

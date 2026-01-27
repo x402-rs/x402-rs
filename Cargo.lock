@@ -13237,6 +13237,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "x402-facilitator-local"
+version = "0.1.0"
+dependencies = [
+ "axum 0.8.8",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+ "x402-types",
+]
+
+[[package]]
 name = "x402-reqwest"
 version = "0.6.0"
 dependencies = [
