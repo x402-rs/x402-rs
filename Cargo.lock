@@ -13155,6 +13155,31 @@ dependencies = [
  "x402-chain-eip155",
  "x402-chain-solana",
  "x402-rs",
+ "x402-types",
+]
+
+[[package]]
+name = "x402-chain-aptos"
+version = "0.1.0"
+dependencies = [
+ "aptos-crypto",
+ "aptos-rest-client",
+ "aptos-types",
+ "async-trait",
+ "base64 0.22.1",
+ "bcs 0.1.6",
+ "dashmap 6.1.0",
+ "hex",
+ "move-core-types",
+ "rand 0.9.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "url",
+ "x402-types",
 ]
 
 [[package]]
@@ -13312,6 +13337,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber 0.3.22",
  "url",
+ "x402-chain-aptos",
  "x402-chain-eip155",
  "x402-chain-solana",
  "x402-types",

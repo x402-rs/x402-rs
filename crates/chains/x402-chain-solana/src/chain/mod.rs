@@ -80,8 +80,8 @@ pub const SOLANA_NAMESPACE: &str = "solana";
 /// # Example
 ///
 /// ```
-/// use x402_rs::chain::solana::SolanaChainReference;
-/// use x402_rs::networks::KnownNetworkSolana;
+/// use x402_chain_solana::chain::SolanaChainReference;
+/// use x402_chain_solana::KnownNetworkSolana;
 ///
 /// let mainnet = SolanaChainReference::solana();
 /// assert_eq!(mainnet.as_str(), "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
@@ -213,8 +213,8 @@ pub enum SolanaChainReferenceFormatError {
 /// # Example
 ///
 /// ```rust
-/// use x402_rs::chain::solana::{SolanaChainReference, SolanaTokenDeployment, Address};
-/// use x402_rs::networks::KnownNetworkSolana;
+/// use x402_chain_solana::chain::{SolanaChainReference, SolanaTokenDeployment, Address};
+/// use x402_chain_solana::KnownNetworkSolana;
 /// use std::str::FromStr;
 ///
 /// // USDC on Solana mainnet
@@ -678,7 +678,7 @@ impl<T: SolanaChainProviderLike> SolanaChainProviderLike for Arc<T> {
 /// # Example
 ///
 /// ```
-/// use x402_rs::chain::solana::Address;
+/// use x402_chain_solana::chain::Address;
 /// use std::str::FromStr;
 ///
 /// let addr = Address::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap();

@@ -1,6 +1,8 @@
+use solana_pubkey::pubkey;
 use x402_types::chain::ChainId;
+use x402_types::networks::USDC;
 
-use crate::chain::SolanaChainReference;
+use crate::chain::{SolanaChainReference, SolanaTokenDeployment};
 
 /// Trait providing convenient methods to get instances for well-known Solana networks.
 ///
@@ -54,5 +56,17 @@ impl KnownNetworkSolana<ChainId> for ChainId {
 
     fn solana_devnet() -> ChainId {
         SolanaChainReference::solana_devnet().into()
+    }
+}
+
+impl KnownNetworkSolana<SolanaTokenDeployment> for USDC {
+    fn solana() -> SolanaTokenDeployment {
+        let address = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+        SolanaTokenDeployment::new(SolanaChainReference::solana(), address.into(), 6)
+    }
+
+    fn solana_devnet() -> SolanaTokenDeployment {
+        let address = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+        SolanaTokenDeployment::new(SolanaChainReference::solana_devnet(), address.into(), 6)
     }
 }

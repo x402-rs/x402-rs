@@ -1,0 +1,26 @@
+[package]
+name = "x402-chain-aptos"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+x402-types = { path = "../../x402-types" }
+serde = { version = "1.0.219", features = ["derive"] } # FIXME Features schemes, facilitator, server, client
+async-trait = { version = "0.1" }
+dashmap = { version = "6.1.0" }
+tokio = { version = "1.45" }
+tower = { version = "0.5.2" }
+thiserror = { version = "2.0.12" }
+serde_json = { version = "1.0.145", features = ["raw_value"] }
+rand = { version = "0.9.2" }
+url = { version = "2.5.8" }
+hex = { version = "0.4" }
+base64 = { version = "0.22.1" }
+
+aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
+aptos-rest-client = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
+aptos-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
+move-core-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
+bcs = { version = "0.1" }
+
+tracing = { version = "0.1.41" }

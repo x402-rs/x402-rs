@@ -13,8 +13,8 @@
 //! use axum::response::IntoResponse;
 //! use http::StatusCode;
 //! use x402_axum::X402Middleware;
-//! use x402_eip155::{KnownNetworkEip155, V1Eip155Exact};
-//! use x402_rs::networks::USDC;
+//! use x402_chain_eip155::{KnownNetworkEip155, V1Eip155Exact};
+//! use x402_types::networks::USDC;
 //!
 //! let x402 = X402Middleware::new("https://facilitator.x402.rs");
 //!
@@ -52,9 +52,9 @@
 //! use axum::http::StatusCode;
 //! use alloy_primitives::address;
 //! use x402_axum::X402Middleware;
-//! use x402_eip155::KnownNetworkEip155;
-//! use x402_eip155::V1Eip155Exact;
-//! use x402_rs::networks::USDC;
+//! use x402_chain_eip155::KnownNetworkEip155;
+//! use x402_chain_eip155::V1Eip155Exact;
+//! use x402_types::networks::USDC;
 //!
 //! let x402 = X402Middleware::new("https://facilitator.x402.rs");
 //!

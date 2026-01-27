@@ -34,12 +34,10 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use x402_chain_aptos::chain as aptos;
 use x402_chain_eip155::chain as eip155;
 use x402_chain_solana::chain as solana;
 use x402_types::chain::{ChainId, ChainProviderOps, ChainRegistry, FromConfig};
-
-#[cfg(feature = "aptos")]
-pub mod aptos;
 
 use crate::config::{ChainConfig, ChainsConfig};
 
@@ -60,7 +58,7 @@ pub enum ChainProvider {
     /// Solana chain provider.
     Solana(Arc<solana::SolanaChainProvider>),
     /// Aptos chain provider.
-    #[cfg(feature = "aptos")]
+    // #[cfg(feature = "aptos")] FIXME
     Aptos(Arc<aptos::AptosChainProvider>),
 }
 
@@ -102,7 +100,7 @@ impl ChainProviderOps for ChainProvider {
         match self {
             ChainProvider::Eip155(provider) => provider.signer_addresses(),
             ChainProvider::Solana(provider) => provider.signer_addresses(),
-            #[cfg(feature = "aptos")]
+            // #[cfg(feature = "aptos")] FIXME
             ChainProvider::Aptos(provider) => provider.signer_addresses(),
         }
     }
@@ -111,7 +109,7 @@ impl ChainProviderOps for ChainProvider {
         match self {
             ChainProvider::Eip155(provider) => provider.chain_id(),
             ChainProvider::Solana(provider) => provider.chain_id(),
-            #[cfg(feature = "aptos")]
+            // #[cfg(feature = "aptos")] FIXME
             ChainProvider::Aptos(provider) => provider.chain_id(),
         }
     }
