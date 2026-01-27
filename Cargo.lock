@@ -4221,6 +4221,24 @@ dependencies = [
 [[package]]
 name = "facilitator"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum 0.8.8",
+ "clap 4.5.54",
+ "dotenvy",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "x402-chain-aptos",
+ "x402-chain-eip155",
+ "x402-chain-solana",
+ "x402-facilitator-local",
+ "x402-types",
+]
 
 [[package]]
 name = "fail"

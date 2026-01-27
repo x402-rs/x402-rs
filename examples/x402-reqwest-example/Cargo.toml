@@ -10,8 +10,8 @@ x402-chain-solana = { path = "../../crates/chains/x402-chain-solana"}
 x402-rs = { version = "0.12" }
 x402-reqwest = { version = "0.6", features = ["telemetry"] }
 reqwest = { version = "0.13" }
-tokio = { version = "1.45.1" }
-dotenvy = { version = "0.15.7" }
+tokio = { workspace = true } # FIXME Unify deps
+dotenvy = { workspace = true }
 
 # EVM: Alloy
 alloy-signer-local = { version = "1.1.3" }
