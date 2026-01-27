@@ -1,6 +1,5 @@
-use crate::chain::{ChainId, ChainProviderOps};
-use crate::config::AptosChainConfig;
-use crate::scheme::X402SchemeFacilitatorError;
+pub mod config;
+
 use aptos_crypto::ed25519::Ed25519PrivateKey;
 use aptos_rest_client::Client as AptosClient;
 use aptos_types::account_address::AccountAddress;
@@ -8,6 +7,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
+use x402_types::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
+use x402_types::scheme::X402SchemeFacilitatorError;
+
+use crate::chain::config::AptosChainConfig;
 
 pub const APTOS_NAMESPACE: &str = "aptos";
 
@@ -358,8 +361,8 @@ impl AptosTokenDeployment {
     }
 
     #[allow(dead_code)] // Public for consumption by downstream crates.
-    pub fn amount(&self, v: u64) -> crate::chain::DeployedTokenAmount<u64, AptosTokenDeployment> {
-        crate::chain::DeployedTokenAmount {
+    pub fn amount(&self, v: u64) -> DeployedTokenAmount<u64, AptosTokenDeployment> {
+        DeployedTokenAmount {
             amount: v,
             token: self.clone(),
         }

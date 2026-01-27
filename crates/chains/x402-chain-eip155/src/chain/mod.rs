@@ -98,8 +98,8 @@ pub const EIP155_NAMESPACE: &str = "eip155";
 /// # Example
 ///
 /// ```
-/// use x402_rs::chain::eip155::Eip155ChainReference;
-/// use x402_rs::chain::ChainId;
+/// use x402_chain_eip155::chain::Eip155ChainReference;
+/// use x402_types::chain::ChainId;
 ///
 /// let base = Eip155ChainReference::new(8453);
 /// let chain_id: ChainId = base.into();

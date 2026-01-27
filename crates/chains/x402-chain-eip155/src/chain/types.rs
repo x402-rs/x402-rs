@@ -17,7 +17,7 @@ use std::str::FromStr;
 /// # Example
 ///
 /// ```
-/// use x402_rs::chain::eip155::ChecksummedAddress;
+/// use x402_chain_eip155::chain::ChecksummedAddress;
 ///
 /// let addr: ChecksummedAddress = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045".parse().unwrap();
 /// assert_eq!(addr.to_string(), "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
@@ -86,7 +86,7 @@ impl PartialEq<ChecksummedAddress> for Address {
 /// # Example
 ///
 /// ```
-/// use x402_rs::chain::eip155::TokenAmount;
+/// use x402_chain_eip155::chain::TokenAmount;
 /// use alloy_primitives::U256;
 ///
 /// let amount = TokenAmount(U256::from(1_000_000u64));

@@ -1,9 +1,12 @@
 //! V2 Aptos "exact" payment scheme types.
 
-use crate::chain::aptos::Address;
-use crate::proto::v2;
-use crate::scheme::v1_eip155_exact::types::ExactScheme;
 use serde::{Deserialize, Serialize};
+use x402_types::lit_str;
+use x402_types::proto::v2;
+
+use crate::chain::Address;
+
+lit_str!(ExactScheme, "exact");
 
 /// The V2 Aptos exact scheme verify request.
 pub type VerifyRequest = v2::VerifyRequest<PaymentPayload, PaymentRequirements>;

@@ -29,13 +29,10 @@ pub mod types;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::chain::aptos::AptosChainProvider;
-use crate::chain::{ChainProvider, ChainProviderOps};
-use crate::proto;
-use crate::proto::PaymentVerificationError;
-use crate::proto::v2;
-use crate::scheme::v1_eip155_exact::types::ExactScheme;
-use crate::scheme::{
+use x402_types::proto;
+use x402_types::proto::PaymentVerificationError;
+use x402_types::proto::v2;
+use x402_types::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 
@@ -45,6 +42,10 @@ use aptos_types::transaction::{EntryFunction, RawTransaction, SignedTransaction}
 use base64::Engine;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
+use x402_types::chain::ChainProviderOps;
+
+use crate::chain::AptosChainProvider;
+use types::ExactScheme;
 
 pub struct V2AptosExact;
 
@@ -58,25 +59,18 @@ impl X402SchemeId for V2AptosExact {
     }
 }
 
-impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2AptosExact {
-    fn build(
-        &self,
-        provider: &ChainProvider,
-        _config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        let aptos_provider = if let ChainProvider::Aptos(provider) = provider {
-            Arc::clone(provider)
-        } else {
-            return Err("V2AptosExact::build: provider must be an AptosChainProvider".into());
-        };
-        Ok(Box::new(V2AptosExactFacilitator {
-            provider: aptos_provider,
-        }))
-    }
-}
-
 pub struct V2AptosExactFacilitator {
     provider: Arc<AptosChainProvider>,
+}
+
+impl X402SchemeFacilitatorBuilder<Arc<AptosChainProvider>> for V2AptosExact {
+    fn build(
+        &self,
+        provider: Arc<AptosChainProvider>,
+        _config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        Ok(Box::new(V2AptosExactFacilitator { provider }))
+    }
 }
 
 #[async_trait::async_trait]

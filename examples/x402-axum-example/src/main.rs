@@ -10,8 +10,8 @@ use tracing::instrument;
 use x402_axum::X402Middleware;
 use x402_chain_eip155::{KnownNetworkEip155, V1Eip155Exact, V2Eip155Exact};
 use x402_chain_solana::{KnownNetworkSolana, V1SolanaExact, V2SolanaExact};
-use x402_rs::networks::USDC;
 use x402_rs::util::Telemetry;
+use x402_types::networks::USDC;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
