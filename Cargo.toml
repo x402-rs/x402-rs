@@ -105,7 +105,7 @@ members = [
   "examples/x402-axum-example",
   "crates/x402-reqwest",
   "examples/x402-reqwest-example",
-  ".", "crates/x402-types", "facilitator", "crates/chains/x402-chain-eip155", "crates/chains/x402-chain-solana", "crates/chains/x402-chain-aptos",
+  ".", "crates/x402-types", "facilitator", "crates/chains/x402-chain-eip155", "crates/chains/x402-chain-solana", "crates/chains/x402-chain-aptos", "crates/x402-facilitator-local",
 ]
 
 [workspace.dependencies]
