@@ -4,14 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+x402-types = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 alloy-primitives = { workspace = true } # Client
 serde_json = { workspace = true }
-
-x402-types = { path = "../../x402-types" }
 
 # Solana
 solana-compute-budget-interface = { version = "3.0.0" }
