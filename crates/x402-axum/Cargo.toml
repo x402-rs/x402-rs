@@ -30,8 +30,8 @@ tracing = { workspace = true, optional = true }
 [dev-dependencies]
 wiremock = "0.6"
 axum = { workspace = true }
-alloy-primitives = { version = "1.4.1" }
-x402-chain-eip155 = { path = "../chains/x402-chain-eip155" }
+alloy-primitives = { workspace = true }
+x402-chain-eip155 = { workspace = true }
 
 [features]
 default = []
