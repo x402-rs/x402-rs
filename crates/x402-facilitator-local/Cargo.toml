@@ -4,15 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+x402-types = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
-
 axum = { workspace = true }
-tower-http = { version = "0.6.6", features = ["trace", "cors"] }
-x402-types = { path = "../x402-types" }
+tower-http = { workspace = true }
 
 # Tracing and OpenTelemetry
 tracing = { workspace = true }
