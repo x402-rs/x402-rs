@@ -39,6 +39,7 @@ use alloy_primitives::U256;
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
+#[cfg(feature = "telemetry")]
 use tracing::instrument;
 use x402_types::chain::{ChainProviderOps, DeployedTokenAmount};
 use x402_types::proto;
@@ -203,7 +204,7 @@ where
 /// - Correct EIP-712 domain construction.
 /// - Sufficient on-chain balance.
 /// - Sufficient value in payload.
-#[instrument(skip_all, err)]
+#[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 async fn assert_valid_payment<P: Provider>(
     provider: P,
     chain: &Eip155ChainReference,

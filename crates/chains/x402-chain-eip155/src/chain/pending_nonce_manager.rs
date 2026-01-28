@@ -63,9 +63,11 @@ impl NonceManager for PendingNonceManager {
         let mut nonce = nonce.lock().await;
         let new_nonce = if *nonce == NONE {
             // Initialize the nonce if we haven't seen this account before.
+            #[cfg(feature = "telemetry")]
             tracing::trace!(%address, "fetching nonce");
             provider.get_transaction_count(address).pending().await?
         } else {
+            #[cfg(feature = "telemetry")]
             tracing::trace!(%address, current_nonce = *nonce, "incrementing nonce");
             *nonce + 1
         };
@@ -85,6 +87,7 @@ impl PendingNonceManager {
         if let Some(nonce_lock) = self.nonces.get(&address) {
             let mut nonce = nonce_lock.lock().await;
             *nonce = u64::MAX; // NONE sentinel - will trigger fresh query
+            #[cfg(feature = "telemetry")]
             tracing::debug!(%address, "reset nonce cache, will requery on next use");
         }
     }

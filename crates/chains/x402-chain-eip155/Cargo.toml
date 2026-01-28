@@ -3,6 +3,10 @@ name = "x402-chain-eip155"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+telemetry = ["tracing", "tracing-core"]
+
 [dependencies]  # FIXME Features schemes, facilitator, server, client
 x402-types = { workspace = true }
 serde = { workspace = true }
@@ -28,5 +32,5 @@ alloy-signer-local = { version = "1.4" }
 alloy-contract = { version = "1.4" }
 alloy-sol-types = { version = "1.4", features = ["json"] }
 
-tracing = { workspace = true }
-tracing-core = { workspace = true }
+tracing = { workspace = true, optional = true }
+tracing-core = { workspace = true, optional = true }

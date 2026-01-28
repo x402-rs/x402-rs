@@ -63,10 +63,12 @@ use std::ops::Mul;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
-use tracing::Instrument;
 use x402_types::chain::{ChainId, ChainProviderOps, DeployedTokenAmount, FromConfig};
 use x402_types::config::RpcConfig;
 use x402_types::util::money_amount::{MoneyAmount, MoneyAmountParseError};
+
+#[cfg(feature = "telemetry")]
+use tracing::Instrument;
 
 use crate::chain::config::Eip155ChainConfig;
 pub use pending_nonce_manager::*;
@@ -333,6 +335,7 @@ pub struct Eip155ChainProvider {
 }
 
 impl Eip155ChainProvider {
+    #[allow(unused_variables)] // chain_id is needed for tracing only here
     pub fn rpc_client(chain_id: ChainId, rpc: &[RpcConfig]) -> RpcClient {
         let transports = rpc
             .iter()
@@ -343,6 +346,7 @@ impl Eip155ChainProvider {
                     return None;
                 }
                 let rpc_url = provider_config.http.clone();
+                #[cfg(feature = "telemetry")]
                 tracing::info!(chain=%chain_id, rpc_url=%rpc_url, rate_limit=?provider_config.rate_limit, "Using HTTP transport");
                 let rate_limit = provider_config.rate_limit.unwrap_or(u32::MAX);
                 let service = ServiceBuilder::new()
@@ -440,6 +444,7 @@ impl FromConfig<Eip155ChainConfig> for Eip155ChainProvider {
             .wallet(wallet)
             .connect_client(client);
 
+        #[cfg(feature = "telemetry")]
         tracing::info!(chain=%config.chain_id(), signers=?signer_addresses, "Using EVM provider");
 
         Ok(Self {
@@ -516,10 +521,13 @@ impl Eip155MetaTransactionProvider for Eip155ChainProvider {
 
         if !self.eip1559 {
             let provider = &self.inner;
-            let gas: u128 = provider
-                .get_gas_price()
+            let gas_fut = provider.get_gas_price();
+            #[cfg(feature = "telemetry")]
+            let gas: u128 = gas_fut
                 .instrument(tracing::info_span!("get_gas_price"))
                 .await?;
+            #[cfg(not(feature = "telemetry"))]
+            let gas: u128 = gas_fut.await?;
             txr.set_gas_price(gas);
         }
 

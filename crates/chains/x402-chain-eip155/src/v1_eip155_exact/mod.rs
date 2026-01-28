@@ -52,9 +52,6 @@ use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, 
 use alloy_transport::TransportError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing::Instrument;
-use tracing::instrument;
-use tracing_core::Level;
 use x402_types::chain::{ChainId, ChainProviderOps, DeployedTokenAmount};
 use x402_types::proto;
 use x402_types::proto::{PaymentVerificationError, v1};
@@ -62,6 +59,13 @@ use x402_types::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 use x402_types::timestamp::UnixTimestamp;
+
+#[cfg(feature = "telemetry")]
+use tracing::Instrument;
+#[cfg(feature = "telemetry")]
+use tracing::instrument;
+#[cfg(feature = "telemetry")]
+use tracing_core::Level;
 
 pub mod client;
 pub mod types;
@@ -266,7 +270,7 @@ sol! {
 /// - Correct EIP-712 domain construction.
 /// - Sufficient on-chain balance.
 /// - Sufficient value in payload.
-#[instrument(skip_all, err)]
+#[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 async fn assert_valid_payment<'a, P: Provider>(
     provider: &'a P,
     chain: &Eip155ChainReference,
@@ -323,7 +327,7 @@ async fn assert_valid_payment<'a, P: Provider>(
 /// Validates that the current time is within the `validAfter` and `validBefore` bounds.
 ///
 /// Adds a 6-second grace buffer when checking expiration to account for latency.
-#[instrument(skip_all, err)]
+#[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 pub fn assert_time(
     valid_after: UnixTimestamp,
     valid_before: UnixTimestamp,
@@ -339,10 +343,10 @@ pub fn assert_time(
 }
 
 /// Constructs the correct EIP-712 domain for signature verification.
-#[instrument(skip_all, err, fields(
+#[cfg_attr(feature = "telemetry", instrument(skip_all, err, fields(
     network = %chain.as_chain_id(),
     asset = %asset_address
-))]
+)))]
 pub async fn assert_domain<P: Provider>(
     chain: &Eip155ChainReference,
     token_contract: &IEIP3009::IEIP3009Instance<P>,
@@ -353,29 +357,35 @@ pub async fn assert_domain<P: Provider>(
     let name = if let Some(name) = name {
         name
     } else {
-        token_contract
-            .name()
-            .call()
-            .into_future()
+        let name_b = token_contract.name();
+        let name_fut = name_b.call().into_future();
+        #[cfg(feature = "telemetry")]
+        let name = name_fut
             .instrument(tracing::info_span!(
                 "fetch_eip712_name",
                 otel.kind = "client",
             ))
-            .await?
+            .await?;
+        #[cfg(not(feature = "telemetry"))]
+        let name = name_fut.await?;
+        name
     };
     let version = extra.as_ref().map(|extra| extra.version.clone());
     let version = if let Some(version) = version {
         version
     } else {
-        token_contract
-            .version()
-            .call()
-            .into_future()
+        let version_b = token_contract.version();
+        let version_fut = version_b.call().into_future();
+        #[cfg(feature = "telemetry")]
+        let version = version_fut
             .instrument(tracing::info_span!(
                 "fetch_eip712_version",
                 otel.kind = "client",
             ))
-            .await?
+            .await?;
+        #[cfg(not(feature = "telemetry"))]
+        let version = version_fut.await?;
+        version
     };
     let domain = eip712_domain! {
         name: name,
@@ -389,20 +399,20 @@ pub async fn assert_domain<P: Provider>(
 /// Checks if the payer has enough on-chain token balance to meet the `maxAmountRequired`.
 ///
 /// Performs an `ERC20.balanceOf()` call using the token contract instance.
-#[instrument(skip_all, err, fields(
+#[cfg_attr(feature = "telemetry", instrument(skip_all, err, fields(
     sender = %sender,
     max_required = %max_amount_required,
     token_contract = %ieip3009_token_contract.address()
-))]
+)))]
 pub async fn assert_enough_balance<P: Provider>(
     ieip3009_token_contract: &IEIP3009::IEIP3009Instance<P>,
     sender: &Address,
     max_amount_required: U256,
 ) -> Result<(), Eip155ExactError> {
-    let balance = ieip3009_token_contract
-        .balanceOf(*sender)
-        .call()
-        .into_future()
+    let balance_of = ieip3009_token_contract.balanceOf(*sender);
+    let balance_fut = balance_of.call().into_future();
+    #[cfg(feature = "telemetry")]
+    let balance = balance_fut
         .instrument(tracing::info_span!(
             "fetch_token_balance",
             token_contract = %ieip3009_token_contract.address(),
@@ -410,6 +420,8 @@ pub async fn assert_enough_balance<P: Provider>(
             otel.kind = "client"
         ))
         .await?;
+    #[cfg(not(feature = "telemetry"))]
+    let balance = balance_fut.await?;
 
     if balance < max_amount_required {
         Err(PaymentVerificationError::InsufficientFunds.into())
@@ -421,10 +433,10 @@ pub async fn assert_enough_balance<P: Provider>(
 /// Verifies that the declared `value` in the payload is sufficient for the required amount.
 ///
 /// This is a static check (not on-chain) that compares two numbers.
-#[instrument(skip_all, err, fields(
+#[cfg_attr(feature = "telemetry", instrument(skip_all, err, fields(
     sent = %sent,
     max_amount_required = %max_amount_required
-))]
+)))]
 pub fn assert_enough_value(
     sent: &U256,
     max_amount_required: &U256,
@@ -774,14 +786,16 @@ async fn is_contract_deployed<P: Provider>(
     provider: &P,
     address: &Address,
 ) -> Result<bool, TransportError> {
-    let bytes = provider
-        .get_code_at(*address)
-        .into_future()
+    let bytes_fut = provider.get_code_at(*address).into_future();
+    #[cfg(feature = "telemetry")]
+    let bytes = bytes_fut
         .instrument(tracing::info_span!("get_code_at",
             address = %address,
             otel.kind = "client",
         ))
         .await?;
+    #[cfg(not(feature = "telemetry"))]
+    let bytes = bytes_fut.await?;
     Ok(!bytes.is_empty())
 }
 
@@ -810,11 +824,13 @@ pub async fn verify_payment<P: Provider>(
             let transfer_call = TransferWithAuthorization0Call::new(contract, payment, inner);
             let transfer_call = transfer_call.0;
             // Execute both calls in a single transaction simulation to accommodate for possible smart wallet creation
-            let (is_valid_signature_result, transfer_result) = provider
+            let aggregate3 = provider
                 .multicall()
                 .add(is_valid_signature_call)
-                .add(transfer_call.tx)
-                .aggregate3()
+                .add(transfer_call.tx);
+            let aggregate3_call = aggregate3.aggregate3();
+            #[cfg(feature = "telemetry")]
+            let (is_valid_signature_result, transfer_result) = aggregate3_call
                 .instrument(tracing::info_span!("call_transferWithAuthorization_0",
                         from = %transfer_call.from,
                         to = %transfer_call.to,
@@ -827,6 +843,8 @@ pub async fn verify_payment<P: Provider>(
                         otel.kind = "client",
                 ))
                 .await?;
+            #[cfg(not(feature = "telemetry"))]
+            let (is_valid_signature_result, transfer_result) = aggregate3_call.await?;
             let is_valid_signature_result = is_valid_signature_result
                 .map_err(|e| PaymentVerificationError::InvalidSignature(e.to_string()))?;
             if !is_valid_signature_result {
@@ -842,10 +860,9 @@ pub async fn verify_payment<P: Provider>(
             // It is EIP-1271 signature, which we can pass to the transfer simulation
             let transfer_call = TransferWithAuthorization0Call::new(contract, payment, signature);
             let transfer_call = transfer_call.0;
-            transfer_call
-                .tx
-                .call()
-                .into_future()
+            let transfer_call_fut = transfer_call.tx.call().into_future();
+            #[cfg(feature = "telemetry")]
+            transfer_call_fut
                 .instrument(tracing::info_span!("call_transferWithAuthorization_0",
                         from = %transfer_call.from,
                         to = %transfer_call.to,
@@ -858,15 +875,16 @@ pub async fn verify_payment<P: Provider>(
                         otel.kind = "client",
                 ))
                 .await?;
+            #[cfg(not(feature = "telemetry"))]
+            transfer_call_fut.await?;
         }
         StructuredSignature::EOA(signature) => {
             // It is EOA signature, which we can pass to the transfer simulation of (r,s,v)-based transferWithAuthorization function
             let transfer_call = TransferWithAuthorization1Call::new(contract, payment, signature);
             let transfer_call = transfer_call.0;
-            transfer_call
-                .tx
-                .call()
-                .into_future()
+            let transfer_call_fut = transfer_call.tx.call().into_future();
+            #[cfg(feature = "telemetry")]
+            transfer_call_fut
                 .instrument(tracing::info_span!("call_transferWithAuthorization_1",
                         from = %transfer_call.from,
                         to = %transfer_call.to,
@@ -879,6 +897,8 @@ pub async fn verify_payment<P: Provider>(
                         otel.kind = "client",
                 ))
                 .await?;
+            #[cfg(not(feature = "telemetry"))]
+            transfer_call_fut.await?;
         }
     }
 
@@ -897,7 +917,7 @@ where
 {
     let signed_message = SignedMessage::extract(payment, eip712_domain)?;
     let payer = payment.from;
-    let transaction_receipt_fut = match signed_message.signature {
+    let receipt = match signed_message.signature {
         StructuredSignature::EIP6492 {
             factory,
             factory_calldata,
@@ -909,16 +929,17 @@ where
             let transfer_call = transfer_call.0;
             if is_contract_deployed {
                 // transferWithAuthorization with inner signature
-                Eip155MetaTransactionProvider::send_transaction(
+                let tx_fut = Eip155MetaTransactionProvider::send_transaction(
                     provider,
                     MetaTransaction {
                         to: transfer_call.tx.target(),
                         calldata: transfer_call.tx.calldata().clone(),
                         confirmations: 1,
                     },
-                )
-                .instrument(
-                    tracing::info_span!("call_transferWithAuthorization_0",
+                );
+                #[cfg(feature = "telemetry")]
+                let receipt = tx_fut
+                    .instrument(tracing::info_span!("call_transferWithAuthorization_0",
                         from = %transfer_call.from,
                         to = %transfer_call.to,
                         value = %transfer_call.value,
@@ -929,8 +950,11 @@ where
                         token_contract = %transfer_call.contract_address,
                         sig_kind="EIP6492.deployed",
                         otel.kind = "client",
-                    ),
-                )
+                    ))
+                    .await?;
+                #[cfg(not(feature = "telemetry"))]
+                let receipt = tx_fut.await?;
+                receipt
             } else {
                 // deploy the smart wallet, and transferWithAuthorization with inner signature
                 let deployment_call = IMulticall3::Call3 {
@@ -946,16 +970,17 @@ where
                 let aggregate_call = IMulticall3::aggregate3Call {
                     calls: vec![deployment_call, transfer_with_authorization_call],
                 };
-                Eip155MetaTransactionProvider::send_transaction(
+                let tx_fut = Eip155MetaTransactionProvider::send_transaction(
                     provider,
                     MetaTransaction {
                         to: MULTICALL3_ADDRESS,
                         calldata: aggregate_call.abi_encode().into(),
                         confirmations: 1,
                     },
-                )
-                .instrument(
-                    tracing::info_span!("call_transferWithAuthorization_0",
+                );
+                #[cfg(feature = "telemetry")]
+                let receipt = tx_fut
+                    .instrument(tracing::info_span!("call_transferWithAuthorization_0",
                         from = %transfer_call.from,
                         to = %transfer_call.to,
                         value = %transfer_call.value,
@@ -966,8 +991,11 @@ where
                         token_contract = %transfer_call.contract_address,
                         sig_kind="EIP6492.counterfactual",
                         otel.kind = "client",
-                    ),
-                )
+                    ))
+                    .await?;
+                #[cfg(not(feature = "telemetry"))]
+                let receipt = tx_fut.await?;
+                receipt
             }
         }
         StructuredSignature::EIP1271(eip1271_signature) => {
@@ -975,56 +1003,68 @@ where
                 TransferWithAuthorization0Call::new(contract, payment, eip1271_signature);
             let transfer_call = transfer_call.0;
             // transferWithAuthorization with eip1271 signature
-            Eip155MetaTransactionProvider::send_transaction(
+            let tx_fut = Eip155MetaTransactionProvider::send_transaction(
                 provider,
                 MetaTransaction {
                     to: transfer_call.tx.target(),
                     calldata: transfer_call.tx.calldata().clone(),
                     confirmations: 1,
                 },
-            )
-            .instrument(tracing::info_span!("call_transferWithAuthorization_0",
-                from = %transfer_call.from,
-                to = %transfer_call.to,
-                value = %transfer_call.value,
-                valid_after = %transfer_call.valid_after,
-                valid_before = %transfer_call.valid_before,
-                nonce = %transfer_call.nonce,
-                signature = %transfer_call.signature,
-                token_contract = %transfer_call.contract_address,
-                sig_kind="EIP1271",
-                otel.kind = "client",
-            ))
+            );
+            #[cfg(feature = "telemetry")]
+            let receipt = tx_fut
+                .instrument(tracing::info_span!("call_transferWithAuthorization_0",
+                    from = %transfer_call.from,
+                    to = %transfer_call.to,
+                    value = %transfer_call.value,
+                    valid_after = %transfer_call.valid_after,
+                    valid_before = %transfer_call.valid_before,
+                    nonce = %transfer_call.nonce,
+                    signature = %transfer_call.signature,
+                    token_contract = %transfer_call.contract_address,
+                    sig_kind="EIP1271",
+                    otel.kind = "client",
+                ))
+                .await?;
+            #[cfg(not(feature = "telemetry"))]
+            let receipt = tx_fut.await?;
+            receipt
         }
         StructuredSignature::EOA(signature) => {
             let transfer_call = TransferWithAuthorization1Call::new(contract, payment, signature);
             let transfer_call = transfer_call.0;
             // transferWithAuthorization with EOA signature
-            Eip155MetaTransactionProvider::send_transaction(
+            let tx_fut = Eip155MetaTransactionProvider::send_transaction(
                 provider,
                 MetaTransaction {
                     to: transfer_call.tx.target(),
                     calldata: transfer_call.tx.calldata().clone(),
                     confirmations: 1,
                 },
-            )
-            .instrument(tracing::info_span!("call_transferWithAuthorization_1",
-                from = %transfer_call.from,
-                to = %transfer_call.to,
-                value = %transfer_call.value,
-                valid_after = %transfer_call.valid_after,
-                valid_before = %transfer_call.valid_before,
-                nonce = %transfer_call.nonce,
-                signature = %transfer_call.signature,
-                token_contract = %transfer_call.contract_address,
-                sig_kind="EOA",
-                otel.kind = "client",
-            ))
+            );
+            #[cfg(feature = "telemetry")]
+            let receipt = tx_fut
+                .instrument(tracing::info_span!("call_transferWithAuthorization_1",
+                    from = %transfer_call.from,
+                    to = %transfer_call.to,
+                    value = %transfer_call.value,
+                    valid_after = %transfer_call.valid_after,
+                    valid_before = %transfer_call.valid_before,
+                    nonce = %transfer_call.nonce,
+                    signature = %transfer_call.signature,
+                    token_contract = %transfer_call.contract_address,
+                    sig_kind="EOA",
+                    otel.kind = "client",
+                ))
+                .await?;
+            #[cfg(not(feature = "telemetry"))]
+            let receipt = tx_fut.await?;
+            receipt
         }
     };
-    let receipt = transaction_receipt_fut.await?;
     let success = receipt.status();
     if success {
+        #[cfg(feature = "telemetry")]
         tracing::event!(Level::INFO,
             status = "ok",
             tx = %receipt.transaction_hash,
@@ -1032,6 +1072,7 @@ where
         );
         Ok(receipt.transaction_hash)
     } else {
+        #[cfg(feature = "telemetry")]
         tracing::event!(
             Level::WARN,
             status = "failed",
