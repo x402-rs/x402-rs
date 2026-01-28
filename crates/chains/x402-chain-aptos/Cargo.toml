@@ -3,6 +3,10 @@ name = "x402-chain-aptos"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+telemetry = ["tracing"]
+
 [dependencies] # FIXME Features schemes, facilitator, server, client
 x402-types = { workspace = true }
 serde = { workspace = true }
@@ -18,4 +22,4 @@ aptos-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-n
 move-core-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
 bcs = { version = "0.1" }
 
-tracing = { workspace = true }
+tracing = { workspace = true, optional = true }

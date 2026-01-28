@@ -9,7 +9,7 @@ x402-types = { workspace = true }
 x402-facilitator-local = { workspace = true }
 x402-chain-eip155 = { workspace = true }
 x402-chain-solana = { workspace = true }
-x402-chain-aptos = { workspace = true }
+x402-chain-aptos = { workspace = true, features = ["telemetry"] }
 
 dotenvy = { workspace = true }
 serde_json = { workspace = true }

@@ -214,6 +214,7 @@ impl AptosChainProvider {
         fee_payer_private_key: Option<Ed25519PrivateKey>,
         rest_client: AptosClient,
     ) -> Self {
+        #[cfg(feature = "telemetry")]
         {
             let chain_id: ChainId = chain.into();
             if let Some(address) = fee_payer_address {
