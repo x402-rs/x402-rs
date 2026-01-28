@@ -3,22 +3,35 @@ name = "x402-facilitator-local"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+telemetry = [
+    "dep:tracing",
+    "dep:tracing-subscriber",
+    "dep:opentelemetry",
+    "dep:opentelemetry_sdk",
+    "dep:opentelemetry-semantic-conventions",
+    "dep:tracing-opentelemetry",
+    "dep:opentelemetry-otlp",
+    "dep:opentelemetry-stdout",
+]
+
 [dependencies]
 x402-types = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
 tokio-util = { workspace = true }
 axum = { workspace = true }
 tower-http = { workspace = true }
 
-# Tracing and OpenTelemetry
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-opentelemetry = { version = "0.31" }
-opentelemetry_sdk = { version = "0.31" }
-opentelemetry-semantic-conventions = { version = "0.31", features = ["semconv_experimental"] }
-tracing-opentelemetry = { version = "0.32" }
-opentelemetry-otlp = { version = "0.31", features = ["metrics", "grpc-tonic"] }
-opentelemetry-stdout = { version = "0.31", features = ["trace", "metrics"] }
+# Tracing and OpenTelemetry (optional, enabled via `telemetry` feature)
+tracing = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+opentelemetry = { version = "0.31", optional = true }
+opentelemetry_sdk = { version = "0.31", optional = true }
+opentelemetry-semantic-conventions = { version = "0.31", features = ["semconv_experimental"], optional = true }
+tracing-opentelemetry = { version = "0.32", optional = true }
+opentelemetry-otlp = { version = "0.31", features = ["metrics", "grpc-tonic"], optional = true }
+opentelemetry-stdout = { version = "0.31", features = ["trace", "metrics"], optional = true }

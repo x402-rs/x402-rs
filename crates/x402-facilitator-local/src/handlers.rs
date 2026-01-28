@@ -16,11 +16,13 @@ use axum::routing::{get, post};
 use axum::{Json, Router, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tracing::instrument;
 use x402_types::facilitator::Facilitator;
 use x402_types::proto;
 use x402_types::proto::{AsPaymentProblem, ErrorReason};
 use x402_types::scheme::X402SchemeFacilitatorError;
+
+#[cfg(feature = "telemetry")]
+use tracing::instrument;
 
 use crate::facilitator_local::FacilitatorLocalError;
 
@@ -30,7 +32,7 @@ use crate::facilitator_local::FacilitatorLocalError;
 /// a valid [`VerifyRequest`] for payment verification.
 ///
 /// This is optional metadata and primarily useful for discoverability and debugging tools.
-#[instrument(skip_all)]
+#[cfg_attr(feature = "telemetry", instrument(skip_all))]
 pub async fn get_verify_info() -> impl IntoResponse {
     Json(json!({
         "endpoint": "/verify",
@@ -46,7 +48,7 @@ pub async fn get_verify_info() -> impl IntoResponse {
 ///
 /// This is served by the facilitator to describe the structure of a valid
 /// [`SettleRequest`] used to initiate on-chain payment settlement.
-#[instrument(skip_all)]
+#[cfg_attr(feature = "telemetry", instrument(skip_all))]
 pub async fn get_settle_info() -> impl IntoResponse {
     Json(json!({
         "endpoint": "/settle",
@@ -74,7 +76,7 @@ where
 }
 
 /// `GET /`: Returns a simple greeting message from the facilitator.
-#[instrument(skip_all)]
+#[cfg_attr(feature = "telemetry", instrument(skip_all))]
 pub async fn get_root() -> impl IntoResponse {
     let pkg_name = env!("CARGO_PKG_NAME");
     (StatusCode::OK, format!("Hello from {pkg_name}!"))
@@ -84,7 +86,7 @@ pub async fn get_root() -> impl IntoResponse {
 ///
 /// Facilitators may expose this to help clients dynamically configure their payment requests
 /// based on available network and scheme support.
-#[instrument(skip_all)]
+#[cfg_attr(feature = "telemetry", instrument(skip_all))]
 pub async fn get_supported<A>(State(facilitator): State<A>) -> impl IntoResponse
 where
     A: Facilitator,
@@ -96,7 +98,7 @@ where
     }
 }
 
-#[instrument(skip_all)]
+#[cfg_attr(feature = "telemetry", instrument(skip_all))]
 pub async fn get_health<A>(State(facilitator): State<A>) -> impl IntoResponse
 where
     A: Facilitator,
@@ -111,7 +113,7 @@ where
 /// [`PaymentRequirements`], including signature validity, scheme match, and fund sufficiency.
 ///
 /// Responds with a [`VerifyResponse`] indicating whether the payment can be accepted.
-#[instrument(skip_all)]
+#[cfg_attr(feature = "telemetry", instrument(skip_all))]
 pub async fn post_verify<A>(
     State(facilitator): State<A>,
     Json(body): Json<proto::VerifyRequest>,
@@ -123,6 +125,7 @@ where
     match facilitator.verify(&body).await {
         Ok(valid_response) => (StatusCode::OK, Json(valid_response)).into_response(),
         Err(error) => {
+            #[cfg(feature = "telemetry")]
             tracing::warn!(
                 error = ?error,
                 body = %serde_json::to_string(&body).unwrap_or_else(|_| "<can-not-serialize>".to_string()),
@@ -139,7 +142,7 @@ where
 /// via ERC-3009 `transferWithAuthorization`, and returns a [`SettleResponse`] with transaction details.
 ///
 /// This endpoint is typically called after a successful `/verify` step.
-#[instrument(skip_all)]
+#[cfg_attr(feature = "telemetry", instrument(skip_all))]
 pub async fn post_settle<A>(
     State(facilitator): State<A>,
     Json(body): Json<proto::SettleRequest>,
@@ -151,6 +154,7 @@ where
     match facilitator.settle(&body).await {
         Ok(valid_response) => (StatusCode::OK, Json(valid_response)).into_response(),
         Err(error) => {
+            #[cfg(feature = "telemetry")]
             tracing::warn!(
                 error = ?error,
                 body = %serde_json::to_string(&body).unwrap_or_else(|_| "<can-not-serialize>".to_string()),
