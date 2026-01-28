@@ -49,7 +49,6 @@ use solana_transaction::TransactionError;
 use solana_transaction::versioned::VersionedTransaction;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing_core::Level;
 use x402_types::chain::ChainId;
 use x402_types::chain::{ChainProviderOps, DeployedTokenAmount};
 use x402_types::proto;
@@ -59,6 +58,9 @@ use x402_types::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId,
 };
 use x402_types::util::Base64Bytes;
+
+#[cfg(feature = "telemetry")]
+use tracing_core::Level;
 
 use crate::chain::{
     Address, SolanaChainProviderError, SolanaChainProviderLike, SolanaTokenDeployment,
@@ -533,6 +535,7 @@ pub async fn verify_transaction<P: SolanaChainProviderLike>(
     if compute_units > provider.max_compute_unit_limit() {
         return Err(SolanaExactError::MaxComputeUnitLimitExceeded.into());
     }
+    #[cfg(feature = "telemetry")]
     tracing::debug!(compute_units = compute_units, "Verified compute unit limit");
     verify_compute_price_instruction(provider.max_compute_unit_price(), &transaction, 1)?;
 
@@ -703,6 +706,7 @@ pub async fn settle_transaction<P: SolanaChainProviderLike>(
     let tx = TransactionInt::new(verification.transaction).sign(provider)?;
     // Verify if fully signed
     if !tx.is_fully_signed() {
+        #[cfg(feature = "telemetry")]
         tracing::event!(Level::WARN, status = "failed", "undersigned transaction");
         return Err(SolanaChainProviderError::InvalidTransaction(
             UiTransactionError::from(TransactionError::SignatureFailure),

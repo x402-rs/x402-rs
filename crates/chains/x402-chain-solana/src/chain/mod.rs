@@ -386,6 +386,7 @@ impl SolanaChainProvider {
         max_compute_unit_limit: u32,
         max_compute_unit_price: u64,
     ) -> Result<Self, PubsubClientError> {
+        #[cfg(feature = "telemetry")]
         {
             let signer_addresses = vec![keypair.pubkey()];
             let chain_id: ChainId = chain.into();
@@ -585,6 +586,7 @@ impl SolanaChainProviderLike for SolanaChainProvider {
                 .signature_subscribe(tx_sig, Some(config))
                 .await?;
             if let Err(e) = self.send(tx).await {
+                #[cfg(feature = "telemetry")]
                 tracing::error!(error = %e, "Failed to send transaction");
                 unsubscribe().await;
                 return Err(e);

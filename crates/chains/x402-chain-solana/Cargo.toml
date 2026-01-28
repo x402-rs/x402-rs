@@ -3,6 +3,10 @@ name = "x402-chain-solana"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+telemetry = ["tracing", "tracing-core"]
+
 [dependencies]
 x402-types = { workspace = true }
 serde = { workspace = true }
@@ -29,5 +33,5 @@ solana-client = { version = "3.1.4" }
 bincode = { version = "1.3.3" }
 futures-util = { version = "0.3.31" }
 
-tracing = { workspace = true }
-tracing-core = { workspace = true }
+tracing = { workspace = true, optional = true }
+tracing-core = { workspace = true, optional = true }
