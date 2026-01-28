@@ -5,16 +5,16 @@ edition = "2024"
 publish = false
 
 [dependencies]
-x402-types = { path = "../../crates/x402-types" }
-x402-chain-eip155 = { path = "../../crates/chains/x402-chain-eip155" }
-x402-chain-solana = { path = "../../crates/chains/x402-chain-solana" }
-x402-axum = { path = "../../crates/x402-axum", features = ["telemetry"] }
+x402-types = { workspace = true }
+x402-chain-eip155 = { workspace = true }
+x402-chain-solana = { workspace = true }
+x402-axum = { workspace = true, features = ["telemetry"] }
 http = { workspace = true }
-
 axum = { workspace = true }
 tokio = { workspace = true }
 dotenvy = { workspace = true }
 alloy-primitives = { workspace = true }
+
 solana-pubkey = { version = "4.0.0" }
 
 # Tracing and OpenTelemetry

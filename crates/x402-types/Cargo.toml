@@ -14,15 +14,16 @@ categories = ["cryptography", "finance", "network-programming", "web-programming
 
 [dependencies]
 url = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+alloy-primitives = { workspace = true }
+
 base64 = { version = "0.22.1" }
 rust_decimal = { version = "1.39.0" }
 regex = { version = "1.12.2" }
-thiserror = { version = "2.0.12" }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = { version = "1.0.149", features = ["raw_value"] }
 serde_with = { version = "3.16.1" }
-async-trait = { version = "0.1" }
-alloy-primitives = { version = "1.4.1" }
 
 # Tracing
-tracing = { workspace = true } # Feature tracing
+tracing = { workspace = true } # FIXME Feature tracing
