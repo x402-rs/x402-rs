@@ -4,6 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+x402-types = { workspace = true }
+x402-facilitator-local = { workspace = true }
+x402-chain-eip155 = { workspace = true }
+x402-chain-solana = { workspace = true }
+x402-chain-aptos = { workspace = true }
+
 dotenvy = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
@@ -11,14 +17,8 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
-
-x402-types = { path = "../crates/x402-types" }
-x402-facilitator-local = { path = "../crates/x402-facilitator-local" }
-x402-chain-eip155 = { path = "../crates/chains/x402-chain-eip155" }
-x402-chain-solana = { path = "../crates/chains/x402-chain-solana" }
-x402-chain-aptos = { path = "../crates/chains/x402-chain-aptos" }
-
 axum = { workspace = true }
-clap = { version = "4.5", features = ["derive", "env"] }
 tower-http = { workspace = true }
+
+clap = { version = "4.5", features = ["derive", "env"] }
 rustls = { version = "0.23" }
