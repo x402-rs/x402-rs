@@ -39,10 +39,10 @@ use x402_types::scheme::{
 use aptos_types::account_address::AccountAddress;
 use aptos_types::transaction::authenticator::AccountAuthenticator;
 use aptos_types::transaction::{EntryFunction, RawTransaction, SignedTransaction};
-use base64::Engine;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use x402_types::chain::ChainProviderOps;
+use x402_types::util::Base64Bytes;
 
 use crate::chain::AptosChainProvider;
 use types::ExactScheme;
@@ -347,8 +347,8 @@ fn deserialize_aptos_transaction(
     transaction_b64: &str,
 ) -> Result<(RawTransaction, Vec<u8>, EntryFunction), PaymentVerificationError> {
     // Base64 decode
-    let json_bytes = base64::engine::general_purpose::STANDARD
-        .decode(transaction_b64)
+    let json_bytes = Base64Bytes::from(transaction_b64.as_bytes())
+        .decode()
         .map_err(|e| {
             PaymentVerificationError::InvalidFormat(format!("Base64 decode failed: {}", e))
         })?;
