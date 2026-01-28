@@ -4,14 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies] # FIXME Features schemes, facilitator, server, client
-x402-types = { path = "../../x402-types" }
+x402-types = { workspace = true }
 serde = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
 url = { workspace = true }
 hex = { version = "0.4" }
-base64 = { version = "0.22.1" } # WTF ?! whyy?
+base64 = { version = "0.22.1" } # FIXME WTF ?! whyy?
 
 aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
 aptos-rest-client = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
