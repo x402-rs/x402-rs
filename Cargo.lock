@@ -13162,7 +13162,6 @@ dependencies = [
  "aptos-rest-client",
  "aptos-types",
  "async-trait",
- "base64 0.22.1",
  "bcs 0.1.6",
  "hex",
  "move-core-types",

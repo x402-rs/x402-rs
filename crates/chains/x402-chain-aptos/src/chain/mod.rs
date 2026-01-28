@@ -126,8 +126,6 @@ pub enum AptosChainReferenceFormatError {
 pub enum AptosChainProviderError {
     #[error("BCS deserialization error: {0}")]
     BcsError(#[from] bcs::Error),
-    #[error("Base64 decode error: {0}")]
-    Base64Error(#[from] base64::DecodeError),
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
 }
