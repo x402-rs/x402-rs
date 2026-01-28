@@ -2,6 +2,7 @@
 name = "facilitator"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
 x402-types = { workspace = true }
