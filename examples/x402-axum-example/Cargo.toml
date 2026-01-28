@@ -9,7 +9,7 @@ x402-types = { path = "../../crates/x402-types" }
 x402-chain-eip155 = { path = "../../crates/chains/x402-chain-eip155" }
 x402-chain-solana = { path = "../../crates/chains/x402-chain-solana" }
 x402-axum = { path = "../../crates/x402-axum", features = ["telemetry"] }
-http = { version = "1.4.0" }
+http = { workspace = true }
 
 axum = { workspace = true }
 tokio = { workspace = true }

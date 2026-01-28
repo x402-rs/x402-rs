@@ -45,6 +45,7 @@ dotenvy = { version = "0.15.7" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 alloy-primitives = { version = "1.4.1" } # To represent token amounts
 tower = { version = "0.5" }
+tower-http = { version = "0.6.6", features = ["trace", "cors"] }
 axum = { version = "0.8" }
 reqwest = { version = "0.13", features = ["json"] }
 http = { version = "1.4" }
