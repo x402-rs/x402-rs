@@ -19,17 +19,17 @@ serde_json = { version = "1.0" }
 reqwest = { version = "0.13", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = { version = "2.0" }
-tower = { version = "0.5" }
+tower = { workspace = true }
 http = { version = "1.4" }
 axum-core = { version = "0.5" }
-tokio = { version = "1.45", features = ["sync"] }
+tokio = { workspace = true }
 
 # Telemetry
-tracing = { version = "0.1", optional = true }
+tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
 wiremock = "0.6"
-axum = { version = "0.8" }
+axum = { workspace = true }
 alloy-primitives = { version = "1.4.1" }
 x402-chain-eip155 = { path = "../chains/x402-chain-eip155" }
 

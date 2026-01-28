@@ -10,7 +10,7 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 
-axum = { version = "0.8" }
+axum = { workspace = true }
 tower-http = { version = "0.6.6", features = ["trace", "cors"] }
 x402-types = { path = "../x402-types" }
 
@@ -20,7 +20,6 @@ tracing-subscriber = { workspace = true }
 opentelemetry = { version = "0.31" }
 opentelemetry_sdk = { version = "0.31" }
 opentelemetry-semantic-conventions = { version = "0.31", features = ["semconv_experimental"] }
-tracing-core = { version = "0.1.34" }
 tracing-opentelemetry = { version = "0.32" }
 opentelemetry-otlp = { version = "0.31", features = ["metrics", "grpc-tonic"] }
 opentelemetry-stdout = { version = "0.31", features = ["trace", "metrics"] }

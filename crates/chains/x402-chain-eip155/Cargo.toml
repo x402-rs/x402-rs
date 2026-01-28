@@ -8,7 +8,7 @@ serde = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
 dashmap = { version = "6.1.0" }
-tower = { version = "0.5.2" }
+tower = { workspace = true }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
 

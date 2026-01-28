@@ -13270,7 +13270,6 @@ dependencies = [
  "tokio-util",
  "tower-http",
  "tracing",
- "tracing-core",
  "tracing-opentelemetry",
  "tracing-subscriber 0.3.22",
  "x402-types",
