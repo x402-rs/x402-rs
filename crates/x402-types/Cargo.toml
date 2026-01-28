@@ -25,4 +25,4 @@ alloy-primitives = { version = "1.4.1" }
 url = { version = "2.5.4", features = ["serde"] }
 
 # Tracing
-tracing = { version = "0.1.41" } # Feature tracing
+tracing = { workspace = true } # Feature tracing

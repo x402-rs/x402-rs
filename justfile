@@ -1,6 +1,7 @@
 build-all:
-  cargo build
   cd facilitator/ && cargo build
+  cd crates/chains/x402-chain-eip155 && cargo build
+  cd crates/chains/x402-chain-solana && cargo build
   cd crates/x402-types && cargo build
   cd crates/x402-axum && cargo build
   cd crates/x402-reqwest && cargo build
@@ -8,7 +9,6 @@ build-all:
   cd examples/x402-reqwest-example && cargo build
 
 format-all:
-  cargo fmt
   cd facilitator/ && cargo fmt
   cd crates/chains/x402-chain-eip155 && cargo fmt
   cd crates/chains/x402-chain-solana && cargo fmt
@@ -21,7 +21,6 @@ format-all:
 fmt-all: format-all
 
 clippy-all:
-  cargo clippy
   cd facilitator/ && cargo clippy
   cd crates/chains/x402-chain-eip155 && cargo clippy
   cd crates/chains/x402-chain-solana && cargo clippy
@@ -32,7 +31,6 @@ clippy-all:
   cd examples/x402-reqwest-example && cargo clippy
 
 check-all:
-  cargo check
   cd facilitator/ && cargo check
   cd crates/chains/x402-chain-eip155 && cargo check
   cd crates/chains/x402-chain-solana && cargo check
@@ -43,7 +41,6 @@ check-all:
   cd examples/x402-reqwest-example && cargo check
 
 test-all:
-  cargo check
   cd facilitator/ && cargo test
   cd crates/chains/x402-chain-eip155 && cargo test
   cd crates/chains/x402-chain-solana && cargo test

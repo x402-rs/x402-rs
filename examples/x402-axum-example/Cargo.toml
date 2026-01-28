@@ -11,10 +11,10 @@ x402-chain-solana = { path = "../../crates/chains/x402-chain-solana" }
 x402-axum = { path = "../../crates/x402-axum", features = ["telemetry"] }
 http = { version = "1.4.0" }
 
-axum = { version = "0.8.7" }
-tokio = { version = "1.48.0" }
-dotenvy = { version = "0.15.7" }
-alloy-primitives = { version = "1.4.1" }
+axum = { workspace = true }
+tokio = { workspace = true }
+dotenvy = { workspace = true }
+alloy-primitives = { workspace = true }
 solana-pubkey = { version = "4.0.0" }
 
 # Tracing and OpenTelemetry

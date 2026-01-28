@@ -19,4 +19,4 @@ aptos-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-n
 move-core-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
 bcs = { version = "0.1" }
 
-tracing = { version = "0.1.41" }
+tracing = { workspace = true }
