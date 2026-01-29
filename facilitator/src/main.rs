@@ -34,11 +34,14 @@ use tower_http::cors;
 use x402_chain_aptos::V2AptosExact;
 use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact};
 use x402_chain_solana::{V1SolanaExact, V2SolanaExact};
-use x402_facilitator_local::util::{SigDown, Telemetry};
+use x402_facilitator_local::util::SigDown;
 use x402_facilitator_local::{FacilitatorLocal, handlers};
 use x402_types::chain::ChainRegistry;
 use x402_types::chain::FromConfig;
 use x402_types::scheme::{SchemeBlueprints, SchemeRegistry};
+
+#[cfg(feature = "telemetry")]
+use x402_facilitator_local::util::Telemetry;
 
 use crate::config::Config;
 
@@ -58,10 +61,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Load .env variables
     dotenv().ok();
 
-    let telemetry = Telemetry::new()
-        .with_name(env!("CARGO_PKG_NAME"))
-        .with_version(env!("CARGO_PKG_VERSION"))
-        .register();
+    #[cfg(feature = "telemetry")]
+    let telemetry_layer = {
+        let telemetry = Telemetry::new()
+            .with_name(env!("CARGO_PKG_NAME"))
+            .with_version(env!("CARGO_PKG_VERSION"))
+            .register();
+        telemetry.http_tracing()
+    };
 
     let config = Config::load()?;
 
@@ -78,25 +85,24 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let facilitator = FacilitatorLocal::new(scheme_registry);
     let axum_state = Arc::new(facilitator);
 
-    let http_endpoints = Router::new()
-        .merge(handlers::routes().with_state(axum_state))
-        .layer(telemetry.http_tracing())
-        .layer(
-            cors::CorsLayer::new()
-                .allow_origin(cors::Any)
-                .allow_methods([Method::GET, Method::POST])
-                .allow_headers(cors::Any),
-        );
+    let http_endpoints = Router::new().merge(handlers::routes().with_state(axum_state));
+    #[cfg(feature = "telemetry")]
+    let http_endpoints = http_endpoints.layer(telemetry_layer);
+    let http_endpoints = http_endpoints.layer(
+        cors::CorsLayer::new()
+            .allow_origin(cors::Any)
+            .allow_methods([Method::GET, Method::POST])
+            .allow_headers(cors::Any),
+    );
 
     let addr = SocketAddr::new(config.host(), config.port());
+    #[cfg(feature = "telemetry")]
     tracing::info!("Starting server at http://{}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .unwrap_or_else(|e| {
-            tracing::error!("Failed to bind to {}: {}", addr, e);
-            std::process::exit(1);
-        });
+    let listener = tokio::net::TcpListener::bind(addr).await;
+    #[cfg(feature = "telemetry")]
+    let listener = listener.inspect_err(|e| tracing::error!("Failed to bind to {}: {}", addr, e));
+    let listener = listener?;
 
     let sig_down = SigDown::try_new()?;
     let axum_cancellation_token = sig_down.cancellation_token();

@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+default = []
+telemetry = ["dep:tracing", "x402-facilitator-local/telemetry", "x402-chain-eip155/telemetry", "x402-chain-solana/telemetry", "x402-chain-aptos/telemetry"]
+
 [dependencies]
 x402-types = { workspace = true }
 x402-facilitator-local = { workspace = true, features = ["telemetry"] }
@@ -15,7 +19,7 @@ dotenvy = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
-tracing = { workspace = true }
+tracing = { workspace = true, optional = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
