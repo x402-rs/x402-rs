@@ -35,4 +35,4 @@ x402-chain-eip155 = { workspace = true }
 
 [features]
 default = []
-telemetry = ["dep:tracing"]
+telemetry = ["dep:tracing", "x402-types/telemetry"]
