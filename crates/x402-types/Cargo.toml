@@ -26,4 +26,8 @@ regex = { version = "1.12.2" }
 serde_with = { version = "3.16.1" }
 
 # Tracing
-tracing = { workspace = true } # FIXME Feature tracing
+tracing = { workspace = true, optional = true }
+
+[features]
+default = []
+telemetry = ["dep:tracing"]

@@ -275,6 +275,7 @@ impl SchemeRegistry {
         let mut handlers = HashMap::with_capacity(config.len());
         for config in config {
             if !config.enabled {
+                #[cfg(feature = "telemetry")]
                 tracing::info!(
                     "Skipping disabled scheme {} for chains {}",
                     config.id,
@@ -285,12 +286,14 @@ impl SchemeRegistry {
             let blueprint = match blueprints.get(&config.id) {
                 Some(blueprint) => blueprint,
                 None => {
+                    #[cfg(feature = "telemetry")]
                     tracing::warn!("No scheme registered: {}", config.id);
                     continue;
                 }
             };
             let chain_providers = chains.by_chain_id_pattern(&config.chains);
             if chain_providers.is_empty() {
+                #[cfg(feature = "telemetry")]
                 tracing::warn!("No chain provider found for {}", config.chains);
                 continue;
             }
@@ -299,8 +302,13 @@ impl SchemeRegistry {
                 let chain_id = chain_provider.chain_id();
                 let handler = match blueprint.build(chain_provider, config.config.clone()) {
                     Ok(handler) => handler,
-                    Err(err) => {
-                        tracing::error!("Error building scheme handler for {}: {}", config.id, err);
+                    Err(_err) => {
+                        #[cfg(feature = "telemetry")]
+                        tracing::error!(
+                            "Error building scheme handler for {}: {}",
+                            config.id,
+                            _err
+                        );
                         continue;
                     }
                 };
@@ -309,6 +317,7 @@ impl SchemeRegistry {
                     blueprint.x402_version(),
                     blueprint.scheme().to_string(),
                 );
+                #[cfg(feature = "telemetry")]
                 tracing::info!(chain_id = %chain_id, scheme = %blueprint.scheme(), id=blueprint.id(), "Registered scheme handler");
                 handlers.insert(slug, handler);
             }
