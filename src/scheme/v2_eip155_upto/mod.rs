@@ -104,10 +104,18 @@ where
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
 
+        // Convert signer addresses from String to Address
+        let signer_addresses: Vec<Address> = self
+            .provider
+            .signer_addresses()
+            .iter()
+            .filter_map(|s| s.parse().ok())
+            .collect();
+
         let payer = verify_upto_payment(
             self.provider.inner(),
             self.provider.chain(),
-            &self.provider.signer_addresses(),
+            &signer_addresses,
             payload,
             requirements,
         )
@@ -124,11 +132,19 @@ where
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
 
+        // Convert signer addresses from String to Address
+        let signer_addresses: Vec<Address> = self
+            .provider
+            .signer_addresses()
+            .iter()
+            .filter_map(|s| s.parse().ok())
+            .collect();
+
         // Verify first
         let payer = verify_upto_payment(
             self.provider.inner(),
             self.provider.chain(),
-            &self.provider.signer_addresses(),
+            &signer_addresses,
             payload,
             requirements,
         )
@@ -279,7 +295,7 @@ async fn verify_upto_payment<P: alloy_provider::Provider>(
     let asset_address = requirements.asset.0;
     let token_contract = IEIP3009::new(asset_address, provider);
 
-    // Validate on-chain nonce to prevent replays and ensure settlement will succeed
+    // Check on-chain nonce for fresh permits, or allowance for reused permits (batched payments)
     let on_chain_nonce = token_contract
         .nonces(owner)
         .call()
@@ -290,9 +306,30 @@ async fn verify_upto_payment<P: alloy_provider::Provider>(
         ._0;
 
     if nonce != on_chain_nonce {
-        return Err(PaymentVerificationError::InvalidFormat(
-            format!("Nonce mismatch: permit has {}, on-chain is {}", nonce, on_chain_nonce)
-        ).into());
+        // Nonce mismatch - permit may have already been used (batched payment scenario)
+        // Check if we have sufficient allowance instead
+        let allowance = token_contract
+            .allowance(owner, spender)
+            .call()
+            .await
+            .map_err(|e| {
+                PaymentVerificationError::InvalidFormat(format!("Failed to fetch allowance: {}", e))
+            })?
+            ._0;
+
+        if allowance < required_amount {
+            return Err(PaymentVerificationError::InvalidFormat(
+                format!(
+                    "Nonce mismatch (permit: {}, on-chain: {}) and insufficient allowance ({} < {})",
+                    nonce, on_chain_nonce, allowance, required_amount
+                )
+            ).into());
+        }
+        // Allowance is sufficient - permit was already used, this is a batched payment
+        tracing::info!(
+            "Nonce mismatch but sufficient allowance - accepting batched payment (allowance: {})",
+            allowance
+        );
     }
 
     // Construct EIP-712 domain
@@ -345,23 +382,13 @@ async fn verify_permit_signature<P: alloy_provider::Provider>(
             // Verify EIP-1271 signature via contract call
             verify_eip1271_signature(provider, signer, hash, sig_bytes).await
         }
-        StructuredSignature::EIP6492 {
-            factory,
-            factory_calldata,
-            inner,
-            original,
-        } => {
-            // Verify EIP-6492 counterfactual signature
-            verify_eip6492_signature(
-                provider,
-                signer,
-                hash,
-                factory,
-                factory_calldata,
-                inner,
-                original,
-            )
-            .await
+        StructuredSignature::EIP6492 { .. } => {
+            // EIP-6492 is not supported for upto scheme
+            // Reason: Token contracts don't understand 6492 format in permit() calls.
+            // The wallet must be deployed before using upto payments.
+            Err(PaymentVerificationError::InvalidSignature(
+                "EIP-6492 counterfactual signatures are not supported for upto scheme. Deploy the wallet first.".to_string()
+            ).into())
         }
     }
 }
@@ -498,12 +525,16 @@ where
                 .calldata()
                 .clone()
         }
-        StructuredSignature::EIP1271(_) | StructuredSignature::EIP6492 { .. } => {
-            // Smart wallet signature: use permit(owner, spender, value, deadline, bytes signature)
+        StructuredSignature::EIP1271(_) => {
+            // EIP-1271 smart wallet signature: use permit(owner, spender, value, deadline, bytes signature)
             token_contract
                 .permit_1(owner, spender, cap, deadline, signature.clone())
                 .calldata()
                 .clone()
+        }
+        StructuredSignature::EIP6492 { .. } => {
+            // EIP-6492 is rejected in verification, but handle it here for safety
+            return Err(Eip155UptoError::InvalidSignature);
         }
     };
 
@@ -591,7 +622,7 @@ mod tests {
     use super::*;
     use alloy_primitives::{address, hex, B256, Signature};
     use crate::chain::eip155::types::{ChecksummedAddress, TokenAmount};
-    use crate::proto::v2::{PaymentPayload as V2PaymentPayload, PaymentRequirements as V2PaymentRequirements, X402Version2};
+    use crate::proto::v2::X402Version2;
     use crate::timestamp::UnixTimestamp;
     use types::{PaymentRequirementsExtra, UptoEvmAuthorization, UptoEvmPayload};
 
