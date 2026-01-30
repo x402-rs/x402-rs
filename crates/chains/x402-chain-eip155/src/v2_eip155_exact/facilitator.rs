@@ -1,0 +1,170 @@
+use alloy_provider::Provider;
+use alloy_sol_types::Eip712Domain;
+use std::collections::HashMap;
+use tracing::instrument;
+use x402_types::chain::{ChainId, ChainProviderOps};
+use x402_types::proto;
+use x402_types::proto::{PaymentVerificationError, v2};
+use x402_types::scheme::{
+    X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError,
+};
+
+use crate::V2Eip155Exact;
+use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider};
+use crate::v1_eip155_exact::ExactScheme;
+use crate::v1_eip155_exact::facilitator::{
+    Eip155ExactError, ExactEvmPayment, IEIP3009, assert_domain, assert_enough_balance,
+    assert_enough_value, assert_time, settle_payment, verify_payment,
+};
+use crate::v2_eip155_exact::types;
+
+impl<P> X402SchemeFacilitatorBuilder<P> for V2Eip155Exact
+where
+    P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync + 'static,
+    Eip155ExactError: From<P::Error>,
+{
+    fn build(
+        &self,
+        provider: P,
+        _config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        Ok(Box::new(V2Eip155ExactFacilitator::new(provider)))
+    }
+}
+
+pub struct V2Eip155ExactFacilitator<P> {
+    provider: P,
+}
+
+impl<P> V2Eip155ExactFacilitator<P> {
+    /// Creates a new facilitator with the given provider.
+    pub fn new(provider: P) -> Self {
+        Self { provider }
+    }
+}
+
+#[async_trait::async_trait]
+impl<P> X402SchemeFacilitator for V2Eip155ExactFacilitator<P>
+where
+    P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync,
+    P::Inner: Provider,
+    Eip155ExactError: From<P::Error>,
+{
+    async fn verify(
+        &self,
+        request: &proto::VerifyRequest,
+    ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
+        let request = types::VerifyRequest::from_proto(request.clone())?;
+        let payload = &request.payment_payload;
+        let requirements = &request.payment_requirements;
+        let (contract, payment, eip712_domain) = assert_valid_payment(
+            self.provider.inner(),
+            self.provider.chain(),
+            payload,
+            requirements,
+        )
+        .await?;
+
+        let payer =
+            verify_payment(self.provider.inner(), &contract, &payment, &eip712_domain).await?;
+        Ok(v2::VerifyResponse::valid(payer.to_string()).into())
+    }
+
+    async fn settle(
+        &self,
+        request: &proto::SettleRequest,
+    ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError> {
+        let request = types::SettleRequest::from_proto(request.clone())?;
+        let payload = &request.payment_payload;
+        let requirements = &request.payment_requirements;
+        let (contract, payment, eip712_domain) = assert_valid_payment(
+            self.provider.inner(),
+            self.provider.chain(),
+            payload,
+            requirements,
+        )
+        .await?;
+
+        let tx_hash = settle_payment(&self.provider, &contract, &payment, &eip712_domain).await?;
+
+        Ok(v2::SettleResponse::Success {
+            payer: payment.from.to_string(),
+            transaction: tx_hash.to_string(),
+            network: payload.accepted.network.to_string(),
+        }
+        .into())
+    }
+
+    async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
+        let chain_id = self.provider.chain_id();
+        let kinds = vec![proto::SupportedPaymentKind {
+            x402_version: v2::X402Version2.into(),
+            scheme: ExactScheme.to_string(),
+            network: chain_id.clone().into(),
+            extra: None,
+        }];
+        let signers = {
+            let mut signers = HashMap::with_capacity(1);
+            signers.insert(chain_id, self.provider.signer_addresses());
+            signers
+        };
+        Ok(proto::SupportedResponse {
+            kinds,
+            extensions: Vec::new(),
+            signers,
+        })
+    }
+}
+
+/// Runs all preconditions needed for a successful payment:
+/// - Valid scheme, network, and receiver.
+/// - Valid time window (validAfter/validBefore).
+/// - Correct EIP-712 domain construction.
+/// - Sufficient on-chain balance.
+/// - Sufficient value in payload.
+#[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
+async fn assert_valid_payment<P: Provider>(
+    provider: P,
+    chain: &Eip155ChainReference,
+    payload: &types::PaymentPayload,
+    requirements: &types::PaymentRequirements,
+) -> Result<(IEIP3009::IEIP3009Instance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
+    let accepted = &payload.accepted;
+    if accepted != requirements {
+        return Err(PaymentVerificationError::AcceptedRequirementsMismatch.into());
+    }
+    let payload = &payload.payload;
+
+    let chain_id: ChainId = chain.into();
+    let payload_chain_id = &accepted.network;
+    if payload_chain_id != &chain_id {
+        return Err(PaymentVerificationError::ChainIdMismatch.into());
+    }
+    let authorization = &payload.authorization;
+    if authorization.to != accepted.pay_to {
+        return Err(PaymentVerificationError::RecipientMismatch.into());
+    }
+    let valid_after = authorization.valid_after;
+    let valid_before = authorization.valid_before;
+    assert_time(valid_after, valid_before)?;
+    let asset_address = accepted.asset;
+    let contract = IEIP3009::new(asset_address.into(), provider);
+
+    let domain = assert_domain(chain, &contract, &asset_address.into(), &accepted.extra).await?;
+
+    let amount_required = accepted.amount;
+    assert_enough_balance(&contract, &authorization.from, amount_required.into()).await?;
+    assert_enough_value(&authorization.value, &amount_required.into())?;
+
+    let payment = ExactEvmPayment {
+        from: authorization.from,
+        to: authorization.to,
+        value: authorization.value,
+        valid_after: authorization.valid_after,
+        valid_before: authorization.valid_before,
+        nonce: authorization.nonce,
+        signature: payload.signature.clone(),
+    };
+
+    Ok((contract, payment, domain))
+}

@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-x402-chain-eip155 = { workspace = true }
+x402-chain-eip155 = { workspace = true, features = ["client"] }
 x402-chain-solana = { workspace = true }
 x402-reqwest = { workspace = true, features = ["telemetry"] }
 reqwest = { workspace = true }

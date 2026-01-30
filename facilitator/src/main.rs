@@ -22,8 +22,8 @@
 
 mod chain;
 mod config;
-mod schemes;
 mod run;
+mod schemes;
 
 use std::process;
 

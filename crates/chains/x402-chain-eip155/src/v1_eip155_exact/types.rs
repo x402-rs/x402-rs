@@ -9,6 +9,9 @@ use x402_types::lit_str;
 use x402_types::proto::v1;
 use x402_types::timestamp::UnixTimestamp;
 
+#[cfg(any(feature = "facilitator", feature = "client"))]
+use alloy_sol_types::sol;
+
 lit_str!(ExactScheme, "exact");
 
 pub type VerifyRequest = v1::VerifyRequest<PaymentPayload, PaymentRequirements>;
@@ -46,3 +49,25 @@ pub struct PaymentRequirementsExtra {
     pub name: String,
     pub version: String,
 }
+
+#[cfg(any(feature = "facilitator", feature = "client"))]
+sol!(
+    /// Solidity-compatible struct definition for ERC-3009 `transferWithAuthorization`.
+    ///
+    /// This matches the EIP-3009 format used in EIP-712 typed data:
+    /// it defines the authorization to transfer tokens from `from` to `to`
+    /// for a specific `value`, valid only between `validAfter` and `validBefore`
+    /// and identified by a unique `nonce`.
+    ///
+    /// This struct is primarily used to reconstruct the typed data domain/message
+    /// when verifying a client's signature.
+    #[derive(Serialize, Deserialize)]
+    struct TransferWithAuthorization {
+        address from;
+        address to;
+        uint256 value;
+        uint256 validAfter;
+        uint256 validBefore;
+        bytes32 nonce;
+    }
+);
