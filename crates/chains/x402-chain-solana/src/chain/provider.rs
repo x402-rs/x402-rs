@@ -1,5 +1,3 @@
-#![cfg(feature = "facilitator")]
-
 use solana_account::Account;
 use solana_client::client_error::{ClientError, ClientErrorKind};
 use solana_client::nonblocking::pubsub_client::PubsubClient;

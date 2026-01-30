@@ -6,21 +6,24 @@ edition = "2024"
 [features]
 default = []
 telemetry = ["tracing", "x402-types/telemetry"]
-facilitator = []
+facilitator = ["async-trait", "url", "hex", "aptos-crypto", "aptos-types", "bcs", "aptos-rest-client"]
 
-[dependencies] # FIXME Features schemes, facilitator, server, client
+[dependencies]
 x402-types = { workspace = true }
 serde = { workspace = true }
-async-trait = { workspace = true }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
-url = { workspace = true }
-hex = { version = "0.4" }
 
-aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
-aptos-rest-client = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
-aptos-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
+url = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+hex = { version = "0.4", optional = true }
 move-core-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2" }
-bcs = { version = "0.1" }
 
+# Facilitator feature
+aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2", optional = true }
+aptos-rest-client = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2", optional = true }
+aptos-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.39.2", optional = true }
+bcs = { version = "0.1", optional = true }
+
+# Telemetry
 tracing = { workspace = true, optional = true }

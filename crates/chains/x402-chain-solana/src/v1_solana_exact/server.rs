@@ -1,5 +1,3 @@
-#![cfg(feature = "server")]
-
 use std::sync::Arc;
 use x402_types::chain::{ChainId, DeployedTokenAmount};
 use x402_types::proto;
