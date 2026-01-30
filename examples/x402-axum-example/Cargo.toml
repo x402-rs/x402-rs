@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 x402-types = { workspace = true }
-x402-chain-eip155 = { workspace = true, features = ["server"] }
+x402-chain-eip155 = { workspace = true, features = ["server", "telemetry"] }
 x402-chain-solana = { workspace = true }
 x402-axum = { workspace = true, features = ["telemetry"] }
 http = { workspace = true }
