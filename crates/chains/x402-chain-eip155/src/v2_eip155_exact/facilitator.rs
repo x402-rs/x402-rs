@@ -1,13 +1,15 @@
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
-use tracing::instrument;
 use x402_types::chain::{ChainId, ChainProviderOps};
 use x402_types::proto;
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError,
 };
+
+#[cfg(feature = "telemetry")]
+use tracing::instrument;
 
 use crate::V2Eip155Exact;
 use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider};

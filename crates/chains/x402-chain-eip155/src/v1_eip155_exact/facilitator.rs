@@ -7,8 +7,6 @@ use alloy_provider::{
 use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, sol};
 use alloy_transport::TransportError;
 use std::collections::HashMap;
-use tracing::{Instrument, instrument};
-use tracing_core::Level;
 use x402_types::chain::{ChainId, ChainProviderOps};
 use x402_types::proto;
 use x402_types::proto::{PaymentVerificationError, v1};
@@ -16,6 +14,11 @@ use x402_types::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError,
 };
 use x402_types::timestamp::UnixTimestamp;
+
+#[cfg(feature = "telemetry")]
+use tracing::{Instrument, instrument};
+#[cfg(feature = "telemetry")]
+use tracing_core::Level;
 
 use crate::V1Eip155Exact;
 use crate::chain::{
