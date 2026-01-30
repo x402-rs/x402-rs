@@ -461,30 +461,57 @@ where
     let token_contract = IEIP3009::new(asset_address, provider.inner());
 
     // Step 1: Try to apply permit
-    // Check if signature is EOA (65 or 64 bytes) or smart wallet (variable length)
-    let permit_calldata = if signature.len() == 65 || signature.len() == 64 {
-        // EOA signature: use permit(owner, spender, value, deadline, v, r, s)
-        let sig = alloy_primitives::Signature::try_from(signature.as_ref())
-            .map_err(|_| Eip155UptoError::InvalidSignature)?;
-        let v = sig.v().y_parity_byte_non_eip155().unwrap_or(sig.v().y_parity_byte());
-        let r = sig.r();
-        let s = sig.s();
-        token_contract
-            .permit(owner, spender, cap, deadline, v, r, s)
-            .calldata()
-            .clone()
-    } else {
-        // Smart wallet signature (EIP-1271/6492): use permit(owner, spender, value, deadline, bytes signature)
-        token_contract
-            .permit_1(owner, spender, cap, deadline, signature.clone())
-            .calldata()
-            .clone()
+    // Parse signature to determine if it's EOA or smart wallet
+    // We need to compute the EIP-712 hash to properly classify the signature
+    let extra = requirements.extra.as_ref().ok_or(
+        PaymentVerificationError::InvalidFormat("Missing EIP-712 domain info".to_string())
+    )?;
+    let domain = eip712_domain! {
+        name: extra.name.clone(),
+        version: extra.version.clone(),
+        chain_id: provider.chain().inner(),
+        verifying_contract: asset_address,
+    };
+    let permit = Permit {
+        owner,
+        spender,
+        value: cap,
+        nonce: authorization.nonce,
+        deadline,
+    };
+    let eip712_hash = permit.eip712_signing_hash(&domain);
+
+    // Use StructuredSignature to properly classify the signature type
+    let structured_sig = StructuredSignature::try_from_bytes(signature.clone(), owner, &eip712_hash)
+        .map_err(|e| {
+            PaymentVerificationError::InvalidSignature(format!("Invalid signature format: {}", e))
+        })?;
+
+    let permit_calldata = match structured_sig {
+        StructuredSignature::EOA(sig) => {
+            // EOA signature: use permit(owner, spender, value, deadline, v, r, s)
+            let v = sig.v().y_parity_byte_non_eip155().unwrap_or(sig.v().y_parity_byte());
+            let r = sig.r();
+            let s = sig.s();
+            token_contract
+                .permit(owner, spender, cap, deadline, v, r, s)
+                .calldata()
+                .clone()
+        }
+        StructuredSignature::EIP1271(_) | StructuredSignature::EIP6492 { .. } => {
+            // Smart wallet signature: use permit(owner, spender, value, deadline, bytes signature)
+            token_contract
+                .permit_1(owner, spender, cap, deadline, signature.clone())
+                .calldata()
+                .clone()
+        }
     };
 
     let permit_result = provider
         .send_transaction(MetaTransaction {
             to: asset_address,
             calldata: permit_calldata,
+            confirmations: 1,
         })
         .await;
 
@@ -548,6 +575,7 @@ where
         .send_transaction(MetaTransaction {
             to: asset_address,
             calldata: transfer_calldata,
+            confirmations: 1,
         })
         .await?;
 
@@ -611,7 +639,7 @@ mod tests {
         extra: PaymentRequirementsExtra,
     ) -> types::PaymentRequirements {
         types::PaymentRequirements {
-            scheme: UptoScheme.to_string(),
+            scheme: UptoScheme,
             network,
             amount: TokenAmount(amount),
             asset: ChecksummedAddress(asset),
@@ -627,7 +655,7 @@ mod tests {
         payload: UptoEvmPayload,
     ) -> types::PaymentPayload {
         let accepted_req = types::PaymentRequirements {
-            scheme: UptoScheme.to_string(),
+            scheme: UptoScheme,
             network: accepted_network.clone(),
             amount: TokenAmount(TEST_AMOUNT),
             asset: ChecksummedAddress(TEST_TOKEN),
