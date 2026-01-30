@@ -4,11 +4,20 @@
 //! on Solana using the V1 x402 protocol.
 
 use serde::{Deserialize, Serialize};
-use solana_pubkey::Pubkey;
+use solana_commitment_config::CommitmentConfig;
+use solana_message::compiled_instruction::CompiledInstruction;
+use solana_pubkey::{Pubkey, pubkey};
+use solana_signature::Signature;
+use solana_signer::Signer;
+use solana_transaction::versioned::VersionedTransaction;
 use std::sync::LazyLock;
+use x402_types::proto::PaymentVerificationError;
 use x402_types::proto::util::U64String;
+use x402_types::util::Base64Bytes;
 use x402_types::{lit_str, proto};
 
+#[cfg(feature = "facilitator")]
+use crate::chain::{SolanaChainProviderError, SolanaChainProviderLike};
 use crate::chain::Address;
 
 lit_str!(ExactScheme, "exact");
@@ -40,93 +49,232 @@ pub struct SupportedPaymentKindExtra {
     pub fee_payer: Address,
 }
 
-/// Configuration for V1 Solana Exact Facilitator
-///
-/// Controls transaction verification behavior, including support for
-/// additional instructions from third-party wallets like Phantom.
-///
-/// By default, the Phantom Lighthouse program is allowed to support
-/// Phantom wallet users on mainnet.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct V1SolanaExactFacilitatorConfig {
-    /// Allow additional instructions beyond the required ones
-    /// Default: true (to support Phantom Lighthouse)
-    #[serde(default = "default_allow_additional_instructions")]
-    pub allow_additional_instructions: bool,
+pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
-    /// Maximum number of instructions allowed in a transaction
-    /// Default: 10
-    #[serde(default = "default_max_instruction_count")]
-    pub max_instruction_count: usize,
-
-    /// Explicitly allowed program IDs for additional instructions.
-    /// Only checked if allow_additional_instructions is true.
-    /// Uses Solana Address type which deserializes from base58 strings.
-    ///
-    /// Default: [Phantom Lighthouse program]
-    ///
-    /// SECURITY: If this list is empty and allow_additional_instructions is true,
-    /// ALL additional instructions will be rejected. You must explicitly whitelist
-    /// the programs you want to allow.
-    #[serde(default = "default_allowed_program_ids")]
-    pub allowed_program_ids: Vec<Address>,
-
-    /// Blocked program IDs (always rejected, takes precedence over allowed).
-    /// Uses Solana Address type which deserializes from base58 strings.
-    #[serde(default)]
-    pub blocked_program_ids: Vec<Address>,
-
-    /// SECURITY: Require fee payer is NOT present in any instruction's accounts
-    /// Default: true - strongly recommended to keep this enabled
-    #[serde(default = "default_require_fee_payer_not_in_instructions")]
-    pub require_fee_payer_not_in_instructions: bool,
+#[cfg(any(feature = "client", feature = "facilitator"))]
+pub struct TransactionInt {
+    inner: VersionedTransaction,
 }
 
-fn default_allow_additional_instructions() -> bool {
-    true
+#[cfg(any(feature = "client", feature = "facilitator"))]
+impl TransactionInt {
+    pub fn new(transaction: VersionedTransaction) -> Self {
+        Self { inner: transaction }
+    }
+    pub fn inner(&self) -> &VersionedTransaction {
+        &self.inner
+    }
+    pub fn instruction(&self, index: usize) -> Result<InstructionInt, SolanaExactError> {
+        let instruction = self
+            .inner
+            .message
+            .instructions()
+            .get(index)
+            .cloned()
+            .ok_or(SolanaExactError::NoInstructionAtIndex(index))?;
+        let account_keys = self.inner.message.static_account_keys().to_vec();
+
+        Ok(InstructionInt {
+            index,
+            instruction,
+            account_keys,
+        })
+    }
+
+    pub fn is_fully_signed(&self) -> bool {
+        let num_required = self.inner.message.header().num_required_signatures;
+        if self.inner.signatures.len() < num_required as usize {
+            return false;
+        }
+        let default = Signature::default();
+        for signature in self.inner.signatures.iter() {
+            if default.eq(signature) {
+                return false;
+            }
+        }
+        true
+    }
+
+    #[cfg(feature = "facilitator")]
+    pub fn sign<P: SolanaChainProviderLike>(
+        self,
+        provider: &P,
+    ) -> Result<Self, SolanaChainProviderError> {
+        let tx = provider.sign(self.inner)?;
+        Ok(Self { inner: tx })
+    }
+
+    /// Sign the transaction with any Signer.
+    /// This is used by the client to sign transactions before sending to the facilitator.
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn sign_with_keypair<S: Signer>(self, signer: &S) -> Result<Self, TransactionSignError> {
+        let mut tx = self.inner;
+        let msg_bytes = tx.message.serialize();
+        let signature = signer
+            .try_sign_message(msg_bytes.as_slice())
+            .map_err(|e| TransactionSignError(format!("{e}")))?;
+
+        // Required signatures are the first N account keys
+        let num_required = tx.message.header().num_required_signatures as usize;
+        let static_keys = tx.message.static_account_keys();
+
+        // Find signer's position
+        let pos = static_keys[..num_required]
+            .iter()
+            .position(|k| *k == signer.pubkey())
+            .ok_or(TransactionSignError(
+                "Signer not found in required signers".to_string(),
+            ))?;
+
+        // Ensure signature vector is large enough, then place the signature
+        if tx.signatures.len() < num_required {
+            tx.signatures.resize(num_required, Signature::default());
+        }
+        tx.signatures[pos] = signature;
+        Ok(Self { inner: tx })
+    }
+
+    #[cfg(feature = "facilitator")]
+    pub async fn send_and_confirm<P: SolanaChainProviderLike>(
+        &self,
+        provider: &P,
+        commitment_config: CommitmentConfig,
+    ) -> Result<Signature, SolanaChainProviderError> {
+        provider
+            .send_and_confirm(&self.inner, commitment_config)
+            .await
+    }
+
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn as_base64(&self) -> Result<String, TransactionToB64Error> {
+        let bytes =
+            bincode::serialize(&self.inner).map_err(|e| TransactionToB64Error(format!("{e}")))?;
+        let base64_bytes = Base64Bytes::encode(bytes);
+        let string = String::from_utf8(base64_bytes.0.into_owned())
+            .map_err(|e| TransactionToB64Error(format!("{e}")))?;
+        Ok(string)
+    }
 }
 
-fn default_max_instruction_count() -> usize {
-    10
+pub struct InstructionInt {
+    index: usize,
+    instruction: CompiledInstruction,
+    account_keys: Vec<Pubkey>,
 }
 
-fn default_allowed_program_ids() -> Vec<Address> {
-    vec![Address::new(*PHANTOM_LIGHTHOUSE_PROGRAM)]
+impl InstructionInt {
+    pub fn has_data(&self) -> bool {
+        !self.instruction.data.is_empty()
+    }
+
+    pub fn has_accounts(&self) -> bool {
+        !self.instruction.accounts.is_empty()
+    }
+
+    pub fn data_slice(&self) -> &[u8] {
+        self.instruction.data.as_slice()
+    }
+
+    pub fn assert_not_empty(&self) -> Result<(), SolanaExactError> {
+        if !self.has_data() || !self.has_accounts() {
+            return Err(SolanaExactError::EmptyInstructionAtIndex(self.index));
+        }
+        Ok(())
+    }
+
+    pub fn program_id(&self) -> Pubkey {
+        *self.instruction.program_id(self.account_keys.as_slice())
+    }
+
+    pub fn account(&self, index: u8) -> Result<Pubkey, SolanaExactError> {
+        let account_index = self
+            .instruction
+            .accounts
+            .get(index as usize)
+            .cloned()
+            .ok_or(SolanaExactError::NoAccountAtIndex(index))?;
+        let pubkey = self
+            .account_keys
+            .get(account_index as usize)
+            .cloned()
+            .ok_or(SolanaExactError::NoAccountAtIndex(index))?;
+        Ok(pubkey)
+    }
 }
 
-fn default_require_fee_payer_not_in_instructions() -> bool {
-    true
+#[derive(Debug, thiserror::Error)]
+#[error("Can not encode transaction to base64: {0}")]
+pub struct TransactionToB64Error(String);
+
+#[derive(Debug, thiserror::Error)]
+pub enum SolanaExactError {
+    #[error("Can not decode transaction: {0}")]
+    TransactionDecoding(String),
+    #[error("Compute unit limit exceeds facilitator maximum")]
+    MaxComputeUnitLimitExceeded,
+    #[error("Compute unit price exceeds facilitator maximum")]
+    MaxComputeUnitPriceExceeded,
+    #[error("Too few instructions in transaction")]
+    TooFewInstructions,
+    #[error("Additional instructions not allowed")]
+    AdditionalInstructionsNotAllowed,
+    #[error("Instruction count exceeds maximum: {0}")]
+    InstructionCountExceedsMax(usize),
+    #[error("Blocked program in transaction: {0}")]
+    BlockedProgram(Pubkey),
+    #[error("Program not in allowed list: {0}")]
+    ProgramNotAllowed(Pubkey),
+    #[error("CreateATA instruction not supported - destination ATA must exist")]
+    CreateATANotSupported,
+    #[error("Fee payer included in instruction accounts")]
+    FeePayerIncludedInInstructionAccounts,
+    #[error("Fee payer found transferring funds")]
+    FeePayerTransferringFunds,
+    #[error("Instruction at index {0} not found")]
+    NoInstructionAtIndex(usize),
+    #[error("No account at index {0}")]
+    NoAccountAtIndex(u8),
+    #[error("Empty instruction at index {0}")]
+    EmptyInstructionAtIndex(usize),
+    #[error("Invalid compute limit instruction")]
+    InvalidComputeLimitInstruction,
+    #[error("Invalid compute price instruction")]
+    InvalidComputePriceInstruction,
+    #[error("Invalid token instruction")]
+    InvalidTokenInstruction,
+    #[error("Missing sender account in transaction")]
+    MissingSenderAccount,
 }
 
-impl Default for V1SolanaExactFacilitatorConfig {
-    fn default() -> Self {
-        Self {
-            allow_additional_instructions: default_allow_additional_instructions(),
-            max_instruction_count: default_max_instruction_count(),
-            allowed_program_ids: default_allowed_program_ids(),
-            blocked_program_ids: Vec::new(),
-            require_fee_payer_not_in_instructions: default_require_fee_payer_not_in_instructions(),
+impl From<SolanaExactError> for PaymentVerificationError {
+    fn from(e: SolanaExactError) -> Self {
+        match e {
+            SolanaExactError::TransactionDecoding(_) => {
+                PaymentVerificationError::InvalidFormat(e.to_string())
+            }
+            SolanaExactError::MaxComputeUnitLimitExceeded
+            | SolanaExactError::MaxComputeUnitPriceExceeded
+            | SolanaExactError::TooFewInstructions
+            | SolanaExactError::AdditionalInstructionsNotAllowed
+            | SolanaExactError::InstructionCountExceedsMax(_)
+            | SolanaExactError::BlockedProgram(_)
+            | SolanaExactError::ProgramNotAllowed(_)
+            | SolanaExactError::CreateATANotSupported
+            | SolanaExactError::FeePayerIncludedInInstructionAccounts
+            | SolanaExactError::NoInstructionAtIndex(_)
+            | SolanaExactError::InvalidComputeLimitInstruction
+            | SolanaExactError::NoAccountAtIndex(_)
+            | SolanaExactError::InvalidTokenInstruction
+            | SolanaExactError::EmptyInstructionAtIndex(_)
+            | SolanaExactError::FeePayerTransferringFunds
+            | SolanaExactError::MissingSenderAccount
+            | SolanaExactError::InvalidComputePriceInstruction => {
+                PaymentVerificationError::TransactionSimulation(e.to_string())
+            }
         }
     }
 }
 
-impl V1SolanaExactFacilitatorConfig {
-    /// Check if a program ID is in the blocked list
-    pub fn is_blocked(&self, program_id: &Pubkey) -> bool {
-        self.blocked_program_ids
-            .iter()
-            .any(|addr| addr.pubkey() == program_id)
-    }
-
-    /// Check if a program ID is in the allowed list.
-    ///
-    /// SECURITY: If the allowed list is empty, NO programs are allowed.
-    /// This follows the principle of least privilege - you must explicitly
-    /// whitelist programs you want to accept.
-    pub fn is_allowed(&self, program_id: &Pubkey) -> bool {
-        self.allowed_program_ids
-            .iter()
-            .any(|addr| addr.pubkey() == program_id)
-    }
-}
+#[derive(Debug, thiserror::Error)]
+#[error("Can not sign transaction: {0}")]
+pub struct TransactionSignError(pub String);
