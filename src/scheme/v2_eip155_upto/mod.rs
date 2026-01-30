@@ -19,15 +19,19 @@
 //! - Requires server-side session tracking for pending amounts
 //! - More gas-efficient for multiple small payments
 //!
-//! # Important Configuration Note
+//! # Important Configuration Requirement
 //!
-//! The permit's spender address must match the facilitator signer that will execute
-//! `transferFrom`. If the facilitator has multiple signers configured, ensure that:
-//! - Either use a single signer for upto payments, OR
-//! - All configured signers are acceptable spenders (permits can be made to any of them)
+//! **CRITICAL**: The permit's spender address MUST match the facilitator signer that
+//! will execute `transferFrom`. The provider uses round-robin signer selection, which
+//! means we cannot control which signer is used for settlement.
 //!
-//! The provider uses round-robin signer selection, so with multiple signers, the
-//! settlement transaction may be sent from any configured signer address.
+//! **Required Configuration**:
+//! - Configure the facilitator with **ONLY ONE SIGNER** for upto scheme
+//! - Multi-signer configurations will cause intermittent settlement failures
+//!
+//! This is a known architectural limitation: verification checks that the spender is
+//! in the facilitator's signer list, but settlement may use a different signer from
+//! that list, causing `transferFrom` to fail with "insufficient allowance".
 
 pub mod types;
 
@@ -39,9 +43,9 @@ use tracing::instrument;
 
 use crate::chain::eip155::{Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction};
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
-use crate::proto::{self, v2, PaymentVerificationError, X402SchemeFacilitatorError};
+use crate::proto::{self, v2, PaymentVerificationError};
 use crate::scheme::v1_eip155_exact::{IEIP3009, StructuredSignature, Validator6492};
-use crate::scheme::{X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeId};
+use crate::scheme::{X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId};
 use crate::timestamp::UnixTimestamp;
 
 use types::UptoScheme;
@@ -275,6 +279,22 @@ async fn verify_upto_payment<P: alloy_provider::Provider>(
     let asset_address = requirements.asset.0;
     let token_contract = IEIP3009::new(asset_address, provider);
 
+    // Validate on-chain nonce to prevent replays and ensure settlement will succeed
+    let on_chain_nonce = token_contract
+        .nonces(owner)
+        .call()
+        .await
+        .map_err(|e| {
+            PaymentVerificationError::InvalidFormat(format!("Failed to fetch on-chain nonce: {}", e))
+        })?
+        ._0;
+
+    if nonce != on_chain_nonce {
+        return Err(PaymentVerificationError::InvalidFormat(
+            format!("Nonce mismatch: permit has {}, on-chain is {}", nonce, on_chain_nonce)
+        ).into());
+    }
+
     // Construct EIP-712 domain
     let domain = eip712_domain! {
         name: extra.name.clone(),
@@ -384,9 +404,9 @@ async fn verify_eip6492_signature<P: alloy_provider::Provider>(
     provider: &P,
     signer: Address,
     hash: alloy_primitives::B256,
-    factory: Address,
-    factory_calldata: Bytes,
-    inner_signature: Bytes,
+    _factory: Address,
+    _factory_calldata: Bytes,
+    _inner_signature: Bytes,
     original_signature: Bytes,
 ) -> Result<(), Eip155UptoError> {
     // Use the Validator6492 contract to verify the signature
@@ -437,23 +457,29 @@ where
     let pay_to = requirements.pay_to.0;
     let amount = requirements.amount.0;
 
-    // Parse signature into v, r, s
     let signature = &payload.payload.signature;
-    let sig = alloy_primitives::Signature::try_from(signature.as_ref())
-        .map_err(|_| Eip155UptoError::InvalidSignature)?;
-
-    let v = sig.v().y_parity_byte_non_eip155().unwrap_or(sig.v().y_parity_byte());
-    let r = sig.r();
-    let s = sig.s();
+    let token_contract = IEIP3009::new(asset_address, provider.inner());
 
     // Step 1: Try to apply permit
-    let token_contract = IEIP3009::new(asset_address, provider.inner());
-    
-    // Attempt permit call
-    let permit_calldata = token_contract
-        .permit(owner, spender, cap, deadline, v, r, s)
-        .calldata()
-        .clone();
+    // Check if signature is EOA (65 or 64 bytes) or smart wallet (variable length)
+    let permit_calldata = if signature.len() == 65 || signature.len() == 64 {
+        // EOA signature: use permit(owner, spender, value, deadline, v, r, s)
+        let sig = alloy_primitives::Signature::try_from(signature.as_ref())
+            .map_err(|_| Eip155UptoError::InvalidSignature)?;
+        let v = sig.v().y_parity_byte_non_eip155().unwrap_or(sig.v().y_parity_byte());
+        let r = sig.r();
+        let s = sig.s();
+        token_contract
+            .permit(owner, spender, cap, deadline, v, r, s)
+            .calldata()
+            .clone()
+    } else {
+        // Smart wallet signature (EIP-1271/6492): use permit(owner, spender, value, deadline, bytes signature)
+        token_contract
+            .permit_1(owner, spender, cap, deadline, signature.clone())
+            .calldata()
+            .clone()
+    };
 
     let permit_result = provider
         .send_transaction(MetaTransaction {
@@ -462,27 +488,54 @@ where
         })
         .await;
 
-    // If permit fails, check if we already have sufficient allowance
-    if permit_result.is_err() {
-        let allowance = token_contract
-            .allowance(owner, spender)
-            .call()
-            .await
-            .map_err(|e| {
-                tracing::warn!("Failed to check allowance after permit failure: {}", e);
-                Eip155UptoError::PermitFailed
-            })?
-            ._0;
+    // Check permit result: both Err and reverted receipts are failures
+    match permit_result {
+        Ok(receipt) => {
+            if !receipt.status() {
+                // Permit reverted, check if we already have sufficient allowance
+                let allowance = token_contract
+                    .allowance(owner, spender)
+                    .call()
+                    .await
+                    .map_err(|e| {
+                        tracing::warn!("Failed to check allowance after permit revert: {}", e);
+                        Eip155UptoError::PermitFailed
+                    })?
+                    ._0;
 
-        if allowance < amount {
-            tracing::error!(
-                "Permit failed and allowance insufficient: allowance={}, required={}",
-                allowance,
-                amount
-            );
-            return Err(Eip155UptoError::PermitFailed);
+                if allowance < amount {
+                    tracing::error!(
+                        "Permit reverted and allowance insufficient: allowance={}, required={}",
+                        allowance,
+                        amount
+                    );
+                    return Err(Eip155UptoError::PermitFailed);
+                }
+                tracing::info!("Permit reverted but allowance already sufficient, proceeding");
+            }
         }
-        tracing::info!("Permit already used, proceeding with existing allowance");
+        Err(_) => {
+            // Permit transaction failed, check if we already have sufficient allowance
+            let allowance = token_contract
+                .allowance(owner, spender)
+                .call()
+                .await
+                .map_err(|e| {
+                    tracing::warn!("Failed to check allowance after permit failure: {}", e);
+                    Eip155UptoError::PermitFailed
+                })?
+                ._0;
+
+            if allowance < amount {
+                tracing::error!(
+                    "Permit failed and allowance insufficient: allowance={}, required={}",
+                    allowance,
+                    amount
+                );
+                return Err(Eip155UptoError::PermitFailed);
+            }
+            tracing::info!("Permit failed but allowance already sufficient, proceeding");
+        }
     }
 
     // Step 2: Execute transferFrom
@@ -557,13 +610,13 @@ mod tests {
         pay_to: Address,
         extra: PaymentRequirementsExtra,
     ) -> types::PaymentRequirements {
-        V2PaymentRequirements {
-            x402_version: X402Version2,
-            scheme: UptoScheme,
+        types::PaymentRequirements {
+            scheme: UptoScheme.to_string(),
             network,
             amount: TokenAmount(amount),
             asset: ChecksummedAddress(asset),
             pay_to: ChecksummedAddress(pay_to),
+            max_timeout_seconds: 300,
             extra: Some(extra),
         }
     }
@@ -573,13 +626,13 @@ mod tests {
         accepted_network: ChainId,
         payload: UptoEvmPayload,
     ) -> types::PaymentPayload {
-        let accepted_req = V2PaymentRequirements {
-            x402_version: X402Version2,
-            scheme: UptoScheme,
+        let accepted_req = types::PaymentRequirements {
+            scheme: UptoScheme.to_string(),
             network: accepted_network.clone(),
             amount: TokenAmount(TEST_AMOUNT),
             asset: ChecksummedAddress(TEST_TOKEN),
             pay_to: ChecksummedAddress(TEST_PAY_TO),
+            max_timeout_seconds: 300,
             extra: Some(PaymentRequirementsExtra {
                 name: "Test Token".to_string(),
                 version: "1".to_string(),
@@ -587,9 +640,11 @@ mod tests {
             }),
         };
 
-        V2PaymentPayload {
+        types::PaymentPayload {
             accepted: accepted_req,
             payload,
+            resource: None,
+            x402_version: X402Version2,
         }
     }
 
