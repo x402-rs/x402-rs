@@ -1,5 +1,3 @@
-#![cfg(feature = "client")]
-
 //! Client-side payment signing for the V1 Solana "exact" scheme.
 //!
 //! This module provides [`V1SolanaExactClient`] for building and signing

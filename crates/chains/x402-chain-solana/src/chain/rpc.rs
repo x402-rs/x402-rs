@@ -1,5 +1,3 @@
-#![cfg(feature = "client")]
-
 use solana_account::Account;
 use solana_client::client_error::ClientError;
 use solana_client::nonblocking::rpc_client::RpcClient;

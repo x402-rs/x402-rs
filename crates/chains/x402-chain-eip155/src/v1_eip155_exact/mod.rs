@@ -47,6 +47,7 @@ use x402_types::scheme::X402SchemeId;
 #[cfg(feature = "server")]
 pub mod server;
 #[cfg(feature = "server")]
+#[allow(unused_imports)]
 pub use server::*;
 
 #[cfg(feature = "facilitator")]
