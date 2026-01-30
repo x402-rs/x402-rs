@@ -49,6 +49,7 @@ use x402_types::scheme::client::{
 };
 
 use crate::chain::Address;
+use crate::chain::rpc::RpcClientLike;
 use crate::v1_solana_exact::types::{
     ExactScheme, ExactSolanaPayload, PaymentPayload, PaymentRequirements,
 };
@@ -412,47 +413,5 @@ impl<S: Signer + Sync, R: RpcClientLike + Sync> PaymentCandidateSigner for Paylo
         let b64 = Base64Bytes::encode(&json);
 
         Ok(b64.to_string())
-    }
-}
-
-pub trait RpcClientLike {
-    fn get_account(
-        &self,
-        pubkey: &Pubkey,
-    ) -> impl Future<Output = Result<Account, ClientError>> + Send;
-    fn simulate_transaction_with_config(
-        &self,
-        transaction: &VersionedTransaction,
-        config: RpcSimulateTransactionConfig,
-    ) -> impl Future<Output = RpcResult<RpcSimulateTransactionResult>> + Send;
-    fn get_recent_prioritization_fees(
-        &self,
-        addresses: &[Pubkey],
-    ) -> impl Future<Output = Result<Vec<RpcPrioritizationFee>, ClientError>> + Send;
-    fn get_latest_blockhash(&self) -> impl Future<Output = Result<Hash, ClientError>> + Send;
-}
-
-impl<Container: AsRef<RpcClient>> RpcClientLike for Container {
-    fn get_account(
-        &self,
-        pubkey: &Pubkey,
-    ) -> impl Future<Output = Result<Account, ClientError>> + Send {
-        RpcClient::get_account(self.as_ref(), pubkey)
-    }
-    fn simulate_transaction_with_config(
-        &self,
-        transaction: &VersionedTransaction,
-        config: RpcSimulateTransactionConfig,
-    ) -> impl Future<Output = RpcResult<RpcSimulateTransactionResult>> + Send {
-        RpcClient::simulate_transaction_with_config(self.as_ref(), transaction, config)
-    }
-    fn get_recent_prioritization_fees(
-        &self,
-        addresses: &[Pubkey],
-    ) -> impl Future<Output = Result<Vec<RpcPrioritizationFee>, ClientError>> + Send {
-        RpcClient::get_recent_prioritization_fees(self.as_ref(), addresses)
-    }
-    fn get_latest_blockhash(&self) -> impl Future<Output = Result<Hash, ClientError>> + Send {
-        RpcClient::get_latest_blockhash(self.as_ref())
     }
 }

@@ -6,6 +6,9 @@ edition = "2024"
 [features]
 default = []
 telemetry = ["tracing", "tracing-core", "x402-types/telemetry"]
+client = []
+server = []
+facilitator = []
 
 [dependencies]
 x402-types = { workspace = true }
