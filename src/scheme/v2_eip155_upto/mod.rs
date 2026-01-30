@@ -36,7 +36,7 @@
 pub mod types;
 
 use alloy_primitives::{Address, Bytes, U256};
-use alloy_sol_types::{eip712_domain, SolStruct};
+use alloy_sol_types::{eip712_domain, sol, SolStruct};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::instrument;
@@ -44,11 +44,81 @@ use tracing::instrument;
 use crate::chain::eip155::{Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction};
 use crate::chain::{ChainId, ChainProvider, ChainProviderOps};
 use crate::proto::{self, v2, PaymentVerificationError};
-use crate::scheme::v1_eip155_exact::{IEIP3009, StructuredSignature, Validator6492};
+use crate::scheme::v1_eip155_exact::IEIP3009;
 use crate::scheme::{X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError, X402SchemeId};
 use crate::timestamp::UnixTimestamp;
 
 use types::UptoScheme;
+
+// EIP-1271 interface for smart wallet signature verification
+sol! {
+    #[allow(missing_docs)]
+    #[derive(Debug)]
+    #[sol(rpc)]
+    interface IEIP1271 {
+        function isValidSignature(bytes32 hash, bytes signature) external view returns (bytes4 magicValue);
+    }
+}
+
+// EIP-6492 magic suffix for counterfactual signatures
+const EIP6492_MAGIC_SUFFIX: [u8; 32] = [
+    0x64, 0x92, 0x64, 0x92, 0x64, 0x92, 0x64, 0x92,
+    0x64, 0x92, 0x64, 0x92, 0x64, 0x92, 0x64, 0x92,
+    0x64, 0x92, 0x64, 0x92, 0x64, 0x92, 0x64, 0x92,
+    0x64, 0x92, 0x64, 0x92, 0x64, 0x92, 0x64, 0x92,
+];
+
+/// Structured signature types for permit verification.
+enum StructuredSignature {
+    /// EOA signature (65 bytes: r, s, v)
+    EOA(alloy_primitives::Signature),
+    /// EIP-1271 smart wallet signature
+    EIP1271(Bytes),
+    /// EIP-6492 counterfactual signature (not supported for upto)
+    EIP6492 {
+        factory: Address,
+        factory_calldata: Bytes,
+        inner: Bytes,
+        original: Bytes,
+    },
+}
+
+impl StructuredSignature {
+    /// Parse a signature into its structured format.
+    fn try_from_bytes(
+        bytes: Bytes,
+        expected_signer: Address,
+        hash: &alloy_primitives::B256,
+    ) -> Result<Self, String> {
+        // Check for EIP-6492 wrapper
+        if bytes.len() >= 32 && bytes[bytes.len() - 32..] == EIP6492_MAGIC_SUFFIX {
+            // Decode EIP-6492 signature
+            // Format: abi.encode((address factory, bytes factoryCalldata, bytes innerSig), EIP6492_MAGIC_SUFFIX)
+            // For upto scheme, we reject EIP-6492 signatures
+            return Ok(StructuredSignature::EIP6492 {
+                factory: Address::ZERO,
+                factory_calldata: Bytes::new(),
+                inner: Bytes::new(),
+                original: bytes,
+            });
+        }
+
+        // Try to parse as EOA signature (65 bytes)
+        if bytes.len() == 65 {
+            if let Ok(sig) = alloy_primitives::Signature::try_from(bytes.as_ref()) {
+                // Verify it recovers to expected signer
+                if let Ok(recovered) = sig.recover_address_from_prehash(hash) {
+                    if recovered == expected_signer {
+                        return Ok(StructuredSignature::EOA(sig));
+                    }
+                }
+            }
+        }
+
+        // Otherwise, treat as EIP-1271 signature
+        Ok(StructuredSignature::EIP1271(bytes))
+    }
+}
 
 /// V2 EIP-155 Upto scheme blueprint.
 pub struct V2Eip155Upto;
@@ -63,14 +133,14 @@ impl X402SchemeId for V2Eip155Upto {
     }
 }
 
-impl X402SchemeFacilitatorBuilder for V2Eip155Upto {
+impl<'a> X402SchemeFacilitatorBuilder<&'a ChainProvider> for V2Eip155Upto {
     fn build(
         &self,
-        provider: ChainProvider,
+        provider: &'a ChainProvider,
         _config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
         let provider = match provider {
-            ChainProvider::Eip155(p) => p,
+            ChainProvider::Eip155(p) => p.clone(),
             _ => return Err("v2-eip155-upto requires Eip155ChainProvider".into()),
         };
         Ok(Box::new(V2Eip155UptoFacilitator::new(provider)))
@@ -94,6 +164,7 @@ impl<P> X402SchemeFacilitator for V2Eip155UptoFacilitator<P>
 where
     P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync,
     P::Inner: alloy_provider::Provider,
+    P::Error: Send,
     Eip155UptoError: From<P::Error>,
 {
     async fn verify(
@@ -104,13 +175,25 @@ where
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
 
-        // Convert signer addresses from String to Address
+        // Convert signer addresses from String to Address (fail fast on invalid config)
         let signer_addresses: Vec<Address> = self
             .provider
             .signer_addresses()
             .iter()
-            .filter_map(|s| s.parse().ok())
-            .collect();
+            .map(|s| {
+                s.parse::<Address>().map_err(|_| {
+                    PaymentVerificationError::InvalidFormat(
+                        "Invalid facilitator signer address".to_string(),
+                    )
+                })
+            })
+            .collect::<Result<_, _>>()?;
+        if signer_addresses.is_empty() {
+            return Err(PaymentVerificationError::InvalidFormat(
+                "No valid facilitator signer addresses configured".to_string(),
+            )
+            .into());
+        }
 
         let payer = verify_upto_payment(
             self.provider.inner(),
@@ -132,13 +215,25 @@ where
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
 
-        // Convert signer addresses from String to Address
+        // Convert signer addresses from String to Address (fail fast on invalid config)
         let signer_addresses: Vec<Address> = self
             .provider
             .signer_addresses()
             .iter()
-            .filter_map(|s| s.parse().ok())
-            .collect();
+            .map(|s| {
+                s.parse::<Address>().map_err(|_| {
+                    PaymentVerificationError::InvalidFormat(
+                        "Invalid facilitator signer address".to_string(),
+                    )
+                })
+            })
+            .collect::<Result<_, _>>()?;
+        if signer_addresses.is_empty() {
+            return Err(PaymentVerificationError::InvalidFormat(
+                "No valid facilitator signer addresses configured".to_string(),
+            )
+            .into());
+        }
 
         // Verify first
         let payer = verify_upto_payment(
@@ -205,6 +300,15 @@ impl From<Eip155UptoError> for X402SchemeFacilitatorError {
             Eip155UptoError::Verification(v) => X402SchemeFacilitatorError::PaymentVerification(v),
             e => X402SchemeFacilitatorError::OnchainFailure(e.to_string()),
         }
+    }
+}
+
+impl From<crate::chain::eip155::MetaTransactionSendError> for Eip155UptoError {
+    fn from(e: crate::chain::eip155::MetaTransactionSendError) -> Self {
+        // Convert MetaTransactionSendError to Eip155UptoError
+        // We map it to PermitFailed since it's a transaction send failure
+        tracing::error!("MetaTransaction send error: {}", e);
+        Eip155UptoError::PermitFailed
     }
 }
 
@@ -296,26 +400,12 @@ async fn verify_upto_payment<P: alloy_provider::Provider>(
     let token_contract = IEIP3009::new(asset_address, provider);
 
     // Check on-chain nonce for fresh permits, or allowance for reused permits (batched payments)
-    let on_chain_nonce = token_contract
-        .nonces(owner)
-        .call()
-        .await
-        .map_err(|e| {
-            PaymentVerificationError::InvalidFormat(format!("Failed to fetch on-chain nonce: {}", e))
-        })?
-        ._0;
+    let on_chain_nonce = token_contract.nonces(owner).call().await?;
 
     if nonce != on_chain_nonce {
         // Nonce mismatch - permit may have already been used (batched payment scenario)
         // Check if we have sufficient allowance instead
-        let allowance = token_contract
-            .allowance(owner, spender)
-            .call()
-            .await
-            .map_err(|e| {
-                PaymentVerificationError::InvalidFormat(format!("Failed to fetch allowance: {}", e))
-            })?
-            ._0;
+        let allowance = token_contract.allowance(owner, spender).call().await?;
 
         if allowance < required_amount {
             return Err(PaymentVerificationError::InvalidFormat(
@@ -401,8 +491,6 @@ async fn verify_eip1271_signature<P: alloy_provider::Provider>(
     hash: alloy_primitives::B256,
     signature: Bytes,
 ) -> Result<(), Eip155UptoError> {
-    use crate::scheme::v1_eip155_exact::IEIP1271;
-
     let contract = IEIP1271::new(signer, provider);
     let magic_value = contract
         .isValidSignature(hash, signature)
@@ -410,8 +498,7 @@ async fn verify_eip1271_signature<P: alloy_provider::Provider>(
         .await
         .map_err(|e| {
             PaymentVerificationError::InvalidSignature(format!("EIP-1271 call failed: {}", e))
-        })?
-        ._0;
+        })?;
 
     // EIP-1271 magic value is 0x1626ba7e
     const EIP1271_MAGIC_VALUE: [u8; 4] = [0x16, 0x26, 0xba, 0x7e];
@@ -425,41 +512,6 @@ async fn verify_eip1271_signature<P: alloy_provider::Provider>(
     }
 }
 
-/// Verify an EIP-6492 counterfactual signature.
-#[instrument(skip_all, err)]
-async fn verify_eip6492_signature<P: alloy_provider::Provider>(
-    provider: &P,
-    signer: Address,
-    hash: alloy_primitives::B256,
-    _factory: Address,
-    _factory_calldata: Bytes,
-    _inner_signature: Bytes,
-    original_signature: Bytes,
-) -> Result<(), Eip155UptoError> {
-    // Use the Validator6492 contract to verify the signature
-    let validator = Validator6492::new(
-        alloy_primitives::address!("0x6492649264926492649264926492649264926492"),
-        provider,
-    );
-
-    let is_valid = validator
-        .isValidSigWithSideEffects(signer, hash, original_signature)
-        .call()
-        .await
-        .map_err(|e| {
-            PaymentVerificationError::InvalidSignature(format!("EIP-6492 validation failed: {}", e))
-        })?
-        ._0;
-
-    if is_valid {
-        Ok(())
-    } else {
-        Err(PaymentVerificationError::InvalidSignature(
-            "EIP-6492 signature validation failed".to_string(),
-        )
-        .into())
-    }
-}
 
 /// Settle an upto payment on-chain.
 #[instrument(skip_all, err, fields(
@@ -516,19 +568,20 @@ where
 
     let permit_calldata = match structured_sig {
         StructuredSignature::EOA(sig) => {
-            // EOA signature: use permit(owner, spender, value, deadline, v, r, s)
-            let v = sig.v().y_parity_byte_non_eip155().unwrap_or(sig.v().y_parity_byte());
+            // EOA signature: use permit_1(owner, spender, value, deadline, v, r, s)
+            // In newer alloy versions, v() returns bool, need to convert to u8
+            let v = if sig.v() { 28u8 } else { 27u8 };
             let r = sig.r();
             let s = sig.s();
             token_contract
-                .permit(owner, spender, cap, deadline, v, r, s)
+                .permit_1(owner, spender, cap, deadline, v, r.into(), s.into())
                 .calldata()
                 .clone()
         }
         StructuredSignature::EIP1271(_) => {
-            // EIP-1271 smart wallet signature: use permit(owner, spender, value, deadline, bytes signature)
+            // EIP-1271 smart wallet signature: use permit_0(owner, spender, value, deadline, bytes signature)
             token_contract
-                .permit_1(owner, spender, cap, deadline, signature.clone())
+                .permit_0(owner, spender, cap, deadline, signature.clone())
                 .calldata()
                 .clone()
         }
@@ -538,62 +591,47 @@ where
         }
     };
 
-    let permit_result = provider
+    // Send permit transaction and convert error immediately to avoid Send bound issues
+    let permit_receipt = match provider
         .send_transaction(MetaTransaction {
             to: asset_address,
             calldata: permit_calldata,
             confirmations: 1,
         })
-        .await;
-
-    // Check permit result: both Err and reverted receipts are failures
-    match permit_result {
-        Ok(receipt) => {
-            if !receipt.status() {
-                // Permit reverted, check if we already have sufficient allowance
-                let allowance = token_contract
-                    .allowance(owner, spender)
-                    .call()
-                    .await
-                    .map_err(|e| {
-                        tracing::warn!("Failed to check allowance after permit revert: {}", e);
-                        Eip155UptoError::PermitFailed
-                    })?
-                    ._0;
-
-                if allowance < amount {
-                    tracing::error!(
-                        "Permit reverted and allowance insufficient: allowance={}, required={}",
-                        allowance,
-                        amount
-                    );
-                    return Err(Eip155UptoError::PermitFailed);
-                }
-                tracing::info!("Permit reverted but allowance already sufficient, proceeding");
-            }
+        .await
+    {
+        Ok(receipt) => Some(receipt),
+        Err(e) => {
+            tracing::warn!("Permit transaction failed: {}", Eip155UptoError::from(e));
+            None
         }
-        Err(_) => {
-            // Permit transaction failed, check if we already have sufficient allowance
-            let allowance = token_contract
-                .allowance(owner, spender)
-                .call()
-                .await
-                .map_err(|e| {
-                    tracing::warn!("Failed to check allowance after permit failure: {}", e);
-                    Eip155UptoError::PermitFailed
-                })?
-                ._0;
+    };
 
-            if allowance < amount {
-                tracing::error!(
-                    "Permit failed and allowance insufficient: allowance={}, required={}",
-                    allowance,
-                    amount
-                );
-                return Err(Eip155UptoError::PermitFailed);
-            }
-            tracing::info!("Permit failed but allowance already sufficient, proceeding");
+    // Check permit result: both None (error) and reverted receipts are failures
+    let permit_succeeded = permit_receipt.as_ref().map(|r| r.status()).unwrap_or(false);
+    
+    if !permit_succeeded {
+        // Permit failed or reverted, check if we already have sufficient allowance
+        let allowance = token_contract
+            .allowance(owner, spender)
+            .call()
+            .await
+            .map_err(|e| {
+                tracing::warn!("Failed to check allowance after permit failure: {}", e);
+                Eip155UptoError::PermitFailed
+            })?;
+
+        if allowance < amount {
+            tracing::error!(
+                "Permit failed and allowance insufficient: allowance={}, required={}",
+                allowance,
+                amount
+            );
+            return Err(Eip155UptoError::PermitFailed);
         }
+        tracing::info!("Permit failed but allowance already sufficient, proceeding");
+    } else {
+        tracing::info!("Permit transaction successful");
     }
 
     // Step 2: Execute transferFrom
@@ -611,7 +649,7 @@ where
         .await?;
 
     if receipt.status() {
-        Ok(*receipt.transaction_hash())
+        Ok(receipt.transaction_hash)
     } else {
         Err(Eip155UptoError::TransferFailed)
     }
@@ -620,7 +658,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::{address, hex, B256, Signature};
+    use alloy_primitives::{address, Signature};
     use crate::chain::eip155::types::{ChecksummedAddress, TokenAmount};
     use crate::proto::v2::X402Version2;
     use crate::timestamp::UnixTimestamp;
@@ -633,8 +671,8 @@ mod tests {
     const TEST_TOKEN: Address = address!("0x3333333333333333333333333333333333333333");
     const TEST_PAY_TO: Address = address!("0x4444444444444444444444444444444444444444");
     const TEST_CHAIN_ID: u64 = 8453; // Base
-    const TEST_CAP: U256 = U256::from(1_000_000u64); // 1 USDC
-    const TEST_AMOUNT: U256 = U256::from(100_000u64); // 0.1 USDC
+    const TEST_CAP: U256 = U256::from_limbs([1_000_000, 0, 0, 0]); // 1 USDC
+    const TEST_AMOUNT: U256 = U256::from_limbs([100_000, 0, 0, 0]); // 0.1 USDC
 
     // Helper to create test authorization
     fn create_test_authorization(
@@ -908,9 +946,9 @@ mod tests {
             verifying_contract: TEST_TOKEN,
         };
 
-        assert_eq!(domain.name, "Test Token");
-        assert_eq!(domain.version, "1");
-        assert_eq!(domain.chain_id, Some(TEST_CHAIN_ID));
+        assert_eq!(domain.name.as_ref().map(|s| s.as_ref()), Some("Test Token"));
+        assert_eq!(domain.version.as_ref().map(|s| s.as_ref()), Some("1"));
+        assert_eq!(domain.chain_id, Some(U256::from(TEST_CHAIN_ID)));
         assert_eq!(domain.verifying_contract, Some(TEST_TOKEN));
     }
 

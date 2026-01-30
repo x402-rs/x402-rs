@@ -7,6 +7,7 @@
 
 use alloy_primitives::{Address, Bytes, U256};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use crate::chain::eip155::{ChecksummedAddress, TokenAmount};
 use crate::lit_str;
