@@ -1,3 +1,5 @@
+#![cfg(feature = "facilitator")]
+
 use serde::{Deserialize, Serialize};
 use solana_client::client_error::reqwest::Url;
 use std::ops::Deref;

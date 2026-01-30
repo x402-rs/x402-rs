@@ -1,10 +1,10 @@
-mod networks;
-
 pub mod chain;
 pub mod v1_solana_exact;
 pub mod v2_solana_exact;
 
+mod networks;
 pub use networks::*;
+
 pub use v1_solana_exact::V1SolanaExact;
 pub use v2_solana_exact::V2SolanaExact;
 

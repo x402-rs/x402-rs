@@ -12,7 +12,7 @@ telemetry = ["dep:tracing", "x402-facilitator-local/telemetry", "x402-chain-eip1
 x402-types = { workspace = true }
 x402-facilitator-local = { workspace = true, features = ["telemetry"] }
 x402-chain-eip155 = { workspace = true, features = ["facilitator"] }
-x402-chain-solana = { workspace = true, features = ["telemetry"] }
+x402-chain-solana = { workspace = true, features = ["facilitator"] }
 x402-chain-aptos = { workspace = true, features = ["telemetry"] }
 
 dotenvy = { workspace = true }

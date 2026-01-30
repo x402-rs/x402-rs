@@ -35,11 +35,12 @@ pub mod types;
 pub use types::*;
 
 #[cfg(feature = "facilitator")]
+pub mod config;
+
+#[cfg(feature = "facilitator")]
 pub mod provider;
 #[cfg(feature = "facilitator")]
 pub use provider::*;
-#[cfg(feature = "facilitator")]
-pub mod config;
 
-#[cfg(any(feature = "facilitator", feature = "client"))]
+#[cfg(feature = "client")]
 pub mod rpc;
