@@ -44,17 +44,22 @@
 
 use x402_types::scheme::X402SchemeId;
 
-pub mod types;
-
 #[cfg(feature = "server")]
 pub mod server;
+#[cfg(feature = "server")]
+pub use server::*;
 
 #[cfg(feature = "facilitator")]
 pub mod facilitator;
+#[cfg(feature = "facilitator")]
+pub use facilitator::*;
 
 #[cfg(feature = "client")]
 pub mod client;
+#[cfg(feature = "client")]
+pub use client::*;
 
+pub mod types;
 pub use types::*;
 
 pub struct V1Eip155Exact;

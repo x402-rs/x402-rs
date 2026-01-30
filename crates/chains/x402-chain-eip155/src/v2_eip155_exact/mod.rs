@@ -32,21 +32,25 @@
 //! );
 //! ```
 
-pub mod types;
-
-#[cfg(feature = "client")]
-pub mod client;
-
 #[cfg(feature = "server")]
 pub mod server;
+#[cfg(feature = "server")]
+pub use server::*;
 
 #[cfg(feature = "facilitator")]
 pub mod facilitator;
+#[cfg(feature = "facilitator")]
+pub use facilitator::*;
+
+#[cfg(feature = "client")]
+pub mod client;
+#[cfg(feature = "client")]
+pub use client::*;
+
+pub mod types;
+pub use types::*;
 
 use x402_types::scheme::X402SchemeId;
-
-#[allow(unused)]
-pub use types::*;
 
 pub struct V2Eip155Exact;
 
@@ -56,6 +60,6 @@ impl X402SchemeId for V2Eip155Exact {
     }
 
     fn scheme(&self) -> &str {
-        types::ExactScheme.as_ref()
+        ExactScheme.as_ref()
     }
 }

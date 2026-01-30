@@ -6,6 +6,7 @@ edition = "2024"
 [features]
 default = []
 telemetry = ["tracing", "x402-types/telemetry"]
+facilitator = []
 
 [dependencies] # FIXME Features schemes, facilitator, server, client
 x402-types = { workspace = true }
