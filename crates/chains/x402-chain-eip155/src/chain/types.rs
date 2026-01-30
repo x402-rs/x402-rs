@@ -6,7 +6,10 @@
 use alloy_primitives::{Address, U256, hex};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
+use std::ops::Mul;
 use std::str::FromStr;
+use x402_types::chain::{ChainId, DeployedTokenAmount};
+use x402_types::util::money_amount::{MoneyAmount, MoneyAmountParseError};
 
 /// An Ethereum address that serializes with EIP-55 checksum encoding.
 ///
@@ -145,5 +148,316 @@ impl From<u128> for TokenAmount {
 impl From<u64> for TokenAmount {
     fn from(value: u64) -> Self {
         Self(U256::from(value))
+    }
+}
+
+/// The CAIP-2 namespace for EVM-compatible chains.
+pub const EIP155_NAMESPACE: &str = "eip155";
+
+/// A numeric chain ID for EVM-compatible networks.
+///
+/// This type wraps the numeric chain ID used by EVM networks (e.g., `1` for Ethereum mainnet,
+/// `8453` for Base). It can be converted to/from a [`ChainId`] for use with the x402 protocol.
+///
+/// # Example
+///
+/// ```
+/// use x402_chain_eip155::chain::Eip155ChainReference;
+/// use x402_types::chain::ChainId;
+///
+/// let base = Eip155ChainReference::new(8453);
+/// let chain_id: ChainId = base.into();
+/// assert_eq!(chain_id.to_string(), "eip155:8453");
+/// ```
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub struct Eip155ChainReference(u64);
+
+impl Eip155ChainReference {
+    /// Converts this chain reference to a CAIP-2 [`ChainId`].
+    pub fn as_chain_id(&self) -> ChainId {
+        ChainId::new(EIP155_NAMESPACE, self.0.to_string())
+    }
+}
+
+impl From<Eip155ChainReference> for ChainId {
+    fn from(value: Eip155ChainReference) -> Self {
+        ChainId::new(EIP155_NAMESPACE, value.0.to_string())
+    }
+}
+
+impl From<&Eip155ChainReference> for ChainId {
+    fn from(value: &Eip155ChainReference) -> Self {
+        ChainId::new(EIP155_NAMESPACE, value.0.to_string())
+    }
+}
+
+impl TryFrom<ChainId> for Eip155ChainReference {
+    type Error = Eip155ChainReferenceFormatError;
+
+    fn try_from(value: ChainId) -> Result<Self, Self::Error> {
+        if value.namespace != EIP155_NAMESPACE {
+            return Err(Eip155ChainReferenceFormatError::InvalidNamespace(
+                value.namespace,
+            ));
+        }
+        let chain_id: u64 = value.reference.parse().map_err(|_| {
+            Eip155ChainReferenceFormatError::InvalidReference(value.reference.clone())
+        })?;
+        Ok(Eip155ChainReference(chain_id))
+    }
+}
+
+impl TryFrom<&ChainId> for Eip155ChainReference {
+    type Error = Eip155ChainReferenceFormatError;
+
+    fn try_from(value: &ChainId) -> Result<Self, Self::Error> {
+        if value.namespace != EIP155_NAMESPACE {
+            return Err(Eip155ChainReferenceFormatError::InvalidNamespace(
+                value.namespace.clone(),
+            ));
+        }
+        let chain_id: u64 = value.reference.parse().map_err(|_| {
+            Eip155ChainReferenceFormatError::InvalidReference(value.reference.clone())
+        })?;
+        Ok(Eip155ChainReference(chain_id))
+    }
+}
+
+/// Error returned when converting a [`ChainId`] to an [`Eip155ChainReference`].
+#[derive(Debug, thiserror::Error)]
+pub enum Eip155ChainReferenceFormatError {
+    /// The chain ID namespace is not `eip155`.
+    #[error("Invalid namespace {0}, expected eip155")]
+    InvalidNamespace(String),
+    /// The chain reference is not a valid numeric value.
+    #[error("Invalid eip155 chain reference {0}")]
+    InvalidReference(String),
+}
+
+impl Eip155ChainReference {
+    /// Creates a new chain reference from a numeric chain ID.
+    pub fn new(chain_id: u64) -> Self {
+        Self(chain_id)
+    }
+
+    /// Returns the numeric chain ID.
+    pub fn inner(&self) -> u64 {
+        self.0
+    }
+}
+
+impl Display for Eip155ChainReference {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Information about a token deployment on an EVM chain.
+///
+/// This type contains all the information needed to interact with a token contract,
+/// including its address, decimal places, and optional EIP-712 domain parameters
+/// for signature verification.
+///
+/// # Example
+///
+/// ```ignore
+/// use x402_rs::networks::{KnownNetworkEip155, USDC};
+///
+/// // Get USDC deployment on Base
+/// let usdc = USDC::base();
+/// assert_eq!(usdc.decimals, 6);
+///
+/// // Parse a human-readable amount to token units
+/// let amount = usdc.parse("10.50").unwrap();
+/// assert_eq!(amount.amount, U256::from(10_500_000u64));
+/// ```
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
+pub struct Eip155TokenDeployment {
+    /// The chain this token is deployed on.
+    pub chain_reference: Eip155ChainReference,
+    /// The token contract address.
+    pub address: Address,
+    /// Number of decimal places for the token (e.g., 6 for USDC, 18 for most ERC-20s).
+    pub decimals: u8,
+    /// Optional EIP-712 domain parameters for signature verification.
+    pub eip712: Option<TokenDeploymentEip712>,
+}
+
+#[allow(dead_code)] // Public for consumption by downstream crates.
+impl Eip155TokenDeployment {
+    /// Creates a token amount from a raw value.
+    ///
+    /// The value should already be in the token's smallest unit (e.g., wei).
+    pub fn amount<V: Into<TokenAmount>>(
+        &self,
+        v: V,
+    ) -> DeployedTokenAmount<U256, Eip155TokenDeployment> {
+        DeployedTokenAmount {
+            amount: v.into().0,
+            token: self.clone(),
+        }
+    }
+
+    /// Parses a human-readable amount string into token units.
+    ///
+    /// Accepts formats like `"10.50"`, `"$10.50"`, `"1,000"`, etc.
+    /// The amount is scaled by the token's decimal places.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The input cannot be parsed as a number
+    /// - The input has more decimal places than the token supports
+    /// - The value is out of range
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use x402_rs::networks::{KnownNetworkEip155, USDC};
+    ///
+    /// let usdc = USDC::base();
+    /// let amount = usdc.parse("10.50").unwrap();
+    /// // 10.50 USDC = 10,500,000 units (6 decimals)
+    /// assert_eq!(amount.amount, U256::from(10_500_000u64));
+    /// ```
+    pub fn parse<V>(
+        &self,
+        v: V,
+    ) -> Result<DeployedTokenAmount<U256, Eip155TokenDeployment>, MoneyAmountParseError>
+    where
+        V: TryInto<MoneyAmount>,
+        MoneyAmountParseError: From<<V as TryInto<MoneyAmount>>::Error>,
+    {
+        let money_amount = v.try_into()?;
+        let scale = money_amount.scale();
+        let token_scale = self.decimals as u32;
+        if scale > token_scale {
+            return Err(MoneyAmountParseError::WrongPrecision {
+                money: scale,
+                token: token_scale,
+            });
+        }
+        let scale_diff = token_scale - scale;
+        let multiplier = U256::from(10).pow(U256::from(scale_diff));
+        let digits = money_amount.mantissa();
+        let value = U256::from(digits).mul(multiplier);
+        Ok(DeployedTokenAmount {
+            amount: value,
+            token: self.clone(),
+        })
+    }
+}
+
+/// EIP-712 domain parameters for a token deployment.
+///
+/// These parameters are used when verifying EIP-712 typed data signatures
+/// for ERC-3009 `transferWithAuthorization` calls.
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[allow(dead_code)] // Public for consumption by downstream crates.
+pub struct TokenDeploymentEip712 {
+    /// The token name as specified in the EIP-712 domain.
+    pub name: String,
+    /// The token version as specified in the EIP-712 domain.
+    pub version: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_deployment(decimals: u8) -> Eip155TokenDeployment {
+        let chain_ref = Eip155ChainReference::new(1); // Mainnet
+        Eip155TokenDeployment {
+            chain_reference: chain_ref,
+            address: alloy_primitives::Address::ZERO,
+            decimals,
+            eip712: None,
+        }
+    }
+
+    #[test]
+    fn test_parse_whole_number() {
+        let deployment = create_test_deployment(6); // 6 decimals like USDC
+        let result = deployment.parse("100");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(100_000_000u64)); // 100 * 10^6
+    }
+
+    #[test]
+    fn test_parse_with_decimals() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("1.50");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(1_500_000u64)); // 1.50 * 10^6
+    }
+
+    #[test]
+    fn test_parse_zero_decimals() {
+        let deployment = create_test_deployment(0);
+        let result = deployment.parse("42");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(42u64));
+    }
+
+    #[test]
+    fn test_parse_precision_too_high() {
+        let deployment = create_test_deployment(2); // Only 2 decimals
+        let result = deployment.parse("1.234"); // 3 decimals - should fail
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, MoneyAmountParseError::WrongPrecision { .. }));
+    }
+
+    #[test]
+    fn test_parse_exact_precision() {
+        let deployment = create_test_deployment(9); // 9 decimals
+        let result = deployment.parse("0.123456789");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(123_456_789u64));
+    }
+
+    #[test]
+    fn test_parse_smallest_amount() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("0.000001");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(1u64));
+    }
+
+    #[test]
+    fn test_parse_with_currency_symbol() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("$10.50");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(10_500_000u64));
+    }
+
+    #[test]
+    fn test_parse_with_commas() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("1,000");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().amount, U256::from(1_000_000_000u64));
+    }
+
+    #[test]
+    fn test_parse_large_amount() {
+        let deployment = create_test_deployment(6);
+        let result = deployment.parse("999999999");
+        assert!(result.is_ok());
+        // 999999999 * 10^6 = 999999999000000
+        assert_eq!(result.unwrap().amount, U256::from(999_999_999_000_000u64));
+    }
+
+    #[test]
+    fn test_parse_very_large_amount_with_high_decimals() {
+        // EIP155 uses U256, so we can handle much larger amounts than Solana
+        let deployment = create_test_deployment(18); // 18 decimals like ETH
+        let result = deployment.parse("999999999"); // 9 digits, 0 decimals
+        assert!(result.is_ok());
+        // 999999999 * 10^18 = 999999999000000000000000000
+        let expected = U256::from(999_999_999u64) * U256::from(10).pow(U256::from(18));
+        assert_eq!(result.unwrap().amount, expected);
     }
 }
