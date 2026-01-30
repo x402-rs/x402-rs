@@ -3,7 +3,6 @@ pub mod v1_eip155_exact;
 pub mod v2_eip155_exact;
 
 mod networks;
-
 pub use networks::*;
 
 pub use v1_eip155_exact::V1Eip155Exact;

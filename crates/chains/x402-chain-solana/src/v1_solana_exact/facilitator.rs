@@ -1,3 +1,5 @@
+#![cfg(feature = "facilitator")]
+
 use serde::{Deserialize, Serialize};
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
 use solana_client::rpc_response::{TransactionError, UiTransactionError};

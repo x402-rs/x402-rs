@@ -1,3 +1,5 @@
+#![cfg(feature = "client")]
+
 //! Client-side payment signing for the V2 Solana "exact" scheme.
 //!
 //! This module provides [`V2SolanaExactClient`] for building and signing
@@ -29,7 +31,7 @@ use x402_types::scheme::client::{
 use x402_types::util::Base64Bytes;
 
 use crate::chain::rpc::RpcClientLike;
-use crate::v1_solana_exact::client::{build_signed_transfer_transaction};
+use crate::v1_solana_exact::client::build_signed_transfer_transaction;
 use crate::v1_solana_exact::types::ExactSolanaPayload;
 use crate::v2_solana_exact::V2SolanaExact;
 use crate::v2_solana_exact::types::{PaymentPayload, PaymentRequirements};

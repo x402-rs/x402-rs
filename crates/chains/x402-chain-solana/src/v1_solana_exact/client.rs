@@ -1,3 +1,5 @@
+#![cfg(feature = "client")]
+
 //! Client-side payment signing for the V1 Solana "exact" scheme.
 //!
 //! This module provides [`V1SolanaExactClient`] for building and signing
@@ -24,11 +26,7 @@
 
 use alloy_primitives::U256;
 use async_trait::async_trait;
-use solana_account::Account;
-use solana_client::client_error::ClientError;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::RpcSimulateTransactionConfig;
-use solana_client::rpc_response::{RpcPrioritizationFee, RpcResult, RpcSimulateTransactionResult};
 use solana_compute_budget_interface::ComputeBudgetInstruction;
 use solana_message::v0::Message as MessageV0;
 use solana_message::{Hash, VersionedMessage};

@@ -4,21 +4,28 @@
 //! on Solana using the V1 x402 protocol.
 
 use serde::{Deserialize, Serialize};
-use solana_commitment_config::CommitmentConfig;
-use solana_message::compiled_instruction::CompiledInstruction;
 use solana_pubkey::{Pubkey, pubkey};
-use solana_signature::Signature;
-use solana_signer::Signer;
-use solana_transaction::versioned::VersionedTransaction;
 use std::sync::LazyLock;
 use x402_types::proto::PaymentVerificationError;
 use x402_types::proto::util::U64String;
-use x402_types::util::Base64Bytes;
 use x402_types::{lit_str, proto};
 
+use crate::chain::Address;
 #[cfg(feature = "facilitator")]
 use crate::chain::{SolanaChainProviderError, SolanaChainProviderLike};
-use crate::chain::Address;
+
+#[cfg(feature = "facilitator")]
+use solana_commitment_config::CommitmentConfig;
+#[cfg(any(feature = "client", feature = "facilitator"))]
+use solana_message::compiled_instruction::CompiledInstruction;
+#[cfg(any(feature = "client", feature = "facilitator"))]
+use solana_signature::Signature;
+#[cfg(any(feature = "client", feature = "facilitator"))]
+use solana_signer::Signer;
+#[cfg(any(feature = "client", feature = "facilitator"))]
+use solana_transaction::versioned::VersionedTransaction;
+#[cfg(any(feature = "client", feature = "facilitator"))]
+use x402_types::util::Base64Bytes;
 
 lit_str!(ExactScheme, "exact");
 
@@ -50,6 +57,13 @@ pub struct SupportedPaymentKindExtra {
 }
 
 pub const ATA_PROGRAM_PUBKEY: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+
+#[cfg(any(feature = "client", feature = "facilitator"))]
+pub struct InstructionInt {
+    index: usize,
+    instruction: CompiledInstruction,
+    account_keys: Vec<Pubkey>,
+}
 
 #[cfg(any(feature = "client", feature = "facilitator"))]
 pub struct TransactionInt {
@@ -156,12 +170,7 @@ impl TransactionInt {
     }
 }
 
-pub struct InstructionInt {
-    index: usize,
-    instruction: CompiledInstruction,
-    account_keys: Vec<Pubkey>,
-}
-
+#[cfg(any(feature = "client", feature = "facilitator"))]
 impl InstructionInt {
     pub fn has_data(&self) -> bool {
         !self.instruction.data.is_empty()

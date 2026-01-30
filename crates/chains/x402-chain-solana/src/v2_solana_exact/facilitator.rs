@@ -1,3 +1,5 @@
+#![cfg(feature = "facilitator")]
+
 use std::collections::HashMap;
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto;
