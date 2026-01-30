@@ -32,14 +32,6 @@
 //! );
 //! ```
 
-pub mod types;
-pub use types::*;
-
-#[cfg(feature = "client")]
-pub mod client;
-#[cfg(feature = "client")]
-pub use client::*;
-
 #[cfg(feature = "server")]
 pub mod server;
 #[cfg(feature = "server")]
@@ -49,6 +41,14 @@ pub use server::*;
 pub mod facilitator;
 #[cfg(feature = "facilitator")]
 pub use facilitator::*;
+
+#[cfg(feature = "client")]
+pub mod client;
+#[cfg(feature = "client")]
+pub use client::*;
+
+pub mod types;
+pub use types::*;
 
 use x402_types::scheme::X402SchemeId;
 
