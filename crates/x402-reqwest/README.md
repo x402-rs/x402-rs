@@ -41,7 +41,7 @@ x402-reqwest = { version = "0.6", features = ["telemetry"] }
 
 ```rust,no_run
 use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
-use x402_rs::scheme::v1_eip155_exact::client::V1Eip155ExactClient;
+use x402_chain_eip155::V1Eip155ExactClient;
 use alloy_signer_local::PrivateKeySigner;
 use std::sync::Arc;
 use reqwest::Client;
@@ -73,10 +73,8 @@ Register scheme clients for each chain/network you want to support:
 
 ```rust,no_run
 use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
-use x402_rs::scheme::v1_eip155_exact::client::V1Eip155ExactClient;
-use x402_rs::scheme::v2_eip155_exact::client::V2Eip155ExactClient;
-use x402_rs::scheme::v1_solana_exact::client::V1SolanaExactClient;
-use x402_rs::scheme::v2_solana_exact::client::V2SolanaExactClient;
+use x402_chain_eip155::{V1Eip155ExactClient, V2Eip155ExactClient};
+use x402_chain_solana::{V1SolanaExactClient, V2SolanaExactClient};
 use alloy_signer_local::PrivateKeySigner;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_keypair::Keypair;
@@ -123,7 +121,7 @@ You can implement custom selection logic:
 
 ```rust,ignore
 use x402_reqwest::X402Client;
-use x402_rs::proto::client::{PaymentSelector, PaymentCandidate};
+use x402_types::scheme::client::{PaymentSelector, PaymentCandidate};
 
 struct MyCustomSelector;
 
@@ -163,12 +161,14 @@ The telemetry includes:
 - Request URLs and response status codes
 - Payment parsing results
 
-This integrates with any `tracing`-compatible subscriber. For OpenTelemetry export, see [x402-rs telemetry](https://docs.rs/x402-rs/latest/x402_rs/util/telemetry/index.html).
+This integrates with any `tracing`-compatible subscriber. For OpenTelemetry export, see [x402-types telemetry](https://docs.rs/x402-types/latest/x402_types/util/telemetry/index.html).
 
 ## Related Crates
 
-- [x402-rs](https://crates.io/crates/x402-rs): Core x402 types, facilitator traits, helpers.
+- [x402-types](https://crates.io/crates/x402-types): Core x402 types, facilitator traits, helpers.
 - [x402-axum](https://crates.io/crates/x402-axum): Axum middleware for accepting x402 payments.
+- [x402-chain-eip155](https://crates.io/crates/x402-chain-eip155): EIP-155 chain support for x402.
+- [x402-chain-solana](https://crates.io/crates/x402-chain-solana): Solana chain support for x402.
 
 ## License
 

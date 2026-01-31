@@ -22,6 +22,7 @@ use crate::client::X402Client;
 /// use std::sync::Arc;
 /// use reqwest::Client;
 ///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let signer = Arc::new("PRIVATE_KEY".parse::<PrivateKeySigner>().unwrap());
 /// let x402_client = X402Client::new()
 ///     .register(V1Eip155ExactClient::new(signer));
@@ -29,6 +30,8 @@ use crate::client::X402Client;
 /// let http_client = Client::new()
 ///     .with_payments(x402_client)
 ///     .build();
+/// # Ok(())
+/// # }
 /// ```
 pub trait ReqwestWithPayments<A, S> {
     /// Adds x402 payment middleware to the client or builder.
