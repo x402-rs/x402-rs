@@ -159,4 +159,4 @@ This crate uses the official Solana SDK crates:
 
 ## License
 
-This crate is part of the x402 project. See the repository root for license information.
+Apache 2.0

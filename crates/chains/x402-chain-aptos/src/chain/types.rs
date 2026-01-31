@@ -4,35 +4,55 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use x402_types::chain::{ChainId, DeployedTokenAmount};
 
+/// The CAIP-2 namespace for Aptos chains.
 pub const APTOS_NAMESPACE: &str = "aptos";
 
-/// An Aptos chain reference - the chain ID (1 for mainnet, 2 for testnet)
+/// An Aptos chain reference - the numeric chain ID.
+///
+/// Aptos uses simple numeric chain IDs:
+/// - `1` for mainnet
+/// - `2` for testnet
+///
+/// # Example
+///
+/// ```
+/// use x402_chain_aptos::chain::AptosChainReference;
+/// use x402_types::chain::ChainId;
+///
+/// let mainnet = AptosChainReference::mainnet();
+/// let chain_id: ChainId = mainnet.into();
+/// assert_eq!(chain_id.to_string(), "aptos:1");
+/// ```
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AptosChainReference(u8);
 
 impl AptosChainReference {
+    /// Creates a new Aptos chain reference from a numeric chain ID.
     pub fn new(chain_id: u8) -> Self {
         Self(chain_id)
     }
 
+    /// Returns the numeric chain ID.
     pub fn chain_id(&self) -> u8 {
         self.0
     }
 
+    /// Returns the mainnet chain reference (chain ID 1).
     pub fn mainnet() -> Self {
         Self(1)
     }
 
+    /// Returns the testnet chain reference (chain ID 2).
     pub fn testnet() -> Self {
         Self(2)
     }
 
-    /// Alias for mainnet for compatibility with KnownNetworkAptos trait
+    /// Alias for mainnet for compatibility with [`KnownNetworkAptos`](crate::KnownNetworkAptos) trait.
     pub fn aptos() -> Self {
         Self::mainnet()
     }
 
-    /// Alias for testnet for compatibility with KnownNetworkAptos trait
+    /// Alias for testnet for compatibility with [`KnownNetworkAptos`](crate::KnownNetworkAptos) trait.
     pub fn aptos_testnet() -> Self {
         Self::testnet()
     }
@@ -105,23 +125,41 @@ impl TryFrom<ChainId> for AptosChainReference {
     }
 }
 
+/// Error type for parsing Aptos chain references.
 #[derive(Debug, thiserror::Error)]
 pub enum AptosChainReferenceFormatError {
+    /// The namespace was not "aptos".
     #[error("Invalid namespace {0}, expected aptos")]
     InvalidNamespace(String),
+    /// The reference was not a valid Aptos chain ID (1 or 2).
     #[error("Invalid aptos chain reference {0}")]
     InvalidReference(String),
 }
 
-/// Aptos address type
+/// An Aptos account address.
+///
+/// This is a wrapper around [`AccountAddress`] that provides serialization
+/// as a hex-encoded string with `0x` prefix, suitable for use in x402 protocol messages.
+///
+/// # Example
+///
+/// ```
+/// use x402_chain_aptos::chain::Address;
+/// use std::str::FromStr;
+///
+/// let addr = Address::from_str("0x1").unwrap();
+/// assert_eq!(addr.to_string(), "0x0000000000000000000000000000000000000000000000000000000000000001");
+/// ```
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Address(AccountAddress);
 
 impl Address {
+    /// Creates a new address from an [`AccountAddress`].
     pub fn new(address: AccountAddress) -> Self {
         Self(address)
     }
 
+    /// Returns a reference to the inner [`AccountAddress`].
     pub fn inner(&self) -> &AccountAddress {
         &self.0
     }

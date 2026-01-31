@@ -13156,7 +13156,7 @@ dependencies = [
 
 [[package]]
 name = "x402-chain-aptos"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "aptos-crypto",
  "aptos-rest-client",
