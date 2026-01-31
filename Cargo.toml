@@ -14,13 +14,15 @@ members = [
 ]
 
 [workspace.package]
-version = "0.12.6"
+version = "1.0.0"
 authors = ["Sergey Ukustov <sergey@ukstv.me>"]
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/x402-rs/x402-rs"
 homepage = "https://x402.rs"
 rust-version = "1.88.0"
+keywords = ["blockchain", "payments", "x402", "stablecoin", "http-402"]
+categories = ["cryptography::cryptocurrencies", "finance", "network-programming", "web-programming::http-server"]
 
 [workspace.dependencies]
 alloy-primitives = { version = "1.4.1" } # To represent token amounts

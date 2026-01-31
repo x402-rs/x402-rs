@@ -1,3 +1,14 @@
+//! Facilitator-side payment verification and settlement for V1 EIP-155 exact scheme.
+//!
+//! This module implements the facilitator logic for verifying and settling ERC-3009
+//! payments on EVM chains. It handles:
+//!
+//! - Signature verification (EOA, EIP-1271, EIP-6492)
+//! - Balance and amount validation
+//! - EIP-712 domain construction
+//! - On-chain settlement with gas management
+//! - Smart wallet deployment for counterfactual signatures
+
 use alloy_contract::SolCallBuilder;
 use alloy_primitives::{Address, B256, Bytes, Signature, TxHash, U256, address, hex};
 use alloy_provider::bindings::IMulticall3;
@@ -46,12 +57,21 @@ where
     }
 }
 
+/// Facilitator for V1 EIP-155 exact scheme payments.
+///
+/// This struct implements the [`X402SchemeFacilitator`] trait to provide payment
+/// verification and settlement services for ERC-3009 based payments on EVM chains.
+///
+/// # Type Parameters
+///
+/// - `P`: The provider type, which must implement [`Eip155MetaTransactionProvider`]
+///   and [`ChainProviderOps`]
 pub struct V1Eip155ExactFacilitator<P> {
     provider: P,
 }
 
 impl<P> V1Eip155ExactFacilitator<P> {
-    /// Creates a new facilitator with the given provider.
+    /// Creates a new V1 EIP-155 exact scheme facilitator with the given provider.
     pub fn new(provider: P) -> Self {
         Self { provider }
     }

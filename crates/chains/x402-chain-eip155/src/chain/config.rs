@@ -6,31 +6,60 @@ use x402_types::config::{LiteralOrEnv, RpcConfig};
 
 use crate::chain::Eip155ChainReference;
 
+/// Configuration for an EVM-compatible chain in the x402 facilitator.
+///
+/// This struct combines a chain reference with chain-specific configuration
+/// including RPC endpoints, signers, and network capabilities.
+///
+/// # Example
+///
+/// ```ignore
+/// use x402_chain_eip155::chain::{Eip155ChainConfig, Eip155ChainReference};
+///
+/// let config = Eip155ChainConfig {
+///     chain_reference: Eip155ChainReference::new(8453), // Base
+///     inner: config_inner,
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct Eip155ChainConfig {
+    /// The numeric chain ID for this EVM network.
     pub chain_reference: Eip155ChainReference,
+    /// Chain-specific configuration details.
     pub inner: Eip155ChainConfigInner,
 }
 
 impl Eip155ChainConfig {
+    /// Returns the CAIP-2 chain ID for this configuration.
     pub fn chain_id(&self) -> ChainId {
         self.chain_reference.into()
     }
+    /// Returns whether this chain supports EIP-1559 gas pricing.
     pub fn eip1559(&self) -> bool {
         self.inner.eip1559
     }
+
+    /// Returns whether this chain supports flashblocks (immediate block finality).
     pub fn flashblocks(&self) -> bool {
         self.inner.flashblocks
     }
+
+    /// Returns the transaction receipt timeout in seconds.
     pub fn receipt_timeout_secs(&self) -> u64 {
         self.inner.receipt_timeout_secs
     }
+
+    /// Returns the signer configuration for this chain.
     pub fn signers(&self) -> &Eip155SignersConfig {
         &self.inner.signers
     }
+
+    /// Returns the RPC endpoint configurations for this chain.
     pub fn rpc(&self) -> &Vec<RpcConfig> {
         &self.inner.rpc
     }
+
+    /// Returns the numeric chain reference.
     pub fn chain_reference(&self) -> Eip155ChainReference {
         self.chain_reference
     }

@@ -1,3 +1,9 @@
+//! Facilitator-side payment verification and settlement for V2 EIP-155 exact scheme.
+//!
+//! This module implements the facilitator logic for V2 protocol payments on EVM chains.
+//! It reuses most of the V1 verification and settlement logic but handles V2-specific
+//! payload structures with embedded requirements and CAIP-2 chain IDs.
+
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
@@ -34,12 +40,22 @@ where
     }
 }
 
+/// Facilitator for V2 EIP-155 exact scheme payments.
+///
+/// This struct implements the [`X402SchemeFacilitator`] trait to provide payment
+/// verification and settlement services for ERC-3009 based payments on EVM chains
+/// using the V2 protocol.
+///
+/// # Type Parameters
+///
+/// - `P`: The provider type, which must implement [`Eip155MetaTransactionProvider`]
+///   and [`ChainProviderOps`]
 pub struct V2Eip155ExactFacilitator<P> {
     provider: P,
 }
 
 impl<P> V2Eip155ExactFacilitator<P> {
-    /// Creates a new facilitator with the given provider.
+    /// Creates a new V2 EIP-155 exact scheme facilitator with the given provider.
     pub fn new(provider: P) -> Self {
         Self { provider }
     }
