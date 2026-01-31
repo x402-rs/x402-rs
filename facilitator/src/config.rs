@@ -1,4 +1,42 @@
 //! Configuration module for the x402 facilitator server.
+//!
+//! This module handles configuration loading from JSON files and environment variables.
+//! It supports multiple blockchain families (EVM, Solana, Aptos) through a unified
+//! configuration interface.
+//!
+//! # Configuration File Format
+//!
+//! Configuration is loaded from a JSON file (default: `config.json`) with the following structure:
+//!
+//! ```json
+//! {
+//!   "port": 8080,
+//!   "host": "0.0.0.0",
+//!   "chains": {
+//!     "eip155:84532": {
+//!       "rpc_url": "https://sepolia.base.org",
+//!       "signer_private_key": "0x..."
+//!     },
+//!     "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
+//!       "rpc_url": "https://api.devnet.solana.com",
+//!       "signer_private_key": "base58..."
+//!     }
+//!   },
+//!   "schemes": [
+//!     {
+//!       "version": "v2",
+//!       "scheme": "exact",
+//!       "network": "eip155:*"
+//!     }
+//!   ]
+//! }
+//! ```
+//!
+//! # Environment Variables
+//!
+//! - `CONFIG` - Path to configuration file (default: `config.json`)
+//! - `PORT` - Server port (default: 8080)
+//! - `HOST` - Server bind address (default: `0.0.0.0`)
 
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -60,7 +98,7 @@ pub enum ChainConfig {
 
 /// Configuration for chains.
 ///
-/// This is a wrapper around Vec<ChainConfig> that provides custom serialization
+/// This is a wrapper around `Vec<ChainConfig>` that provides custom serialization
 /// as a map where keys are CAIP-2 chain identifiers.
 #[derive(Debug, Clone, Default)]
 pub struct ChainsConfig(pub Vec<ChainConfig>);

@@ -1,12 +1,25 @@
 [package]
-name = "facilitator"
-version = "0.1.0"
-edition = "2024"
+name = "x402-facilitator"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+keywords.workspace = true
+description = "Production-ready x402 facilitator server binary"
+readme = "README.md"
 publish = false
 
 [features]
 default = []
 telemetry = ["dep:tracing", "x402-facilitator-local/telemetry", "x402-chain-eip155/telemetry", "x402-chain-solana/telemetry", "x402-chain-aptos/telemetry"]
+
+# FIXME Check README
+# FIXME feature-toggle chains
+# FIXME Dockerfile and GH support
 
 [dependencies]
 x402-types = { workspace = true }

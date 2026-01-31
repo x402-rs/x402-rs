@@ -1,24 +1,32 @@
-//! x402 Facilitator HTTP entrypoint.
+//! x402 Facilitator HTTP server entrypoint.
 //!
-//! This binary launches an Axum-based HTTP server that exposes the x402 protocol interface
-//! for payment verification and settlement via Ethereum-compatible networks.
+//! This module initializes and runs the Axum-based HTTP server that exposes the x402 protocol
+//! interface for payment verification and settlement across multiple blockchain networks.
 //!
-//! Endpoints:
-//! - `GET /verify` – Supported verification schema
-//! - `POST /verify` – Verify a payment payload against requirements
-//! - `GET /settle` – Supported settlement schema
-//! - `POST /settle` – Settle an accepted payment payload on-chain
-//! - `GET /supported` – List supported payment kinds (version/scheme/network)
+//! # Endpoints
 //!
-//! This server includes:
-//! - OpenTelemetry tracing via `TraceLayer`
-//! - CORS support for cross-origin clients
-//! - Ethereum provider cache for per-network RPC routing
+//! | Method | Path | Description |
+//! |--------|------|-------------|
+//! | `GET` | `/verify` | Get supported verification schema |
+//! | `POST` | `/verify` | Verify a payment payload against requirements |
+//! | `GET` | `/settle` | Get supported settlement schema |
+//! | `POST` | `/settle` | Settle an accepted payment payload on-chain |
+//! | `GET` | `/supported` | List supported payment kinds (version/scheme/network) |
+//! | `GET` | `/health` | Health check endpoint |
 //!
-//! Environment:
-//! - `.env` values loaded at startup
-//! - `HOST`, `PORT` control binding address
-//! - `OTEL_*` variables enable tracing to systems like Honeycomb
+//! # Features
+//!
+//! - **Multi-chain support**: EIP-155 (EVM), Solana, and Aptos networks
+//! - **OpenTelemetry tracing** (with `telemetry` feature): Distributed tracing and metrics
+//! - **CORS support**: Cross-origin requests for browser-based clients
+//! - **Graceful shutdown**: Signal-based shutdown with cleanup
+//!
+//! # Environment Variables
+//!
+//! - `HOST` - Server bind address (default: `0.0.0.0`)
+//! - `PORT` - Server port (default: `8080`)
+//! - `CONFIG` - Path to configuration file (default: `config.json`)
+//! - `OTEL_*` - OpenTelemetry configuration (when `telemetry` feature enabled)
 
 use axum::Router;
 use axum::http::Method;

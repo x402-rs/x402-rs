@@ -8,23 +8,41 @@
 //!
 //! Telemetry is configured via environment variables:
 //!
-//! - `OTEL_EXPORTER_OTLP_ENDPOINT` - OTLP collector endpoint
-//! - `OTEL_EXPORTER_OTLP_PROTOCOL` - Protocol (`http/protobuf` or `grpc`)
-//! - `OTEL_SERVICE_NAME` - Service name for traces
-//! - `OTEL_SERVICE_VERSION` - Service version
-//! - `OTEL_SERVICE_DEPLOYMENT` - Deployment environment
+//! | Variable | Description |
+//! |----------|-------------|
+//! | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector endpoint |
+//! | `OTEL_EXPORTER_OTLP_PROTOCOL` | Protocol (`http/protobuf` or `grpc`) |
+//! | `OTEL_SERVICE_NAME` | Service name for traces |
+//! | `OTEL_SERVICE_VERSION` | Service version |
+//! | `OTEL_SERVICE_DEPLOYMENT` | Deployment environment |
 //!
 //! # Example
 //!
 //! ```ignore
-//! use x402::util::Telemetry;
+//! use x402_facilitator_local::util::Telemetry;
 //!
 //! // Initialize telemetry (reads from environment)
-//! let _providers = Telemetry::new().register();
+//! let telemetry = Telemetry::new()
+//!     .with_name("x402-facilitator")
+//!     .with_version("1.0.0")
+//!     .register();
+//!
+//! // Get HTTP tracing layer for axum
+//! let tracing_layer = telemetry.http_tracing();
 //!
 //! // Telemetry is now active; spans and metrics will be exported
 //! tracing::info!("Application started");
 //! ```
+//!
+//! # Features
+//!
+//! This module is only available when the `telemetry` feature is enabled.
+//!
+//! The telemetry system provides:
+//! - Distributed tracing via OpenTelemetry
+//! - Metrics collection via OTLP
+//! - HTTP request tracing for axum applications
+//! - Automatic graceful shutdown of exporters via [`TelemetryProviders`]
 
 use axum::http::{Request, Response};
 use opentelemetry::trace::{Status, TracerProvider};
@@ -361,6 +379,26 @@ impl Drop for TelemetryProviders {
 }
 
 impl TelemetryProviders {
+    /// Creates an HTTP tracing layer for axum applications.
+    ///
+    /// This layer creates OpenTelemetry-compatible spans for each HTTP request
+    /// and records response status and latency.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use x402_facilitator_local::util::Telemetry;
+    ///
+    /// let telemetry = Telemetry::new()
+    ///     .with_name("x402-facilitator")
+    ///     .register();
+    ///
+    /// let tracing_layer = telemetry.http_tracing();
+    ///
+    /// let app = Router::new()
+    ///     .merge(handlers::routes().with_state(state))
+    ///     .layer(tracing_layer);
+    /// ```
     pub fn http_tracing(
         &self,
     ) -> TraceLayer<
@@ -375,6 +413,10 @@ impl TelemetryProviders {
     }
 }
 
+/// Custom span maker for HTTP requests.
+///
+/// Creates OpenTelemetry-compatible spans with relevant HTTP attributes
+/// including method, URI, and version.
 #[derive(Clone, Debug)]
 pub struct FacilitatorHttpMakeSpan;
 
@@ -391,6 +433,10 @@ impl<A> MakeSpan<A> for FacilitatorHttpMakeSpan {
     }
 }
 
+/// Custom response handler for HTTP tracing.
+///
+/// Records response status, latency, and sets OpenTelemetry span status
+/// based on the HTTP response.
 #[derive(Clone, Debug)]
 pub struct FacilitatorHttpOnResponse;
 

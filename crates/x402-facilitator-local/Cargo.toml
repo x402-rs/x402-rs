@@ -1,7 +1,17 @@
 [package]
 name = "x402-facilitator-local"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+keywords.workspace = true
+description = "Local facilitator implementation for the x402 payment protocol"
+documentation = "https://docs.rs/x402-facilitator-local"
+readme = "README.md"
 
 [features]
 default = []
