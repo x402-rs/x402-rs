@@ -36,6 +36,25 @@ use crate::v1_eip155_exact::{
 
 use crate::chain::Eip155ChainReference;
 
+/// Client for signing V1 EIP-155 exact scheme payments.
+///
+/// This client handles the creation and signing of ERC-3009 `transferWithAuthorization`
+/// payments for EVM chains. It accepts payment requirements from servers and produces
+/// signed payment payloads that can be verified and settled by facilitators.
+///
+/// # Type Parameters
+///
+/// - `S`: The signer type, which must implement [`SignerLike`]
+///
+/// # Example
+///
+/// ```ignore
+/// use x402_chain_eip155::V1Eip155ExactClient;
+/// use alloy_signer_local::PrivateKeySigner;
+///
+/// let signer = PrivateKeySigner::random();
+/// let client = V1Eip155ExactClient::new(signer);
+/// ```
 #[derive(Debug)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
 pub struct V1Eip155ExactClient<S> {
@@ -44,6 +63,7 @@ pub struct V1Eip155ExactClient<S> {
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
 impl<S> V1Eip155ExactClient<S> {
+    /// Creates a new V1 EIP-155 exact scheme client with the given signer.
     pub fn new(signer: S) -> Self {
         Self { signer }
     }
