@@ -9,7 +9,7 @@
 //!
 //! ```rust,ignore
 //! use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
-//! use x402_rs::scheme::v1_eip155_exact::client::V1Eip155ExactClient;
+//! use x402_chain_eip155::V1Eip155ExactClient;
 //! use alloy_signer_local::PrivateKeySigner;
 //! use std::sync::Arc;
 //! use reqwest::Client;
@@ -39,7 +39,7 @@
 //! - **[`V1Eip155ExactClient`]** - EIP-155 chains, x402 V1 protocol, "exact" payment scheme
 //! - **[`V2Eip155ExactClient`]** - EIP-155 chains, x402 V2 protocol, "exact" payment scheme
 //! - **[`V1SolanaExactClient`]** - Solana chains, x402 V1 protocol, "exact" payment scheme
-//! - **[`V2SolanaExactClient`]** - Solana chains, x402 V1 protocol, "exact" payment scheme
+//! - **[`V2SolanaExactClient`]** - Solana chains, x402 V2 protocol, "exact" payment scheme
 //!
 //! See [`X402Client::register`] for more details on registering scheme clients.
 //!

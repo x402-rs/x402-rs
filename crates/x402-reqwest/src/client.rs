@@ -118,7 +118,7 @@ impl<TSelector> X402Client<TSelector> {
     ///
     /// ```rust,ignore
     /// use x402_reqwest::X402Client;
-    /// use x402_rs::proto::client::{FirstMatch, PaymentSelector};
+    /// use x402_types::scheme::client::{FirstMatch, PaymentSelector};
     ///
     /// let client = X402Client::new()
     ///     .with_selector(MyCustomSelector);
