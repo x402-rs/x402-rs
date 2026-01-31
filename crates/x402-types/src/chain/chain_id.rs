@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```
-//! use x402_rs::chain::ChainId;
+//! use x402_types::chain::ChainId;
 //!
 //! // Create a chain ID for Base mainnet
 //! let base = ChainId::new("eip155", "8453");
@@ -44,7 +44,7 @@ use crate::networks;
 /// # Example
 ///
 /// ```
-/// use x402_rs::chain::ChainId;
+/// use x402_types::chain::ChainId;
 ///
 /// let chain = ChainId::new("eip155", "8453");
 /// let json = serde_json::to_string(&chain).unwrap();
@@ -64,7 +64,7 @@ impl ChainId {
     /// # Example
     ///
     /// ```
-    /// use x402_rs::chain::ChainId;
+    /// use x402_types::chain::ChainId;
     ///
     /// let base = ChainId::new("eip155", "8453");
     /// assert_eq!(base.namespace, "eip155");
@@ -95,7 +95,7 @@ impl ChainId {
     /// # Example
     ///
     /// ```
-    /// use x402_rs::chain::ChainId;
+    /// use x402_types::chain::ChainId;
     ///
     /// let base = ChainId::from_network_name("base").unwrap();
     /// assert_eq!(base.to_string(), "eip155:8453");
@@ -113,7 +113,7 @@ impl ChainId {
     /// # Example
     ///
     /// ```
-    /// use x402_rs::chain::ChainId;
+    /// use x402_types::chain::ChainId;
     ///
     /// let base = ChainId::new("eip155", "8453");
     /// assert_eq!(base.as_network_name(), Some("base"));
@@ -198,7 +198,7 @@ impl<'de> Deserialize<'de> for ChainId {
 /// # Example
 ///
 /// ```
-/// use x402_rs::chain::{ChainId, ChainIdPattern};
+/// use x402_types::chain::{ChainId, ChainIdPattern};
 ///
 /// // Match all EVM chains
 /// let all_evm = ChainIdPattern::wildcard("eip155");
@@ -240,7 +240,7 @@ impl ChainIdPattern {
     /// # Example
     ///
     /// ```
-    /// use x402_rs::chain::{ChainId, ChainIdPattern};
+    /// use x402_types::chain::{ChainId, ChainIdPattern};
     ///
     /// let pattern = ChainIdPattern::wildcard("eip155");
     /// assert!(pattern.matches(&ChainId::new("eip155", "1")));
@@ -257,7 +257,7 @@ impl ChainIdPattern {
     /// # Example
     ///
     /// ```
-    /// use x402_rs::chain::{ChainId, ChainIdPattern};
+    /// use x402_types::chain::{ChainId, ChainIdPattern};
     ///
     /// let pattern = ChainIdPattern::exact("eip155", "8453");
     /// assert!(pattern.matches(&ChainId::new("eip155", "8453")));
@@ -275,7 +275,7 @@ impl ChainIdPattern {
     /// # Example
     ///
     /// ```
-    /// use x402_rs::chain::{ChainId, ChainIdPattern};
+    /// use x402_types::chain::{ChainId, ChainIdPattern};
     /// use std::collections::HashSet;
     ///
     /// let refs: HashSet<String> = ["1", "8453", "137"].iter().map(|s| s.to_string()).collect();

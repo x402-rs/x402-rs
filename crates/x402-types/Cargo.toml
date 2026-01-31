@@ -1,16 +1,17 @@
 [package]
 name = "x402-types"
-version = "0.1.0"
-edition = "2024"
-authors = ["Sergey Ukustov <sergey@ukstv.me>"]
-license = "Apache-2.0"
-repository = "https://github.com/x402-rs/x402-rs"
-description = "Core structures for x402 payments in Rust: verify, settle, and monitor payments over HTTP 402 flows"
-readme = "README.md" # FIXME
-homepage = "https://x402.rs"
-documentation = "https://docs.rs/x402-rs"
-keywords = ["blockchain", "payments", "x402", "stablecoin", "http-402"]
-categories = ["cryptography", "finance", "network-programming", "web-programming::http-server"]
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+keywords.workspace = true
+documentation = "https://docs.rs/x402-types"
+description = "Core types for x402 payments: chain identifiers, protocol messages, and facilitator traits"
+readme = "README.md"
 
 [dependencies]
 url = { workspace = true }

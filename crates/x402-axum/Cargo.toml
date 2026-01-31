@@ -7,10 +7,10 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
+categories.workspace = true
+keywords.workspace = true
 description = "Axum middleware for enforcing x402 protocol payments on protected routes"
 documentation = "https://docs.rs/x402-axum"
-keywords = ["axum", "middleware", "x402", "payments", "stablecoin"]
-categories = ["web-programming::http-server", "authentication", "cryptography", "finance", "network-programming"]
 readme = "README.md"
 
 [dependencies]
