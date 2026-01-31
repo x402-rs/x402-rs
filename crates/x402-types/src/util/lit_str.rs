@@ -30,6 +30,7 @@
 #[macro_export]
 macro_rules! lit_str {
     ($struct_name:ident, $val:expr) => {
+        #[doc = concat!("A unit struct representing the string literal \"", $val, "\".")]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub struct $struct_name;
 

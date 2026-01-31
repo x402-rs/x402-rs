@@ -12,10 +12,6 @@ use x402_types::timestamp::UnixTimestamp;
 #[cfg(any(feature = "facilitator", feature = "client"))]
 use alloy_sol_types::sol;
 
-/// The scheme identifier for the "exact" payment scheme.
-///
-/// This constant string is used to identify the exact payment scheme in the x402 protocol,
-/// where the payer authorizes a specific token amount to be transferred.
 lit_str!(ExactScheme, "exact");
 
 /// Type alias for V1 verify requests using the exact EVM payment scheme.
