@@ -144,4 +144,4 @@ This crate uses the [Alloy](https://github.com/alloy-rs/alloy) library for Ether
 
 ## License
 
-Apache-2.0
+Apache 2.0

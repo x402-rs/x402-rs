@@ -9,11 +9,14 @@ use x402_types::scheme::X402SchemeFacilitatorError;
 use crate::chain::config::AptosChainConfig;
 use crate::chain::types::{Address, AptosChainReference};
 
+/// Errors that can occur when interacting with an Aptos chain provider.
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum AptosChainProviderError {
+    /// BCS (Binary Canonical Serialization) error.
     #[error("BCS deserialization error: {0}")]
     BcsError(#[from] bcs::Error),
+    /// JSON serialization/deserialization error.
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
 }
@@ -24,11 +27,44 @@ impl From<AptosChainProviderError> for X402SchemeFacilitatorError {
     }
 }
 
+/// Provider for interacting with an Aptos blockchain.
+///
+/// This provider handles transaction sponsorship, signing, and submission for
+/// Aptos-based x402 payments. It supports both sponsored (gasless) and non-sponsored
+/// transaction modes.
+///
+/// # Configuration
+///
+/// The provider requires:
+/// - A chain reference (mainnet or testnet)
+/// - An Aptos REST API endpoint
+/// - Optionally, a fee payer keypair for sponsored transactions
+/// - Optionally, an API key for rate-limited endpoints
+///
+/// # Sponsored Transactions
+///
+/// When `sponsor_gas` is enabled, the facilitator acts as the fee payer for
+/// user transactions. The client creates and signs a transaction, and the
+/// facilitator adds its signature as the sponsor before submitting.
+///
+/// # Example
+///
+/// ```ignore
+/// use x402_chain_aptos::chain::AptosChainProvider;
+///
+/// let provider = AptosChainProvider::from_config(&config).await?;
+/// println!("Fee payer: {:?}", provider.account_address());
+/// ```
 pub struct AptosChainProvider {
+    /// The Aptos network this provider connects to.
     chain: AptosChainReference,
+    /// Whether to sponsor gas fees for user transactions.
     sponsor_gas: bool,
+    /// The fee payer account address (if sponsoring).
     fee_payer_address: Option<AccountAddress>,
+    /// The fee payer private key (if sponsoring).
     fee_payer_private_key: Option<Ed25519PrivateKey>,
+    /// The Aptos REST API client.
     rest_client: Arc<AptosClient>,
 }
 
@@ -43,6 +79,14 @@ impl Debug for AptosChainProvider {
 }
 
 impl AptosChainProvider {
+    /// Creates a new provider from configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - `sponsor_gas` is true but no signer is provided
+    /// - The private key is invalid
+    /// - The REST client cannot be initialized
     pub async fn from_config(
         config: &AptosChainConfig,
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -95,6 +139,15 @@ impl AptosChainProvider {
         Ok(provider)
     }
 
+    /// Creates a new Aptos chain provider.
+    ///
+    /// # Parameters
+    ///
+    /// - `chain`: The Aptos network identifier
+    /// - `sponsor_gas`: Whether to sponsor gas fees for user transactions
+    /// - `fee_payer_address`: Optional fee payer account address
+    /// - `fee_payer_private_key`: Optional fee payer private key
+    /// - `rest_client`: The Aptos REST API client
     pub fn new(
         chain: AptosChainReference,
         sponsor_gas: bool,
@@ -129,18 +182,22 @@ impl AptosChainProvider {
         }
     }
 
+    /// Returns a reference to the Aptos REST API client.
     pub fn rest_client(&self) -> &AptosClient {
         &self.rest_client
     }
 
+    /// Returns whether gas sponsorship is enabled.
     pub fn sponsor_gas(&self) -> bool {
         self.sponsor_gas
     }
 
+    /// Returns the fee payer account address, if configured.
     pub fn account_address(&self) -> Option<AccountAddress> {
         self.fee_payer_address
     }
 
+    /// Returns a reference to the fee payer private key, if configured.
     pub fn private_key(&self) -> Option<&Ed25519PrivateKey> {
         self.fee_payer_private_key.as_ref()
     }
