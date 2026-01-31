@@ -1,13 +1,13 @@
 //! Local facilitator implementation for x402 payments.
 //!
-//! This module provides [`FacilitatorLocal`], a [`Facilitator`] implementation that
+//! This module provides [`FacilitatorLocal`], a [`Facilitator`](x402_types::facilitator::Facilitator) implementation that
 //! validates x402 payment payloads and performs on-chain settlements using the
 //! registered scheme handlers.
 //!
 //! # Architecture
 //!
 //! The local facilitator delegates payment processing to scheme handlers registered
-//! in a [`SchemeRegistry`]. Each handler is responsible for:
+//! in a [`SchemeRegistry`](x402_types::scheme::SchemeRegistry). Each handler is responsible for:
 //!
 //! - Verifying payment signatures and requirements
 //! - Checking on-chain balances
@@ -16,12 +16,21 @@
 //! # Example
 //!
 //! ```ignore
-//! use x402::facilitator_local::FacilitatorLocal;
-//! use x402::scheme::SchemeRegistry;
+//! use x402_facilitator_local::FacilitatorLocal;
+//! use x402_types::scheme::SchemeRegistry;
 //!
-//! let registry = SchemeRegistry::build(chains, blueprints, &config);
+//! let registry = SchemeRegistry::build(chain_registry, scheme_blueprints, &config);
 //! let facilitator = FacilitatorLocal::new(registry);
 //! ```
+//!
+//! # Scheme Routing
+//!
+//! The facilitator routes requests to the appropriate scheme handler based on the
+//! payment's chain ID and scheme name. The scheme handler slug is extracted from
+//! the request and used to look up the handler in the registry.
+//!
+//! If no matching handler is found, the request returns an error with
+//! [`PaymentVerificationError::UnsupportedScheme`](x402_types::proto::PaymentVerificationError::UnsupportedScheme).
 
 use std::collections::HashMap;
 use x402_types::facilitator::Facilitator;
@@ -29,21 +38,48 @@ use x402_types::proto;
 use x402_types::proto::PaymentVerificationError;
 use x402_types::scheme::{SchemeRegistry, X402SchemeFacilitatorError};
 
-/// A local [`Facilitator`] implementation that delegates to scheme handlers.
+/// A local [`Facilitator`](x402_types::facilitator::Facilitator) implementation that delegates to scheme handlers.
 ///
-/// This type wraps a [`SchemeRegistry`] and routes payment verification and
+/// This type wraps a [`SchemeRegistry`](x402_types::scheme::SchemeRegistry) and routes payment verification and
 /// settlement requests to the appropriate scheme handler based on the payment's
 /// chain ID and scheme name.
 ///
 /// # Type Parameter
 ///
-/// - `A` - The handler registry type (typically [`SchemeRegistry`])
+/// - `A` - The handler registry type (typically [`SchemeRegistry`](x402_types::scheme::SchemeRegistry))
+///
+/// # Example
+///
+/// ```ignore
+/// use x402_facilitator_local::FacilitatorLocal;
+/// use x402_types::scheme::SchemeRegistry;
+///
+/// let scheme_registry = SchemeRegistry::build(chain_registry, scheme_blueprints, &config);
+/// let facilitator = FacilitatorLocal::new(scheme_registry);
+///
+/// // Use the facilitator to verify payments
+/// let response = facilitator.verify(&verify_request).await?;
+/// ```
 pub struct FacilitatorLocal<A> {
     handlers: A,
 }
 
 impl<A> FacilitatorLocal<A> {
     /// Creates a new [`FacilitatorLocal`] with the given scheme handler registry.
+    ///
+    /// # Arguments
+    ///
+    /// - `handlers` - The scheme registry containing all registered payment handlers
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use x402_facilitator_local::FacilitatorLocal;
+    /// use x402_types::scheme::SchemeRegistry;
+    ///
+    /// let scheme_registry = SchemeRegistry::build(chain_registry, scheme_blueprints, &config);
+    /// let facilitator = FacilitatorLocal::new(scheme_registry);
+    /// ```
     pub fn new(handlers: A) -> Self {
         FacilitatorLocal { handlers }
     }
@@ -107,12 +143,22 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
 }
 
 /// Errors that can occur during local facilitator operations.
+///
+/// These errors wrap the underlying scheme handler errors and distinguish between
+/// verification failures (which occur during the `/verify` step) and settlement
+/// failures (which occur during the `/settle` step).
 #[derive(Debug, thiserror::Error)]
 pub enum FacilitatorLocalError {
     /// Payment verification failed.
+    ///
+    /// This error occurs when the scheme handler fails to verify a payment,
+    /// typically due to invalid signatures, unsupported schemes, or insufficient funds.
     #[error(transparent)]
     Verification(X402SchemeFacilitatorError),
     /// Payment settlement failed.
+    ///
+    /// This error occurs when the scheme handler fails to settle a payment on-chain,
+    /// typically due to transaction failures or network issues.
     #[error(transparent)]
     Settlement(X402SchemeFacilitatorError),
 }

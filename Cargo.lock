@@ -4219,28 +4219,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "facilitator"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "axum 0.8.8",
- "clap 4.5.54",
- "dotenvy",
- "rustls",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "tower-http",
- "tracing",
- "x402-chain-aptos",
- "x402-chain-eip155",
- "x402-chain-solana",
- "x402-facilitator-local",
- "x402-types",
-]
-
-[[package]]
 name = "fail"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13232,8 +13210,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "x402-facilitator"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "axum 0.8.8",
+ "clap 4.5.54",
+ "dotenvy",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "x402-chain-aptos",
+ "x402-chain-eip155",
+ "x402-chain-solana",
+ "x402-facilitator-local",
+ "x402-types",
+]
+
+[[package]]
 name = "x402-facilitator-local"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axum 0.8.8",
  "opentelemetry",

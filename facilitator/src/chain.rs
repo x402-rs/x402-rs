@@ -1,24 +1,24 @@
 //! Blockchain-specific types and providers for x402 payment processing.
 //!
 //! This module provides abstractions for interacting with different blockchain networks
-//! in the x402 protocol. It supports two major blockchain families:
+//! in the x402 protocol. It supports multiple blockchain families:
 //!
 //! - **EIP-155 (EVM)**: Ethereum and EVM-compatible chains like Base, Polygon, Avalanche
 //! - **Solana**: The Solana blockchain
+//! - **Aptos**: The Aptos blockchain
 //!
 //! # Architecture
 //!
 //! The module is organized around the concept of chain providers and chain identifiers:
 //!
 //! - [`ChainId`] - A CAIP-2 compliant chain identifier (e.g., `eip155:8453` for Base)
-//! - [`ChainIdPattern`] - Pattern matching for chain IDs (exact, wildcard, or set)
 //! - [`ChainProvider`] - Enum wrapping chain-specific providers
 //! - [`ChainRegistry`] - Registry of configured chain providers
 //!
 //! # Example
 //!
 //! ```ignore
-//! use x402_rs::chain::{ChainId, ChainIdPattern};
+//! use x402_types::chain::{ChainId, ChainIdPattern};
 //!
 //! // Create a specific chain ID
 //! let base = ChainId::new("eip155", "8453");

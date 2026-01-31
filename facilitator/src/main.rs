@@ -1,24 +1,39 @@
-//! x402 Facilitator HTTP entrypoint.
+//! x402 Facilitator HTTP server binary.
 //!
-//! This binary launches an Axum-based HTTP server that exposes the x402 protocol interface
-//! for payment verification and settlement via Ethereum-compatible networks.
+//! This is the main entry point for the x402 facilitator server, a production-ready
+//! HTTP server that implements the x402 payment protocol for blockchain-based micropayments.
 //!
-//! Endpoints:
-//! - `GET /verify` – Supported verification schema
-//! - `POST /verify` – Verify a payment payload against requirements
-//! - `GET /settle` – Supported settlement schema
-//! - `POST /settle` – Settle an accepted payment payload on-chain
-//! - `GET /supported` – List supported payment kinds (version/scheme/network)
+//! # Usage
 //!
-//! This server includes:
-//! - OpenTelemetry tracing via `TraceLayer`
-//! - CORS support for cross-origin clients
-//! - Ethereum provider cache for per-network RPC routing
+//! ```bash
+//! # Run with default configuration (config.json)
+//! cargo run --package facilitator
 //!
-//! Environment:
-//! - `.env` values loaded at startup
-//! - `HOST`, `PORT` control binding address
-//! - `OTEL_*` variables enable tracing to systems like Honeycomb
+//! # Run with custom configuration
+//! cargo run --package facilitator -- --config /path/to/config.json
+//!
+//! # Run with telemetry enabled
+//! cargo run --package facilitator --features telemetry
+//! ```
+//!
+//! # Configuration
+//!
+//! The server loads configuration from a JSON file. See [`config`](crate::config) module
+//! for the configuration format and environment variables.
+//!
+//! # Supported Blockchains
+//!
+//! - **EIP-155 (EVM)**: Ethereum, Base, Polygon, and other EVM-compatible chains
+//! - **Solana**: Mainnet, Devnet, and custom clusters
+//! - **Aptos**: Mainnet and testnet
+//!
+//! # Architecture
+//!
+//! The binary is organized into modules:
+//! - [`chain`](crate::chain) - Blockchain provider abstractions
+//! - [`config`](crate::config) - Configuration loading and validation
+//! - [`run`](crate::run) - HTTP server initialization and request handling
+//! - [`schemes`](crate::schemes) - Payment scheme registration
 
 mod chain;
 mod config;

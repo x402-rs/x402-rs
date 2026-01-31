@@ -29,7 +29,7 @@ use crate::facilitator_local::FacilitatorLocalError;
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.
 ///
 /// This is served by the facilitator to help clients understand how to construct
-/// a valid [`VerifyRequest`] for payment verification.
+/// a valid [`VerifyRequest`](x402_types::proto::VerifyRequest) for payment verification.
 ///
 /// This is optional metadata and primarily useful for discoverability and debugging tools.
 #[cfg_attr(feature = "telemetry", instrument(skip_all))]
@@ -47,7 +47,9 @@ pub async fn get_verify_info() -> impl IntoResponse {
 /// `GET /settle`: Returns a machine-readable description of the `/settle` endpoint.
 ///
 /// This is served by the facilitator to describe the structure of a valid
-/// [`SettleRequest`] used to initiate on-chain payment settlement.
+/// [`SettleRequest`](x402_types::proto::SettleRequest) used to initiate on-chain payment settlement.
+///
+/// This is optional metadata and primarily useful for discoverability and debugging tools.
 #[cfg_attr(feature = "telemetry", instrument(skip_all))]
 pub async fn get_settle_info() -> impl IntoResponse {
     Json(json!({
@@ -60,6 +62,32 @@ pub async fn get_settle_info() -> impl IntoResponse {
     }))
 }
 
+/// Creates the Axum router with all x402 facilitator endpoints.
+///
+/// The router includes the following routes:
+/// - `GET /` - Root greeting
+/// - `GET /verify` - Schema information for verify endpoint
+/// - `POST /verify` - Verify a payment payload
+/// - `GET /settle` - Schema information for settle endpoint
+/// - `POST /settle` - Settle a verified payment on-chain
+/// - `GET /health` - Health check (delegates to `/supported`)
+/// - `GET /supported` - List supported payment schemes and networks
+///
+/// # Type Parameters
+///
+/// - `A` - The facilitator type that implements [`Facilitator`]
+///
+/// # Example
+///
+/// ```ignore
+/// use x402_facilitator_local::{FacilitatorLocal, handlers};
+/// use std::sync::Arc;
+///
+/// let facilitator = FacilitatorLocal::new(scheme_registry);
+/// let state = Arc::new(facilitator);
+/// let app = axum::Router::new()
+///     .merge(handlers::routes().with_state(state));
+/// ```
 pub fn routes<A>() -> Router<A>
 where
     A: Facilitator + Clone + Send + Sync + 'static,
@@ -98,6 +126,10 @@ where
     }
 }
 
+/// `GET /health`: Health check endpoint.
+///
+/// Returns the same response as `/supported`, making it useful for load balancers
+/// and monitoring systems to check if the facilitator is operational.
 #[cfg_attr(feature = "telemetry", instrument(skip_all))]
 pub async fn get_health<A>(State(facilitator): State<A>) -> impl IntoResponse
 where
@@ -110,9 +142,16 @@ where
 /// `POST /verify`: Facilitator-side verification of a proposed x402 payment.
 ///
 /// This endpoint checks whether a given payment payload satisfies the declared
-/// [`PaymentRequirements`], including signature validity, scheme match, and fund sufficiency.
+/// [`PaymentRequirements`](x402_types::proto::PaymentRequirements), including signature validity, scheme match,
+/// and fund sufficiency.
 ///
-/// Responds with a [`VerifyResponse`] indicating whether the payment can be accepted.
+/// Responds with a [`VerifyResponse`](x402_types::proto::VerifyResponse) indicating whether the payment can be accepted.
+///
+/// # Errors
+///
+/// Returns `400 Bad Request` if the payment verification fails (e.g., invalid signature,
+/// unsupported scheme, insufficient funds). Returns `500 Internal Server Error` if an
+/// unexpected error occurs during verification.
 #[cfg_attr(feature = "telemetry", instrument(skip_all))]
 pub async fn post_verify<A>(
     State(facilitator): State<A>,
@@ -138,10 +177,16 @@ where
 
 /// `POST /settle`: Facilitator-side execution of a valid x402 payment on-chain.
 ///
-/// Given a valid [`SettleRequest`], this endpoint attempts to execute the payment
-/// via ERC-3009 `transferWithAuthorization`, and returns a [`SettleResponse`] with transaction details.
+/// Given a valid [`SettleRequest`](x402_types::proto::SettleRequest), this endpoint attempts to execute the payment
+/// on-chain using the appropriate scheme handler, and returns a [`SettleResponse`](x402_types::proto::SettleResponse)
+/// with transaction details.
 ///
 /// This endpoint is typically called after a successful `/verify` step.
+///
+/// # Errors
+///
+/// Returns `400 Bad Request` if the payment verification fails (e.g., invalid signature,
+/// insufficient funds). Returns `500 Internal Server Error` if the on-chain settlement fails.
 #[cfg_attr(feature = "telemetry", instrument(skip_all))]
 pub async fn post_settle<A>(
     State(facilitator): State<A>,
