@@ -754,18 +754,24 @@ type BoxedDynamicPriceCallback<TPriceTag> = dyn for<'a> Fn(
 /// # Example
 ///
 /// ```ignore
+/// use alloy_primitives::address;
 /// use x402_axum::paygate::DynamicPriceTags;
+/// use x402_chain_eip155::V1Eip155Exact;
+/// use x402_types::networks::USDC;
 ///
 /// // Users write a simple async closure - no Box::pin needed!
-/// let source = DynamicPriceTags::new(|headers, uri, base_url| async move {
+/// let source = DynamicPriceTags::new(|headers, uri, _base_url| async move {
 ///     let is_premium = headers
 ///         .get("X-User-Tier")
 ///         .and_then(|v| v.to_str().ok())
 ///         .map(|v| v == "premium")
 ///         .unwrap_or(false);
 ///
-///     let amount = if is_premium { 5000 } else { 10000 };
-///     vec![create_price_tag(amount)]
+///     let amount = if is_premium { "0.005" } else { "0.01" };
+///     vec![V1Eip155Exact::price_tag(
+///         address!("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"),
+///         USDC::base_sepolia().parse(amount).unwrap()
+///     )]
 /// });
 /// ```
 pub struct DynamicPriceTags<TPriceTag> {
@@ -796,10 +802,15 @@ impl<TPriceTag> DynamicPriceTags<TPriceTag> {
     /// # Example
     ///
     /// ```ignore
-    /// use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
+    /// use alloy_primitives::address;
+    /// use x402_chain_eip155::V1Eip155Exact;
+    /// use x402_types::networks::USDC;
     ///
-    /// DynamicPriceTags::new(|headers, uri, base_url| async move {
-    ///     vec![V1Eip155Exact::price_tag(pay_to, amount)]
+    /// DynamicPriceTags::new(|_headers, _uri, _base_url| async move {
+    ///     vec![V1Eip155Exact::price_tag(
+    ///         address!("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"),
+    ///         USDC::base_sepolia().parse("0.01").unwrap()
+    ///     )]
     /// })
     /// ```
     pub fn new<F, Fut>(callback: F) -> Self

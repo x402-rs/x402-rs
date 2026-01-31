@@ -1,7 +1,7 @@
-//! A [`x402_rs::facilitator::Facilitator`] implementation that interacts with a _remote_ x402 Facilitator over HTTP.
+//! A [`x402_types::facilitator::Facilitator`] implementation that interacts with a _remote_ x402 Facilitator over HTTP.
 //!
 //! This [`FacilitatorClient`] handles the `/verify`, `/settle`, and `/supported` endpoints of a remote facilitator,
-//! and implements the [`x402_rs::facilitator::Facilitator`] trait for compatibility
+//! and implements the [`x402_types::facilitator::Facilitator`] trait for compatibility
 //! with x402-based middleware and logic.
 //!
 //! ## Example

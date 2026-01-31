@@ -1,12 +1,13 @@
 [package]
 name = "x402-axum"
-version = "0.9.0"
-edition = "2024"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
 description = "Axum middleware for enforcing x402 protocol payments on protected routes"
-license = "Apache-2.0"
-authors = ["Sergey Ukustov <sergey@ukstv.me>"]
-repository = "https://github.com/x402-rs/x402-rs"
-homepage = "https://x402.rs"
 documentation = "https://docs.rs/x402-axum"
 keywords = ["axum", "middleware", "x402", "payments", "stablecoin"]
 categories = ["web-programming::http-server", "authentication", "cryptography", "finance", "network-programming"]
