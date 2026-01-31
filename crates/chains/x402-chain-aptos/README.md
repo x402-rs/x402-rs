@@ -1,5 +1,8 @@
 # x402-chain-aptos
 
+[![Crates.io](https://img.shields.io/crates/v/x402-chain-aptos.svg)](https://crates.io/crates/x402-chain-aptos)
+[![Docs.rs](https://docs.rs/x402-chain-aptos/badge.svg)](https://docs.rs/x402-chain-aptos)
+
 Aptos chain support for the x402 payment protocol.
 
 This crate provides implementations of the x402 payment protocol for the Aptos blockchain. It currently supports the V2

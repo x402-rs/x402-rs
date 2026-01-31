@@ -1,5 +1,8 @@
 # x402-chain-eip155
 
+[![Crates.io](https://img.shields.io/crates/v/x402-chain-eip155.svg)](https://crates.io/crates/x402-chain-eip155)
+[![Docs.rs](https://docs.rs/x402-chain-eip155/badge.svg)](https://docs.rs/x402-chain-eip155)
+
 EIP-155 (EVM) chain support for the [x402](https://www.x402.org) payment protocol.
 
 This crate provides implementations of the [x402](https://www.x402.org) payment protocol for EVM-compatible blockchains using the EIP-155 chain

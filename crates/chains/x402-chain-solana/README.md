@@ -1,5 +1,8 @@
 # x402-chain-solana
 
+[![Crates.io](https://img.shields.io/crates/v/x402-chain-solana.svg)](https://crates.io/crates/x402-chain-solana)
+[![Docs.rs](https://docs.rs/x402-chain-solana/badge.svg)](https://docs.rs/x402-chain-solana)
+
 Solana chain support for the x402 payment protocol.
 
 This crate provides implementations of the x402 payment protocol for the Solana blockchain. It supports both V1 and V2 protocol versions with the "exact" payment scheme based on SPL Token `transfer` instructions with pre-signed authorization.
