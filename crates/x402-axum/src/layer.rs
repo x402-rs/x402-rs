@@ -1,9 +1,9 @@
 //! Axum middleware for enforcing [x402](https://www.x402.org) payments on protected routes.
 //!
-//! This middleware validates incoming `X-Payment` headers using a configured x402 facilitator,
+//! This middleware validates incoming payment headers using a configured x402 facilitator,
 //! and settles valid payments either before or after request execution (configurable).
 //!
-//! Returns a `402 Payment Required` JSON response if the request lacks a valid payment.
+//! Returns a `402 Payment Required` response if the request lacks a valid payment.
 //!
 //! ## Example Usage
 //!
@@ -43,10 +43,11 @@
 //!
 //! ## Configuration Notes
 //!
-//! - **[`X402Middleware::with_price_tag`]** sets the assets and amounts accepted for payment.
+//! - **[`X402Middleware::with_price_tag`]** sets the assets and amounts accepted for payment (static pricing).
+//! - **[`X402Middleware::with_dynamic_price`]** sets a callback for dynamic pricing based on request context.
 //! - **[`X402Middleware::with_base_url`]** sets the base URL for computing full resource URLs.
 //!   If not set, defaults to `http://localhost/` (avoid in production).
-//! - **[`X402Middleware::with_description`]** is optional but helps the payer understand what is being paid for.
+//! - **[`X402LayerBuilder::with_description`]** is optional but helps the payer understand what is being paid for.
 //! - **[`X402LayerBuilder::with_mime_type`]** sets the MIME type of the protected resource (default: `application/json`).
 //! - **[`X402LayerBuilder::with_resource`]** explicitly sets the full URI of the protected resource.
 //!
@@ -208,14 +209,16 @@ where
     /// Sets a dynamic price source for the protected route.
     ///
     /// The `callback` receives request headers, URI, and base URL, and returns
-    /// a vector of V1 price tags.
+    /// a vector of price tags.
     ///
     /// # Example
     ///
     /// ```rust,ignore
-    /// use x402_rs::scheme::v1_eip155_exact::V1Eip155Exact;
+    /// use alloy_primitives::address;
+    /// use x402_chain_eip155::V1Eip155Exact;
+    /// use x402_types::networks::USDC;
     ///
-    /// x402.with_dynamic_price(|headers, uri, base_url| async move {
+    /// x402.with_dynamic_price(|headers, uri, _base_url| async move {
     ///     let is_premium = headers
     ///         .get("X-User-Tier")
     ///         .and_then(|v| v.to_str().ok())
@@ -223,7 +226,10 @@ where
     ///         .unwrap_or(false);
     ///
     ///     let amount = if is_premium { "0.005" } else { "0.01" };
-    ///     vec![V1Eip155Exact::price_tag(pay_to, USDC::base_sepolia().parse(amount).unwrap())]
+    ///     vec![V1Eip155Exact::price_tag(
+    ///         address!("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"),
+    ///         USDC::base_sepolia().parse(amount).unwrap()
+    ///     )]
     /// })
     /// ```
     pub fn with_dynamic_price<F, Fut, TPriceTag>(
