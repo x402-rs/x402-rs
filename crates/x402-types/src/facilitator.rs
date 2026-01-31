@@ -1,9 +1,10 @@
 //! Core trait defining the verification and settlement interface for x402 facilitators.
 //!
 //! Implementors of this trait are responsible for validating incoming payment payloads
-//! against specified requirements [`Facilitator::verify`] and executing on-chain transfers [`Facilitator::settle`].
+//! against specified requirements ([`Facilitator::verify`]) and executing on-chain transfers ([`Facilitator::settle`]).
 
 use std::fmt::{Debug, Display};
+use std::future::Future;
 use std::sync::Arc;
 
 use crate::proto;

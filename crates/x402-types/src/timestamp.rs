@@ -29,7 +29,7 @@ use std::time::SystemTime;
 /// # Example
 ///
 /// ```
-/// use x402_rs::timestamp::UnixTimestamp;
+/// use x402_types::timestamp::UnixTimestamp;
 ///
 /// // Create a timestamp for "now"
 /// let now = UnixTimestamp::now();
@@ -83,7 +83,7 @@ impl UnixTimestamp {
     /// # Example
     ///
     /// ```
-    /// use x402_rs::timestamp::UnixTimestamp;
+    /// use x402_types::timestamp::UnixTimestamp;
     ///
     /// let ts = UnixTimestamp::from_secs(1699999999);
     /// assert_eq!(ts.as_secs(), 1699999999);
@@ -102,7 +102,7 @@ impl UnixTimestamp {
     /// # Example
     ///
     /// ```
-    /// use x402_rs::timestamp::UnixTimestamp;
+    /// use x402_types::timestamp::UnixTimestamp;
     ///
     /// let now = UnixTimestamp::now();
     /// // Timestamp should be after year 2020
@@ -121,7 +121,7 @@ impl UnixTimestamp {
     /// # Example
     ///
     /// ```
-    /// use x402_rs::timestamp::UnixTimestamp;
+    /// use x402_types::timestamp::UnixTimestamp;
     ///
     /// let ts = UnixTimestamp::from_secs(1699999999);
     /// assert_eq!(ts.as_secs(), 1699999999);

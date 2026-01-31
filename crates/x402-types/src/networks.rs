@@ -55,29 +55,23 @@
 //!
 //! # Examples
 //!
-//! ```ignore
-//! use x402_rs::chain::ChainId;
-//! use x402_rs::known::{KnownNetworkEip155, KnownNetworkSolana, chain_id_by_network_name};
-//!
-//! // Using EVM network trait methods
-//! let base = ChainId::base();
-//! assert_eq!(base.namespace, "eip155");
-//! assert_eq!(base.reference, "8453");
-//!
-//! // Using Solana network trait methods
-//! let solana = ChainId::solana();
-//! assert_eq!(solana.namespace, "solana");
-//! assert_eq!(solana.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+//! ```
+//! use x402_types::chain::ChainId;
+//! use x402_types::networks::chain_id_by_network_name;
 //!
 //! // Using lookup functions
 //! let polygon = chain_id_by_network_name("polygon").unwrap();
 //! assert_eq!(polygon.namespace, "eip155");
 //! assert_eq!(polygon.reference, "137");
 //!
+//! // Using ChainId::from_network_name
+//! let base = ChainId::from_network_name("base").unwrap();
+//! assert_eq!(base.namespace, "eip155");
+//! assert_eq!(base.reference, "8453");
+//!
 //! // Reverse lookup
 //! let chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
-//! let name = chain_id_by_network_name("solana").unwrap();
-//! assert_eq!(name, "solana");
+//! assert_eq!(chain_id.as_network_name(), Some("solana"));
 //! ```
 
 use std::collections::HashMap;
@@ -217,8 +211,8 @@ pub static KNOWN_NETWORKS: &[NetworkInfo] = &[
 ///
 /// # Examples
 ///
-/// ```ignore
-/// use x402_rs::known::chain_id_by_network_name;
+/// ```
+/// use x402_types::networks::chain_id_by_network_name;
 ///
 /// let base = chain_id_by_network_name("base").unwrap();
 /// assert_eq!(base.namespace, "eip155");
@@ -239,9 +233,9 @@ pub static NAME_TO_CHAIN_ID: LazyLock<HashMap<&'static str, ChainId>> = LazyLock
 ///
 /// # Examples
 ///
-/// ```ignore
-/// use x402_rs::chain::ChainId;
-/// use x402_rs::known::network_name_by_chain_id;
+/// ```
+/// use x402_types::chain::ChainId;
+/// use x402_types::networks::network_name_by_chain_id;
 ///
 /// let chain_id = ChainId::new("eip155", "137");
 /// let name = network_name_by_chain_id(&chain_id).unwrap();
@@ -270,8 +264,8 @@ pub static CHAIN_ID_TO_NAME: LazyLock<HashMap<ChainId, &'static str>> = LazyLock
 ///
 /// # Examples
 ///
-/// ```ignore
-/// use x402_rs::known::chain_id_by_network_name;
+/// ```
+/// use x402_types::networks::chain_id_by_network_name;
 ///
 /// let base = chain_id_by_network_name("base").unwrap();
 /// assert_eq!(base.namespace, "eip155");
@@ -299,9 +293,9 @@ pub fn chain_id_by_network_name(name: &str) -> Option<&ChainId> {
 ///
 /// # Examples
 ///
-/// ```ignore
-/// use x402_rs::chain::ChainId;
-/// use x402_rs::known::network_name_by_chain_id;
+/// ```
+/// use x402_types::chain::ChainId;
+/// use x402_types::networks::network_name_by_chain_id;
 ///
 /// let chain_id = ChainId::new("eip155", "8453");
 /// let name = network_name_by_chain_id(&chain_id).unwrap();

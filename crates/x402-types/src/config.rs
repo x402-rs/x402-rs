@@ -1,3 +1,24 @@
+//! Configuration types for x402 infrastructure.
+//!
+//! This module provides configuration types used throughout the x402 ecosystem,
+//! including RPC provider configuration and environment variable resolution.
+//!
+//! # Environment Variable Resolution
+//!
+//! The [`LiteralOrEnv`] wrapper type allows configuration values to be specified
+//! either as literal values or as references to environment variables:
+//!
+//! ```json
+//! {
+//!   "http": "http://localhost:8545",           // Literal value
+//!   "api_key": "$API_KEY",                     // Simple env var
+//!   "secret": "${DATABASE_SECRET}"             // Braced env var
+//! }
+//! ```
+//!
+//! This is particularly useful for keeping secrets out of configuration files
+//! while still allowing them to be loaded at runtime.
+
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;

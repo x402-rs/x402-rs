@@ -12,12 +12,13 @@
 //! 2. **Handlers** ([`X402SchemeFacilitator`]) - Process verify/settle requests
 //! 3. **Registry** ([`SchemeRegistry`]) - Maps chain+scheme combinations to handlers
 //!
-//! # Built-in Schemes
+//! # Available Schemes
 //!
-//! - [`v1_eip155_exact`] - V1 protocol, EVM chains, exact amount transfers
-//! - [`v1_solana_exact`] - V1 protocol, Solana, exact amount transfers
-//! - [`v2_eip155_exact`] - V2 protocol, EVM chains, exact amount transfers
-//! - [`v2_solana_exact`] - V2 protocol, Solana, exact amount transfers
+//! Scheme implementations are provided by chain-specific crates:
+//!
+//! - **EVM chains** (`x402-chain-eip155`): `v1-eip155-exact`, `v2-eip155-exact`
+//! - **Solana** (`x402-chain-solana`): `v1-solana-exact`, `v2-solana-exact`
+//! - **Aptos** (`x402-chain-aptos`): `v2-aptos-exact`
 //!
 //! # Implementing a Custom Scheme
 //!
@@ -28,7 +29,7 @@
 //! 3. Implement [`X402SchemeFacilitator`] for the actual verification/settlement logic
 //! 4. Register your scheme with [`SchemeBlueprints::register`]
 //!
-//! See the [how-to-write-a-scheme](../../docs/how-to-write-a-scheme.md) guide for details. FIXME
+//! See the `docs/how-to-write-a-scheme.md` guide in the repository for details.
 
 pub mod client;
 

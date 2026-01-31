@@ -15,7 +15,7 @@ use std::str::FromStr;
 /// # Example
 ///
 /// ```rust
-/// use x402_rs::proto::util::U64String;
+/// use x402_types::proto::util::U64String;
 ///
 /// let value = U64String::from(12345678901234567890u64);
 /// let json = serde_json::to_string(&value).unwrap();
