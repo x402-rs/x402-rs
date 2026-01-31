@@ -13203,7 +13203,7 @@ dependencies = [
 
 [[package]]
 name = "x402-chain-solana"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "alloy-primitives",
  "async-trait",

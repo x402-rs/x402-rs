@@ -7,31 +7,60 @@ use x402_types::config::LiteralOrEnv;
 
 use crate::chain::SolanaChainReference;
 
+/// Configuration for a Solana chain in the x402 facilitator.
+///
+/// This struct combines a chain reference with chain-specific configuration
+/// including RPC endpoints, signer, and compute budget parameters.
+///
+/// # Example
+///
+/// ```ignore
+/// use x402_chain_solana::chain::{SolanaChainConfig, SolanaChainReference};
+///
+/// let config = SolanaChainConfig {
+///     chain_reference: SolanaChainReference::solana(),
+///     inner: config_inner,
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct SolanaChainConfig {
+    /// The Solana network identifier (genesis hash prefix).
     pub chain_reference: SolanaChainReference,
+    /// Chain-specific configuration details.
     pub inner: SolanaChainConfigInner,
 }
 
 impl SolanaChainConfig {
+    /// Returns the signer configuration for this chain.
     pub fn signer(&self) -> &SolanaSignerConfig {
         &self.inner.signer
     }
+    /// Returns the RPC endpoint URL for this chain.
     pub fn rpc(&self) -> &Url {
         &self.inner.rpc
     }
+
+    /// Returns the maximum compute unit limit for transactions.
     pub fn max_compute_unit_limit(&self) -> u32 {
         self.inner.max_compute_unit_limit
     }
+
+    /// Returns the maximum compute unit price (in micro-lamports).
     pub fn max_compute_unit_price(&self) -> u64 {
         self.inner.max_compute_unit_price
     }
+
+    /// Returns the chain reference (genesis hash prefix).
     pub fn chain_reference(&self) -> SolanaChainReference {
         self.chain_reference
     }
+
+    /// Returns the CAIP-2 chain ID for this configuration.
     pub fn chain_id(&self) -> ChainId {
         self.chain_reference.into()
     }
+
+    /// Returns the optional WebSocket pubsub endpoint URL.
     pub fn pubsub(&self) -> &Option<Url> {
         &self.inner.pubsub
     }
