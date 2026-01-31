@@ -112,6 +112,20 @@ impl Debug for SolanaChainProvider {
 }
 
 impl SolanaChainProvider {
+    /// Creates a new Solana chain provider.
+    ///
+    /// # Parameters
+    ///
+    /// - `keypair`: The keypair used for signing transactions (fee payer)
+    /// - `rpc_url`: The HTTP RPC endpoint URL
+    /// - `pubsub_url`: Optional WebSocket pubsub endpoint for faster confirmations
+    /// - `chain`: The Solana network identifier
+    /// - `max_compute_unit_limit`: Maximum compute units per transaction
+    /// - `max_compute_unit_price`: Maximum price per compute unit in micro-lamports
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the WebSocket connection fails to establish.
     pub async fn new(
         keypair: Keypair,
         rpc_url: String,
@@ -151,16 +165,26 @@ impl SolanaChainProvider {
         })
     }
 
+    /// Returns a cloned reference to the RPC client.
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn rpc_client(&self) -> Arc<RpcClient> {
         Arc::clone(&self.rpc_client)
     }
 
+    /// Returns a cloned reference to the optional pubsub client.
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn pubsub_client(&self) -> Option<Arc<PubsubClient>> {
         self.pubsub_client.clone()
     }
 
+    /// Sends a signed transaction to the network without waiting for confirmation.
+    ///
+    /// This method submits the transaction with `skip_preflight: true` to avoid
+    /// simulation delays. The transaction should already be signed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the RPC request fails or the transaction is rejected.
     pub async fn send(
         &self,
         tx: &VersionedTransaction,
@@ -211,24 +235,45 @@ impl ChainProviderOps for SolanaChainProvider {
     }
 }
 
+/// Trait for Solana chain provider operations.
+///
+/// This trait abstracts the core operations needed for x402 payment processing
+/// on Solana, including transaction simulation, signing, and confirmation.
 pub trait SolanaChainProviderLike {
+    /// Simulates a transaction with the given configuration.
     fn simulate_transaction_with_config(
         &self,
         tx: &VersionedTransaction,
         cfg: RpcSimulateTransactionConfig,
     ) -> impl Future<Output = Result<(), SolanaChainProviderError>> + Send;
+
+    /// Fetches multiple accounts in a single RPC call.
     fn get_multiple_accounts(
         &self,
         pubkeys: &[Pubkey],
     ) -> impl Future<Output = Result<Vec<Option<Account>>, SolanaChainProviderError>> + Send;
+
+    /// Returns the maximum compute unit limit for transactions.
     fn max_compute_unit_limit(&self) -> u32;
+
+    /// Returns the maximum compute unit price in micro-lamports.
     fn max_compute_unit_price(&self) -> u64;
+
+    /// Returns the public key of the fee payer.
     fn pubkey(&self) -> Pubkey;
+
+    /// Returns the fee payer address.
     fn fee_payer(&self) -> Address;
+
+    /// Signs a transaction with the provider's keypair.
     fn sign(
         &self,
         tx: VersionedTransaction,
     ) -> Result<VersionedTransaction, SolanaChainProviderError>;
+
+    /// Sends a transaction and waits for confirmation.
+    ///
+    /// Uses WebSocket subscription if available, otherwise polls for confirmation.
     fn send_and_confirm(
         &self,
         tx: &VersionedTransaction,
