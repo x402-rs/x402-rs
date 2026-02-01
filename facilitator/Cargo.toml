@@ -13,20 +13,28 @@ description = "Production-ready x402 facilitator server binary"
 readme = "README.md"
 publish = false
 
+[[bin]]
+name = "x402-facilitator"
+path = "src/main.rs"
+
 [features]
 default = []
 telemetry = ["dep:tracing", "x402-facilitator-local/telemetry", "x402-chain-eip155/telemetry", "x402-chain-solana/telemetry", "x402-chain-aptos/telemetry"]
+chain-aptos = ["x402-chain-aptos"]
+chain-eip155 = ["x402-chain-eip155"]
+chain-solana = ["x402-chain-solana"]
 
-# FIXME Check README
+# FIXME Package name x402-facilitator (incl README)
 # FIXME feature-toggle chains
 # FIXME Dockerfile and GH support
+# FIXME fs-facilitator
 
 [dependencies]
 x402-types = { workspace = true }
 x402-facilitator-local = { workspace = true, features = ["telemetry"] }
-x402-chain-eip155 = { workspace = true, features = ["facilitator"] }
-x402-chain-solana = { workspace = true, features = ["facilitator"] }
-x402-chain-aptos = { workspace = true, features = ["facilitator"] }
+x402-chain-eip155 = { workspace = true, features = ["facilitator"], optional = true }
+x402-chain-solana = { workspace = true, features = ["facilitator"], optional = true }
+x402-chain-aptos = { workspace = true, features = ["facilitator"], optional = true }
 
 dotenvy = { workspace = true }
 serde_json = { workspace = true }
