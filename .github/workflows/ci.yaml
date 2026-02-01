@@ -14,10 +14,10 @@ jobs:
     name: Docker Metadata
     runs-on: ubuntu-24.04
     outputs:
-      tags: ${{ steps.meta_main.outputs.tags || steps.meta_tag.outputs.tags }}
-      labels: ${{ steps.meta_main.outputs.labels || steps.meta_tag.outputs.labels }}
-      annotations: ${{ steps.meta_main.outputs.annotations || steps.meta_tag.outputs.annotations }}
-      json: ${{ steps.meta_main.outputs.json || steps.meta_tag.outputs.json }}
+      tags: ${{ steps.meta_main.outputs.tags || steps.meta_tag.outputs.tags || steps.meta_default.outputs.tags }}
+      labels: ${{ steps.meta_main.outputs.labels || steps.meta_tag.outputs.labels || steps.meta_default.outputs.labels }}
+      annotations: ${{ steps.meta_main.outputs.annotations || steps.meta_tag.outputs.annotations || steps.meta_default.outputs.annotations }}
+      json: ${{ steps.meta_main.outputs.json || steps.meta_tag.outputs.json || steps.meta_default.outputs.json }}
       architectures: ${{ steps.set-architectures.outputs.matrix }}
       arch-list: ${{ steps.set-architectures.outputs.list }}
     steps:
@@ -63,6 +63,17 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+          labels: true
+          annotations: true
+
+      - name: Prepare Metadata (default)
+        if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/v')
+        id: meta_default
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.GH_REGISTRY }}/${{ env.GH_IMAGE_NAME }}
+          tags: |
+            type=raw,value=dev
           labels: true
           annotations: true
 
