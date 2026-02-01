@@ -28,20 +28,28 @@
 //!     .and_register(V2SolanaExact);
 //! ```
 
+#[allow(unused_imports)] // For when no chain features are enabled
 use std::sync::Arc;
-use x402_chain_aptos::V2AptosExact;
-use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact};
-use x402_chain_solana::{V1SolanaExact, V2SolanaExact};
+#[allow(unused_imports)] // For when no chain features are enabled
 use x402_types::scheme::{X402SchemeFacilitator, X402SchemeFacilitatorBuilder};
-
+#[allow(unused_imports)] // For when no chain features are enabled
 use crate::chain::ChainProvider;
 
+#[cfg(feature = "chain-aptos")]
+use x402_chain_aptos::V2AptosExact;
+#[cfg(feature = "chain-eip155")]
+use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact};
+#[cfg(feature = "chain-solana")]
+use x402_chain_solana::{V1SolanaExact, V2SolanaExact};
+
+#[cfg(feature = "chain-solana")]
 impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1SolanaExact {
     fn build(
         &self,
         provider: &ChainProvider,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        #[allow(irrefutable_let_patterns)] // For when just chain-aptos is enabled
         let solana_provider = if let ChainProvider::Solana(provider) = provider {
             Arc::clone(provider)
         } else {
@@ -51,12 +59,14 @@ impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1SolanaExact {
     }
 }
 
+#[cfg(feature = "chain-solana")]
 impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2SolanaExact {
     fn build(
         &self,
         provider: &ChainProvider,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        #[allow(irrefutable_let_patterns)] // For when just chain-aptos is enabled
         let solana_provider = if let ChainProvider::Solana(provider) = provider {
             Arc::clone(provider)
         } else {
@@ -66,12 +76,14 @@ impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2SolanaExact {
     }
 }
 
+#[cfg(feature = "chain-eip155")]
 impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2Eip155Exact {
     fn build(
         &self,
         provider: &ChainProvider,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        #[allow(irrefutable_let_patterns)] // For when just chain-aptos is enabled
         let eip155_provider = if let ChainProvider::Eip155(provider) = provider {
             Arc::clone(provider)
         } else {
@@ -81,12 +93,14 @@ impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2Eip155Exact {
     }
 }
 
+#[cfg(feature = "chain-aptos")]
 impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2AptosExact {
     fn build(
         &self,
         provider: &ChainProvider,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        #[allow(irrefutable_let_patterns)] // For when just chain-aptos is enabled
         let aptos_provider = if let ChainProvider::Aptos(provider) = provider {
             Arc::clone(provider)
         } else {
@@ -96,12 +110,14 @@ impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2AptosExact {
     }
 }
 
+#[cfg(feature = "chain-eip155")]
 impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1Eip155Exact {
     fn build(
         &self,
         provider: &ChainProvider,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        #[allow(irrefutable_let_patterns)] // For when just chain-aptos is enabled
         let eip155_provider = if let ChainProvider::Eip155(provider) = provider {
             Arc::clone(provider)
         } else {

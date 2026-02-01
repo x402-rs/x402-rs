@@ -19,13 +19,12 @@ path = "src/main.rs"
 
 [features]
 default = []
-telemetry = ["dep:tracing", "x402-facilitator-local/telemetry", "x402-chain-eip155/telemetry", "x402-chain-solana/telemetry", "x402-chain-aptos/telemetry"]
-chain-aptos = ["x402-chain-aptos"]
-chain-eip155 = ["x402-chain-eip155"]
-chain-solana = ["x402-chain-solana"]
+telemetry = ["dep:tracing", "x402-facilitator-local/telemetry", "x402-chain-eip155?/telemetry", "x402-chain-solana?/telemetry", "x402-chain-aptos?/telemetry"]
+chain-aptos = ["dep:x402-chain-aptos"]
+chain-eip155 = ["dep:x402-chain-eip155"]
+chain-solana = ["dep:x402-chain-solana"]
 
 # FIXME Package name x402-facilitator (incl README)
-# FIXME feature-toggle chains
 # FIXME Dockerfile and GH support
 # FIXME fs-facilitator
 
@@ -47,4 +46,4 @@ axum = { workspace = true }
 tower-http = { workspace = true }
 
 clap = { version = "4.5", features = ["derive", "env"] }
-rustls = { version = "0.23" }
+rustls = { version = "0.23", features = ["ring"] }

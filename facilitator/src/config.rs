@@ -44,14 +44,21 @@ use std::fs;
 use std::net::IpAddr;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use x402_chain_aptos::chain as aptos;
-use x402_chain_aptos::chain::config::{AptosChainConfig, AptosChainConfigInner};
-use x402_chain_eip155::chain as eip155;
-use x402_chain_eip155::chain::config::{Eip155ChainConfig, Eip155ChainConfigInner};
-use x402_chain_solana::chain as solana;
-use x402_chain_solana::chain::config::{SolanaChainConfig, SolanaChainConfigInner};
 use x402_types::chain::ChainId;
 use x402_types::scheme::SchemeConfig;
+
+#[cfg(feature = "chain-aptos")]
+use x402_chain_aptos::chain as aptos;
+#[cfg(feature = "chain-aptos")]
+use x402_chain_aptos::chain::config::{AptosChainConfig, AptosChainConfigInner};
+#[cfg(feature = "chain-eip155")]
+use x402_chain_eip155::chain as eip155;
+#[cfg(feature = "chain-eip155")]
+use x402_chain_eip155::chain::config::{Eip155ChainConfig, Eip155ChainConfigInner};
+#[cfg(feature = "chain-solana")]
+use x402_chain_solana::chain as solana;
+#[cfg(feature = "chain-solana")]
+use x402_chain_solana::chain::config::{SolanaChainConfig, SolanaChainConfigInner};
 
 /// CLI arguments for the x402 facilitator server.
 #[derive(Parser, Debug)]
@@ -89,10 +96,13 @@ pub struct Config<TChainsConfig = ChainsConfig> {
 #[derive(Debug, Clone)]
 pub enum ChainConfig {
     /// EVM chain configuration (for chains with "eip155:" prefix).
+    #[cfg(feature = "chain-eip155")]
     Eip155(Box<Eip155ChainConfig>),
     /// Solana chain configuration (for chains with "solana:" prefix).
+    #[cfg(feature = "chain-solana")]
     Solana(Box<SolanaChainConfig>),
     /// Aptos chain configuration (for chains with "aptos:" prefix).
+    #[cfg(feature = "chain-aptos")]
     Aptos(Box<AptosChainConfig>),
 }
 
@@ -119,24 +129,30 @@ impl Serialize for ChainsConfig {
         use serde::ser::SerializeMap;
 
         let chains = &self.0;
+        #[allow(unused_mut)] // For when no chain features enabled
         let mut map = serializer.serialize_map(Some(chains.len()))?;
         for chain_config in chains {
             match chain_config {
+                #[cfg(feature = "chain-eip155")]
                 ChainConfig::Eip155(config) => {
                     let chain_id = config.chain_id();
                     let inner = &config.inner;
                     map.serialize_entry(&chain_id, inner)?;
                 }
+                #[cfg(feature = "chain-solana")]
                 ChainConfig::Solana(config) => {
                     let chain_id = config.chain_id();
                     let inner = &config.inner;
                     map.serialize_entry(&chain_id, inner)?;
                 }
+                #[cfg(feature = "chain-aptos")]
                 ChainConfig::Aptos(config) => {
                     let chain_id = config.chain_id();
                     let inner = &config.inner;
                     map.serialize_entry(&chain_id, inner)?;
                 }
+                #[allow(unreachable_patterns)] // For when no chain features enabled
+                _ => unreachable!("ChainConfig variant not enabled in this build"),
             }
         }
         map.end()
@@ -164,11 +180,14 @@ impl<'de> Deserialize<'de> for ChainsConfig {
             where
                 M: MapAccess<'de>,
             {
+                #[allow(unused_mut)] // For when no chain features enabled
                 let mut chains = Vec::with_capacity(access.size_hint().unwrap_or(0));
 
                 while let Some(chain_id) = access.next_key::<ChainId>()? {
                     let namespace = chain_id.namespace();
+                    #[allow(unused_variables)] // For when no chain features enabled
                     let config = match namespace {
+                        #[cfg(feature = "chain-eip155")]
                         eip155::EIP155_NAMESPACE => {
                             let inner: Eip155ChainConfigInner = access.next_value()?;
                             let config = Eip155ChainConfig {
@@ -179,6 +198,7 @@ impl<'de> Deserialize<'de> for ChainsConfig {
                             };
                             ChainConfig::Eip155(Box::new(config))
                         }
+                        #[cfg(feature = "chain-solana")]
                         solana::SOLANA_NAMESPACE => {
                             let inner: SolanaChainConfigInner = access.next_value()?;
                             let config = SolanaChainConfig {
@@ -189,6 +209,7 @@ impl<'de> Deserialize<'de> for ChainsConfig {
                             };
                             ChainConfig::Solana(Box::new(config))
                         }
+                        #[cfg(feature = "chain-aptos")]
                         aptos::APTOS_NAMESPACE => {
                             let inner: AptosChainConfigInner = access.next_value()?;
                             let config = AptosChainConfig {
@@ -206,6 +227,7 @@ impl<'de> Deserialize<'de> for ChainsConfig {
                             )));
                         }
                     };
+                    #[allow(unreachable_code)] // For when no chain features enabled
                     chains.push(config)
                 }
 
