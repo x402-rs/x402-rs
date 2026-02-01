@@ -34,15 +34,18 @@ use dotenvy::dotenv;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::cors;
-use x402_chain_aptos::V2AptosExact;
-use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact};
-use x402_chain_solana::{V1SolanaExact, V2SolanaExact};
 use x402_facilitator_local::util::SigDown;
 use x402_facilitator_local::{FacilitatorLocal, handlers};
 use x402_types::chain::ChainRegistry;
 use x402_types::chain::FromConfig;
 use x402_types::scheme::{SchemeBlueprints, SchemeRegistry};
 
+#[cfg(feature = "chain-aptos")]
+use x402_chain_aptos::V2AptosExact;
+#[cfg(feature = "chain-eip155")]
+use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact};
+#[cfg(feature = "chain-solana")]
+use x402_chain_solana::{V1SolanaExact, V2SolanaExact};
 #[cfg(feature = "telemetry")]
 use x402_facilitator_local::util::Telemetry;
 
@@ -76,12 +79,25 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load()?;
 
     let chain_registry = ChainRegistry::from_config(config.chains()).await?;
-    let scheme_blueprints = SchemeBlueprints::new()
-        .and_register(V1Eip155Exact)
-        .and_register(V2Eip155Exact)
-        .and_register(V1SolanaExact)
-        .and_register(V2SolanaExact)
-        .and_register(V2AptosExact);
+    let scheme_blueprints = {
+        #[allow(unused_mut)] // For when no chain features enabled
+        let mut scheme_blueprints = SchemeBlueprints::new();
+        #[cfg(feature = "chain-eip155")]
+        {
+            scheme_blueprints.register(V1Eip155Exact);
+            scheme_blueprints.register(V2Eip155Exact);
+        }
+        #[cfg(feature = "chain-solana")]
+        {
+            scheme_blueprints.register(V1SolanaExact);
+            scheme_blueprints.register(V2SolanaExact);
+        }
+        #[cfg(feature = "chain-aptos")]
+        {
+            scheme_blueprints.register(V2AptosExact);
+        }
+        scheme_blueprints
+    };
     let scheme_registry =
         SchemeRegistry::build(chain_registry, scheme_blueprints, config.schemes());
 
