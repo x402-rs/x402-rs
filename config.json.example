@@ -33,6 +33,11 @@
         "chains": "eip155:*"
       },
       {
+        "_comment": "Upto scheme for batched EIP-2612 permit-based payments",
+        "id": "v2-eip155-upto",
+        "chains": "eip155:*"
+      },
+      {
         "_comment": "Solana schemes allow Phantom Lighthouse program by default",
         "id": "v1-solana-exact",
         "chains": "solana:*"

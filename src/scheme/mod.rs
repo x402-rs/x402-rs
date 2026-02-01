@@ -33,6 +33,7 @@
 pub mod v1_eip155_exact;
 pub mod v1_solana_exact;
 pub mod v2_eip155_exact;
+pub mod v2_eip155_upto;
 pub mod v2_solana_exact;
 
 #[cfg(feature = "aptos")]
@@ -52,6 +53,7 @@ use crate::proto::{AsPaymentProblem, ErrorReason, PaymentProblem, PaymentVerific
 use crate::scheme::v1_eip155_exact::V1Eip155Exact;
 use crate::scheme::v1_solana_exact::V1SolanaExact;
 use crate::scheme::v2_eip155_exact::V2Eip155Exact;
+use crate::scheme::v2_eip155_upto::V2Eip155Upto;
 use crate::scheme::v2_solana_exact::V2SolanaExact;
 
 #[cfg(feature = "aptos")]
@@ -212,6 +214,7 @@ impl<P> SchemeBlueprints<P> {
 /// - V1 EIP-155 exact
 /// - V1 Solana exact
 /// - V2 EIP-155 exact
+/// - V2 EIP-155 upto
 /// - V2 Solana exact
 /// - V2 Aptos exact (when "aptos" feature is enabled)
 impl SchemeBlueprints<ChainProvider> {
@@ -220,6 +223,7 @@ impl SchemeBlueprints<ChainProvider> {
             .and_register(V1Eip155Exact)
             .and_register(V1SolanaExact)
             .and_register(V2Eip155Exact)
+            .and_register(V2Eip155Upto)
             .and_register(V2SolanaExact);
 
         #[cfg(feature = "aptos")]

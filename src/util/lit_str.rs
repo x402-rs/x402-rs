@@ -75,8 +75,8 @@ macro_rules! lit_str {
             }
         }
 
-        impl Display for $struct_name {
-            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        impl std::fmt::Display for $struct_name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, $val)
             }
         }

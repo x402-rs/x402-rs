@@ -12318,6 +12318,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
+name = "upto-integration-test"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "alloy-signer-local",
+ "axum 0.8.8",
+ "dotenvy",
+ "reqwest 0.13.1",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.22",
+ "x402-axum",
+ "x402-reqwest",
+ "x402-rs",
+]
+
+[[package]]
 name = "ureq"
 version = "1.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
