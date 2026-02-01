@@ -1,5 +1,3 @@
-// FIXME feature gate client, server, facilitator
-
 //! Client-side payment scheme support.
 //!
 //! This module provides types for client applications (buyers) to select and

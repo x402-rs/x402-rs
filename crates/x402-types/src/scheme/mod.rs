@@ -191,29 +191,6 @@ impl<P> SchemeBlueprints<P> {
     }
 }
 
-// /// Creates a registry with all built-in schemes registered. FIXME Full
-// ///
-// /// This includes:
-// /// - V1 EIP-155 exact
-// /// - V1 Solana exact
-// /// - V2 EIP-155 exact
-// /// - V2 Solana exact
-// /// - V2 Aptos exact (when "aptos" feature is enabled)
-// impl SchemeBlueprints<ChainProvider> {
-//     pub fn full() -> Self {
-//         let blueprints = Self::new()
-//             .and_register(V1Eip155Exact)
-//             .and_register(V1SolanaExact)
-//             .and_register(V2Eip155Exact)
-//             .and_register(V2SolanaExact);
-//
-//         #[cfg(feature = "aptos")]
-//         let blueprints = blueprints.and_register(V2AptosExact);
-//
-//         blueprints
-//     }
-// }
-
 /// Unique identifier for a scheme handler instance.
 ///
 /// Combines the chain ID, protocol version, and scheme name to uniquely

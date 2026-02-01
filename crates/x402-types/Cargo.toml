@@ -35,4 +35,4 @@ tracing = { workspace = true, optional = true }
 [features]
 default = []
 telemetry = ["dep:tracing"]
-cli = ["dep:clap"] # FIXME Update README
+cli = ["dep:clap"]
