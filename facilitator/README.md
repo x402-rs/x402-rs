@@ -14,6 +14,7 @@ The crate can also be used as a library to build custom facilitator implementati
 - **Graceful Shutdown**: Clean shutdown on SIGTERM/SIGINT signals
 - **CORS Support**: Cross-origin requests enabled for web clients
 - **Flexible Configuration**: JSON-based configuration with environment variable overrides
+- **Modular Chain Support**: Enable only the blockchain networks you need via feature flags
 
 ## Installation
 
@@ -36,6 +37,16 @@ Add to your `Cargo.toml`:
 x402-facilitator = { git = "https://github.com/x402-rs/x402-rs" }
 ```
 
+**Note**: If you enable the `chain-aptos` feature, you must also include the required patches in your `Cargo.toml`:
+
+```toml
+[patch.crates-io]
+merlin = { git = "https://github.com/aptos-labs/merlin" }
+
+[patch."https://github.com/aptos-labs/aptos-core"]
+aptos-runtimes = { path = "https://github.com/x402-rs/x402-rs/patches/aptos-runtimes" }
+```
+
 ## Usage
 
 ### Running the Server
@@ -46,6 +57,12 @@ cargo run --package x402-facilitator
 
 # With telemetry
 cargo run --package x402-facilitator --features telemetry
+
+# With specific chains only
+cargo run --package x402-facilitator --features chain-eip155,chain-solana
+
+# With all chains including Aptos (requires patches)
+cargo run --package x402-facilitator --features chain-eip155,chain-solana,chain-aptos
 
 # Specify custom config file
 cargo run --package x402-facilitator -- --config /path/to/config.json
@@ -141,17 +158,22 @@ The facilitator is built on top of the `x402-facilitator-local` crate and uses:
        │
   ┌────┴────┐
   ▼         ▼
-┌─────┐  ┌─────┐
-│EIP  │  │Sol  │
-│155  │  │ana  │
-└─────┘  └─────┘
+┌─────┐  ┌─────┐  ┌─────┐
+│EIP  │  │Sol  │  │Apt  │
+│155  │  │ana  │  │os   │
+└─────┘  └─────┘  └─────┘
 ```
 
 ## Feature Flags
 
-| Feature     | Description                              |
-|-------------|------------------------------------------|
-| `telemetry` | Enable OpenTelemetry tracing and metrics |
+| Feature        | Description                                   |
+|----------------|-----------------------------------------------|
+| `telemetry`    | Enable OpenTelemetry tracing and metrics      |
+| `chain-eip155` | Enable EVM/EIP-155 chain support              |
+| `chain-solana` | Enable Solana chain support                   |
+| `chain-aptos`  | Enable Aptos chain support (requires patches) |
+
+**Note**: The `chain-aptos` feature requires additional patches due to its dependencies on Aptos core libraries. See the [Installation](#installation) section for details.
 
 ## License
 
