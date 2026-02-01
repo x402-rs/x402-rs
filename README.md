@@ -4,9 +4,7 @@
 [![Docs.rs](https://docs.rs/x402-types/badge.svg)](https://docs.rs/x402-types)
 [![GHCR](https://img.shields.io/badge/ghcr.io-x402--facilitator-blue)](https://github.com/orgs/x402-rs/packages/container/package/x402-facilitator)
 
-> A comprehensive Rust ecosystem for the [x402 protocol](https://www.x402.org) — enabling blockchain payments directly through HTTP using the native `402 Payment Required` status code.
-
-## The x402-rs Ecosystem
+> A comprehensive Rust toolkit for the [x402 protocol](https://www.x402.org), enabling blockchain payments directly through HTTP using the native `402 Payment Required` status code.
 
 x402-rs is a modular, production-ready implementation of the x402 protocol with support for multiple blockchains (EVM, Solana, Aptos, ..) and protocol versions (V1 and V2).
 
