@@ -105,8 +105,6 @@ use std::sync::LazyLock;
 
 use crate::chain::ChainId;
 
-// FIXME This is only relevant for x402 v1.
-
 /// A known network definition with its chain ID and human-readable name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NetworkInfo {
