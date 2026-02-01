@@ -31,6 +31,7 @@ facilitator = [
   "tokio",
   "tower",
   "async-trait",
+  "url"
 ]
 
 [dependencies]
@@ -44,6 +45,7 @@ serde_json = { workspace = true }
 
 dashmap = { version = "6.1.0", optional = true }
 rand = { version = "0.9.2", optional = true }
+url = { workspace = true, optional = true }
 
 # Alloy
 alloy-primitives = { version = "1.4" }

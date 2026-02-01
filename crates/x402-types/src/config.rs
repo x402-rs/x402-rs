@@ -11,7 +11,6 @@
 //! - [`Config<T>`] - Generic server configuration parameterized by chain config type
 //! - [`CliArgs`] - CLI argument parsing (requires `cli` feature)
 //! - [`LiteralOrEnv`] - Transparent wrapper for environment variable resolution
-//! - [`RpcConfig`] - RPC provider configuration
 //!
 //! # Configuration File Format
 //!
@@ -61,7 +60,6 @@ use std::net::IpAddr;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::str::FromStr;
-use url::Url;
 
 #[cfg(feature = "cli")]
 use clap::Parser;
@@ -69,16 +67,6 @@ use clap::Parser;
 use std::path::Path;
 
 use crate::scheme::SchemeConfig;
-
-/// RPC provider configuration for a single provider.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct RpcConfig {
-    /// HTTP URL for the RPC endpoint.
-    pub http: Url,
-    /// Rate limit for requests per second (optional).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rate_limit: Option<u32>,
-}
 
 // ============================================================================
 // Environment Variable Resolution
