@@ -13,6 +13,9 @@ description = "Axum middleware for enforcing x402 protocol payments on protected
 documentation = "https://docs.rs/x402-axum"
 readme = "README.md"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 x402-types = { workspace = true }
 url = { workspace = true }

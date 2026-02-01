@@ -12,6 +12,9 @@ categories.workspace = true
 description = "EIP-155 (EVM) chain support for the x402 payment protocol"
 readme = "README.md"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = []
 telemetry = ["tracing", "tracing-core", "x402-types/telemetry"]

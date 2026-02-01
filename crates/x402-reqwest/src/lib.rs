@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+
 //! Reqwest middleware for automatic [x402](https://www.x402.org) payment handling.
 //!
 //! This crate provides a [`X402Client`] that can be used as a `reqwest` middleware

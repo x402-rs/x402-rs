@@ -393,17 +393,17 @@ pub fn network_name_by_chain_id(chain_id: &ChainId) -> Option<&'static str> {
 
 /// Marker struct for USDC token deployment implementations.
 ///
-/// This struct is used as a type parameter for chain-specific traits (e.g., [`KnownNetworkEip155`],
-/// [`KnownNetworkSolana`]) to provide per-network USDC token deployment information.
+/// This struct is used as a type parameter for chain-specific traits (e.g., `KnownNetworkEip155`,
+/// `KnownNetworkSolana`) to provide per-network USDC token deployment information.
 ///
 /// # Usage
 ///
 /// Chain-specific crates implement traits for this marker struct to provide USDC token
 /// deployments on different networks. For example:
 ///
-/// - `x402-chain-eip155` implements [`KnownNetworkEip155<Eip155TokenDeployment>`] for `USDC`
-/// - `x402-chain-solana` implements [`KnownNetworkSolana<SolanaTokenDeployment>`] for `USDC`
-/// - `x402-chain-aptos` implements [`KnownNetworkAptos<AptosTokenDeployment>`] for `USDC`
+/// - `x402-chain-eip155` implements `KnownNetworkEip155<Eip155TokenDeployment>` for `USDC`
+/// - `x402-chain-solana` implements `KnownNetworkSolana<SolanaTokenDeployment>` for `USDC`
+/// - `x402-chain-aptos` implements `KnownNetworkAptos<AptosTokenDeployment>` for `USDC`
 ///
 /// # Example
 ///

@@ -17,14 +17,14 @@ pub trait Facilitator {
     /// The error type returned by this facilitator.
     type Error: Debug + Display;
 
-    /// Verifies a proposed x402 payment payload against a [`VerifyRequest`].
+    /// Verifies a proposed x402 payment payload against a [`proto::VerifyRequest`].
     ///
     /// This includes checking payload integrity, signature validity, balance sufficiency,
     /// network compatibility, and compliance with the declared payment requirements.
     ///
     /// # Returns
     ///
-    /// A [`VerifyResponse`] indicating success or failure, wrapped in a [`Result`].
+    /// A [`proto::VerifyResponse`] indicating success or failure, wrapped in a [`Result`].
     ///
     /// # Errors
     ///
@@ -34,14 +34,14 @@ pub trait Facilitator {
         request: &proto::VerifyRequest,
     ) -> impl Future<Output = Result<proto::VerifyResponse, Self::Error>> + Send;
 
-    /// Executes an on-chain x402 settlement for a valid [`SettleRequest`].
+    /// Executes an on-chain x402 settlement for a valid [`proto::SettleRequest`].
     ///
     /// This method should re-validate the payment and, if valid, perform
     /// an onchain call to settle the payment.
     ///
     /// # Returns
     ///
-    /// A [`SettleResponse`] indicating whether the settlement was successful, and
+    /// A [`proto::SettleResponse`] indicating whether the settlement was successful, and
     /// containing any on-chain transaction metadata.
     ///
     /// # Errors

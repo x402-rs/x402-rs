@@ -13,6 +13,9 @@ description = "Production-ready x402 facilitator server binary"
 readme = "README.md"
 publish = false
 
+[package.metadata.docs.rs]
+all-features = true
+
 [[bin]]
 name = "x402-facilitator"
 path = "src/main.rs"

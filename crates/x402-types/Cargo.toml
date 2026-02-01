@@ -13,6 +13,9 @@ documentation = "https://docs.rs/x402-types"
 description = "Core types for x402 payments: chain identifiers, protocol messages, and facilitator traits"
 readme = "README.md"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 thiserror = { workspace = true }
 serde = { workspace = true }

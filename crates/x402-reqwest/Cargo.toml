@@ -12,6 +12,9 @@ keywords = ["axum", "middleware", "x402", "payments", "stablecoin"]
 categories = ["web-programming::http-client", "authentication", "cryptography", "finance", "network-programming"]
 readme = "README.md"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 x402-types = { workspace = true }
 reqwest = { workspace = true }

@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+
 //! Aptos chain support for the x402 payment protocol.
 //!
 //! This crate provides implementations of the x402 payment protocol for the Aptos blockchain.

@@ -13,6 +13,9 @@ description = "Local facilitator implementation for the x402 payment protocol"
 documentation = "https://docs.rs/x402-facilitator-local"
 readme = "README.md"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = []
 telemetry = [

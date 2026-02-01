@@ -13,6 +13,9 @@ categories.workspace = true
 description = "Aptos chain support for the x402 payment protocol"
 readme = "README.md"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = []
 telemetry = ["tracing", "x402-types/telemetry"]
