@@ -25,7 +25,6 @@ chain-eip155 = ["dep:x402-chain-eip155"]
 chain-solana = ["dep:x402-chain-solana"]
 
 # FIXME Dockerfile and GH support
-# FIXME fs-facilitator
 
 [dependencies]
 x402-types = { workspace = true, features = ["cli"]}

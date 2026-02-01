@@ -5,12 +5,36 @@
 //! to improve developer experience (DX) when working with the x402 protocol, which operates on
 //! CAIP-2 chain IDs.
 //!
+//! # x402 v1 Protocol Relevance
+//!
+//! **This module is primarily relevant for x402 v1 protocol compatibility.** The registry of
+//! known networks represents the set of blockchain networks that were supported in x402 v1.
+//! For x402 v2 and beyond, the protocol is designed to work with any CAIP-2 chain ID without
+//! requiring a predefined registry.
+//!
+//! Despite being v1-focused, this module continues to provide value for improved developer
+//! experience by offering convenient methods to work with well-known networks without manually
+//! constructing CAIP-2 identifiers.
+//!
 //! # Purpose
 //!
 //! This module serves two main purposes:
-//! 1. **Compatibility with x402 protocol v1**: Maintains support for networks that were known in v1
+//! 1. **x402 v1 Protocol Compatibility**: Maintains support for networks that were known in v1
 //! 2. **Better Developer Experience**: Provides convenient methods to work with well-known networks
 //!    without manually constructing CAIP-2 identifiers
+//!
+//! # Usage Across the Codebase
+//!
+//! This module is used in several ways throughout the x402 ecosystem:
+//!
+//! - **ChainId Methods**: The [`ChainId::from_network_name()`](crate::chain::ChainId::from_network_name)
+//!   and [`ChainId::as_network_name()`](crate::chain::ChainId::as_network_name) methods use this
+//!   module for convenient network name lookups
+//! - **Chain-Specific Traits**: Chain-specific crates (e.g., `x402-chain-eip155`, `x402-chain-solana`)
+//!   implement namespace-specific traits like [`KnownNetworkEip155`] and [`KnownNetworkSolana`]
+//!   for type-safe network access
+//! - **Token Deployments**: The [`USDC`] marker struct is used by chain-specific crates to provide
+//!   per-network token deployment information (e.g., USDC addresses on different chains)
 //!
 //! # CAIP-2 Standard
 //!
@@ -29,6 +53,7 @@
 //! - [`KNOWN_NETWORKS`]: A static array of all well-known networks
 //! - [`chain_id_by_network_name`]: Lookup function to get ChainId by network name
 //! - [`network_name_by_chain_id`]: Reverse lookup function to get network name by ChainId
+//! - [`USDC`]: Marker struct used for token deployment implementations
 //!
 //! # Namespace-Specific Traits
 //!
@@ -41,6 +66,7 @@
 //! - Avalanche, Avalanche Fuji
 //! - Sei, Sei Testnet
 //! - XDC, XRPL EVM, Peaq, IoTeX
+//! - Celo, Celo Sepolia
 //!
 //! ## KnownNetworkSolana
 //! Provides convenient static methods for Solana networks:
@@ -49,8 +75,8 @@
 //!
 //! # Supported Networks
 //!
-//! The module supports 14 blockchain networks across two namespaces:
-//! - **EVM Networks (12)**: All networks in the eip155 namespace
+//! The module supports 16 blockchain networks across two namespaces:
+//! - **EVM Networks (14)**: All networks in the eip155 namespace
 //! - **Solana Networks (2)**: Solana mainnet and devnet
 //!
 //! # Examples
@@ -106,9 +132,22 @@ impl NetworkInfo {
 /// (EVM networks first, then Solana networks). Each entry includes the network's
 /// human-readable name, CAIP-2 namespace, and chain reference.
 ///
+/// # x402 v1 Protocol Relevance
+///
+/// This registry represents the set of blockchain networks that were known and supported
+/// in x402 v1. For x402 v2 and beyond, the protocol is designed to work with any CAIP-2
+/// chain ID without requiring a predefined registry.
+///
 /// The array is used to populate the lazy-initialized lookup hashmaps:
 /// - [`NAME_TO_CHAIN_ID`] for name-based lookups
 /// - [`CHAIN_ID_TO_NAME`] for ChainId-based lookups
+///
+/// # Developer Experience Benefits
+///
+/// Despite being v1-focused, this registry continues to provide value by:
+/// - Enabling convenient network name lookups via [`ChainId::from_network_name()`](crate::chain::ChainId::from_network_name)
+/// - Providing human-readable network names via [`ChainId::as_network_name()`](crate::chain::ChainId::as_network_name)
+/// - Serving as a reference for commonly used blockchain networks
 pub static KNOWN_NETWORKS: &[NetworkInfo] = &[
     // EVM Networks
     // Base
@@ -209,6 +248,17 @@ pub static KNOWN_NETWORKS: &[NetworkInfo] = &[
 /// corresponding [`ChainId`] instances. This hashmap is populated once on first access
 /// from the [`KNOWN_NETWORKS`] array.
 ///
+/// # x402 v1 Protocol Relevance
+///
+/// This hashmap provides the network name lookup functionality that was used in x402 v1.
+/// For x402 v2 and beyond, the protocol is designed to work with any CAIP-2 chain ID
+/// without requiring a predefined registry.
+///
+/// # Developer Experience Benefits
+///
+/// Despite being v1-focused, this hashmap continues to provide value by enabling
+/// convenient network name lookups via [`ChainId::from_network_name()`](crate::chain::ChainId::from_network_name).
+///
 /// # Examples
 ///
 /// ```
@@ -231,6 +281,17 @@ pub static NAME_TO_CHAIN_ID: LazyLock<HashMap<&'static str, ChainId>> = LazyLock
 /// populated once on first access from the [`KNOWN_NETWORKS`] array. Useful for
 /// reverse lookups when you have a ChainId and need to find its network name.
 ///
+/// # x402 v1 Protocol Relevance
+///
+/// This hashmap provides the reverse lookup functionality that was used in x402 v1.
+/// For x402 v2 and beyond, the protocol is designed to work with any CAIP-2 chain ID
+/// without requiring a predefined registry.
+///
+/// # Developer Experience Benefits
+///
+/// Despite being v1-focused, this hashmap continues to provide value by enabling
+/// human-readable network name lookups via [`ChainId::as_network_name()`](crate::chain::ChainId::as_network_name).
+///
 /// # Examples
 ///
 /// ```
@@ -252,6 +313,18 @@ pub static CHAIN_ID_TO_NAME: LazyLock<HashMap<ChainId, &'static str>> = LazyLock
 ///
 /// Performs a lookup in the [`NAME_TO_CHAIN_ID`] hashmap to find the ChainId
 /// corresponding to the given network name. The lookup is case-sensitive.
+///
+/// # x402 v1 Protocol Relevance
+///
+/// This function provides the network name lookup functionality that was used in x402 v1.
+/// For x402 v2 and beyond, the protocol is designed to work with any CAIP-2 chain ID
+/// without requiring a predefined registry.
+///
+/// # Developer Experience Benefits
+///
+/// Despite being v1-focused, this function continues to provide value by enabling
+/// convenient network name lookups. It is used by [`ChainId::from_network_name()`](crate::chain::ChainId::from_network_name)
+/// to provide a developer-friendly API for creating ChainId instances.
 ///
 /// # Arguments
 ///
@@ -282,6 +355,18 @@ pub fn chain_id_by_network_name(name: &str) -> Option<&ChainId> {
 /// Performs a reverse lookup in the [`CHAIN_ID_TO_NAME`] hashmap to find the
 /// human-readable network name corresponding to the given ChainId.
 ///
+/// # x402 v1 Protocol Relevance
+///
+/// This function provides the reverse lookup functionality that was used in x402 v1.
+/// For x402 v2 and beyond, the protocol is designed to work with any CAIP-2 chain ID
+/// without requiring a predefined registry.
+///
+/// # Developer Experience Benefits
+///
+/// Despite being v1-focused, this function continues to provide value by enabling
+/// human-readable network name lookups. It is used by [`ChainId::as_network_name()`](crate::chain::ChainId::as_network_name)
+/// to provide a developer-friendly API for displaying network names.
+///
 /// # Arguments
 ///
 /// * `chain_id` - A reference to the ChainId to look up
@@ -308,6 +393,30 @@ pub fn network_name_by_chain_id(chain_id: &ChainId) -> Option<&'static str> {
     CHAIN_ID_TO_NAME.get(chain_id).copied()
 }
 
+/// Marker struct for USDC token deployment implementations.
+///
+/// This struct is used as a type parameter for chain-specific traits (e.g., [`KnownNetworkEip155`],
+/// [`KnownNetworkSolana`]) to provide per-network USDC token deployment information.
+///
+/// # Usage
+///
+/// Chain-specific crates implement traits for this marker struct to provide USDC token
+/// deployments on different networks. For example:
+///
+/// - `x402-chain-eip155` implements [`KnownNetworkEip155<Eip155TokenDeployment>`] for `USDC`
+/// - `x402-chain-solana` implements [`KnownNetworkSolana<SolanaTokenDeployment>`] for `USDC`
+/// - `x402-chain-aptos` implements [`KnownNetworkAptos<AptosTokenDeployment>`] for `USDC`
+///
+/// # Example
+///
+/// ```ignore
+/// use x402_chain_eip155::{KnownNetworkEip155, Eip155TokenDeployment};
+/// use x402_types::networks::USDC;
+///
+/// // Get USDC deployment on Base mainnet
+/// let usdc_base: Eip155TokenDeployment = USDC::base();
+/// assert_eq!(usdc_base.chain_reference.value(), 8453);
+/// ```
 #[allow(dead_code, clippy::upper_case_acronyms)] // Public for consumption by downstream crates.
 pub struct USDC;
 
