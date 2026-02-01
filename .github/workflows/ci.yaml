@@ -85,7 +85,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-      # attestations: write # Attestations are not available for free private repos
+      attestations: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -114,6 +115,13 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
 
+      - name: Generate image attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.GH_REGISTRY }}/${{ env.GH_IMAGE_NAME }}
+          subject-digest: ${{ steps.build-and-push.outputs.digest }}
+          push-to-registry: true
+
   merge-manifest:
     name: Merge Docker manifests
     runs-on: ubuntu-latest
@@ -121,6 +129,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+      attestations: write
+      id-token: write
+    outputs:
+      digests_matrix: ${{ steps.merge-manifest.outputs.digests_matrix }}
     steps:
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -138,7 +150,8 @@ jobs:
           echo "DESCRIPTION=$DESCRIPTION"
           echo "DESCRIPTION=$DESCRIPTION" >> "$GITHUB_ENV"
 
-      - name: Merge manifests for all tags
+      - name: Merge all tags and capture digests
+        id: merge-manifest
         run: |
           echo "Merging tags: ${{ needs.metadata.outputs.tags }}"
           echo "Architectures: ${{ needs.metadata.outputs.arch-list }}"
@@ -147,6 +160,7 @@ jobs:
           readarray -t ARCHITECTURES < <(echo '${{ needs.metadata.outputs.arch-list }}' | jq -r '.[]')
 
           readarray -t FULL_TAGS <<< "${{ needs.metadata.outputs.tags }}"
+          digests_matrix="["
           for full in "${FULL_TAGS[@]}"; do
             tag="${full##*:}"
             echo "Creating manifest for: $tag"
@@ -162,4 +176,36 @@ jobs:
               --tag ${{ env.GH_REGISTRY }}/${{ env.GH_IMAGE_NAME }}:$tag \
               --annotation "index:org.opencontainers.image.description=$DESCRIPTION" \
               $ARCH_IMAGES
+
+            digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' ${{ env.GH_REGISTRY }}/${{ env.GH_IMAGE_NAME }}:$tag | jq -r '.digest')
+            digests_matrix+="{\"tag\":\"$tag\",\"digest\":\"$digest\"},"
           done
+          digests_matrix="${digests_matrix%,}]"
+          echo "digests_matrix=$digests_matrix" >> $GITHUB_OUTPUT
+
+  attest-digests:
+    name: Attest merged manifests
+    needs: merge-manifest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    strategy:
+      matrix:
+        digest_entry: ${{ fromJson(needs.merge-manifest.outputs.digests_matrix) }}
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GH_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest ${{ env.GH_REGISTRY }}/${{ env.GH_IMAGE_NAME }}:${{ matrix.digest_entry.tag }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.GH_REGISTRY }}/${{ env.GH_IMAGE_NAME }}
+          subject-digest: ${{ matrix.digest_entry.digest }}
+          push-to-registry: true
