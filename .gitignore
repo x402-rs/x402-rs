@@ -4,3 +4,5 @@
 crates/*/target/
 examples/*/.env
 config.json
+node_modules/
+*.log

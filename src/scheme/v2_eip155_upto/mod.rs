@@ -34,6 +34,7 @@
 //! that list, causing `transferFrom` to fail with "insufficient allowance".
 
 pub mod types;
+pub mod client;
 
 use alloy_primitives::{Address, Bytes, U256};
 use alloy_sol_types::{eip712_domain, sol, SolStruct};
@@ -122,6 +123,38 @@ impl StructuredSignature {
 
 /// V2 EIP-155 Upto scheme blueprint.
 pub struct V2Eip155Upto;
+
+impl V2Eip155Upto {
+    #[allow(dead_code)] // Public for consumption by downstream crates.
+    pub fn price_tag<A: Into<crate::chain::eip155::ChecksummedAddress>>(
+        pay_to: A,
+        asset_address: Address,
+        amount: U256,
+        chain_id: ChainId,
+        eip712_name: String,
+        eip712_version: String,
+    ) -> v2::PriceTag {
+        let extra = types::PaymentRequirementsExtra {
+            name: eip712_name,
+            version: eip712_version,
+            max_amount_required: None,
+        };
+        let extra_value = serde_json::to_value(&extra).ok();
+        let requirements = v2::PaymentRequirements {
+            scheme: types::UptoScheme.to_string(),
+            network: chain_id,
+            amount: amount.to_string(),
+            asset: asset_address.to_string(),
+            pay_to: pay_to.into().to_string(),
+            max_timeout_seconds: 300,
+            extra: extra_value,
+        };
+        v2::PriceTag {
+            requirements,
+            enricher: None,
+        }
+    }
+}
 
 impl X402SchemeId for V2Eip155Upto {
     fn namespace(&self) -> &str {
