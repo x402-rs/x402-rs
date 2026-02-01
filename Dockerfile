@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 COPY . ./
-RUN cargo build --release --locked
+RUN cargo build --package x402-facilitator --release --locked
 
 # --- Stage 2 ---
 FROM --platform=$BUILDPLATFORM debian:trixie-slim
@@ -22,9 +22,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/x402-rs /usr/local/bin/x402-rs
+COPY --from=builder /app/target/release/x402-facilitator /usr/local/bin/x402-facilitator
 
 EXPOSE $PORT
 ENV RUST_LOG=info
 
-ENTRYPOINT ["x402-rs"]
+ENTRYPOINT ["x402-facilitator"]
