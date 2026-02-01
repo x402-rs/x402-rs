@@ -8,6 +8,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: x402-rs/x402-facilitator
+  IMAGE_NAME_DH: ukstv/x402-facilitator
 
 jobs:
   metadata:
@@ -164,6 +165,7 @@ jobs:
             echo "Merging manifest for: $tag"
             docker buildx imagetools create \
               --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag \
+              --tag docker.io/${{ env.IMAGE_NAME_DH }}:$tag \
               --annotation "index:org.opencontainers.image.description=$DESCRIPTION" \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-amd64 \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$tag-arm64
@@ -202,5 +204,11 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ matrix.digest_entry.digest }}
+          push-to-registry: true
+      - name: Attest docker.io/${{ env.IMAGE_NAME_DH }}:${{ matrix.digest_entry.tag }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: docker.io/${{ env.IMAGE_NAME_DH }}
           subject-digest: ${{ matrix.digest_entry.digest }}
           push-to-registry: true
