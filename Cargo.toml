@@ -99,5 +99,6 @@ members = [
   "examples/x402-axum-example",
   "crates/x402-reqwest",
   "examples/x402-reqwest-example",
+  "examples/upto-integration-test",
   ".",
 ]
