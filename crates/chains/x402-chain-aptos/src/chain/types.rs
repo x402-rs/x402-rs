@@ -148,7 +148,7 @@ pub enum AptosChainReferenceFormatError {
 /// use std::str::FromStr;
 ///
 /// let addr = Address::from_str("0x1").unwrap();
-/// assert_eq!(addr.to_string(), "0x0000000000000000000000000000000000000000000000000000000000000001");
+/// assert_eq!(addr.to_string(), "0x1");
 /// ```
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Address(AccountAddress);
