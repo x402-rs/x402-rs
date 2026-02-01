@@ -11,6 +11,20 @@ A facilitator is a service that:
 
 The x402-rs ecosystem provides building blocks to create custom facilitators tailored to your needs.
 
+## Why Build a Custom Facilitator?
+
+You might want to build a custom facilitator for several reasons:
+
+1. **Support for custom blockchains** — You need to support a blockchain that is not yet supported by the official x402-rs crates. This involves implementing a custom chain provider and adapting the payment schemes to work with it.
+
+2. **Custom chain provider behavior** — You want to customize how the facilitator interacts with a supported chain. For example, you might want to implement a custom `Eip155MetaTransactionProvider` for EVM chains to add custom transaction signing logic, gas pricing strategies, or nonce management.
+
+3. **Chain-specific deployment** — You want to run a facilitator that only supports specific chains or schemes, reducing the binary size and attack surface. This can be achieved through feature flags in the `facilitator` crate or by creating a minimal custom facilitator.
+
+4. **Custom middleware or authentication** — You need to add custom HTTP middleware, authentication, or logging that is specific to your infrastructure.
+
+5. **Integration with existing infrastructure** — You want to integrate the x402 facilitator into an existing application or service, rather than running it as a standalone binary.
+
 ## Architecture
 
 The facilitator architecture consists of:
@@ -190,12 +204,81 @@ See the [How to Write a Scheme](./how-to-write-a-scheme.md) guide for detailed i
 
 ### Custom Chain Support
 
-To add support for a new blockchain:
+To add support for a new blockchain that is not yet supported by x402-rs:
 
-1. Implement the `ChainProviderOps` trait for your provider type
-2. Implement the `FromConfig` trait to construct your provider from configuration
-3. Create scheme implementations for your chain
-4. Register with the `ChainRegistry`
+1. **Implement the `ChainProviderOps` trait** for your provider type. This trait provides basic operations like getting signer addresses and chain ID.
+
+2. **Implement the `FromConfig` trait** to construct your provider from configuration. This allows your provider to be initialized from the JSON configuration file.
+
+3. **Create scheme implementations for your chain**. For each scheme you want to support (e.g., `exact`), implement the `X402SchemeFacilitator` trait. Your scheme will use your custom chain provider to interact with the blockchain.
+
+4. **Register with the `ChainRegistry`**. Add your chain provider to the registry so it can be discovered by the scheme registry.
+
+5. **Add the scheme to your facilitator's `schemes.rs`**. Similar to how the `facilitator` crate has a `schemes.rs` file that implements `X402SchemeFacilitatorBuilder` for each scheme, you'll need to add your scheme there to bridge the generic `ChainProvider` enum to your chain-specific provider type.
+
+### Custom Chain Provider for Supported Chains
+
+Even for supported chains like EIP-155 (EVM), you might want to customize the chain provider behavior. The EIP-155 schemes use the `Eip155MetaTransactionProvider` trait to send transactions. You can implement this trait to customize:
+
+- **Transaction signing logic** — Add custom signature validation or multi-sig support
+- **Gas pricing strategies** — Implement dynamic gas pricing based on network conditions
+- **Nonce management** — Customize how nonces are tracked and reset
+- **Transaction submission** — Add retry logic, batching, or fallback to different RPC endpoints
+
+To do this:
+
+1. Create a new type that wraps or replaces `Eip155ChainProvider`
+2. Implement `Eip155MetaTransactionProvider` for your type
+3. Implement `ChainProviderOps` and `FromConfig` for your type
+4. Use your custom provider when building the `ChainRegistry`
+
+### Chain-Specific Facilitator Deployment
+
+If you want to run a facilitator that only supports specific chains (e.g., only Solana, only EVM chains), you have two options:
+
+**Option 1: Use the `facilitator` crate with feature flags**
+
+The `facilitator` crate supports feature flags to enable only specific chains. Since this crate is not published on crates.io, use a git dependency:
+
+```toml
+[dependencies]
+x402-facilitator = { git = "https://github.com/x402-rs/x402-rs", default-features = false, features = ["chain-solana"] }
+```
+
+Available features:
+- `chain-eip155` — Enable EIP-155 (EVM) chain support
+- `chain-solana` — Enable Solana chain support
+- `chain-aptos` — Enable Aptos chain support
+- `telemetry` — Enable OpenTelemetry tracing
+
+Then in your `main.rs`, simply call the `run` function:
+
+```rust
+#[tokio::main]
+async fn main() {
+    let result = x402_facilitator::run().await;
+    if let Err(e) = result {
+        eprintln!("{e}");
+        std::process::exit(1)
+    }
+}
+```
+
+**Option 2: Create a minimal custom facilitator**
+
+Follow the "Getting Started" section above, but only register the schemes you need:
+
+```rust
+// Only register Solana schemes
+let scheme_blueprints = {
+    let mut blueprints = SchemeBlueprints::new();
+    blueprints.register(V1SolanaExact);
+    blueprints.register(V2SolanaExact);
+    blueprints
+};
+```
+
+This approach gives you full control over the binary size and dependencies.
 
 ### Middleware Integration
 
@@ -208,6 +291,83 @@ let app = Router::new()
     .route("/verify", post(verify_handler))
     .route("/settle", post(settle_handler))
     .layer(middleware::from_fn(your_auth_middleware));
+```
+
+### Adding Pre/Post Processing Logic
+
+You can wrap `FacilitatorLocal` to add custom logic before or after payment verification and settlement. This is useful for:
+
+- **Logging and auditing** — Log all payment attempts for compliance
+- **Rate limiting** — Enforce limits on verification/settlement calls
+- **Custom validation** — Add business-specific validation rules
+- **Metrics collection** — Track payment success rates, latency, etc.
+
+To do this, create a wrapper struct and implement the `Facilitator` trait:
+
+```rust
+use x402_facilitator_local::FacilitatorLocal;
+use x402_types::facilitator::Facilitator;
+use x402_types::proto;
+use std::sync::Arc;
+
+/// A wrapper around FacilitatorLocal that adds custom pre/post processing.
+pub struct FancyFacilitator<A> {
+    inner: FacilitatorLocal<A>,
+}
+
+impl<A> FancyFacilitator<A> {
+    pub fn new(inner: FacilitatorLocal<A>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<A: Clone + Send + Sync + 'static> Facilitator for FancyFacilitator<A>
+where
+    FacilitatorLocal<A>: Facilitator,
+{
+    type Error = <FacilitatorLocal<A> as Facilitator>::Error;
+
+    async fn verify(
+        &self,
+        request: &proto::VerifyRequest,
+    ) -> Result<proto::VerifyResponse, Self::Error> {
+        // Pre-processing: custom validation, logging, rate limiting, etc.
+        println!("Verifying payment for scheme: {:?}", request.scheme);
+        
+        // Delegate to inner facilitator
+        let response = self.inner.verify(request).await?;
+        
+        // Post-processing: audit logging, metrics, etc.
+        println!("Payment verified: payer={}", response.payer);
+        
+        Ok(response)
+    }
+
+    async fn settle(
+        &self,
+        request: &proto::SettleRequest,
+    ) -> Result<proto::SettleResponse, Self::Error> {
+        // Pre-processing
+        println!("Settling payment...");
+        
+        // Delegate to inner facilitator
+        let response = self.inner.settle(request).await?;
+        
+        // Post-processing
+        println!("Payment settled: tx={}", response.transaction);
+        
+        Ok(response)
+    }
+
+    async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
+        self.inner.supported().await
+    }
+}
+
+// Usage:
+let facilitator = FacilitatorLocal::new(scheme_registry);
+let fancy_facilitator = FancyFacilitator::new(facilitator);
+let state = Arc::new(fancy_facilitator);
 ```
 
 ## Deployment
