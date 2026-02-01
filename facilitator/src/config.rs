@@ -54,8 +54,6 @@ use x402_chain_solana::chain::config::{SolanaChainConfig, SolanaChainConfigInner
 /// then to hardcoded defaults.
 pub type Config = x402_types::config::Config<ChainsConfig>;
 
-// FIXME Move to facilitator local
-
 /// Configuration for a specific chain.
 ///
 /// This enum represents chain-specific configuration that varies by chain family
