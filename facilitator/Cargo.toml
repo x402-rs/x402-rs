@@ -18,13 +18,12 @@ name = "x402-facilitator"
 path = "src/main.rs"
 
 [features]
-default = []
+default = ["telemetry", "chain-eip155", "chain-solana"]
 telemetry = ["dep:tracing", "x402-facilitator-local/telemetry", "x402-chain-eip155?/telemetry", "x402-chain-solana?/telemetry", "x402-chain-aptos?/telemetry"]
 chain-aptos = ["dep:x402-chain-aptos"]
 chain-eip155 = ["dep:x402-chain-eip155"]
 chain-solana = ["dep:x402-chain-solana"]
 
-# FIXME Package name x402-facilitator (incl README)
 # FIXME Dockerfile and GH support
 # FIXME fs-facilitator
 
