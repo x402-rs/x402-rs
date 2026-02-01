@@ -23,8 +23,7 @@ telemetry = ["dep:tracing", "x402-types/telemetry", "x402-facilitator-local/tele
 chain-aptos = ["dep:x402-chain-aptos"]
 chain-eip155 = ["dep:x402-chain-eip155"]
 chain-solana = ["dep:x402-chain-solana"]
-
-# FIXME Dockerfile and GH support
+full = ["telemetry", "chain-aptos", "chain-eip155", "chain-solana"]
 
 [dependencies]
 x402-types = { workspace = true, features = ["cli"]}

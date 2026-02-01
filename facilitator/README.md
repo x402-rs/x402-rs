@@ -64,6 +64,9 @@ cargo run --package x402-facilitator --features chain-eip155,chain-solana
 # With all chains including Aptos (requires patches)
 cargo run --package x402-facilitator --features chain-eip155,chain-solana,chain-aptos
 
+# With the full feature (all chains + telemetry)
+cargo run --package x402-facilitator --features full
+
 # Specify custom config file
 cargo run --package x402-facilitator -- --config /path/to/config.json
 ```
@@ -172,6 +175,7 @@ The facilitator is built on top of the `x402-facilitator-local` crate and uses:
 | `chain-eip155` | Enable EVM/EIP-155 chain support              |
 | `chain-solana` | Enable Solana chain support                   |
 | `chain-aptos`  | Enable Aptos chain support (requires patches) |
+| `full`         | Enable all features: telemetry + all chains   |
 
 **Note**: The `chain-aptos` feature requires additional patches due to its dependencies on Aptos core libraries. See the [Installation](#installation) section for details.
 
