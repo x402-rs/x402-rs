@@ -24,7 +24,7 @@ The crate can also be used as a library to build custom facilitator implementati
 cargo install --git https://github.com/x402-rs/x402-rs --package x402-facilitator
 
 # Run the installed binary
-facilitator --config /path/to/config.json
+x402-facilitator --config /path/to/config.json # Or provide config path via $CONF env var
 ```
 
 ### As a Library
@@ -42,13 +42,13 @@ x402-facilitator = { git = "https://github.com/x402-rs/x402-rs" }
 
 ```bash
 # Build and run from source
-cargo run --package facilitator
+cargo run --package x402-facilitator
 
 # With telemetry
-cargo run --package facilitator --features telemetry
+cargo run --package x402-facilitator --features telemetry
 
 # Specify custom config file
-cargo run --package facilitator -- --config /path/to/config.json
+cargo run --package x402-facilitator -- --config /path/to/config.json
 ```
 
 ### Configuration
