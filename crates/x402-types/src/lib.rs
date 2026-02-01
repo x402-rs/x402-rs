@@ -14,7 +14,7 @@
 //! # Modules
 //!
 //! - [`chain`] - Blockchain identifiers and provider abstractions (CAIP-2 chain IDs)
-//! - [`config`] - Configuration types for RPC providers and environment variable resolution
+//! - [`config`] - Server configuration, CLI parsing, RPC config, and environment variable resolution
 //! - [`facilitator`] - Core trait for payment verification and settlement
 //! - [`networks`] - Registry of well-known blockchain networks
 //! - [`proto`] - Wire format types for protocol messages (V1 and V2)
@@ -31,6 +31,7 @@
 //!
 //! # Feature Flags
 //!
+//! - `cli` - Enables CLI argument parsing via clap for configuration loading
 //! - `telemetry` - Enables tracing instrumentation for debugging and monitoring
 
 pub mod chain;
