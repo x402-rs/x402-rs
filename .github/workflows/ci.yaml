@@ -2,7 +2,7 @@ name: Build, test, and publish a Docker image
 
 on:
   push:
-    branches: ['main', "su/extract-crates"]
+    branches: ['main']
     tags: ['v*']
 
 env:
