@@ -38,14 +38,9 @@
 //! - `PORT` - Server port (default: 8080)
 //! - `HOST` - Server bind address (default: `0.0.0.0`)
 
-use clap::Parser;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::net::IpAddr;
 use std::ops::Deref;
-use std::path::{Path, PathBuf};
 use x402_types::chain::ChainId;
-use x402_types::scheme::SchemeConfig;
 
 #[cfg(feature = "chain-aptos")]
 use x402_chain_aptos::chain as aptos;
@@ -60,31 +55,11 @@ use x402_chain_solana::chain as solana;
 #[cfg(feature = "chain-solana")]
 use x402_chain_solana::chain::config::{SolanaChainConfig, SolanaChainConfigInner};
 
-/// CLI arguments for the x402 facilitator server.
-#[derive(Parser, Debug)]
-#[command(name = "x402-rs")]
-#[command(about = "x402 Facilitator HTTP server")]
-struct CliArgs {
-    /// Path to the JSON configuration file
-    #[arg(long, short, env = "CONFIG", default_value = "config.json")]
-    config: PathBuf,
-}
-
 /// Server configuration.
 ///
 /// Fields use serde defaults that fall back to environment variables,
 /// then to hardcoded defaults.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Config<TChainsConfig = ChainsConfig> {
-    #[serde(default = "config_defaults::default_port")]
-    port: u16,
-    #[serde(default = "config_defaults::default_host")]
-    host: IpAddr,
-    #[serde(default)]
-    chains: TChainsConfig,
-    #[serde(default)]
-    schemes: Vec<SchemeConfig>,
-}
+pub type Config = x402_types::config::Config<ChainsConfig>;
 
 // FIXME Move to facilitator local
 
@@ -236,108 +211,5 @@ impl<'de> Deserialize<'de> for ChainsConfig {
         }
 
         deserializer.deserialize_map(ChainsVisitor)
-    }
-}
-
-impl<TChainsConfig> Default for Config<TChainsConfig>
-where
-    TChainsConfig: Default,
-{
-    fn default() -> Self {
-        Config {
-            port: config_defaults::default_port(),
-            host: config_defaults::default_host(),
-            chains: TChainsConfig::default(),
-            schemes: Vec::new(),
-        }
-    }
-}
-
-pub mod config_defaults {
-    use std::env;
-    use std::net::IpAddr;
-
-    pub const DEFAULT_PORT: u16 = 8080;
-    pub const DEFAULT_HOST: &str = "0.0.0.0";
-
-    /// Returns the default port value with fallback: $PORT env var -> 8080
-    pub fn default_port() -> u16 {
-        env::var("PORT")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(DEFAULT_PORT)
-    }
-
-    /// Returns the default host value with fallback: $HOST env var -> "0.0.0.0"
-    pub fn default_host() -> IpAddr {
-        env::var("HOST")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(IpAddr::V4(DEFAULT_HOST.parse().unwrap()))
-    }
-}
-
-/// Configuration error types.
-#[derive(Debug, thiserror::Error)]
-pub enum ConfigError {
-    #[error("Failed to read config file at {0}: {1}")]
-    FileRead(PathBuf, std::io::Error),
-    #[error("Failed to parse config file: {0}")]
-    JsonParse(#[from] serde_json::Error),
-}
-
-impl<TChainsConfig> Config<TChainsConfig> {
-    /// Get the port value.
-    pub fn port(&self) -> u16 {
-        self.port
-    }
-
-    /// Get the host value as an IpAddr.
-    ///
-    /// Returns an error if the host string cannot be parsed as an IP address.
-    pub fn host(&self) -> IpAddr {
-        self.host
-    }
-
-    /// Get the schemes configuration list.
-    ///
-    /// Each entry specifies a scheme and the chains it applies to.
-    pub fn schemes(&self) -> &Vec<SchemeConfig> {
-        &self.schemes
-    }
-
-    /// Get the chains configuration map.
-    ///
-    /// Keys are CAIP-2 chain identifiers (e.g., "eip155:84532", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").
-    pub fn chains(&self) -> &TChainsConfig {
-        &self.chains
-    }
-}
-
-impl<TChainsConfig> Config<TChainsConfig>
-where
-    TChainsConfig: Default + for<'de> Deserialize<'de>,
-{
-    /// Load configuration from CLI arguments and JSON file.
-    ///
-    /// The config file path is determined by:
-    /// 1. `--config <path>` CLI argument
-    /// 2. `./config.json` (if it exists)
-    ///
-    /// Values not present in the config file will be resolved via
-    /// environment variables or defaults during deserialization.
-    pub fn load() -> Result<Self, ConfigError> {
-        let cli_args = CliArgs::parse();
-        let config_path = Path::new(&cli_args.config)
-            .canonicalize()
-            .map_err(|e| ConfigError::FileRead(cli_args.config, e))?;
-        Self::load_from_path(config_path)
-    }
-
-    /// Load configuration from a specific path (or use defaults if None).
-    fn load_from_path(path: PathBuf) -> Result<Self, ConfigError> {
-        let content = fs::read_to_string(&path).map_err(|e| ConfigError::FileRead(path, e))?;
-        let config: Config<TChainsConfig> = serde_json::from_str(&content)?;
-        Ok(config)
     }
 }

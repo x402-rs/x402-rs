@@ -51,6 +51,7 @@ x402-chain-solana = { version = "*", path = "crates/chains/x402-chain-solana" }
 x402-facilitator-local = { version = "*", path = "crates/x402-facilitator-local" }
 x402-reqwest = { version = "*", path = "crates/x402-reqwest" }
 x402-types = { version = "*", path = "crates/x402-types" }
+clap = { version = "4.5", features = ["derive", "env"] }
 
 # Patches for aptos-core dependencies
 [patch.crates-io]
