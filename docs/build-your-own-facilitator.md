@@ -26,8 +26,8 @@ The facilitator architecture consists of:
 │  (Verification & Settlement Logic)      │
 └────────────────┬────────────────────────┘
                  │
-    ┌────────────┴────────────┐
-    │                         │
+     ┌────────────┴────────────┐
+     │                         │
 ┌───▼────────┐        ┌──────▼──────┐
 │ Chain      │        │ Scheme      │
 │ Registry   │        │ Registry    │
@@ -44,63 +44,86 @@ The facilitator architecture consists of:
 
 ### 1. Add Dependencies
 
+> **Note:** The versions shown below are indicative. Please check the latest versions on [crates.io](https://crates.io) or the source repository if the packages are not published on crates.io.
+
 ```toml
 [dependencies]
-x402-types = { version = "1.0", features = ["telemetry"] }
-x402-facilitator-local = { version = "1.0", features = ["telemetry"] }
+x402-types = { version = "1.0", features = ["cli"] }
+x402-facilitator-local = { version = "1.0" }
 x402-chain-eip155 = { version = "1.0", features = ["facilitator"] }
 x402-chain-solana = { version = "1.0", features = ["facilitator"] }
 
-axum = "0.8"
-tokio = { version = "1.35", features = ["full"] }
+dotenvy = "0.15"
 serde_json = "1.0"
+tokio = { version = "1.35", features = ["full"] }
+async-trait = "0.1"
+axum = "0.8"
+tower-http = "0.9"
+rustls = { version = "0.23", features = ["ring"] }
 ```
 
 ### 2. Initialize the Facilitator
 
 ```rust
 use x402_facilitator_local::{FacilitatorLocal, handlers};
-use x402_types::chain::ChainRegistry;
+use x402_types::chain::{ChainRegistry, FromConfig};
 use x402_types::scheme::{SchemeBlueprints, SchemeRegistry};
 use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact};
 use x402_chain_solana::{V1SolanaExact, V2SolanaExact};
 use std::sync::Arc;
 use axum::Router;
+use tower_http::cors;
+use axum::http::Method;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize rustls crypto provider
+    rustls::crypto::CryptoProvider::install_default(
+        rustls::crypto::ring::default_provider()
+    ).expect("Failed to initialize rustls crypto provider");
+
+    // Load .env variables
+    dotenvy::dotenv().ok();
+
     // Load configuration
-    let config = serde_json::from_str(include_str!("../config.json"))?;
-    
-    // Initialize chain registry
-    let chain_registry = ChainRegistry::from_config(&config.chains).await?;
-    
+    let config = Config::load()?;
+
+    // Initialize chain registry from config
+    let chain_registry = ChainRegistry::from_config(config.chains()).await?;
+
     // Register supported schemes
-    let scheme_blueprints = SchemeBlueprints::new()
-        .and_register(V1Eip155Exact)
-        .and_register(V2Eip155Exact)
-        .and_register(V1SolanaExact)
-        .and_register(V2SolanaExact);
-    
+    let scheme_blueprints = {
+        let mut blueprints = SchemeBlueprints::new();
+        blueprints.register(V1Eip155Exact);
+        blueprints.register(V2Eip155Exact);
+        blueprints.register(V1SolanaExact);
+        blueprints.register(V2SolanaExact);
+        blueprints
+    };
+
     // Build scheme registry
-    let scheme_registry = SchemeRegistry::build(
-        chain_registry,
-        scheme_blueprints,
-        &config.schemes,
-    );
-    
+    let scheme_registry =
+        SchemeRegistry::build(chain_registry, scheme_blueprints, config.schemes());
+
     // Create facilitator
     let facilitator = FacilitatorLocal::new(scheme_registry);
     let state = Arc::new(facilitator);
-    
-    // Create HTTP routes
+
+    // Create HTTP routes with CORS
     let app = Router::new()
-        .merge(handlers::routes().with_state(state));
-    
+        .merge(handlers::routes().with_state(state))
+        .layer(
+            cors::CorsLayer::new()
+                .allow_origin(cors::Any)
+                .allow_methods([Method::GET, Method::POST])
+                .allow_headers(cors::Any),
+        );
+
     // Run server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    let addr = SocketAddr::new(config.host(), config.port());
+    let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
-    
+
     Ok(())
 }
 ```
@@ -111,9 +134,12 @@ Create a `config.json` file:
 
 ```json
 {
+  "port": 8080,
+  "host": "0.0.0.0",
   "chains": {
     "eip155:8453": {
       "eip1559": true,
+      "flashblocks": true,
       "signers": ["$FACILITATOR_PRIVATE_KEY"],
       "rpc": [
         {
@@ -124,13 +150,22 @@ Create a `config.json` file:
     },
     "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp": {
       "signer": "$SOLANA_PRIVATE_KEY",
-      "rpc": "https://api.mainnet-beta.solana.com"
+      "rpc": "https://api.mainnet-beta.solana.com",
+      "pubsub": "wss://api.mainnet-beta.solana.com"
     }
   },
   "schemes": [
     {
+      "id": "v1-eip155-exact",
+      "chains": "eip155:*"
+    },
+    {
       "id": "v2-eip155-exact",
       "chains": "eip155:*"
+    },
+    {
+      "id": "v1-solana-exact",
+      "chains": "solana:*"
     },
     {
       "id": "v2-solana-exact",
@@ -147,7 +182,9 @@ Create a `config.json` file:
 To implement a custom payment scheme:
 
 1. Implement the `X402SchemeFacilitator` trait from `x402-types`
-2. Register it with the `SchemeRegistry`
+2. Implement the `X402SchemeFacilitatorBuilder` trait
+3. Implement the `X402SchemeId` trait
+4. Register it with the `SchemeBlueprints`
 
 See the [How to Write a Scheme](./how-to-write-a-scheme.md) guide for detailed instructions.
 
@@ -155,9 +192,10 @@ See the [How to Write a Scheme](./how-to-write-a-scheme.md) guide for detailed i
 
 To add support for a new blockchain:
 
-1. Implement the `ChainProvider` trait
-2. Create scheme implementations for your chain
-3. Register with the `ChainRegistry`
+1. Implement the `ChainProviderOps` trait for your provider type
+2. Implement the `FromConfig` trait to construct your provider from configuration
+3. Create scheme implementations for your chain
+4. Register with the `ChainRegistry`
 
 ### Middleware Integration
 
@@ -193,6 +231,7 @@ ENTRYPOINT ["your-facilitator"]
 
 - `HOST` - Server bind address (default: `0.0.0.0`)
 - `PORT` - Server port (default: `8080`)
+- `CONFIG` - Path to configuration file (default: `config.json`)
 - `RUST_LOG` - Log level (default: `info`)
 - `OTEL_EXPORTER_OTLP_ENDPOINT` - OpenTelemetry collector endpoint
 
