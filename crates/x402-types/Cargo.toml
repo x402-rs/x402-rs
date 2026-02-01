@@ -26,9 +26,13 @@ rust_decimal = { version = "1.39.0" }
 regex = { version = "1.12.2" }
 serde_with = { version = "3.16.1" }
 
+# CLI
+clap = { workspace = true, optional = true }
+
 # Tracing
 tracing = { workspace = true, optional = true }
 
 [features]
 default = []
 telemetry = ["dep:tracing"]
+cli = ["dep:clap"] # FIXME Update README

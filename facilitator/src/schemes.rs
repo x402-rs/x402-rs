@@ -29,11 +29,11 @@
 //! ```
 
 #[allow(unused_imports)] // For when no chain features are enabled
+use crate::chain::ChainProvider;
+#[allow(unused_imports)] // For when no chain features are enabled
 use std::sync::Arc;
 #[allow(unused_imports)] // For when no chain features are enabled
 use x402_types::scheme::{X402SchemeFacilitator, X402SchemeFacilitatorBuilder};
-#[allow(unused_imports)] // For when no chain features are enabled
-use crate::chain::ChainProvider;
 
 #[cfg(feature = "chain-aptos")]
 use x402_chain_aptos::V2AptosExact;

@@ -19,7 +19,7 @@ path = "src/main.rs"
 
 [features]
 default = ["telemetry", "chain-eip155", "chain-solana"]
-telemetry = ["dep:tracing", "x402-facilitator-local/telemetry", "x402-chain-eip155?/telemetry", "x402-chain-solana?/telemetry", "x402-chain-aptos?/telemetry"]
+telemetry = ["dep:tracing", "x402-types/telemetry", "x402-facilitator-local/telemetry", "x402-chain-eip155?/telemetry", "x402-chain-solana?/telemetry", "x402-chain-aptos?/telemetry"]
 chain-aptos = ["dep:x402-chain-aptos"]
 chain-eip155 = ["dep:x402-chain-eip155"]
 chain-solana = ["dep:x402-chain-solana"]
@@ -28,8 +28,8 @@ chain-solana = ["dep:x402-chain-solana"]
 # FIXME fs-facilitator
 
 [dependencies]
-x402-types = { workspace = true }
-x402-facilitator-local = { workspace = true, features = ["telemetry"] }
+x402-types = { workspace = true, features = ["cli"]}
+x402-facilitator-local = { workspace = true }
 x402-chain-eip155 = { workspace = true, features = ["facilitator"], optional = true }
 x402-chain-solana = { workspace = true, features = ["facilitator"], optional = true }
 x402-chain-aptos = { workspace = true, features = ["facilitator"], optional = true }
@@ -39,10 +39,7 @@ serde_json = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true, optional = true }
-thiserror = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
 tower-http = { workspace = true }
-
-clap = { version = "4.5", features = ["derive", "env"] }
 rustls = { version = "0.23", features = ["ring"] }
