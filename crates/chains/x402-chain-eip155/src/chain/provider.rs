@@ -18,12 +18,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
 use x402_types::chain::{ChainId, ChainProviderOps, FromConfig};
-use x402_types::config::RpcConfig;
 
 #[cfg(feature = "telemetry")]
 use tracing::Instrument;
 
-use crate::chain::config::Eip155ChainConfig;
+use crate::chain::config::{Eip155ChainConfig, RpcConfig};
 use crate::chain::pending_nonce_manager::PendingNonceManager;
 use crate::chain::types::Eip155ChainReference;
 

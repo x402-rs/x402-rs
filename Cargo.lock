@@ -13176,6 +13176,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "tracing-core",
+ "url",
  "x402-types",
 ]
 
@@ -13296,7 +13297,6 @@ dependencies = [
  "serde_with",
  "thiserror 2.0.18",
  "tracing",
- "url",
 ]
 
 [[package]]

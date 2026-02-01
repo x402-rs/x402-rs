@@ -1,8 +1,9 @@
 use alloy_primitives::B256;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use url::Url;
 use x402_types::chain::ChainId;
-use x402_types::config::{LiteralOrEnv, RpcConfig};
+use x402_types::config::LiteralOrEnv;
 
 use crate::chain::Eip155ChainReference;
 
@@ -94,6 +95,16 @@ mod eip155_chain_config {
     pub fn default_receipt_timeout_secs() -> u64 {
         30
     }
+}
+
+/// RPC provider configuration for a single provider.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RpcConfig {
+    /// HTTP URL for the RPC endpoint.
+    pub http: Url,
+    /// Rate limit for requests per second (optional).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rate_limit: Option<u32>,
 }
 
 /// Configuration for EVM signers.
