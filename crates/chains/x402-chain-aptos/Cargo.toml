@@ -1,5 +1,6 @@
 [package]
 name = "x402-chain-aptos"
+publish = false # Due to Aptos dependencies not published on crates.io
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
