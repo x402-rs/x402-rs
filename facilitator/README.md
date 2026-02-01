@@ -137,7 +137,7 @@ The facilitator is built on top of the `x402-facilitator-local` crate and uses:
 
 - **Axum**: HTTP server framework
 - **Tokio**: Async runtime
-- **x402-types**: Core protocol types
+- **x402-types**: Core protocol types and configuration (via `x402_types::config`)
 - **x402-chain-\\\\*\\\**: Chain-specific implementations
 
 ```text

@@ -1,17 +1,23 @@
-//! Configuration module for the x402 facilitator server.
+//! Chain-specific configuration types for the x402 facilitator server.
 //!
-//! This module handles configuration loading from JSON files and environment variables.
-//! It supports multiple blockchain families (EVM, Solana, Aptos) through a unified
-//! configuration interface.
+//! This module provides chain-specific configuration types that extend the base
+//! [`x402_types::config::Config`] with support for multiple blockchain families
+//! (EVM, Solana, Aptos).
+//!
+//! The core configuration loading logic, environment variable resolution, and CLI
+//! argument parsing are provided by [`x402_types::config`]. This module adds:
+//!
+//! - [`ChainConfig`] - Enum representing chain-specific configuration variants
+//! - [`ChainsConfig`] - Collection of chain configurations with custom serialization
+//! - [`Config`] - Type alias combining base config with chain-specific types
 //!
 //! # Configuration File Format
 //!
-//! Configuration is loaded from a JSON file (default: `config.json`) with the following structure:
+//! See [`x402_types::config`] for the full configuration file format. The `chains`
+//! section uses CAIP-2 chain identifiers as keys:
 //!
 //! ```json
 //! {
-//!   "port": 8080,
-//!   "host": "0.0.0.0",
 //!   "chains": {
 //!     "eip155:84532": {
 //!       "rpc_url": "https://sepolia.base.org",
@@ -21,22 +27,9 @@
 //!       "rpc_url": "https://api.devnet.solana.com",
 //!       "signer_private_key": "base58..."
 //!     }
-//!   },
-//!   "schemes": [
-//!     {
-//!       "version": "v2",
-//!       "scheme": "exact",
-//!       "network": "eip155:*"
-//!     }
-//!   ]
+//!   }
 //! }
 //! ```
-//!
-//! # Environment Variables
-//!
-//! - `CONFIG` - Path to configuration file (default: `config.json`)
-//! - `PORT` - Server port (default: 8080)
-//! - `HOST` - Server bind address (default: `0.0.0.0`)
 
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;

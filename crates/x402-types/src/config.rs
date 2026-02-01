@@ -1,7 +1,38 @@
 //! Configuration types for x402 infrastructure.
 //!
-//! This module provides configuration types used throughout the x402 ecosystem,
-//! including RPC provider configuration and environment variable resolution.
+//! This module provides the core configuration types used throughout the x402 ecosystem,
+//! including server configuration, RPC provider configuration, CLI argument parsing,
+//! and environment variable resolution.
+//!
+//! # Overview
+//!
+//! The configuration system is designed to be reusable across different x402 components:
+//!
+//! - [`Config<T>`] - Generic server configuration parameterized by chain config type
+//! - [`CliArgs`] - CLI argument parsing (requires `cli` feature)
+//! - [`LiteralOrEnv`] - Transparent wrapper for environment variable resolution
+//! - [`RpcConfig`] - RPC provider configuration
+//!
+//! # Configuration File Format
+//!
+//! Configuration is loaded from a JSON file (default: `config.json`) with the following structure:
+//!
+//! ```json
+//! {
+//!   "port": 8080,
+//!   "host": "0.0.0.0",
+//!   "chains": { /* chain-specific configuration */ },
+//!   "schemes": [
+//!     { "scheme": "v2-eip155-exact", "chains": ["eip155:8453"] }
+//!   ]
+//! }
+//! ```
+//!
+//! # Environment Variables
+//!
+//! - `CONFIG` - Path to configuration file (default: `config.json`)
+//! - `PORT` - Server port (default: 8080)
+//! - `HOST` - Server bind address (default: `0.0.0.0`)
 //!
 //! # Environment Variable Resolution
 //!
@@ -18,6 +49,11 @@
 //!
 //! This is particularly useful for keeping secrets out of configuration files
 //! while still allowing them to be loaded at runtime.
+//!
+//! # Feature Flags
+//!
+//! - `cli` - Enables CLI argument parsing via [`clap`]. When enabled, [`Config::load()`]
+//!   parses command-line arguments to determine the config file path.
 
 use serde::{Deserialize, Serialize};
 use std::fs;

@@ -38,16 +38,16 @@ x402-types = { version = "0.1", features = ["telemetry"] }
 
 ## Modules
 
-| Module        | Description                                                               |
-|---------------|---------------------------------------------------------------------------|
-| `chain`       | Blockchain identifiers and provider abstractions (CAIP-2 chain IDs)       |
-| `config`      | Configuration types for RPC providers and environment variable resolution |
-| `facilitator` | Core trait for payment verification and settlement                        |
-| `networks`    | Registry of well-known blockchain networks                                |
-| `proto`       | Wire format types for protocol messages (V1 and V2)                       |
-| `scheme`      | Payment scheme system for extensible payment methods                      |
-| `timestamp`   | Unix timestamp utilities for payment authorization windows                |
-| `util`        | Helper types (base64, string literals, money amounts)                     |
+| Module        | Description                                                                        |
+|---------------|------------------------------------------------------------------------------------|
+| `chain`       | Blockchain identifiers and provider abstractions (CAIP-2 chain IDs)                |
+| `config`      | Server configuration, CLI parsing, RPC config, and environment variable resolution |
+| `facilitator` | Core trait for payment verification and settlement                                 |
+| `networks`    | Registry of well-known blockchain networks                                         |
+| `proto`       | Wire format types for protocol messages (V1 and V2)                                |
+| `scheme`      | Payment scheme system for extensible payment methods                               |
+| `timestamp`   | Unix timestamp utilities for payment authorization windows                         |
+| `util`        | Helper types (base64, string literals, money amounts)                              |
 
 ## Protocol Versions
 
@@ -130,9 +130,10 @@ let valid_before = valid_after + std::time::Duration::from_secs(3600);
 
 ## Feature Flags
 
-| Feature     | Description                                                  |
-|-------------|--------------------------------------------------------------|
-| `telemetry` | Enables tracing instrumentation for debugging and monitoring |
+| Feature     | Description                                                     |
+|-------------|-----------------------------------------------------------------|
+| `cli`       | Enables CLI argument parsing via clap for configuration loading |
+| `telemetry` | Enables tracing instrumentation for debugging and monitoring    |
 
 ## License
 
