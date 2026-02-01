@@ -1,3 +1,0 @@
-[patch.crates-io]
-x402-axum = { path = "./crates/x402-axum" }
-x402-reqwest = { path = "./crates/x402-reqwest" }
