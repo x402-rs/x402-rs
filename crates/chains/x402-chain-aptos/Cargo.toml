@@ -20,6 +20,7 @@ all-features = true
 default = []
 telemetry = ["tracing", "x402-types/telemetry"]
 facilitator = ["async-trait", "url", "hex", "aptos-crypto", "aptos-types", "bcs", "aptos-rest-client"]
+full = ["telemetry", "facilitator"]
 
 [dependencies]
 x402-types = { workspace = true }

@@ -1,14 +1,14 @@
 //! Compile-time string literal type generation.
 //!
-//! This module provides the [`lit_str!`] macro for creating types that
+//! This module provides the [`lit_str!`](macro@lit_str) macro for creating types that
 //! represent specific string literals at compile time. These types are
 //! useful for ensuring type safety when working with fixed string values
 //! in protocol messages.
 //!
 //! # Example
 //!
-//! ```ignore
-//! use x402::lit_str;
+//! ```rust
+//! use x402_types::lit_str;
 //!
 //! lit_str!(ExactScheme, "exact");
 //!

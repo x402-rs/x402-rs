@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use solana_client::client_error::reqwest::Url;
 use std::ops::Deref;
 use std::str::FromStr;
+use url::Url;
 use x402_types::chain::ChainId;
 use x402_types::config::LiteralOrEnv;
 

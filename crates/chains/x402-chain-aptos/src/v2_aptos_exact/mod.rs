@@ -13,8 +13,8 @@
 //! # Usage
 //!
 //! ```ignore
-//! use x402::scheme::v2_aptos_exact::V2AptosExact;
-//! use x402::networks::{KnownNetworkAptos, USDC};
+//! use x402_chain_aptos::v2_aptos_exact::V2AptosExact;
+//! use x402_chain_aptos::networks::{KnownNetworkAptos, USDC};
 //!
 //! // Create a price tag for 1 USDC on Aptos mainnet
 //! let usdc = USDC::aptos();

@@ -132,9 +132,9 @@ impl PaymentSelector for FirstMatch {
 ///
 /// # Example
 ///
-/// ```ignore
-/// use x402::scheme::client::PreferChain;
-/// use x402::chain::ChainIdPattern;
+/// ```rust
+/// use x402_types::scheme::client::PreferChain;
+/// use x402_types::chain::ChainIdPattern;
 ///
 /// // Prefer Base, then any EVM chain, then anything else
 /// let selector = PreferChain::new(vec![

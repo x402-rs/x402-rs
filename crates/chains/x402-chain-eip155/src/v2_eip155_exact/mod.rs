@@ -21,8 +21,8 @@
 //! # Usage
 //!
 //! ```ignore
-//! use x402::scheme::v2_eip155_exact::V2Eip155Exact;
-//! use x402::networks::{KnownNetworkEip155, USDC};
+//! use x402_chain_eip155::v2_eip155_exact::V2Eip155Exact;
+//! use x402_chain_eip155::networks::{KnownNetworkEip155, USDC};
 //!
 //! // Create a price tag for 1 USDC on Base
 //! let usdc = USDC::base();

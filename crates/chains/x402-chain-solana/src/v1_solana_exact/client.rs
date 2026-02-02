@@ -12,10 +12,10 @@
 //!
 //! # Usage
 //!
-//! ```ignore
-//! use x402::scheme::v1_solana_exact::client::V1SolanaExactClient;
+//! ```rust
+//! use x402_chain_solana::v1_solana_exact::client::V1SolanaExactClient;
 //! use solana_client::nonblocking::rpc_client::RpcClient;
-//! use solana_sdk::signer::keypair::Keypair;
+//! use solana_keypair::Keypair;
 //!
 //! let keypair = Keypair::new();
 //! let rpc = RpcClient::new("https://api.mainnet-beta.solana.com".to_string());

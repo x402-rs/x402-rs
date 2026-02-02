@@ -248,9 +248,9 @@ pub struct PaymentRequired {
 ///
 /// # Example
 ///
-/// ```ignore
-/// use x402::proto::v2::{PriceTag, PaymentRequirements};
-/// use x402::chain::ChainId;
+/// ```rust
+/// use x402_types::proto::v2::{PriceTag, PaymentRequirements};
+/// use x402_types::chain::ChainId;
 ///
 /// let requirements = PaymentRequirements {
 ///     scheme: "exact".to_string(),

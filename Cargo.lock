@@ -13207,6 +13207,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-core",
+ "url",
  "x402-types",
 ]
 

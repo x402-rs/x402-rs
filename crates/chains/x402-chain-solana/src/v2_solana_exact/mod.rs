@@ -21,13 +21,13 @@
 //! # Usage
 //!
 //! ```ignore
-//! use x402::scheme::v2_solana_exact::V2SolanaExact;
-//! use x402::networks::{KnownNetworkSolana, USDC};
+//! use x402_chain_solana::v2_solana_exact::V2SolanaExact;
+//! use x402_chain_solana::networks::{KnownNetworkSolana, USDC};
 //!
 //! // Create a price tag for 1 USDC on Solana mainnet
 //! let usdc = USDC::solana_mainnet();
 //! let price = V2SolanaExact::price_tag(
-//!     "recipient_pubkey...",  // pay_to address
+//!     recipient_pubkey, // pay_to address
 //!     usdc.amount(1_000_000),  // 1 USDC
 //! );
 //! ```

@@ -29,6 +29,7 @@ telemetry = [
     "dep:opentelemetry-stdout",
     "x402-types/telemetry",
 ]
+full = ["telemetry"]
 
 [dependencies]
 x402-types = { workspace = true }

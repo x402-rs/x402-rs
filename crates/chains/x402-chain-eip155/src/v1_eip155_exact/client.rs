@@ -6,7 +6,7 @@
 //! # Usage
 //!
 //! ```ignore
-//! use x402::scheme::v1_eip155_exact::client::V1Eip155ExactClient;
+//! use x402_chain_eip155::v1_eip155_exact::client::V1Eip155ExactClient;
 //! use alloy_signer_local::PrivateKeySigner;
 //!
 //! let signer = PrivateKeySigner::random();

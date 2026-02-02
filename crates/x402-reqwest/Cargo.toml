@@ -35,3 +35,4 @@ x402-chain-eip155 = { workspace = true, features = ["client"] }
 default = []
 telemetry = ["dep:tracing", "x402-types/telemetry"]
 json = ["reqwest-middleware/json"]
+full = ["telemetry", "json"]

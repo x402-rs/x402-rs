@@ -36,6 +36,7 @@ facilitator = [
   "async-trait",
   "url"
 ]
+full = ["telemetry", "client", "server", "facilitator"]
 
 [dependencies]
 x402-types = { workspace = true }

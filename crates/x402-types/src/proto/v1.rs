@@ -448,8 +448,8 @@ pub struct PaymentRequired {
 ///
 /// # Example
 ///
-/// ```ignore
-/// use x402::proto::v1::PriceTag;
+/// ```rust
+/// use x402_types::proto::v1::PriceTag;
 ///
 /// let price = PriceTag {
 ///     scheme: "exact".to_string(),

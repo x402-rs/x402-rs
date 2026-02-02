@@ -38,3 +38,4 @@ tracing = { workspace = true, optional = true }
 default = []
 telemetry = ["dep:tracing"]
 cli = ["dep:clap"]
+full = ["cli", "telemetry"]

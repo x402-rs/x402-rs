@@ -80,8 +80,8 @@ impl From<SolanaChainProviderError> for PaymentVerificationError {
 /// # Example
 ///
 /// ```ignore
-/// use x402::chain::solana::SolanaChainProvider;
-/// use x402::config::SolanaChainConfig;
+/// use x402_chain_solana::chain::SolanaChainProvider;
+/// use x402_chain_solana::chain::SolanaChainConfig;
 ///
 /// let provider = SolanaChainProvider::from_config(&config).await?;
 /// println!("Fee payer: {}", provider.fee_payer());
