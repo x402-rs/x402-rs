@@ -4,7 +4,7 @@
 //! on EVM chains using the V1 x402 protocol.
 
 use alloy_primitives::{Address, B256, Bytes, U256};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use x402_types::lit_str;
 use x402_types::proto::v1;
 use x402_types::timestamp::UnixTimestamp;
@@ -13,6 +13,15 @@ use x402_types::timestamp::UnixTimestamp;
 use alloy_sol_types::sol;
 
 lit_str!(ExactScheme, "exact");
+
+fn serialize_u256_decimal<S: Serializer>(value: &U256, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(&value.to_string())
+}
+
+fn deserialize_u256_decimal<'de, D: Deserializer<'de>>(deserializer: D) -> Result<U256, D::Error> {
+    let s: String = Deserialize::deserialize(deserializer)?;
+    U256::from_str_radix(&s, 10).map_err(serde::de::Error::custom)
+}
 
 /// Type alias for V1 verify requests using the exact EVM payment scheme.
 pub type VerifyRequest = v1::VerifyRequest<PaymentPayload, PaymentRequirements>;
@@ -58,6 +67,7 @@ pub struct ExactEvmPayloadAuthorization {
     pub to: Address,
 
     /// The amount of tokens to transfer (in token's smallest unit).
+    #[serde(serialize_with = "serialize_u256_decimal", deserialize_with = "deserialize_u256_decimal")]
     pub value: U256,
 
     /// The authorization is not valid before this timestamp (inclusive).
