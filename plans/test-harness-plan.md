@@ -1,0 +1,407 @@
+# x402-rs E2E Test Harness Plan
+
+## Overview
+
+This document outlines the plan for creating a comprehensive end-to-end (E2E) test harness for the x402-rs project. The harness will test various combinations of client, server, and facilitator implementations across multiple chains and protocol versions.
+
+## Current State Analysis
+
+### Existing Implementations
+
+| Component | Rust Crate | TypeScript Package | Status |
+|-----------|------------|-------------------|--------|
+| **Client** | `x402-reqwest` | `@x402/fetch` | V1, V2 for EVM, Solana, Aptos |
+| **Server** | `x402-axum` | `@x402/hono` | V1, V2 middleware |
+| **Facilitator** | `x402-facilitator-local` | `@x402/core` | Full implementation |
+
+### Existing TypeScript Tester (`x402-ts-tester`)
+
+The [`x402-ts-tester`](file:///Users/ukstv/Developer/FareSide/x402-ts-tester) provides reference implementations:
+- `v1-seller.ts` / `v2-seller.ts` - Server implementations using Hono
+- `v1-buyer-evm.ts` / `v2-buyer-evm.ts` - Client implementations
+- Manual execution, no automation
+
+## Test Matrix
+
+The test harness supports these axes of configuration (not all combinations are valid):
+
+| x402 Version | Client | Server | Facilitator | Namespace | Scheme | Extension |
+|--------------|--------|--------|-------------|-----------|--------|----------|
+| v1 | Rust (rs) | Rust (rs) | Local (rs) | eip155 | exact | (none) |
+| v2 | TS (ts) | TS (ts) | TS (@x402) | solana | | eip2612GasSponsoring (eip155 + exact) |
+| | | | Remote | aptos | | erc20ApprovalGasSponsoring (eip155 + exact) |
+| | | | | | | sign-in-with-x |
+| | | | | | | bazaar (v2 only) |
+
+**Naming Convention:** `{x402-version}-{namespace}-{scheme}-{client}-{server}-{facilitator}.{modifier}.test.ts`
+
+Example: `v2-eip155-exact-rs-rs-rs.test.ts` (x402 v2, eip155, exact, Rust Client + Rust Server + Rust Facilitator)
+Example: `v2-solana-exact-rs-rs-rs.siwx.test.ts` (with sign-in-with-x modifier)
+
+**Initial Focus Combinations:**
+1. v2-eip155-exact-rs-rs-rs (Rust Client + Rust Server + Rust Facilitator + eip155)
+2. v2-solana-exact-rs-rs-rs (Rust Client + Rust Server + Rust Facilitator + Solana)
+3. v2-eip155-exact-ts-ts-rs (TS Client + TS Server + Rust Facilitator + eip155)
+4. v2-eip155-exact-ts-rs-rs (TS Client + Rust Server + Rust Facilitator + eip155)
+5. v2-eip155-exact-rs-ts-rs (Rust Client + TS Server + Rust Facilitator + eip155)
+
+> **Note:** Combination 3 (TS Client + TS Server + Rust Facilitator) is critical for testing the Rust facilitator's compatibility with the canonical TypeScript implementation, isolating any quirks in the Rust facilitator.
+
+## Proposed Structure
+
+```
+e2e/
+├── package.json                    # Node.js configuration
+├── tsconfig.json                   # TypeScript configuration
+├── .env.example                    # Environment template
+├── .env                            # Local environment (gitignored)
+├── justfile                       # Task runner commands
+├── README.md                       # Documentation
+├── src/
+│   ├── index.ts                   # Main entry point (all tests)
+│   ├── cli.ts                      # CLI for manual test invocation
+│   ├── utils/
+│   │   ├── facilitator.ts         # Facilitator utilities
+│   │   ├── server.ts              # Server utilities
+│   │   ├── client.ts               # Client utilities
+│   │   ├── config.ts              # Configuration management
+│   │   └── waitFor.ts              # Polling utilities
+│   ├── tests/
+│   │   ├── smoke.test.ts                        # Basic connectivity tests
+│   │   ├── v2-eip155-exact-rs-rs-rs.test.ts
+│   │   ├── v2-solana-exact-rs-rs-rs.test.ts
+│   │   ├── v2-eip155-exact-ts-ts-rs.test.ts    # TS Client + TS Server + Rust Facilitator
+│   │   ├── v2-eip155-exact-ts-rs-rs.test.ts
+│   │   ├── v2-eip155-exact-rs-ts-rs.test.ts
+│   │   ├── v1-eip155-exact-rs-rs-rs.test.ts        # Rust client + Rust server
+│   │   ├── v1-eip155-exact-rs-ts-rs.test.ts        # Rust client + TS server
+│   │   ├── v1-eip155-exact-ts-rs-rs.test.ts        # TS client + Rust server
+│   │   ├── v1-eip155-exact-ts-ts-rs.test.ts        # TS client + TS server
+│   │   ├── v1-solana-exact-rs-rs-rs.test.ts        # Rust client + Rust server
+│   │   ├── v1-solana-exact-rs-ts-rs.test.ts        # Rust client + TS server
+│   │   ├── v1-solana-exact-ts-rs-rs.test.ts        # TS client + Rust server
+│   │   └── v1-solana-exact-ts-ts-rs.test.ts        # TS client + TS server
+│   ├── fixtures/
+│   │   └── keys.ts               # Test wallets (from env)
+│   └── types/
+│       └── index.ts               # TypeScript types
+```
+
+## Key Components
+
+### 1. Configuration Management ([`src/utils/config.ts`](e2e/src/utils/config.ts))
+
+```typescript
+interface TestConfig {
+  facilitator: {
+    local: { port: number };
+    remote: { url: string };
+  };
+  server: {
+    rust: { port: number; facilitatorUrl: string };
+    ts: { port: number; facilitatorUrl: string };
+  };
+  client: {
+    rust: { facilitatorUrl: string };
+    ts: { facilitatorUrl: string };
+  };
+  chains: {
+    eip155: { network: string; rpcUrl: string };
+    solana: { network: string; rpcUrl: string };
+    aptos: { network: string; rpcUrl: string };
+  };
+  wallets: {
+    payer: { eip155: string; solana: string; aptos: string };
+    payee: { eip155: string; solana: string; aptos: string };
+  };
+}
+```
+
+### 2. Server Utilities ([`src/utils/server.ts`](e2e/src/utils/server.ts))
+
+```typescript
+interface ServerHandle {
+  url: string;
+  stop: () => Promise<void>;
+}
+
+async function startRustServer(port: number, facilitatorUrl: string): Promise<ServerHandle>;
+async function startTSSeller(port: number, facilitatorUrl: string): Promise<ServerHandle>;
+```
+
+### 3. Facilitator Management ([`src/utils/facilitator.ts`](e2e/src/utils/facilitator.ts))
+
+```typescript
+// Uses the same ServerHandle interface as above
+async function startLocalFacilitator(port: number, configPath: string): Promise<ServerHandle>;
+async function waitForFacilitator(url: string, maxWaitMs: number): Promise<boolean>;
+async function getSupportedChains(url: string): Promise<string[]>;
+```
+
+**Note:** The local facilitator is run via `cargo run --package facilitator` with the config from [`facilitator/config.json`](facilitator/config.json).
+
+### 4. Test Framework
+
+Uses **Vitest** for test execution with the following patterns:
+
+```typescript
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+
+describe('v2-eip155-exact-rs-rs-rs: x402 v2, eip155, exact, Rust Client + Rust Server + Rust Facilitator', () => {
+  let facilitator: ServerHandle;
+  let server: ServerHandle;
+
+  beforeAll(async () => {
+    facilitator = await startLocalFacilitator(23635, 'facilitator/config.json');
+    server = await startRustServer(3000, facilitator.url);
+  });
+
+  afterAll(async () => {
+    await server.stop();
+    await facilitator.stop();
+  });
+
+  it('should complete payment flow', async () => {
+    const response = await makePaymentRequest(server.url);
+    expect(response.status).toBe(200);
+  });
+});
+```
+
+## Command Interface
+
+### All-in-One Test Execution
+
+```bash
+# Run all tests
+just test-all
+
+# Run specific test category
+just test eip155           # eip155-only tests
+just test solana           # Solana-only tests
+just test compat           # Compatibility tests
+
+# Run with verbose output
+just test-all --verbose
+
+# Generate coverage report
+just test-coverage
+```
+
+### Manual Test Invocation
+
+```bash
+# Single combination test
+e2e run --client rs --server rs --facilitator rs --chain eip155 --version v2
+
+# Debug mode with logs
+e2e run --client rs --server rs --chain eip155 --verbose --debug
+```
+
+### Facilitator Management
+
+```bash
+# Run local facilitator (uses config.json in facilitator folder)
+cargo run --package facilitator -- --config facilitator/config.json
+```
+
+## Test Scenarios
+
+### 1. Basic Payment Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    participant F as Facilitator
+    participant BC as Blockchain
+
+    C->>S: GET /protected-resource
+    S-->>C: 402 Payment Required
+    C->>S: GET /protected-resource + Payment Header
+    S->>F: Verify Payment
+    F->>BC: Check Balance
+    BC-->>F: Sufficient Funds
+    F-->>S: Payment Verified
+    S->>BC: Settle Payment
+    BC-->>S: Settlement Confirmed
+    S-->>C: 200 OK + Content
+```
+
+### 2. Test Cases
+
+| Test Case              | Description               | Expected Result |
+|------------------------|--------------------------|-----------------|
+| Happy Path             | Complete payment flow    | 200 OK          |
+
+> **Note:** Error cases (missing payment, insufficient funds, invalid signature, etc.) are tested per-component, not in E2E harness.
+
+## Implementation Tasks
+
+### Phase 0: Infrastructure Setup
+
+- [ ] Create `e2e/` directory structure
+- [ ] Set up `package.json` with dependencies
+- [ ] Configure TypeScript and Vitest
+- [ ] Create environment configuration template
+- [ ] Set up justfile commands
+
+### Phase 1: v2-eip155-exact-rs-rs-rs Scenario
+
+**Scenario:** Rust Client + Rust Server + Rust Facilitator + eip155 + exact
+
+- [ ] Implement `startLocalFacilitator()` utility
+- [ ] Implement `startRustServer()` utility
+- [ ] Implement Rust Client test helper
+- [ ] Write `v2-eip155-exact-rs-rs-rs.test.ts` with happy path test
+
+> **Note:** Error cases are tested per-component, not in E2E harness.
+
+### Phase 2: v2-eip155-exact-ts-rs-rs Scenario
+
+**Scenario:** TS Client + Rust Server + Rust Facilitator + eip155 + exact
+
+- [ ] Implement `startTSSeller()` utility
+- [ ] Implement TS Client test helper
+- [ ] Write `v2-eip155-exact-ts-rs-rs.test.ts` with happy path test
+
+> **Note:** Error cases are tested per-component, not in E2E harness.
+
+### Phase 3: v2-eip155-exact-ts-ts-rs Scenario
+
+**Scenario:** TS Client + TS Server + Rust Facilitator + eip155 + exact
+
+- [ ] Write `v2-eip155-exact-ts-ts-rs.test.ts` with happy path test
+
+### Phase 4: v2-eip155-exact-rs-ts-rs Scenario
+
+**Scenario:** Rust Client + TS Server + Rust Facilitator + eip155 + exact
+
+- [ ] Write `v2-eip155-exact-rs-ts-rs.test.ts` with happy path test
+
+### Phase 5: v2-solana-exact-rs-rs-rs Scenario
+
+**Scenario:** Rust Client + Rust Server + Rust Facilitator + Solana + exact
+
+- [ ] Write `v2-solana-exact-rs-rs-rs.test.ts` with happy path test
+
+### Phase 6: V1 Scheme Tests
+
+**Scenario:** Full matrix `v1 (eip155|solana) exact (rs|ts) (rs|ts) rs` against Rust facilitator
+
+#### EIP155 Tests:
+- [ ] Write `v1-eip155-exact-rs-rs-rs.test.ts` - Rust client + Rust server
+- [ ] Write `v1-eip155-exact-rs-ts-rs.test.ts` - Rust client + TS server
+- [ ] Write `v1-eip155-exact-ts-rs-rs.test.ts` - TS client + Rust server
+- [ ] Write `v1-eip155-exact-ts-ts-rs.test.ts` - TS client + TS server
+
+#### Solana Tests:
+- [ ] Write `v1-solana-exact-rs-rs-rs.test.ts` - Rust client + Rust server
+- [ ] Write `v1-solana-exact-rs-ts-rs.test.ts` - Rust client + TS server
+- [ ] Write `v1-solana-exact-ts-rs-rs.test.ts` - TS client + Rust server
+- [ ] Write `v1-solana-exact-ts-ts-rs.test.ts` - TS client + TS server
+
+### Future Work (Out of Scope here)
+
+Extensions are part of this repository but not yet implemented:
+- eip2612GasSponsoring, erc20ApprovalGasSponsoring, sign-in-with-x, bazaar
+- Tests will be added when extensions are implemented
+
+### Phase 7: CLI and Integration
+
+- [ ] Build CLI for manual test invocation
+- [ ] Add `just` commands for all operations
+
+## Environment Variables
+
+```bash
+# Required
+EVM_PAYER_PRIVATE_KEY=0x...
+EIP155_PAYEE_ADDRESS=0x...
+SOLANA_PAYER_KEYPAIR=[...]
+APTOS_PAYER_PRIVATE_KEY=...
+
+# Optional (defaults provided)
+FACILITATOR_PORT=23635
+SERVER_PORT=3000
+FACILITATOR_URL=http://localhost:23635
+
+# Blockchain RPC URLs (optional, defaults to public RPCs)
+EIP155_RPC_URL=https://...
+SOLANA_RPC_URL=https://...
+APTOS_RPC_URL=https://...
+```
+
+## Dependencies
+
+```json
+{
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.8",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.21.0"
+  },
+  "dependencies": {
+    "@x402/fetch": "^2.2.0",
+    "@x402/hono": "^2.2.0",
+    "@x402/core": "^2.2.0",
+    "@x402/evm": "^2.2.0",
+    "@x402/svm": "^2.2.0",
+    "hono": "^4.11.4",
+    "viem": "^2.44.2",
+    "@solana/kit": "^5.4.0",
+    "dotenv": "^17.2.3"
+  }
+}
+```
+
+## Justfile Commands
+
+```makefile
+# Run all tests
+test-all:
+    cd e2e && pnpm test
+
+# Run specific test file
+test FILE='':
+    cd e2e && pnpm vitest run {{FILE}}
+
+# Run specific test by name pattern
+test-pattern PATTERN='':
+    cd e2e && pnpm vitest run -t {{PATTERN}}
+
+# Watch mode
+test-watch:
+    cd e2e && pnpm vitest
+
+# Run CLI manually
+run ARGS='':
+    cd e2e && pnpm tsx src/cli.ts {{ARGS}}
+
+# Facilitator management (uses cargo package from /facilitator folder)
+facilitator-start:
+    cargo run --package facilitator -- --config facilitator/config.json
+
+facilitator-stop:
+    pkill -f "cargo run --package facilitator"
+
+facilitator-logs:
+    tail -f facilitator.log
+
+# Install dependencies
+install:
+    cd e2e && pnpm install
+
+# Type check
+typecheck:
+    cd e2e && pnpm tsc --noEmit
+```
+
+## Next Steps
+
+1. **Approve this plan** - Confirm the structure and scope
+2. **Phase 0 implementation** - Infrastructure setup
+3. **Phase 1 implementation** - v2-eip155-exact-rs-rs-rs scenario
+4. **Phase 2 implementation** - v2-eip155-exact-ts-rs-rs scenario
+5. **Iterative implementation** - Continue with remaining phases
