@@ -24,8 +24,15 @@ export async function waitForUrl(
   return waitFor(
     async () => {
       try {
-        const response = await fetch(url, { method: 'GET' });
-        return response.status >= 200 && response.status < 300;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const response = await fetch(url, {
+          method: 'GET',
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        // Accept any HTTP response (including 402, 500, etc.)
+        return response.status >= 100;
       } catch {
         return false;
       }

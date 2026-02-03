@@ -1,31 +1,24 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { startLocalFacilitator, type ServerHandle } from '../utils/facilitator.js';
-import { startRustServer } from '../utils/server.js';
-import { startRustClient } from '../utils/client.js';
-import { config, getWalletConfig } from '../utils/config.js';
+import { startTSServer } from '../utils/server.js';
+import { makePaymentRequest } from '../utils/client.js';
+import { getWalletConfig } from '../utils/config.js';
 
-describe('v2-eip155-exact-rs-rs-rs: x402 v2, eip155, exact, Rust Client + Rust Server + Rust Facilitator', () => {
+describe('v2-eip155-exact-ts-ts-rs: x402 v2, eip155, exact, TS Client + TS Server + Rust Facilitator', () => {
   let facilitator: ServerHandle;
   let server: ServerHandle;
-  let client: { stop: () => Promise<void> };
 
   beforeAll(async () => {
     // Start the local facilitator
     facilitator = await startLocalFacilitator();
 
-    // Start the Rust test server (x402-axum-example)
-    server = await startRustServer({
-      facilitatorUrl: facilitator.url,
-    });
-
-    // Start the Rust test client (x402-reqwest-example)
-    client = await startRustClient({
+    // Start the TS test server
+    server = await startTSServer({
       facilitatorUrl: facilitator.url,
     });
   }, 120000); // 2 minute timeout for starting services
 
   afterAll(async () => {
-    await client.stop();
     await server.stop();
     await facilitator.stop();
   });
@@ -36,7 +29,6 @@ describe('v2-eip155-exact-rs-rs-rs: x402 v2, eip155, exact, Rust Client + Rust S
   });
 
   it('should have server running', async () => {
-    // x402-axum-example listens on port 3000
     const response = await fetch(`${server.url}/static-price-v2`);
     // Should either get 402 (payment required) or 200 (free endpoint)
     expect([200, 402]).toContain(response.status);
@@ -48,25 +40,18 @@ describe('v2-eip155-exact-rs-rs-rs: x402 v2, eip155, exact, Rust Client + Rust S
     expect(response.status).toBe(402);
   });
 
-  it('should return 200 OK and VIP content when payment is provided via Rust client', async () => {
-    const wallets = getWalletConfig('eip155');
-
+  it('should return 200 OK and VIP content when payment is provided via TS client', async () => {
     // Skip if no EVM private key is configured
+    const wallets = getWalletConfig('eip155');
     if (!wallets.payer || wallets.payer.length === 0) {
-      console.log('Skipping Rust client test - no EVM private key configured');
+      console.log('Skipping TS client test - no EVM private key configured');
       return;
     }
 
-    // Make a request using the Rust reqwest client
-    const response = await fetch(`${server.url}/static-price-v2`, {
-      method: 'GET',
-      headers: {
-        'X-Payment-Accepted': '2',
-        'X-Payment-Scheme': 'exact',
-        'X-Payment-Namespace': 'eip155',
-        'X-Payment-Payee': wallets.payee,
-        'X-Payment-Amount': '1',
-      },
+    // Make a request using the TypeScript client (simulated payment headers)
+    // The TS client uses @x402/fetch which constructs proper payment headers
+    const response = await makePaymentRequest(server.url, '/static-price-v2', {
+      facilitatorUrl: facilitator.url,
     });
 
     // Should succeed with 200 OK

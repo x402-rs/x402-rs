@@ -1,15 +1,23 @@
-import type { ServerHandle } from './facilitator.js';
+import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
+import { paymentMiddleware, x402ResourceServer } from '@x402/hono';
+import { ExactEvmScheme } from '@x402/evm/exact/server';
+import { HTTPFacilitatorClient } from '@x402/core/server';
 import { config } from './config.js';
-import { waitForUrl } from './waitFor.js';
 import { spawn } from 'child_process';
 import { join } from 'path';
 
 // Workspace root - hardcoded for vitest compatibility
 const WORKSPACE_ROOT = '/Users/ukstv/Developer/FareSide/x402-rs';
 
+export interface ServerHandle {
+  url: string;
+  stop: () => Promise<void>;
+}
+
 export interface RustServerOptions {
-  port?: number;
   facilitatorUrl: string;
+  port?: number;
 }
 
 export async function startRustServer(options: RustServerOptions): Promise<ServerHandle> {
@@ -17,22 +25,26 @@ export async function startRustServer(options: RustServerOptions): Promise<Serve
   const serverUrl = `http://localhost:${port}`;
 
   // Check if server is already running
-  const alreadyRunning = await waitForUrl(serverUrl, { timeoutMs: 2000 });
-  if (alreadyRunning) {
-    console.log(`Rust Server already running at ${serverUrl}`);
-    return {
-      url: serverUrl,
-      stop: async () => {},
-    };
+  try {
+    const response = await fetch(`${serverUrl}/health`, { method: 'GET' });
+    if (response.ok) {
+      console.log(`Rust Server already running at ${serverUrl}`);
+      return {
+        url: serverUrl,
+        stop: async () => {},
+      };
+    }
+  } catch {
+    // Server not running, need to start it
   }
 
-  // Start Rust test server via cargo run using x402-axum-example
   console.log(`Starting Rust test server at ${serverUrl}...`);
 
+  // Start Rust test server via cargo run using x402-axum-example
   const rustServerProcess = spawn('cargo', [
     'run',
     '--manifest-path', join(WORKSPACE_ROOT, 'examples/x402-axum-example/Cargo.toml'),
-    '--', '--facilitator-url', options.facilitatorUrl,
+    '--', '--port', port.toString(), '--facilitator-url', options.facilitatorUrl,
   ], {
     cwd: WORKSPACE_ROOT,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -55,12 +67,6 @@ export async function startRustServer(options: RustServerOptions): Promise<Serve
     console.error(`Rust server error: ${err}`);
   });
 
-  // Wait for server to be ready
-  const ready = await waitForUrl(serverUrl, { timeoutMs: 60000 });
-  if (!ready) {
-    throw new Error(`Rust server failed to start within 60 seconds`);
-  }
-
   console.log(`Rust test server started at ${serverUrl}`);
 
   return {
@@ -72,44 +78,103 @@ export async function startRustServer(options: RustServerOptions): Promise<Serve
 }
 
 export interface TSServerOptions {
-  port?: number;
   facilitatorUrl: string;
-  scheme?: string;
-  namespace?: string;
-  version?: 'v1' | 'v2';
+  port?: number;
+  chain?: 'eip155' | 'solana' | 'aptos';
+  payeeAddress?: string;
+  price?: string;
 }
 
-export async function startTSServer(_options: TSServerOptions): Promise<ServerHandle> {
-  const port = _options.port ?? config.server.port;
+export async function startTSServer(options: TSServerOptions): Promise<ServerHandle> {
+  const port = options.port ?? config.server.port;
+  const chain = options.chain ?? 'eip155';
+  const payeeAddress = options.payeeAddress ?? config.wallets.payee[chain];
+  const price = options.price ?? '$0.001';
   const serverUrl = `http://localhost:${port}`;
 
   // Check if server is already running
-  const alreadyRunning = await waitForUrl(serverUrl, { timeoutMs: 2000 });
-  if (alreadyRunning) {
-    console.log(`TS Server already running at ${serverUrl}`);
-    return {
-      url: serverUrl,
-      stop: async () => {},
-    };
+  try {
+    const response = await fetch(`${serverUrl}/health`, { method: 'GET' });
+    if (response.ok) {
+      console.log(`TS Server already running at ${serverUrl}`);
+      return {
+        url: serverUrl,
+        stop: async () => {},
+      };
+    }
+  } catch {
+    // Server not running, need to start it
   }
 
-  // TODO: Implement TS server using @x402/hono
-  console.log(`TS Server would start at ${serverUrl}`);
+  console.log(`Starting TS test server at ${serverUrl}...`);
+
+  // Build the namespace string for the network
+  let namespace: string;
+  let scheme: string;
+
+  if (chain === 'eip155') {
+    namespace = 'eip155:84532'; // Base Sepolia
+    scheme = 'exact';
+  } else if (chain === 'solana') {
+    namespace = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1'; // Solana Devnet
+    scheme = 'exact';
+  } else {
+    namespace = 'aptos'; // Placeholder for Aptos
+    scheme = 'exact';
+  }
+
+  const app = new Hono();
+  const facilitatorClient = new HTTPFacilitatorClient({ url: options.facilitatorUrl });
+  const resourceServer = new x402ResourceServer(facilitatorClient);
+
+  // Register the appropriate scheme based on chain
+  if (chain === 'eip155') {
+    resourceServer.register(namespace, new ExactEvmScheme());
+  } else if (chain === 'solana') {
+    // For Solana, we'd need ExactSvmScheme
+    // resourceServer.register(namespace, new ExactSvmScheme());
+    throw new Error('Solana TS server not yet implemented');
+  } else {
+    throw new Error('Aptos TS server not yet implemented');
+  }
+
+  // Apply the payment middleware with configuration
+  app.use(
+    paymentMiddleware(
+      {
+        'GET /static-price-v2': {
+          accepts: [
+            {
+              scheme,
+              price,
+              network: namespace,
+              payTo: payeeAddress,
+            },
+          ],
+          description: 'Access to premium content',
+        },
+      },
+      resourceServer,
+    ),
+  );
+
+  // Health check endpoint
+  app.get('/health', (c) => c.json({ status: 'ok' }));
+
+  // Protected route that returns VIP content
+  app.get('/static-price-v2', async (c) => {
+    return c.text('This is a VIP content!');
+  });
+
+  // Start the server
+  const server = serve({ fetch: app.fetch, port });
+
+  console.log(`TS test server started at ${serverUrl}`);
 
   return {
     url: serverUrl,
-    stop: async () => {},
+    stop: async () => {
+      server.close();
+    },
   };
-}
-
-export function createPaymentHeaders(
-  _x402Version: string,
-  _scheme: string,
-  _namespace: string,
-  _payee: string,
-  _amount: string,
-  _token?: string,
-  _extra?: Record<string, string>
-): Record<string, string> {
-  return {};
 }

@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { startLocalFacilitator, type ServerHandle } from '../utils/facilitator.js';
-import { startRustServer } from '../utils/server.js';
+import { startTSServer } from '../utils/server.js';
 import { startRustClient } from '../utils/client.js';
-import { config, getWalletConfig } from '../utils/config.js';
+import { getWalletConfig } from '../utils/config.js';
 
-describe('v2-eip155-exact-rs-rs-rs: x402 v2, eip155, exact, Rust Client + Rust Server + Rust Facilitator', () => {
+describe('v2-eip155-exact-rs-ts-rs: x402 v2, eip155, exact, Rust Client + TS Server + Rust Facilitator', () => {
   let facilitator: ServerHandle;
   let server: ServerHandle;
   let client: { stop: () => Promise<void> };
@@ -13,12 +13,12 @@ describe('v2-eip155-exact-rs-rs-rs: x402 v2, eip155, exact, Rust Client + Rust S
     // Start the local facilitator
     facilitator = await startLocalFacilitator();
 
-    // Start the Rust test server (x402-axum-example)
-    server = await startRustServer({
+    // Start the TS test server
+    server = await startTSServer({
       facilitatorUrl: facilitator.url,
     });
 
-    // Start the Rust test client (x402-reqwest-example)
+    // Start the Rust test client
     client = await startRustClient({
       facilitatorUrl: facilitator.url,
     });
@@ -36,7 +36,6 @@ describe('v2-eip155-exact-rs-rs-rs: x402 v2, eip155, exact, Rust Client + Rust S
   });
 
   it('should have server running', async () => {
-    // x402-axum-example listens on port 3000
     const response = await fetch(`${server.url}/static-price-v2`);
     // Should either get 402 (payment required) or 200 (free endpoint)
     expect([200, 402]).toContain(response.status);

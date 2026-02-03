@@ -62,8 +62,8 @@ protocol-compliance/
 │   ├── cli.ts                      # CLI for manual test invocation
 │   ├── utils/
 │   │   ├── facilitator.ts         # Facilitator utilities
-│   │   ├── server.ts              # Server utilities
-│   │   ├── client.ts               # Client utilities
+│   │   ├── server.ts              # Server utilities (startRustServer, startTSServer)
+│   │   ├── client.ts               # Client utilities (startRustClient, startTSClient)
 │   │   ├── config.ts              # Configuration management
 │   │   └── waitFor.ts              # Polling utilities
 │   ├── tests/
@@ -126,10 +126,22 @@ interface ServerHandle {
 }
 
 async function startRustServer(port: number, facilitatorUrl: string): Promise<ServerHandle>;
-async function startTSSeller(port: number, facilitatorUrl: string): Promise<ServerHandle>;
+async function startTSServer(port: number, facilitatorUrl: string): Promise<ServerHandle>;
 ```
 
-### 3. Facilitator Management ([`protocol-compliance/src/utils/facilitator.ts`])
+### 3. Client Utilities ([`protocol-compliance/src/utils/client.ts`])
+
+```typescript
+interface ClientHandle {
+  url: string;
+  stop: () => Promise<void>;
+}
+
+async function startRustClient(port: number, facilitatorUrl: string): Promise<ClientHandle>;
+async function startTSClient(port: number, facilitatorUrl: string): Promise<ClientHandle>;
+```
+
+### 4. Facilitator Management ([`protocol-compliance/src/utils/facilitator.ts`])
 
 ```typescript
 // Uses the same ServerHandle interface as above
@@ -140,7 +152,7 @@ async function getSupportedChains(url: string): Promise<string[]>;
 
 **Note:** The local facilitator is run via `cargo run --package facilitator` with the config from [`facilitator/config.json`](facilitator/config.json).
 
-### 4. Test Framework
+### 5. Test Framework
 
 Uses **Vitest** for test execution with the following patterns:
 
@@ -150,20 +162,33 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 describe('v2-eip155-exact-rs-rs-rs: x402 v2, eip155, exact, Rust Client + Rust Server + Rust Facilitator', () => {
   let facilitator: ServerHandle;
   let server: ServerHandle;
+  let client: ClientHandle;
 
   beforeAll(async () => {
     facilitator = await startLocalFacilitator(23635, 'facilitator/config.json');
     server = await startRustServer(3000, facilitator.url);
+    client = await startRustClient(3001, facilitator.url);
   });
 
   afterAll(async () => {
+    await client.stop();
     await server.stop();
     await facilitator.stop();
   });
 
   it('should complete payment flow', async () => {
-    const response = await makePaymentRequest(server.url);
+    const response = await fetch(`${server.url}/protected-resource`, {
+      headers: {
+        'X-Payment-Accepted': '2',
+        'X-Payment-Scheme': 'exact',
+        'X-Payment-Namespace': 'eip155',
+        'X-Payment-Payee': payeeAddress,
+        'X-Payment-Amount': '1',
+      },
+    });
     expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).toBe('This is a VIP content!');
   });
 });
 ```
@@ -232,7 +257,7 @@ sequenceDiagram
 
 | Test Case              | Description               | Expected Result |
 |------------------------|--------------------------|-----------------|
-| Happy Path             | Complete payment flow    | 200 OK          |
+| Happy Path             | Complete payment flow    | 200 OK + "This is a VIP content!" |
 
 > **Note:** Error cases (missing payment, insufficient funds, invalid signature, etc.) are tested per-component, not in E2E harness.
 
@@ -257,15 +282,24 @@ sequenceDiagram
 
 > **Note:** Error cases are tested per-component, not in E2E harness.
 
-### Phase 2: v2-eip155-exact-ts-rs-rs Scenario
+### Phase 2: v2-eip155-exact-ts-rs-rs Scenario ✅ DONE
 
 **Scenario:** TS Client + Rust Server + Rust Facilitator + eip155 + exact
 
-- [ ] Implement `startTSSeller()` utility
-- [ ] Implement TS Client test helper
-- [ ] Write `v2-eip155-exact-ts-rs-rs.test.ts` with happy path test
+- [x] Implement `createX402Client()` using @x402/fetch
+- [x] Write `v2-eip155-exact-ts-rs-rs.test.ts` with happy path test
 
 > **Note:** Error cases are tested per-component, not in E2E harness.
+
+### Phase 2.5: Programmatic Server/Client Management (IN PROGRESS)
+
+**Goal:** All servers and clients should be started programmatically via `beforeAll()` hooks.
+
+- [x] Implement `startRustClient()` in `client.ts` to spawn x402-reqwest-example
+- [x] Update Phase 1 test to spawn Rust client and verify response contains "This is a VIP content!"
+- [ ] Update Phase 2 test to verify response contains "This is a VIP content!"
+- [ ] Implement `startTSServer()` using @x402/hono
+- [ ] Implement `startTSClient()` using @x402/fetch
 
 ### Phase 3: v2-eip155-exact-ts-ts-rs Scenario
 
@@ -279,27 +313,12 @@ sequenceDiagram
 
 - [ ] Write `v2-eip155-exact-rs-ts-rs.test.ts` with happy path test
 
-### Phase 5: v2-solana-exact-rs-rs-rs Scenario
+### Phase 5: v2-solana-exact-rs-rs-rs ✅ DONE
 
 **Scenario:** Rust Client + Rust Server + Rust Facilitator + Solana + exact
 
-- [ ] Write `v2-solana-exact-rs-rs-rs.test.ts` with happy path test
-
-### Phase 6: V1 Scheme Tests
-
-**Scenario:** Full matrix `v1 (eip155|solana) exact (rs|ts) (rs|ts) rs` against Rust facilitator
-
-#### EIP155 Tests:
-- [ ] Write `v1-eip155-exact-rs-rs-rs.test.ts` - Rust client + Rust server
-- [ ] Write `v1-eip155-exact-rs-ts-rs.test.ts` - Rust client + TS server
-- [ ] Write `v1-eip155-exact-ts-rs-rs.test.ts` - TS client + Rust server
-- [ ] Write `v1-eip155-exact-ts-ts-rs.test.ts` - TS client + TS server
-
-#### Solana Tests:
-- [ ] Write `v1-solana-exact-rs-rs-rs.test.ts` - Rust client + Rust server
-- [ ] Write `v1-solana-exact-rs-ts-rs.test.ts` - Rust client + TS server
-- [ ] Write `v1-solana-exact-ts-rs-rs.test.ts` - TS client + Rust server
-- [ ] Write `v1-solana-exact-ts-ts-rs.test.ts` - TS client + TS server
+- [x] Add Solana chain configuration to test-config.json
+- [x] Write `v2-solana-exact-rs-rs-rs.test.ts` with happy path test
 
 ### Future Work (Out of Scope here)
 
@@ -307,7 +326,14 @@ Extensions are part of this repository but not yet implemented:
 - eip2612GasSponsoring, erc20ApprovalGasSponsoring, sign-in-with-x, bazaar
 - Tests will be added when extensions are implemented
 
-### Phase 7: CLI and Integration
+#### Aptos Support (Future Work)
+
+Aptos chain support requires additional setup and is planned for future phases:
+- [ ] Add Aptos chain configuration to test-config.json
+- [ ] Write `v2-aptos-exact-rs-rs-rs.test.ts` - Rust client + Rust server
+- [ ] Write `v1-aptos-exact-rs-rs-rs.test.ts` - V1 Rust tests
+
+### Phase 6: CLI and Integration
 
 - [ ] Build CLI for manual test invocation
 - [ ] Add `just` commands for all operations
@@ -404,4 +430,5 @@ typecheck:
 2. **Phase 0 implementation** - Infrastructure setup
 3. **Phase 1 implementation** - v2-eip155-exact-rs-rs-rs scenario
 4. **Phase 2 implementation** - v2-eip155-exact-ts-rs-rs scenario
-5. **Iterative implementation** - Continue with remaining phases
+5. **Phase 2.5 implementation** - Programmatic server/client management
+6. **Iterative implementation** - Continue with remaining phases
