@@ -16,6 +16,7 @@
     "vitest": "^2.1.8"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.9",
     "@x402/core": "^2.2.0",
     "@x402/evm": "^2.2.0",
     "@x402/fetch": "^2.2.0",
