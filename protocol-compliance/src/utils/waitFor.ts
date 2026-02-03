@@ -24,8 +24,8 @@ export async function waitForUrl(
   return waitFor(
     async () => {
       try {
-        const response = await fetch(url, { method: 'HEAD' });
-        return response.ok;
+        const response = await fetch(url, { method: 'GET' });
+        return response.status >= 200 && response.status < 300;
       } catch {
         return false;
       }
