@@ -1,0 +1,41 @@
+# Protocol Compliance Test Harness
+
+# Install dependencies
+install:
+    cd protocol-compliance && pnpm install
+
+# Type check
+typecheck:
+    cd protocol-compliance && pnpm typecheck
+
+# Run all tests
+test-all:
+    cd protocol-compliance && pnpm test
+
+# Run specific test file
+test FILE='':
+    cd protocol-compliance && pnpm vitest run {{FILE}}
+
+# Run tests matching pattern
+test-pattern PATTERN='':
+    cd protocol-compliance && pnpm vitest run -t {{PATTERN}}
+
+# Watch mode
+test-watch:
+    cd protocol-compliance && pnpm test:watch
+
+# Run CLI manually
+run ARGS='':
+    cd protocol-compliance && pnpm run {{ARGS}}
+
+# Run local facilitator (uses config from facilitator folder)
+facilitator-start:
+    cargo run --package facilitator -- --config facilitator/config.json
+
+# Stop facilitator
+facilitator-stop:
+    pkill -f "cargo run --package facilitator" || true
+
+# View facilitator logs
+facilitator-logs:
+    tail -f facilitator.log
