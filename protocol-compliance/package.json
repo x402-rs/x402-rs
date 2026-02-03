@@ -1,0 +1,29 @@
+{
+  "name": "x402-rs-protocol-compliance",
+  "version": "0.1.0",
+  "description": "Protocol compliance tests for x402-rs implementation",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "run": "tsx src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "@x402/core": "^2.2.0",
+    "@x402/evm": "^2.2.0",
+    "@x402/fetch": "^2.2.0",
+    "@x402/hono": "^2.2.0",
+    "@x402/svm": "^2.2.0",
+    "dotenv": "^17.2.3",
+    "hono": "^4.11.4",
+    "viem": "^2.44.2",
+    "@solana/kit": "^5.4.0"
+  }
+}
