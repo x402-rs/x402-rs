@@ -247,14 +247,13 @@ sequenceDiagram
 - [x] Set up justfile commands
 - [x] **Ensure it runs and works as expected**
 
-### Phase 1: v2-eip155-exact-rs-rs-rs Scenario
+### Phase 1: v2-eip155-exact-rs-rs-rs Scenario ✅ DONE
 
 **Scenario:** Rust Client + Rust Server + Rust Facilitator + eip155 + exact
 
-- [ ] Implement `startLocalFacilitator()` utility
-- [ ] Implement `startRustServer()` utility
-- [ ] Implement Rust Client test helper
-- [ ] Write `v2-eip155-exact-rs-rs-rs.test.ts` with happy path test
+- [x] Implement `startLocalFacilitator()` utility
+- [x] Implement `startRustServer()` utility
+- [x] Write `v2-eip155-exact-rs-rs-rs.test.ts` with happy path test
 
 > **Note:** Error cases are tested per-component, not in E2E harness.
 
