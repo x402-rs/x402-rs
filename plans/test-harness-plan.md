@@ -1,8 +1,8 @@
-# x402-rs E2E Test Harness Plan
+# x402-rs Protocol Compliance Test Harness Plan
 
 ## Overview
 
-This document outlines the plan for creating a comprehensive end-to-end (E2E) test harness for the x402-rs project. The harness will test various combinations of client, server, and facilitator implementations across multiple chains and protocol versions.
+This document outlines the plan for creating a comprehensive protocol compliance test harness for the x402-rs project. The harness will test various combinations of client, server, and facilitator implementations across multiple chains and protocol versions.
 
 ## Current State Analysis
 
@@ -50,7 +50,7 @@ Example: `v2-solana-exact-rs-rs-rs.siwx.test.ts` (with sign-in-with-x modifier)
 ## Proposed Structure
 
 ```
-e2e/
+protocol-compliance/
 ├── package.json                    # Node.js configuration
 ├── tsconfig.json                   # TypeScript configuration
 ├── .env.example                    # Environment template
@@ -89,7 +89,7 @@ e2e/
 
 ## Key Components
 
-### 1. Configuration Management ([`src/utils/config.ts`](e2e/src/utils/config.ts))
+### 1. Configuration Management ([`protocol-compliance/src/utils/config.ts`])
 
 ```typescript
 interface TestConfig {
@@ -117,7 +117,7 @@ interface TestConfig {
 }
 ```
 
-### 2. Server Utilities ([`src/utils/server.ts`](e2e/src/utils/server.ts))
+### 2. Server Utilities ([`protocol-compliance/src/utils/server.ts`])
 
 ```typescript
 interface ServerHandle {
@@ -129,7 +129,7 @@ async function startRustServer(port: number, facilitatorUrl: string): Promise<Se
 async function startTSSeller(port: number, facilitatorUrl: string): Promise<ServerHandle>;
 ```
 
-### 3. Facilitator Management ([`src/utils/facilitator.ts`](e2e/src/utils/facilitator.ts))
+### 3. Facilitator Management ([`protocol-compliance/src/utils/facilitator.ts`])
 
 ```typescript
 // Uses the same ServerHandle interface as above
@@ -192,10 +192,10 @@ just test-coverage
 
 ```bash
 # Single combination test
-e2e run --client rs --server rs --facilitator rs --chain eip155 --version v2
+protocol-compliance run --client rs --server rs --facilitator rs --chain eip155 --version v2
 
 # Debug mode with logs
-e2e run --client rs --server rs --chain eip155 --verbose --debug
+protocol-compliance run --client rs --server rs --chain eip155 --verbose --debug
 ```
 
 ### Facilitator Management
@@ -240,7 +240,7 @@ sequenceDiagram
 
 ### Phase 0: Infrastructure Setup
 
-- [ ] Create `e2e/` directory structure
+- [ ] Create `protocol-compliance/` directory structure
 - [ ] Set up `package.json` with dependencies
 - [ ] Configure TypeScript and Vitest
 - [ ] Create environment configuration template
@@ -361,23 +361,23 @@ APTOS_RPC_URL=https://...
 ```makefile
 # Run all tests
 test-all:
-    cd e2e && pnpm test
+    cd protocol-compliance && pnpm test
 
 # Run specific test file
 test FILE='':
-    cd e2e && pnpm vitest run {{FILE}}
+    cd protocol-compliance && pnpm vitest run {{FILE}}
 
 # Run specific test by name pattern
 test-pattern PATTERN='':
-    cd e2e && pnpm vitest run -t {{PATTERN}}
+    cd protocol-compliance && pnpm vitest run -t {{PATTERN}}
 
 # Watch mode
 test-watch:
-    cd e2e && pnpm vitest
+    cd protocol-compliance && pnpm vitest
 
 # Run CLI manually
 run ARGS='':
-    cd e2e && pnpm tsx src/cli.ts {{ARGS}}
+    cd protocol-compliance && pnpm tsx src/cli.ts {{ARGS}}
 
 # Facilitator management (uses cargo package from /facilitator folder)
 facilitator-start:
@@ -391,11 +391,11 @@ facilitator-logs:
 
 # Install dependencies
 install:
-    cd e2e && pnpm install
+    cd protocol-compliance && pnpm install
 
 # Type check
 typecheck:
-    cd e2e && pnpm tsc --noEmit
+    cd protocol-compliance && pnpm tsc --noEmit
 ```
 
 ## Next Steps
