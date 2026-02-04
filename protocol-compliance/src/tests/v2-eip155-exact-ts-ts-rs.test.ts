@@ -36,7 +36,7 @@ describe("v2-eip155-exact-ts-ts-rs: x402 v2, eip155, exact, TS Client + TS Serve
 
   it("should return 200 OK and VIP content when payment is provided via TS client", async () => {
     // Make a request using the TypeScript client (simulated payment headers)
-    const fetchFn = makeFetch("eip155");
+    const fetchFn = await makeFetch("eip155");
     const endpoint = new URL("./static-price-v2", server.url);
     const response = await fetchFn(endpoint);
 
