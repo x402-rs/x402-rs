@@ -93,7 +93,7 @@ export async function invokeRustClient(
 //   };
 // }
 
-export function makeFetch(chain: 'eip155' | 'solana'): typeof fetch {
+export async function makeFetch(chain: 'eip155' | 'solana'): Promise<typeof fetch> {
   const client = new x402Client();
   switch (chain) {
     case 'eip155': {
@@ -102,10 +102,10 @@ export function makeFetch(chain: 'eip155' | 'solana'): typeof fetch {
       break
     }
     case 'solana': {
-      throw new Error('Solana support not implemented yet')
-      // registerExactSvmScheme(client, {
-      //   signer: Keypair.fromSecretKey(bs58.decode(config.wallets.payer.solana)),
-      // })
+      const keypair = await createKeyPairSignerFromBytes(
+        base58.decode(config.wallets.payer.solana)
+      );
+      registerExactSvmScheme(client, { signer: keypair });
       break
     }
     default:
