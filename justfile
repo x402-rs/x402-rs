@@ -58,12 +58,3 @@ compliance-typecheck:
 
 compliance-test-all: build-all
   cd protocol-compliance && pnpm test
-
-compliance-test FILE='':
-  cd protocol-compliance && pnpm vitest run {{FILE}}
-
-compliance-test-pattern PATTERN='':
-  cd protocol-compliance && pnpm vitest run -t {{PATTERN}}
-
-compliance-test-watch:
-  cd protocol-compliance && pnpm test:watch
