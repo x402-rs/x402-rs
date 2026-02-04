@@ -6,6 +6,7 @@ import { spawn } from "child_process";
 import { join } from "path";
 import { WORKSPACE_ROOT } from "./workspace-root";
 import { printLines } from "./process-handle";
+import { registerExactSvmScheme } from "@x402/svm/exact/client";
 
 export interface ClientOptions {
   facilitatorUrl: string;
@@ -91,7 +92,28 @@ export async function invokeRustClient(
 //     },
 //   };
 // }
-//
+
+export function makeFetch(chain: 'eip155' | 'solana'): typeof fetch {
+  const client = new x402Client();
+  switch (chain) {
+    case 'eip155': {
+      let signer = privateKeyToAccount(config.wallets.payer.eip155 as `0x${string}`)
+      registerExactEvmScheme(client, { signer });
+      break
+    }
+    case 'solana': {
+      throw new Error('Solana support not implemented yet')
+      // registerExactSvmScheme(client, {
+      //   signer: Keypair.fromSecretKey(bs58.decode(config.wallets.payer.solana)),
+      // })
+      break
+    }
+    default:
+      throw new Error(`Unsupported chain: ${chain}`)
+  }
+  return wrapFetchWithPayment(fetch, client)
+}
+
 // export interface RustClientOptions {
 //   port?: number;
 //   facilitatorUrl: string;
