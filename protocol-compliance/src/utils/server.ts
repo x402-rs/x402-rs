@@ -1,20 +1,20 @@
 import { Hono } from "hono";
-import { serve } from "@hono/node-server";
+import { serve, ServerType } from "@hono/node-server";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
-import { config } from "./config.js";
-import { spawn } from "child_process";
-import { join } from "path";
 import { WORKSPACE_ROOT } from "./workspace-root";
 import { ProcessHandle } from "./process-handle";
 import { waitForUrl } from "./waitFor";
+import { ExactSvmScheme } from "@x402/svm/exact/server";
+import getPort from "get-port";
 
-export class RustServerHandle {
+export class RSServerHandle {
   readonly url: URL;
   readonly process: ProcessHandle;
 
-  static async spawn(facilitatorUrl: URL, port: number = config.server.port) {
+  static async spawn(facilitatorUrl: URL, port?: number) {
+    port = port ?? (await getPort());
     const serverUrl = new URL(`http://localhost:${port}/`);
 
     const serverBinary = new URL(
@@ -43,7 +43,7 @@ export class RustServerHandle {
     }
 
     console.log(`Rust server started at ${serverUrl}`);
-    return new RustServerHandle(serverUrl, serverProcess);
+    return new RSServerHandle(serverUrl, serverProcess);
   }
 
   constructor(url: URL, process: ProcessHandle) {
@@ -56,118 +56,88 @@ export class RustServerHandle {
   }
 }
 
-export interface RustServerOptions {
-  facilitatorUrl: string;
-  port?: number;
-}
+export class TSServerHandle {
+  readonly url: URL;
+  readonly server: ServerType;
 
-// Workspace root - hardcoded for vitest compatibility
-export interface ServerHandle {
-  url: string;
-  stop: () => Promise<void>;
-}
+  static async spawn(facilitatorUrl: URL, port?: number) {
+    port = port ?? (await getPort());
+    const serverUrl = new URL(`http://localhost:${port}/`);
+    console.log(`Starting TS test server at ${serverUrl}...`);
 
-export interface TSServerOptions {
-  facilitatorUrl: string;
-  port?: number;
-  chain?: "eip155" | "solana" | "aptos";
-  payeeAddress?: string;
-  price?: string;
-}
+    const ka = facilitatorUrl.href.replace(/(\/)+$/, "");
+    console.log(`Using facilitator at ${ka}`);
+    const facilitatorClient = new HTTPFacilitatorClient({
+      url: ka
+    });
+    const resourceServer = new x402ResourceServer(facilitatorClient)
+      .register("eip155:84532", new ExactEvmScheme())
+      .register(
+        "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+        new ExactSvmScheme(),
+      );
 
-// export async function startTSServer(
-//   options: TSServerOptions,
-// ): Promise<ServerHandle> {
-//   const port = options.port ?? config.server.port;
-//   const chain = options.chain ?? "eip155";
-//   const payeeAddress = options.payeeAddress ?? config.wallets.payee[chain];
-//   const price = options.price ?? "$0.001";
-//   const serverUrl = `http://localhost:${port}`;
-//
-//   // Check if server is already running
-//   try {
-//     const response = await fetch(`${serverUrl}/health`, { method: "GET" });
-//     if (response.ok) {
-//       console.log(`TS Server already running at ${serverUrl}`);
-//       return {
-//         url: serverUrl,
-//         stop: async () => {},
-//       };
-//     }
-//   } catch {
-//     // Server not running, need to start it
-//   }
-//
-//   console.log(`Starting TS test server at ${serverUrl}...`);
-//
-//   // Build the namespace string for the network
-//   let namespace: `${string}:${string}`;
-//   let scheme: string;
-//
-//   if (chain === "eip155") {
-//     namespace = "eip155:84532"; // Base Sepolia
-//     scheme = "exact";
-//   } else if (chain === "solana") {
-//     namespace = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"; // Solana Devnet
-//     scheme = "exact";
-//   } else {
-//     throw new Error(`${chain} server not yet implemented`);
-//   }
-//
-//   const app = new Hono();
-//   const facilitatorClient = new HTTPFacilitatorClient({
-//     url: options.facilitatorUrl,
-//   });
-//   const resourceServer = new x402ResourceServer(facilitatorClient);
-//
-//   // Register the appropriate scheme based on chain
-//   if (chain === "eip155") {
-//     resourceServer.register(namespace, new ExactEvmScheme());
-//   } else if (chain === "solana") {
-//     // For Solana, we'd need ExactSvmScheme
-//     // resourceServer.register(namespace, new ExactSvmScheme());
-//     throw new Error("Solana TS server not yet implemented");
-//   } else {
-//     throw new Error("Aptos TS server not yet implemented");
-//   }
-//
-//   // Apply the payment middleware with configuration
-//   app.use(
-//     paymentMiddleware(
-//       {
-//         "GET /static-price-v2": {
-//           accepts: [
-//             {
-//               scheme,
-//               price,
-//               network: namespace,
-//               payTo: payeeAddress,
-//             },
-//           ],
-//           description: "Access to premium content",
-//         },
-//       },
-//       resourceServer,
-//     ),
-//   );
-//
-//   // Health check endpoint
-//   app.get("/health", (c) => c.json({ status: "ok" }));
-//
-//   // Protected route that returns VIP content
-//   app.get("/static-price-v2", async (c) => {
-//     return c.text("This is a VIP content!");
-//   });
-//
-//   // Start the server
-//   const server = serve({ fetch: app.fetch, port });
-//
-//   console.log(`TS test server started at ${serverUrl}`);
-//
-//   return {
-//     url: serverUrl,
-//     stop: async () => {
-//       server.close();
-//     },
-//   };
-// }
+    const app = new Hono();
+    // Apply the payment middleware with configuration
+    app.use(
+      paymentMiddleware(
+        {
+          "GET /static-price-v2": {
+            accepts: [
+              {
+                scheme: "exact",
+                price: "$0.001",
+                network: "eip155:84532",
+                payTo: "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07",
+              },
+              {
+                scheme: "exact",
+                price: "$0.001",
+                network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+                payTo: "EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV",
+              },
+            ],
+            description: "Access to premium content",
+          },
+        },
+        resourceServer,
+      ),
+    );
+
+    // Health check endpoint
+    app.get("/health", (c) => c.json({ status: "ok" }));
+
+    // Protected route that returns VIP content
+    app.get("/static-price-v2", async (c) => {
+      return c.text("VIP content from /static-price-v2");
+    });
+
+    // Start the server
+    const server = await new Promise<ServerType>((resolve, reject) => {
+      const onError = (err: unknown) => {
+        console.error("Server error:", err);
+        reject(err);
+      };
+      const server = serve({ fetch: app.fetch, port }, () => {
+        server.off("error", onError);
+        resolve(server);
+      });
+      server.on("error", onError);
+    });
+
+    return new TSServerHandle(serverUrl, server);
+  }
+
+  constructor(serverUrl: URL, server: ServerType) {
+    this.url = serverUrl;
+    this.server = server;
+  }
+
+  async stop(): Promise<void> {
+    const closeP = Promise.withResolvers<void>();
+    this.server.close((err) => {
+      err ? closeP.reject(err) : closeP.resolve();
+    });
+    return closeP.promise;
+  }
+}

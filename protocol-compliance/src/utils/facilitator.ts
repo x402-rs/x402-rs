@@ -1,13 +1,14 @@
-import { config } from "./config.js";
 import { waitForUrl } from "./waitFor.js";
 import { WORKSPACE_ROOT } from "./workspace-root.js";
 import { ProcessHandle } from "./process-handle.js";
+import getPort from "get-port";
 
-export class RustFacilitatorHandle {
+export class RSFacilitatorHandle {
   readonly url: URL;
   readonly process: ProcessHandle;
 
-  static async spawn(port: number = config.facilitator.port) {
+  static async spawn(port?: number) {
+    port = port ?? await getPort()
     const facilitatorUrl = new URL(`http://localhost:${port}/`)
 
     const facilitatorBinary = new URL(
@@ -49,7 +50,7 @@ export class RustFacilitatorHandle {
     }
 
     console.log(`Facilitator started at ${facilitatorUrl}`);
-    return new RustFacilitatorHandle(facilitatorUrl, facilitatorProcess);
+    return new RSFacilitatorHandle(facilitatorUrl, facilitatorProcess);
   }
 
   constructor(url: URL, process: ProcessHandle) {
