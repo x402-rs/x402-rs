@@ -470,10 +470,9 @@ where
             Ok(response) => Ok(response),
             Err(err) => {
                 // Get enriched accepts for 402 response
-                let enriched_accepts = self.get_enriched_accepts().await;
                 Ok(TPriceTag::error_into_response(
                     err,
-                    &enriched_accepts,
+                    &self.accepts,
                     &self.resource,
                 ))
             }
@@ -481,18 +480,19 @@ where
     }
 
     /// Gets enriched price tags with facilitator capabilities.
-    async fn get_enriched_accepts(&self) -> Vec<TPriceTag> {
+    pub async fn enrich_accepts(&mut self) {
         // Try to get capabilities, use empty if fails
         let capabilities = self.facilitator.supported().await.unwrap_or_default();
 
-        self.accepts
+        let accepts = self.accepts
             .iter()
             .map(|pt| {
                 let mut pt_clone = pt.clone();
                 pt_clone.enrich_with_capabilities(&capabilities);
                 pt_clone
             })
-            .collect()
+            .collect::<Vec<_>>();
+        self.accepts = Arc::new(accepts);
     }
 
     /// Handles an incoming request, returning errors as `PaygateError`.
