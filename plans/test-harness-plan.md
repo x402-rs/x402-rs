@@ -61,25 +61,20 @@ protocol-compliance/
 │   ├── index.ts                   # Main entry point (all tests)
 │   ├── cli.ts                      # CLI for manual test invocation
 │   ├── utils/
-│   │   ├── facilitator.ts         # Facilitator utilities
-│   │   ├── server.ts              # Server utilities (startRustServer, startTSServer)
-│   │   ├── client.ts               # Client utilities (startRustClient, startTSClient)
+│   │   ├── facilitator.ts         # Facilitator utilities (RSFacilitatorHandle)
+│   │   ├── server.ts              # Server utilities (RSServerHandle, TSServerHandle)
+│   │   ├── client.ts              # Client utilities (invokeRustClient, makeFetch)
 │   │   ├── config.ts              # Configuration management
-│   │   └── waitFor.ts              # Polling utilities
+│   │   ├── process-handle.ts      # Process lifecycle management (ProcessHandle)
+│   │   ├── workspace-root.ts      # Workspace root URL reference
+│   │   └── waitFor.ts             # Polling utilities (waitForUrl)
 │   ├── tests/
-│   │   ├── v2-eip155-exact-rs-rs-rs.test.ts
-│   │   ├── v2-solana-exact-rs-rs-rs.test.ts
-│   │   ├── v2-eip155-exact-ts-ts-rs.test._ts    # TS Client + TS Server + Rust Facilitator
-│   │   ├── v2-eip155-exact-ts-rs-rs.test._ts
-│   │   ├── v2-eip155-exact-rs-ts-rs.test._ts
-│   │   ├── v1-eip155-exact-rs-rs-rs.test.ts        # Rust client + Rust server
-│   │   ├── v1-eip155-exact-rs-ts-rs.test.ts        # Rust client + TS server
-│   │   ├── v1-eip155-exact-ts-rs-rs.test.ts        # TS client + Rust server
-│   │   ├── v1-eip155-exact-ts-ts-rs.test.ts        # TS client + TS server
-│   │   ├── v1-solana-exact-rs-rs-rs.test.ts        # Rust client + Rust server
-│   │   ├── v1-solana-exact-rs-ts-rs.test.ts        # Rust client + TS server
-│   │   ├── v1-solana-exact-ts-rs-rs.test.ts        # TS client + Rust server
-│   │   └── v1-solana-exact-ts-ts-rs.test.ts        # TS client + TS server
+│   │   ├── v2-eip155-exact-rs-rs-rs.test.ts        # Rust Client + Rust Server + Rust Facilitator
+│   │   ├── v2-eip155-exact-ts-rs-rs.test.ts        # TS Client + Rust Server + Rust Facilitator
+│   │   ├── v2-eip155-exact-ts-ts-rs.test.ts        # TS Client + TS Server + Rust Facilitator
+│   │   ├── v2-eip155-exact-rs-ts-rs.test.ts        # Rust Client + TS Server + Rust Facilitator
+│   │   └── v2-solana-exact-rs-rs-rs.test.ts        # [Future] Solana tests
+│   │   # V1 tests and additional chains to be added as needed
 │   ├── fixtures/
 │   │   └── keys.ts               # Test wallets (from env)
 │   └── types/
@@ -118,38 +113,76 @@ interface TestConfig {
 
 ### 2. Server Utilities ([`protocol-compliance/src/utils/server.ts`])
 
+The server utilities use a class-based handle pattern for managing server lifecycle:
+
 ```typescript
-interface ServerHandle {
-  url: string;
-  stop: () => Promise<void>;
+export class RSServerHandle {
+  readonly url: URL;
+  readonly process: ProcessHandle;
+
+  static async spawn(facilitatorUrl: URL, port?: number): Promise<RSServerHandle>;
+  async stop(): Promise<void>;
 }
 
-async function startRustServer(port: number, facilitatorUrl: string): Promise<ServerHandle>;
-async function startTSServer(port: number, facilitatorUrl: string): Promise<ServerHandle>;
+export class TSServerHandle {
+  readonly url: URL;
+  readonly server: ServerType;
+
+  static async spawn(facilitatorUrl: URL, port?: number): Promise<TSServerHandle>;
+  async stop(): Promise<void>;
+}
 ```
+
+**Key Design:**
+- **Static `spawn()` method:** Factory method that handles port allocation (via [`get-port`](protocol-compliance/src/utils/server.ts:10)), process spawning, and health check waiting
+- **Handle instances:** Contain the server URL and process/server reference for lifecycle management
+- **Automatic port selection:** If no port is provided, an available port is automatically selected
+- **Health check integration:** Spawning waits for the server to be ready via [`waitForUrl()`](protocol-compliance/src/utils/waitFor.ts)
 
 ### 3. Client Utilities ([`protocol-compliance/src/utils/client.ts`])
 
-```typescript
-interface ClientHandle {
-  url: string;
-  stop: () => Promise<void>;
-}
+The client utilities follow a different pattern since clients are not long-running services but rather function calls:
 
-async function startRustClient(port: number, facilitatorUrl: string): Promise<ClientHandle>;
-async function startTSClient(port: number, facilitatorUrl: string): Promise<ClientHandle>;
+```typescript
+// For TypeScript clients: Returns a configured fetch function
+export function makeFetch(chain: 'eip155' | 'solana'): typeof fetch;
+
+// For Rust clients: Invokes the binary and returns stdout
+export async function invokeRustClient(
+  endpoint: URL,
+  privateKeys: { eip155: string } | { solana: string }
+): Promise<string>;
 ```
+
+**Key Design:**
+- **TS Client ([`makeFetch()`](protocol-compliance/src/utils/client.ts:96)):** Creates an x402-enabled fetch function using `@x402/fetch` with the appropriate chain scheme registered
+- **Rust Client ([`invokeRustClient()`](protocol-compliance/src/utils/client.ts:19)):** Spawns the `x402-reqwest-example` binary as a one-shot process, waits for completion, and returns stdout for verification
+- **No persistent client handle:** Clients are invoked per-request rather than being started/stopped like servers
 
 ### 4. Facilitator Management ([`protocol-compliance/src/utils/facilitator.ts`])
 
+The facilitator uses the same class-based handle pattern as servers:
+
 ```typescript
-// Uses the same ServerHandle interface as above
-async function startLocalFacilitator(port: number, configPath: string): Promise<ServerHandle>;
-async function waitForFacilitator(url: string, maxWaitMs: number): Promise<boolean>;
-async function getSupportedChains(url: string): Promise<string[]>;
+export class RSFacilitatorHandle {
+  readonly url: URL;
+  readonly process: ProcessHandle;
+
+  static async spawn(port?: number): Promise<RSFacilitatorHandle>;
+  async stop(): Promise<void>;
+}
+
+export async function getSupportedChains(facilitatorUrl: string): Promise<string[]>;
+export function isRemoteFacilitator(url: string): boolean;
 ```
 
-**Note:** The local facilitator is run via `cargo run --package facilitator` with the config from [`facilitator/config.json`](facilitator/config.json).
+**Key Design:**
+- **Static `spawn()` method:** Similar to servers, handles port allocation, binary execution, and health checks
+- **Binary execution:** Runs the pre-built `target/debug/x402-facilitator` binary (not via cargo run)
+- **Configuration:** Uses [`protocol-compliance/test-config.json`](protocol-compliance/test-config.json) for facilitator configuration
+- **Process management:** Uses [`ProcessHandle`](protocol-compliance/src/utils/process-handle.ts:23) for consistent process lifecycle management across Rust components
+
+**Note:** The local facilitator binary is expected to be pre-built at `target/debug/x402-facilitator`.
 
 ### 5. Test Framework
 
@@ -157,40 +190,45 @@ Uses **Vitest** for test execution with the following patterns:
 
 ```typescript
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { RSFacilitatorHandle } from '../utils/facilitator.js';
+import { RSServerHandle } from '../utils/server.js';
+import { invokeRustClient } from '../utils/client.js';
+import { config } from '../utils/config.js';
 
 describe('v2-eip155-exact-rs-rs-rs: x402 v2, eip155, exact, Rust Client + Rust Server + Rust Facilitator', () => {
-  let facilitator: ServerHandle;
-  let server: ServerHandle;
-  let client: ClientHandle;
+  let facilitator: RSFacilitatorHandle;
+  let server: RSServerHandle;
 
   beforeAll(async () => {
-    facilitator = await startLocalFacilitator(23635, 'facilitator/config.json');
-    server = await startRustServer(3000, facilitator.url);
-    client = await startRustClient(3001, facilitator.url);
-  });
+    facilitator = await RSFacilitatorHandle.spawn();
+    server = await RSServerHandle.spawn(facilitator.url);
+  }, 120000); // 2 minute timeout for starting services
 
   afterAll(async () => {
-    await client.stop();
     await server.stop();
     await facilitator.stop();
   });
 
-  it('should complete payment flow', async () => {
-    const response = await fetch(`${server.url}/protected-resource`, {
-      headers: {
-        'X-Payment-Accepted': '2',
-        'X-Payment-Scheme': 'exact',
-        'X-Payment-Namespace': 'eip155',
-        'X-Payment-Payee': payeeAddress,
-        'X-Payment-Amount': '1',
-      },
-    });
-    expect(response.status).toBe(200);
-    const text = await response.text();
-    expect(text).toBe('This is a VIP content!');
+  it('should return 402 Payment Required when no payment header', async () => {
+    const response = await fetch(new URL('./static-price-v2', server.url));
+    expect(response.status).toBe(402);
+  });
+
+  it('should return 200 OK and VIP content when payment is provided via Rust client', async () => {
+    const privateKey = config.wallets.payer.eip155;
+    const endpoint = new URL('./static-price-v2', server.url);
+    const stdout = await invokeRustClient(endpoint, { eip155: privateKey });
+    expect(stdout).toContain('VIP content from /static-price-v2');
   });
 });
 ```
+
+**Key Patterns:**
+- **Handle-based lifecycle:** Facilitator and server handles are created via static `spawn()` methods and stopped via `stop()`
+- **No persistent client:** Rust clients are invoked per-test using [`invokeRustClient()`](protocol-compliance/src/utils/client.ts:19); TS clients use [`makeFetch()`](protocol-compliance/src/utils/client.ts:96)
+- **Automatic port allocation:** No hardcoded ports - handles select available ports automatically
+- **Extended timeouts:** `beforeAll` uses 120s timeout to account for binary startup and compilation if needed
+- **URL objects:** Uses `URL` class for proper URL construction instead of string concatenation
 
 ## Command Interface
 
@@ -260,6 +298,28 @@ sequenceDiagram
 
 > **Note:** Error cases (missing payment, insufficient funds, invalid signature, etc.) are tested per-component, not in E2E harness.
 
+### Additional Utilities
+
+#### Process Management ([`protocol-compliance/src/utils/process-handle.ts`])
+
+```typescript
+export class ProcessHandle {
+  static spawn(role: string, ...args: Parameters<typeof spawn>): ProcessHandle;
+  waitExit(): Promise<void>;
+  async stop(): Promise<void>;
+}
+```
+
+**Purpose:** Wraps Node.js ChildProcess for consistent logging (with role-based prefixes) and lifecycle management across Rust binary invocations.
+
+#### Workspace Root ([`protocol-compliance/src/utils/workspace-root.ts`])
+
+```typescript
+export const WORKSPACE_ROOT: URL;
+```
+
+**Purpose:** Provides a consistent reference to the repository root for resolving binary paths and config files.
+
 ## Implementation Tasks
 
 ### Phase 0: Infrastructure Setup ✅ DONE
@@ -275,49 +335,55 @@ sequenceDiagram
 
 **Scenario:** Rust Client + Rust Server + Rust Facilitator + eip155 + exact
 
-- [x] Implement `startLocalFacilitator()` utility
-- [x] Implement `startRustServer()` utility
 - [x] Write `v2-eip155-exact-rs-rs-rs.test.ts` with happy path test
-
-> **Note:** Error cases are tested per-component, not in E2E harness.
 
 ### Phase 2: v2-eip155-exact-ts-rs-rs Scenario ✅ DONE
 
 **Scenario:** TS Client + Rust Server + Rust Facilitator + eip155 + exact
 
-- [x] Implement `createX402Client()` using @x402/fetch
-- [x] Write `v2-eip155-exact-ts-rs-rs.test._ts` with happy path test
+- [x] Write `v2-eip155-exact-ts-rs-rs.test.ts` with happy path test
 
-> **Note:** Error cases are tested per-component, not in E2E harness.
-
-### Phase 2.5: Programmatic Server/Client Management (IN PROGRESS)
-
-**Goal:** All servers and clients should be started programmatically via `beforeAll()` hooks.
-
-- [x] Implement `startRustClient()` in `client.ts` to spawn x402-reqwest-example
-- [x] Update Phase 1 test to spawn Rust client and verify response contains "This is a VIP content!"
-- [ ] Update Phase 2 test to verify response contains "This is a VIP content!"
-- [ ] Implement `startTSServer()` using @x402/hono
-- [ ] Implement `startTSClient()` using @x402/fetch
-
-### Phase 3: v2-eip155-exact-ts-ts-rs Scenario
+### Phase 3: v2-eip155-exact-ts-ts-rs Scenario ✅ DONE
 
 **Scenario:** TS Client + TS Server + Rust Facilitator + eip155 + exact
 
-- [ ] Write `v2-eip155-exact-ts-ts-rs.test._ts` with happy path test
+- [x] Write `v2-eip155-exact-ts-ts-rs.test.ts` with happy path test
 
-### Phase 4: v2-eip155-exact-rs-ts-rs Scenario
+### Phase 4: v2-eip155-exact-rs-ts-rs Scenario ✅ DONE
 
 **Scenario:** Rust Client + TS Server + Rust Facilitator + eip155 + exact
 
-- [ ] Write `v2-eip155-exact-rs-ts-rs.test._ts` with happy path test
+- [x] Write `v2-eip155-exact-rs-ts-rs.test.ts` with happy path test
 
-### Phase 5: v2-solana-exact-rs-rs-rs ✅ DONE
+> **Note:** All four v2-eip155-exact scenarios are now complete and use programmatic lifecycle management.
+
+### Phase 2.5: Programmatic Server/Client Management ✅ DONE
+
+**Goal:** All servers and clients are started programmatically via `beforeAll()` hooks.
+
+**Completed:**
+- [x] Implemented `RSServerHandle.spawn()` in `server.ts` to spawn x402-axum-example binary
+- [x] Implemented `TSServerHandle.spawn()` in `server.ts` to create Hono-based TypeScript servers
+- [x] Implemented `RSFacilitatorHandle.spawn()` in `facilitator.ts` to spawn x402-facilitator binary
+- [x] Implemented `invokeRustClient()` in `client.ts` to invoke x402-reqwest-example as one-shot process
+- [x] Implemented `makeFetch()` in `client.ts` to create x402-enabled fetch functions for TypeScript clients
+- [x] All v2-eip155-exact tests use programmatic lifecycle management
+
+**Key Design Decisions:**
+- **Class-based handles** with static `spawn()` factory methods for consistent lifecycle management
+- **Automatic port allocation** using `get-port` to avoid conflicts
+- **ProcessHandle abstraction** for consistent process management across Rust components
+- **Binary execution** rather than `cargo run` for faster startup
+- **One-shot Rust client** invocation rather than persistent client process (clients are request-scoped)
+
+### Phase 5: v2-solana-exact-rs-rs-rs Scenario
 
 **Scenario:** Rust Client + Rust Server + Rust Facilitator + Solana + exact
 
-- [x] Add Solana chain configuration to test-config.json
-- [x] Write `v2-solana-exact-rs-rs-rs.test.ts` with happy path test
+- [ ] Add Solana chain configuration to test-config.json
+- [ ] Write `v2-solana-exact-rs-rs-rs.test.ts` with happy path test
+
+> **Note:** Solana support is partially implemented in the client utilities but tests are not yet written.
 
 ### Future Work (Out of Scope here)
 
@@ -425,9 +491,6 @@ typecheck:
 
 ## Next Steps
 
-1. **Approve this plan** - Confirm the structure and scope
-2. **Phase 0 implementation** - Infrastructure setup
-3. **Phase 1 implementation** - v2-eip155-exact-rs-rs-rs scenario
-4. **Phase 2 implementation** - v2-eip155-exact-ts-rs-rs scenario
-5. **Phase 2.5 implementation** - Programmatic server/client management
-6. **Iterative implementation** - Continue with remaining phases
+1. **Phase 5 implementation** - v2-solana-exact-rs-rs-rs scenario
+2. **Future work** - Aptos support, extensions (eip2612GasSponsoring, etc.)
+3. **Iterative implementation** - Continue with remaining phases as needed
