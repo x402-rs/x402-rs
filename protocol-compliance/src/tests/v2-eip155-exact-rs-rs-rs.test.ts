@@ -29,10 +29,7 @@ describe("v2-eip155-exact-rs-rs-rs: x402 v2, eip155, exact, Rust Client + Rust S
   });
 
   it("should return 200 OK and VIP content when payment is provided via Rust client", async () => {
-    const privateKey = config.wallets.payer.eip155;
-    if (!privateKey) {
-      throw new Error("No private key configured for Rust client test");
-    }
+    const privateKey = config.baseSepolia.buyerPrivateKey;
     const endpoint = new URL("./static-price-v2", server.url);
     const stdout = await invokeRustClient(endpoint, {
       eip155: privateKey,

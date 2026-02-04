@@ -30,10 +30,7 @@ describe("v2-solana-exact-rs-ts-rs: x402 v2, solana, exact, Rust Client + TS Ser
   });
 
   it("should return 200 OK and VIP content when payment is provided via Rust client", async () => {
-    const privateKey = config.wallets.payer.solana;
-    if (!privateKey) {
-      throw new Error("No private key configured for Solana Rust client test");
-    }
+    const privateKey = config.solanaDevnet.buyerPrivateKey;
     const endpoint = new URL("./static-price-v2", server.url);
     const stdout = await invokeRustClient(endpoint, {
       solana: privateKey,

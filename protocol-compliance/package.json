@@ -11,23 +11,25 @@
   },
   "devDependencies": {
     "@types/node": "^25.2",
+    "@types/tmp": "^0.2.6",
+    "prettier": "^3.0.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0",
-    "prettier": "^3.0.3"
+    "vitest": "^4.0"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",
+    "@scure/base": "^1.1.9",
+    "@solana/kit": "^6.0",
     "@x402/core": "^2.2.0",
     "@x402/evm": "^2.2.0",
     "@x402/fetch": "^2.2.0",
     "@x402/hono": "^2.2.0",
     "@x402/svm": "^2.2.0",
     "dotenv": "^17.2.3",
-    "hono": "^4.11.4",
-    "viem": "^2.44.2",
-    "@solana/kit": "^6.0",
     "get-port": "^7.0.0",
-    "@scure/base": "^1.1.9"
+    "hono": "^4.11.4",
+    "tmp": "^0.2.5",
+    "viem": "^2.44.2"
   }
 }
