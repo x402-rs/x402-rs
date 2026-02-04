@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route(
             "/static-price-v2",
-            get(my_handler).layer(
+            get(static_price_v2_handler).layer(
                 x402.with_price_tag(V2Eip155Exact::price_tag(
                     address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"),
                     USDC::base_sepolia().amount(10u64),
@@ -126,6 +126,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[instrument(skip_all)]
 async fn my_handler() -> impl IntoResponse {
     (StatusCode::OK, "This is a VIP content!")
+}
+
+#[instrument(skip_all)]
+async fn static_price_v2_handler() -> impl IntoResponse {
+    (StatusCode::OK, "VIP content from /static-price-v2")
 }
 
 fn init_tracing() {

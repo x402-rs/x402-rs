@@ -4,11 +4,11 @@ import { WORKSPACE_ROOT } from "./workspace-root.js";
 import { ProcessHandle } from "./process-handle.js";
 
 export class RustFacilitatorHandle {
-  readonly url: string;
+  readonly url: URL;
   readonly process: ProcessHandle;
 
   static async spawn(port: number = config.facilitator.port) {
-    const facilitatorUrl = `http://localhost:${port}`;
+    const facilitatorUrl = new URL(`http://localhost:${port}/`)
 
     const facilitatorBinary = new URL(
       "./target/debug/x402-facilitator",
@@ -20,7 +20,7 @@ export class RustFacilitatorHandle {
       `Starting facilitator ${facilitatorBinary} at ${facilitatorUrl}...`,
     );
 
-    const facilitatorProcess = ProcessHandle.spawn(
+    const facilitatorProcess = ProcessHandle.spawn('rs-facilitator',
       facilitatorBinary,
       [
         "--config",
@@ -52,7 +52,7 @@ export class RustFacilitatorHandle {
     return new RustFacilitatorHandle(facilitatorUrl, facilitatorProcess);
   }
 
-  constructor(url: string, process: ProcessHandle) {
+  constructor(url: URL, process: ProcessHandle) {
     this.url = url;
     this.process = process;
   }
