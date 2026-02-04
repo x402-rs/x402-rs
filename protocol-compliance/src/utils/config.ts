@@ -1,13 +1,14 @@
 import dotenv from 'dotenv';
+import getPort from "get-port";
 
 dotenv.config();
 
 export const config = {
   facilitator: {
-    port: parseInt(process.env.FACILITATOR_PORT || '8080', 10),
+    port: await getPort(),
   },
   server: {
-    port: parseInt(process.env.SERVER_PORT || '3000', 10),
+    port: await getPort(),
   },
   chains: {
     eip155: {
