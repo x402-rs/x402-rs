@@ -1,79 +1,70 @@
-import { config } from './config.js';
-import { waitForUrl } from './waitFor.js';
-import { spawn } from 'child_process';
-import { join } from 'path';
+import { config } from "./config.js";
+import { waitForUrl } from "./waitFor.js";
+import { WORKSPACE_ROOT } from "./workspace-root.js";
+import { ProcessHandle } from "./process-handle.js";
 
-// Workspace root - hardcoded for vitest compatibility
-const WORKSPACE_ROOT = '/Users/ukstv/Developer/FareSide/x402-rs';
+export class RustFacilitatorHandle {
+  readonly url: string;
+  readonly process: ProcessHandle;
 
-export interface ServerHandle {
-  url: string;
-  stop: () => Promise<void>;
-}
+  static async spawn(port: number = config.facilitator.port) {
+    const facilitatorUrl = `http://localhost:${port}`;
 
-export async function startLocalFacilitator(
-  port: number = config.facilitator.port
-): Promise<ServerHandle> {
-  const facilitatorUrl = `http://localhost:${port}`;
+    const facilitatorBinary = new URL(
+      "./target/debug/x402-facilitator",
+      WORKSPACE_ROOT,
+    ).pathname;
 
-  // Check if facilitator is already running
-  const alreadyRunning = await waitForUrl(facilitatorUrl, { timeoutMs: 2000 });
-  if (alreadyRunning) {
-    console.log(`Facilitator already running at ${facilitatorUrl}`);
-    return {
-      url: facilitatorUrl,
-      stop: async () => {},
-    };
+    // Start facilitator debug binary with absolute path
+    console.log(
+      `Starting facilitator ${facilitatorBinary} at ${facilitatorUrl}...`,
+    );
+
+    const facilitatorProcess = ProcessHandle.spawn(
+      facilitatorBinary,
+      [
+        "--config",
+        new URL("./protocol-compliance/test-config.json", WORKSPACE_ROOT)
+          .pathname,
+      ],
+      {
+        cwd: WORKSPACE_ROOT,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          PORT: port.toString(),
+          // Ensure root .env is loaded - Rust dotenv looks for .env in cwd or parent dirs
+          DOTENV_CONFIG: "full",
+        },
+      },
+    );
+
+    // Wait for facilitator to be ready
+    const ready = await Promise.race([
+      waitForUrl(facilitatorUrl, { timeoutMs: 60000 }),
+      facilitatorProcess.waitExit(),
+    ]);
+    if (!ready) {
+      throw new Error(`Facilitator failed to start within 60 seconds`);
+    }
+
+    console.log(`Facilitator started at ${facilitatorUrl}`);
+    return new RustFacilitatorHandle(facilitatorUrl, facilitatorProcess);
   }
 
-  // Start facilitator via cargo run with absolute path
-  console.log(`Starting facilitator at ${facilitatorUrl}...`);
-  console.log(`WORKSPACE_ROOT: ${WORKSPACE_ROOT}`);
-
-  const facilitatorProcess = spawn('cargo', [
-    'run',
-    '--manifest-path', join(WORKSPACE_ROOT, 'facilitator/Cargo.toml'),
-    '--', '--config', join(WORKSPACE_ROOT, 'protocol-compliance/test-config.json')
-  ], {
-    cwd: WORKSPACE_ROOT,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      PORT: port.toString(),
-      // Ensure root .env is loaded - Rust dotenv looks for .env in cwd or parent dirs
-      DOTENV_CONFIG: 'full',
-    },
-  });
-
-  facilitatorProcess.stdout?.on('data', (data) => {
-    process.stdout.write(`[facilitator] ${data}`);
-  });
-
-  facilitatorProcess.stderr?.on('data', (data) => {
-    process.stderr.write(`[facilitator] ${data}`);
-  });
-
-  facilitatorProcess.on('error', (err) => {
-    console.error(`Facilitator error: ${err}`);
-  });
-
-  // Wait for facilitator to be ready
-  const ready = await waitForUrl(facilitatorUrl, { timeoutMs: 60000 });
-  if (!ready) {
-    throw new Error(`Facilitator failed to start within 60 seconds`);
+  constructor(url: string, process: ProcessHandle) {
+    this.url = url;
+    this.process = process;
   }
 
-  console.log(`Facilitator started at ${facilitatorUrl}`);
-
-  return {
-    url: facilitatorUrl,
-    stop: async () => {
-      facilitatorProcess.kill('SIGTERM');
-    },
-  };
+  async stop() {
+    await this.process.stop();
+  }
 }
 
-export async function getSupportedChains(facilitatorUrl: string): Promise<string[]> {
+export async function getSupportedChains(
+  facilitatorUrl: string,
+): Promise<string[]> {
   try {
     const response = await fetch(`${facilitatorUrl}/chains`);
     if (!response.ok) {
@@ -82,10 +73,12 @@ export async function getSupportedChains(facilitatorUrl: string): Promise<string
     return response.json();
   } catch {
     // If the chains endpoint doesn't exist, return default chains
-    return ['eip155', 'solana', 'aptos'];
+    return ["eip155", "solana", "aptos"];
   }
 }
 
 export function isRemoteFacilitator(url: string): boolean {
-  return !url.startsWith('http://localhost') && !url.startsWith('http://127.0.0.1');
+  return (
+    !url.startsWith("http://localhost") && !url.startsWith("http://127.0.0.1")
+  );
 }

@@ -10,10 +10,11 @@
     "run": "tsx src/cli.ts"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
+    "@types/node": "^25.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.8"
+    "vitest": "^4.0",
+    "prettier": "^3.0.3"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",
@@ -25,6 +26,6 @@
     "dotenv": "^17.2.3",
     "hono": "^4.11.4",
     "viem": "^2.44.2",
-    "@solana/kit": "^5.4.0"
+    "@solana/kit": "^6.0"
   }
 }

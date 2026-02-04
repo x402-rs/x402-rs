@@ -6,10 +6,9 @@ import { HTTPFacilitatorClient } from '@x402/core/server';
 import { config } from './config.js';
 import { spawn } from 'child_process';
 import { join } from 'path';
+import {WORKSPACE_ROOT} from "./workspace-root";
 
 // Workspace root - hardcoded for vitest compatibility
-const WORKSPACE_ROOT = '/Users/ukstv/Developer/FareSide/x402-rs';
-
 export interface ServerHandle {
   url: string;
   stop: () => Promise<void>;
@@ -24,34 +23,18 @@ export async function startRustServer(options: RustServerOptions): Promise<Serve
   const port = options.port ?? config.server.port;
   const serverUrl = `http://localhost:${port}`;
 
-  // Check if server is already running
-  try {
-    const response = await fetch(`${serverUrl}/health`, { method: 'GET' });
-    if (response.ok) {
-      console.log(`Rust Server already running at ${serverUrl}`);
-      return {
-        url: serverUrl,
-        stop: async () => {},
-      };
-    }
-  } catch {
-    // Server not running, need to start it
-  }
+  const serverBinary = new URL('./target/debug/x402-axum-example', WORKSPACE_ROOT).pathname;
 
-  console.log(`Starting Rust test server at ${serverUrl}...`);
+  console.log(`Starting Rust server ${serverBinary} at ${serverUrl}...`);
 
   // Start Rust test server via cargo run using x402-axum-example
-  const rustServerProcess = spawn('cargo', [
-    'run',
-    '--manifest-path', join(WORKSPACE_ROOT, 'examples/x402-axum-example/Cargo.toml'),
-    '--', '--port', port.toString(), '--facilitator-url', options.facilitatorUrl,
-  ], {
-    cwd: WORKSPACE_ROOT,
+  const rustServerProcess = spawn(serverBinary, [], {
+    cwd: WORKSPACE_ROOT.pathname,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env,
       FACILITATOR_URL: options.facilitatorUrl,
-      SERVER_PORT: port.toString(),
+      PORT: port.toString(),
     },
   });
 

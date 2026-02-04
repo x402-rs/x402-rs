@@ -4,7 +4,6 @@ dotenv.config();
 
 export interface TestConfig {
   facilitator: {
-    url: string;
     port: number;
   };
   server: {
@@ -40,8 +39,7 @@ export interface TestConfig {
 
 export const config: TestConfig = {
   facilitator: {
-    url: process.env.FACILITATOR_URL || 'http://localhost:23635',
-    port: parseInt(process.env.FACILITATOR_PORT || '23635', 10),
+    port: parseInt(process.env.FACILITATOR_PORT || '8080', 10),
   },
   server: {
     port: parseInt(process.env.SERVER_PORT || '3000', 10),

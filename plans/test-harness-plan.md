@@ -69,9 +69,9 @@ protocol-compliance/
 │   ├── tests/
 │   │   ├── v2-eip155-exact-rs-rs-rs.test.ts
 │   │   ├── v2-solana-exact-rs-rs-rs.test.ts
-│   │   ├── v2-eip155-exact-ts-ts-rs.test.ts    # TS Client + TS Server + Rust Facilitator
-│   │   ├── v2-eip155-exact-ts-rs-rs.test.ts
-│   │   ├── v2-eip155-exact-rs-ts-rs.test.ts
+│   │   ├── v2-eip155-exact-ts-ts-rs.test._ts    # TS Client + TS Server + Rust Facilitator
+│   │   ├── v2-eip155-exact-ts-rs-rs.test._ts
+│   │   ├── v2-eip155-exact-rs-ts-rs.test._ts
 │   │   ├── v1-eip155-exact-rs-rs-rs.test.ts        # Rust client + Rust server
 │   │   ├── v1-eip155-exact-rs-ts-rs.test.ts        # Rust client + TS server
 │   │   ├── v1-eip155-exact-ts-rs-rs.test.ts        # TS client + Rust server
@@ -286,7 +286,7 @@ sequenceDiagram
 **Scenario:** TS Client + Rust Server + Rust Facilitator + eip155 + exact
 
 - [x] Implement `createX402Client()` using @x402/fetch
-- [x] Write `v2-eip155-exact-ts-rs-rs.test.ts` with happy path test
+- [x] Write `v2-eip155-exact-ts-rs-rs.test._ts` with happy path test
 
 > **Note:** Error cases are tested per-component, not in E2E harness.
 
@@ -304,13 +304,13 @@ sequenceDiagram
 
 **Scenario:** TS Client + TS Server + Rust Facilitator + eip155 + exact
 
-- [ ] Write `v2-eip155-exact-ts-ts-rs.test.ts` with happy path test
+- [ ] Write `v2-eip155-exact-ts-ts-rs.test._ts` with happy path test
 
 ### Phase 4: v2-eip155-exact-rs-ts-rs Scenario
 
 **Scenario:** Rust Client + TS Server + Rust Facilitator + eip155 + exact
 
-- [ ] Write `v2-eip155-exact-rs-ts-rs.test.ts` with happy path test
+- [ ] Write `v2-eip155-exact-rs-ts-rs.test._ts` with happy path test
 
 ### Phase 5: v2-solana-exact-rs-rs-rs ✅ DONE
 
