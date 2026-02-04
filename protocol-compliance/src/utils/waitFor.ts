@@ -18,7 +18,7 @@ export async function waitFor(
 }
 
 export async function waitForUrl(
-  url: string,
+  url: URL | string,
   options: { timeoutMs?: number; intervalMs?: number } = {}
 ): Promise<boolean> {
   return waitFor(
