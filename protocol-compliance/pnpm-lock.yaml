@@ -11,6 +11,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.19.9
         version: 1.19.9(hono@4.11.7)
+      '@scure/base':
+        specifier: ^1.1.9
+        version: 1.2.6
       '@solana/kit':
         specifier: ^6.0
         version: 6.0.0(typescript@5.9.3)

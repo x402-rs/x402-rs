@@ -1,12 +1,13 @@
 import { x402Client, wrapFetchWithPayment } from "@x402/fetch";
 import { registerExactEvmScheme } from "@x402/evm/exact/client";
 import { privateKeyToAccount } from "viem/accounts";
-import { config, getWalletConfig } from "./config.js";
+import { config } from "./config.js";
 import { spawn } from "child_process";
-import { join } from "path";
 import { WORKSPACE_ROOT } from "./workspace-root";
 import { printLines } from "./process-handle";
 import { registerExactSvmScheme } from "@x402/svm/exact/client";
+import { createKeyPairSignerFromBytes } from "@solana/kit";
+import { base58 } from "@scure/base";
 
 export interface ClientOptions {
   facilitatorUrl: string;
@@ -36,6 +37,12 @@ export async function invokeRustClient(
     env = {
       ...env,
       EVM_PRIVATE_KEY: privateKeys["eip155"],
+    };
+  } else if ("solana" in privateKeys) {
+    env = {
+      ...env,
+      SOLANA_PRIVATE_KEY: privateKeys["solana"],
+      SOLANA_RPC_URL: config.chains.solana.rpcUrl,
     };
   }
   const childProcess = spawn(binaryPath, {
