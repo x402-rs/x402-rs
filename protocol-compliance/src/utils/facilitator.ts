@@ -62,24 +62,3 @@ export class RSFacilitatorHandle {
     await this.process.stop();
   }
 }
-
-export async function getSupportedChains(
-  facilitatorUrl: string,
-): Promise<string[]> {
-  try {
-    const response = await fetch(`${facilitatorUrl}/chains`);
-    if (!response.ok) {
-      throw new Error(`Failed to get chains: ${response.statusText}`);
-    }
-    return response.json();
-  } catch {
-    // If the chains endpoint doesn't exist, return default chains
-    return ["eip155", "solana", "aptos"];
-  }
-}
-
-export function isRemoteFacilitator(url: string): boolean {
-  return (
-    !url.startsWith("http://localhost") && !url.startsWith("http://127.0.0.1")
-  );
-}
