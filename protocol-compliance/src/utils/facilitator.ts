@@ -1,15 +1,16 @@
+import getPort from "get-port";
 import { waitForUrl } from "./waitFor.js";
 import { WORKSPACE_ROOT } from "./workspace-root.js";
 import { ProcessHandle } from "./process-handle.js";
-import getPort from "get-port";
+import { makeFacilitatorConfig } from "./config.js";
 
 export class RSFacilitatorHandle {
   readonly url: URL;
   readonly process: ProcessHandle;
 
   static async spawn(port?: number) {
-    port = port ?? await getPort()
-    const facilitatorUrl = new URL(`http://localhost:${port}/`)
+    port = port ?? (await getPort());
+    const facilitatorUrl = new URL(`http://localhost:${port}/`);
 
     const facilitatorBinary = new URL(
       "./target/debug/x402-facilitator",
@@ -21,13 +22,12 @@ export class RSFacilitatorHandle {
       `Starting facilitator ${facilitatorBinary} at ${facilitatorUrl}...`,
     );
 
-    const facilitatorProcess = ProcessHandle.spawn('rs-facilitator',
+    const configFilepath = await makeFacilitatorConfig();
+
+    const facilitatorProcess = ProcessHandle.spawn(
+      "rs-facilitator",
       facilitatorBinary,
-      [
-        "--config",
-        new URL("./protocol-compliance/test-config.json", WORKSPACE_ROOT)
-          .pathname,
-      ],
+      ["--config", configFilepath],
       {
         cwd: WORKSPACE_ROOT,
         stdio: ["ignore", "pipe", "pipe"],

@@ -42,7 +42,7 @@ export async function invokeRustClient(
     env = {
       ...env,
       SOLANA_PRIVATE_KEY: privateKeys["solana"],
-      SOLANA_RPC_URL: config.chains.solana.rpcUrl,
+      SOLANA_RPC_URL: config.solanaDevnet.rpc,
     };
   }
   const childProcess = spawn(binaryPath, {
@@ -81,14 +81,14 @@ export async function makeFetch(
   switch (chain) {
     case "eip155": {
       let signer = privateKeyToAccount(
-        config.wallets.payer.eip155 as `0x${string}`,
+        config.baseSepolia.buyerPrivateKey,
       );
       registerExactEvmScheme(client, { signer });
       break;
     }
     case "solana": {
       const keypair = await createKeyPairSignerFromBytes(
-        base58.decode(config.wallets.payer.solana),
+        base58.decode(config.solanaDevnet.buyerPrivateKey),
       );
       registerExactSvmScheme(client, { signer: keypair });
       break;
