@@ -1,15 +1,8 @@
 import dotenv from 'dotenv';
-import getPort from "get-port";
 
 dotenv.config();
 
 export const config = {
-  facilitator: {
-    port: await getPort(),
-  },
-  server: {
-    port: await getPort(),
-  },
   chains: {
     eip155: {
       rpcUrl: process.env.EIP155_RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/demo',
