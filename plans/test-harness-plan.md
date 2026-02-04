@@ -67,7 +67,6 @@ protocol-compliance/
 │   │   ├── config.ts              # Configuration management
 │   │   └── waitFor.ts              # Polling utilities
 │   ├── tests/
-│   │   ├── smoke.test.ts                        # Basic connectivity tests
 │   │   ├── v2-eip155-exact-rs-rs-rs.test.ts
 │   │   ├── v2-solana-exact-rs-rs-rs.test.ts
 │   │   ├── v2-eip155-exact-ts-ts-rs.test.ts    # TS Client + TS Server + Rust Facilitator
