@@ -19,6 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let facilitator_url =
         env::var("FACILITATOR_URL").unwrap_or("https://facilitator.x402.rs".to_string());
+    let port = env::var("PORT").unwrap_or("3000".to_string());
 
     let x402 = X402Middleware::try_from(facilitator_url)?;
 
@@ -112,7 +113,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Using facilitator on {}", x402.facilitator_url());
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+    let bind_address = format!("0.0.0.0:{}", port);
+    let listener = tokio::net::TcpListener::bind(bind_address)
         .await
         .expect("Can not start server");
     tracing::info!("Listening on {}", listener.local_addr().unwrap());
