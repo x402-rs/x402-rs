@@ -18,6 +18,11 @@ describe("v2-solana-exact-rs-ts-rs: x402 v2, solana, exact, Rust Client + TS Ser
     await facilitator.stop();
   });
 
+  it("should have facilitator running", async () => {
+    const response = await fetch(new URL("./health", facilitator.url));
+    expect(response.ok).toBe(true);
+  });
+
   it("should return 402 Payment Required when no payment header on protected endpoint", async () => {
     const response = await fetch(`${server.url}/static-price-v2`);
     // Without payment, should get 402
