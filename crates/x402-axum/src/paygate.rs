@@ -484,7 +484,8 @@ where
         // Try to get capabilities, use empty if fails
         let capabilities = self.facilitator.supported().await.unwrap_or_default();
 
-        let accepts = self.accepts
+        let accepts = self
+            .accepts
             .iter()
             .map(|pt| {
                 let mut pt_clone = pt.clone();
