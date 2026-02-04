@@ -389,11 +389,15 @@ where
 
             let resource = resource_builder.as_resource_info(base_url.as_deref(), &req);
 
-            let gate = Paygate {
-                facilitator,
-                settle_before_execution,
-                accepts: Arc::new(accepts),
-                resource,
+            let gate = {
+                let mut gate = Paygate {
+                    facilitator,
+                    settle_before_execution,
+                    accepts: Arc::new(accepts),
+                    resource,
+                };
+                gate.enrich_accepts().await;
+                gate
             };
             gate.handle_request(inner, req).await
         })

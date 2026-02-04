@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ))
                 .with_price_tag(V1SolanaExact::price_tag(
                     pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV"),
-                    USDC::solana().amount(100),
+                    USDC::solana_devnet().amount(100),
                 )),
             ),
         )
@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ))
                 .with_price_tag(V2SolanaExact::price_tag(
                     pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV"),
-                    USDC::solana().amount(100),
+                    USDC::solana_devnet().amount(100),
                 )),
             ),
         )
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // V2 Solana price tag
                         V2SolanaExact::price_tag(
                             pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV"),
-                            USDC::solana().amount(amount),
+                            USDC::solana_devnet().amount(amount),
                         ),
                     ]
                 }
@@ -103,7 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             ),
                             V2SolanaExact::price_tag(
                                 pubkey!("EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV"),
-                                USDC::solana().amount(100),
+                                USDC::solana_devnet().amount(100),
                             ),
                         ]
                     }
