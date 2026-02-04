@@ -8,15 +8,15 @@ This document outlines the plan for creating a comprehensive protocol compliance
 
 ### Existing Implementations
 
-| Component | Rust Crate | TypeScript Package | Status |
-|-----------|------------|-------------------|--------|
-| **Client** | `x402-reqwest` | `@x402/fetch` | V1, V2 for EVM, Solana, Aptos |
-| **Server** | `x402-axum` | `@x402/hono` | V1, V2 middleware |
-| **Facilitator** | `x402-facilitator-local` | `@x402/core` | Full implementation |
+| Component       | Rust Crate               | TypeScript Package | Status                        |
+|-----------------|--------------------------|--------------------|-------------------------------|
+| **Client**      | `x402-reqwest`           | `@x402/fetch`      | V1, V2 for EVM, Solana, Aptos |
+| **Server**      | `x402-axum`              | `@x402/hono`       | V1, V2 middleware             |
+| **Facilitator** | `x402-facilitator-local` | `@x402/core`       | Full implementation           |
 
 ### Existing TypeScript Tester (`x402-ts-tester`)
 
-The [`x402-ts-tester`](file:///Users/ukstv/Developer/FareSide/x402-ts-tester) provides reference implementations:
+The x402-ts-tester provides reference implementations:
 - `v1-seller.ts` / `v2-seller.ts` - Server implementations using Hono
 - `v1-buyer-evm.ts` / `v2-buyer-evm.ts` - Client implementations
 - Manual execution, no automation
@@ -25,25 +25,31 @@ The [`x402-ts-tester`](file:///Users/ukstv/Developer/FareSide/x402-ts-tester) pr
 
 The test harness supports these axes of configuration (not all combinations are valid):
 
-| x402 Version | Client | Server | Facilitator | Namespace | Scheme | Extension |
-|--------------|--------|--------|-------------|-----------|--------|----------|
-| v1 | Rust (rs) | Rust (rs) | Local (rs) | eip155 | exact | (none) |
-| v2 | TS (ts) | TS (ts) | TS (@x402) | solana | | eip2612GasSponsoring (eip155 + exact) |
-| | | | Remote | aptos | | erc20ApprovalGasSponsoring (eip155 + exact) |
-| | | | | | | sign-in-with-x |
-| | | | | | | bazaar (v2 only) |
+| x402 Version | Client    | Server    | Facilitator | Namespace | Scheme | Extension                                   |
+|--------------|-----------|-----------|-------------|-----------|--------|---------------------------------------------|
+| v1           | Rust (rs) | Rust (rs) | Local (rs)  | eip155    | exact  | (none)                                      |
+| v2           | TS (ts)   | TS (ts)   | TS (@x402)  | solana    |        | eip2612GasSponsoring (eip155 + exact)       |
+|              |           |           | Remote      | aptos     |        | erc20ApprovalGasSponsoring (eip155 + exact) |
+|              |           |           |             |           |        | sign-in-with-x                              |
+|              |           |           |             |           |        | bazaar (v2 only)                            |
 
 **Naming Convention:** `{x402-version}-{namespace}-{scheme}-{client}-{server}-{facilitator}.{modifier}.test.ts`
 
 Example: `v2-eip155-exact-rs-rs-rs.test.ts` (x402 v2, eip155, exact, Rust Client + Rust Server + Rust Facilitator)
 Example: `v2-solana-exact-rs-rs-rs.siwx.test.ts` (with sign-in-with-x modifier)
 
-**Initial Focus Combinations:**
-1. v2-eip155-exact-rs-rs-rs (Rust Client + Rust Server + Rust Facilitator + eip155)
-2. v2-solana-exact-rs-rs-rs (Rust Client + Rust Server + Rust Facilitator + Solana)
-3. v2-eip155-exact-ts-ts-rs (TS Client + TS Server + Rust Facilitator + eip155)
-4. v2-eip155-exact-ts-rs-rs (TS Client + Rust Server + Rust Facilitator + eip155)
-5. v2-eip155-exact-rs-ts-rs (Rust Client + TS Server + Rust Facilitator + eip155)
+**Initial Focus Combinations (All Complete):**
+
+| # | Combination              | Client     | Server     | Facilitator | Chain  | Status |
+|---|--------------------------|------------|------------|-------------|--------|--------|
+| 1 | v2-eip155-exact-rs-rs-rs | Rust       | Rust       | Rust        | eip155 | ✅      |
+| 2 | v2-eip155-exact-ts-rs-rs | TypeScript | Rust       | Rust        | eip155 | ✅      |
+| 3 | v2-eip155-exact-ts-ts-rs | TypeScript | TypeScript | Rust        | eip155 | ✅      |
+| 4 | v2-eip155-exact-rs-ts-rs | Rust       | TypeScript | Rust        | eip155 | ✅      |
+| 5 | v2-solana-exact-rs-rs-rs | Rust       | Rust       | Rust        | Solana | ✅      |
+| 6 | v2-solana-exact-ts-rs-rs | TypeScript | Rust       | Rust        | Solana | ✅      |
+| 7 | v2-solana-exact-rs-ts-rs | Rust       | TypeScript | Rust        | Solana | ✅      |
+| 8 | v2-solana-exact-ts-ts-rs | TypeScript | TypeScript | Rust        | Solana | ✅      |
 
 > **Note:** Combination 3 (TS Client + TS Server + Rust Facilitator) is critical for testing the Rust facilitator's compatibility with the canonical TypeScript implementation, isolating any quirks in the Rust facilitator.
 
@@ -73,7 +79,10 @@ protocol-compliance/
 │   │   ├── v2-eip155-exact-ts-rs-rs.test.ts        # TS Client + Rust Server + Rust Facilitator
 │   │   ├── v2-eip155-exact-ts-ts-rs.test.ts        # TS Client + TS Server + Rust Facilitator
 │   │   ├── v2-eip155-exact-rs-ts-rs.test.ts        # Rust Client + TS Server + Rust Facilitator
-│   │   └── v2-solana-exact-rs-rs-rs.test.ts        # [Future] Solana tests
+│   │   ├── v2-solana-exact-rs-rs-rs.test.ts        # Rust Client + Rust Server + Rust Facilitator (Solana)
+│   │   ├── v2-solana-exact-ts-rs-rs.test.ts        # TS Client + Rust Server + Rust Facilitator (Solana)
+│   │   ├── v2-solana-exact-rs-ts-rs.test.ts        # Rust Client + TS Server + Rust Facilitator (Solana)
+│   │   └── v2-solana-exact-ts-ts-rs.test.ts        # TS Client + TS Server + Rust Facilitator (Solana)
 │   │   # V1 tests and additional chains to be added as needed
 │   ├── fixtures/
 │   │   └── keys.ts               # Test wallets (from env)
@@ -376,14 +385,24 @@ export const WORKSPACE_ROOT: URL;
 - **Binary execution** rather than `cargo run` for faster startup
 - **One-shot Rust client** invocation rather than persistent client process (clients are request-scoped)
 
-### Phase 5: v2-solana-exact-rs-rs-rs Scenario
+### Phase 5: v2-solana-exact Scenarios ✅ DONE
 
-**Scenario:** Rust Client + Rust Server + Rust Facilitator + Solana + exact
+**Completed Solana test scenarios:**
 
-- [ ] Add Solana chain configuration to test-config.json
-- [ ] Write `v2-solana-exact-rs-rs-rs.test.ts` with happy path test
+| Test File                          | Client     | Server     | Facilitator | Status |
+|------------------------------------|------------|------------|-------------|--------|
+| `v2-solana-exact-rs-rs-rs.test.ts` | Rust       | Rust       | Rust        | ✅      |
+| `v2-solana-exact-ts-rs-rs.test.ts` | TypeScript | Rust       | Rust        | ✅      |
+| `v2-solana-exact-rs-ts-rs.test.ts` | Rust       | TypeScript | Rust        | ✅      |
+| `v2-solana-exact-ts-ts-rs.test.ts` | TypeScript | TypeScript | Rust        | ✅      |
 
-> **Note:** Solana support is partially implemented in the client utilities but tests are not yet written.
+**Implementation Details:**
+- Solana chain configuration added to [`config.ts`](protocol-compliance/src/utils/config.ts) with `solanaDevnet` config
+- [`invokeRustClient()`](protocol-compliance/src/utils/client.ts:19) updated to support Solana private keys via `SOLANA_PRIVATE_KEY` and `SOLANA_RPC_URL` env vars
+- [`makeFetch()`](protocol-compliance/src/utils/client.ts:96) updated to be async and properly initialize Solana client using `createKeyPairSignerFromBytes` from `@solana/kit` with base58 decoding
+- All 4 Solana test files follow the same pattern as EIP155 tests with programmatic lifecycle management
+
+> **Note:** All Solana scenarios are now complete and use programmatic lifecycle management.
 
 ### Future Work (Out of Scope here)
 
@@ -407,20 +426,13 @@ Aptos chain support requires additional setup and is planned for future phases:
 
 ```bash
 # Required
-EVM_PAYER_PRIVATE_KEY=0x...
-EIP155_PAYEE_ADDRESS=0x...
-SOLANA_PAYER_KEYPAIR=[...]
-APTOS_PAYER_PRIVATE_KEY=...
+BASE_SEPOLIA_RPC_URL=http://rpc.example.com/
+BASE_SEPOLIA_BUYER_PRIVATE_KEY=0xPrivateKey
+BASE_SEPOLIA_FACILITATOR_PRIVATE_KEY=0xPrivateKey
 
-# Optional (defaults provided)
-FACILITATOR_PORT=23635
-SERVER_PORT=3000
-FACILITATOR_URL=http://localhost:23635
-
-# Blockchain RPC URLs (optional, defaults to public RPCs)
-EIP155_RPC_URL=https://...
-SOLANA_RPC_URL=https://...
-APTOS_RPC_URL=https://...
+SOLANA_DEVNET_RPC_URL=http://rpc.example.com/
+SOLANA_DEVNET_BUYER_PRIVATE_KEY=PrivateKeyB58
+SOLANA_DEVNET_FACILITATOR_PRIVATE_KEY=PrivateKeyB58
 ```
 
 ## Dependencies
@@ -491,6 +503,14 @@ typecheck:
 
 ## Next Steps
 
-1. **Phase 5 implementation** - v2-solana-exact-rs-rs-rs scenario
+1. ✅ **Phase 5 implementation** - All 4 Solana scenarios complete
 2. **Future work** - Aptos support, extensions (eip2612GasSponsoring, etc.)
 3. **Iterative implementation** - Continue with remaining phases as needed
+
+## Summary
+
+All 8 initial focus combinations are now complete:
+- **4 EIP155 scenarios**: All combinations of Rust/TypeScript clients and servers with Rust facilitator
+- **4 Solana scenarios**: All combinations of Rust/TypeScript clients and servers with Rust facilitator
+
+The test harness now provides comprehensive coverage for both EIP155 and Solana chains across all client/server implementation combinations.
