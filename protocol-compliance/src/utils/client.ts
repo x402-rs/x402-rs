@@ -9,14 +9,6 @@ import { registerExactSvmScheme } from "@x402/svm/exact/client";
 import { createKeyPairSignerFromBytes } from "@solana/kit";
 import { base58 } from "@scure/base";
 
-export interface ClientOptions {
-  facilitatorUrl: string;
-  chain: "eip155" | "solana" | "aptos";
-  scheme?: string;
-  namespace?: string;
-  version?: "v1" | "v2";
-}
-
 export async function invokeRustClient(
   endpoint: URL,
   privateKeys:
