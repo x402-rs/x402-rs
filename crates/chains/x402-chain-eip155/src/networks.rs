@@ -1,7 +1,9 @@
 use x402_types::chain::ChainId;
 use x402_types::networks::USDC;
 
-use crate::chain::{Eip155ChainReference, Eip155TokenDeployment, TokenDeploymentEip712};
+use crate::chain::{
+    AssetTransferMethod, Eip155ChainReference, Eip155TokenDeployment, TokenDeploymentEip712,
+};
 
 /// Trait providing convenient methods to get instances for well-known EVM networks (eip155 namespace).
 ///
@@ -154,6 +156,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "USD Coin".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -166,6 +169,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "USDC".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -178,6 +182,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "USDC".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -190,6 +195,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "USDC".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -202,6 +208,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "USD Coin".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -214,6 +221,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "USD Coin".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -226,6 +234,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "USDC".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -238,6 +247,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "USDC".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -250,6 +260,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "USDC".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -259,6 +270,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
             address: alloy_primitives::address!("0xDaF4556169c4F3f2231d8ab7BC8772Ddb7D4c84C"),
             decimals: 6,
             eip712: None,
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -271,6 +283,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "USDC".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -283,6 +296,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "Bridged USDC".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -295,6 +309,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "USDC".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 
@@ -307,6 +322,7 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 name: "USDC".into(),
                 version: "2".into(),
             }),
+            asset_transfer_method: AssetTransferMethod::Eip3009,
         }
     }
 }

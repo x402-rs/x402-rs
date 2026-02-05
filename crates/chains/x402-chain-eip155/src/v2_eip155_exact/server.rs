@@ -5,11 +5,12 @@
 //! chain IDs instead of network names.
 
 use alloy_primitives::U256;
+use serde_json::json;
 use x402_types::chain::{ChainId, DeployedTokenAmount};
 use x402_types::proto::v2;
 
 use crate::V2Eip155Exact;
-use crate::chain::{ChecksummedAddress, Eip155TokenDeployment};
+use crate::chain::{AssetTransferMethod, ChecksummedAddress, Eip155TokenDeployment};
 use crate::v1_eip155_exact::ExactScheme;
 
 impl V2Eip155Exact {
@@ -46,10 +47,19 @@ impl V2Eip155Exact {
         asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,
     ) -> v2::PriceTag {
         let chain_id: ChainId = asset.token.chain_reference.into();
-        let extra = asset
-            .token
-            .eip712
-            .and_then(|eip712| serde_json::to_value(&eip712).ok());
+        let extra = match asset.token.asset_transfer_method {
+            AssetTransferMethod::Eip3009 => {
+                asset
+                    .token
+                    .eip712
+                    .and_then(|eip712| serde_json::to_value(&eip712).ok())
+            }
+            AssetTransferMethod::Permit2 => {
+                serde_json::to_value(json!({
+                    "assetTransferMethod": "permit2" // TODO: Use some shared struct for that
+                })).ok()
+            }
+        };
         let requirements = v2::PaymentRequirements {
             scheme: ExactScheme.to_string(),
             pay_to: pay_to.into().to_string(),
