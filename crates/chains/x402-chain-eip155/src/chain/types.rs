@@ -282,6 +282,22 @@ pub struct Eip155TokenDeployment {
     pub decimals: u8,
     /// Optional EIP-712 domain parameters for signature verification.
     pub eip712: Option<TokenDeploymentEip712>,
+    /// The method used to transfer assets.
+    pub asset_transfer_method: AssetTransferMethod,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum AssetTransferMethod {
+    #[serde(rename = "eip3009")]
+    Eip3009,
+    #[serde(rename = "permit2")]
+    Permit2,
+}
+
+impl Default for AssetTransferMethod {
+    fn default() -> Self {
+        AssetTransferMethod::Eip3009
+    }
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
