@@ -280,24 +280,24 @@ pub struct Eip155TokenDeployment {
     pub address: Address,
     /// Number of decimal places for the token (e.g., 6 for USDC, 18 for most ERC-20s).
     pub decimals: u8,
-    /// Optional EIP-712 domain parameters for signature verification.
-    pub eip712: Option<TokenDeploymentEip712>,
     /// The method used to transfer assets.
-    pub asset_transfer_method: AssetTransferMethod,
+    pub transfer_method: AssetTransferMethod,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[serde(tag = "assetTransferMethod")]
 pub enum AssetTransferMethod {
+    /// EIP-712 domain parameters for signature verification of EIP3009 transfers.
     #[serde(rename = "eip3009")]
-    Eip3009,
+    Eip3009 {
+        /// The token name as specified in the EIP-712 domain.
+        name: String,
+        /// The token version as specified in the EIP-712 domain.
+        version: String,
+    },
+    /// Permit2 transfer method.
     #[serde(rename = "permit2")]
     Permit2,
-}
-
-impl Default for AssetTransferMethod {
-    fn default() -> Self {
-        AssetTransferMethod::Eip3009
-    }
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
@@ -363,19 +363,6 @@ impl Eip155TokenDeployment {
             token: self.clone(),
         })
     }
-}
-
-/// EIP-712 domain parameters for a token deployment.
-///
-/// These parameters are used when verifying EIP-712 typed data signatures
-/// for ERC-3009 `transferWithAuthorization` calls.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
-#[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct TokenDeploymentEip712 {
-    /// The token name as specified in the EIP-712 domain.
-    pub name: String,
-    /// The token version as specified in the EIP-712 domain.
-    pub version: String,
 }
 
 #[cfg(test)]
