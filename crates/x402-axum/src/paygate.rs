@@ -323,10 +323,11 @@ impl PaygateProtocol for v2::PriceTag {
             payment_requirements: selected.requirements.clone(),
         };
 
-        let json = serde_json::to_value(&verify_request)
+        let raw = serde_json::to_value(&verify_request)
+            .and_then(|json_string| serde_json::value::to_raw_value(&json_string))
             .map_err(|e| VerificationError::VerificationFailed(format!("{e}")))?;
 
-        Ok(proto::VerifyRequest::from(json))
+        Ok(proto::VerifyRequest::from(raw))
     }
 
     fn error_into_response(
