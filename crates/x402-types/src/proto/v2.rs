@@ -145,9 +145,9 @@ where
 /// - `TPayload` - The scheme-specific payload type
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PaymentPayload<TAccepted, TPayload> {
+pub struct PaymentPayload<TPaymentRequirements, TPayload> {
     /// The payment requirements the buyer accepted.
-    pub accepted: TAccepted,
+    pub accepted: TPaymentRequirements,
     /// The scheme-specific signed payload.
     pub payload: TPayload,
     /// Information about the resource being paid for.
