@@ -369,8 +369,8 @@ pub async fn assert_enough_balance<P: Provider>(
     max_amount_required = %max_amount_required
 )))]
 pub fn assert_enough_value<V>(
-    sent: V,
-    max_amount_required: V,
+    sent: &V,
+    max_amount_required: &V,
 ) -> Result<(), PaymentVerificationError>
 where
     V: Display + Ord,

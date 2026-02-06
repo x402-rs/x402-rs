@@ -121,9 +121,9 @@ pub async fn assert_valid_payment<P: Provider>(
 pub fn assert_requirements_match<T: PartialEq>(
     accepted: &T,
     payment_requirements: &T,
-) -> Result<(), Eip155ExactError> {
+) -> Result<(), PaymentVerificationError> {
     if accepted != payment_requirements {
-        Err(PaymentVerificationError::AcceptedRequirementsMismatch.into())
+        Err(PaymentVerificationError::AcceptedRequirementsMismatch)
     } else {
         Ok(())
     }
