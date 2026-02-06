@@ -177,16 +177,13 @@ async fn assert_valid_payment<P: Provider>(
     let contract = IEIP3009::new(asset_address.into(), provider);
 
     let extra = match &accepted.extra {
-        None => None,
-        Some(extra) => match extra {
-            AssetTransferMethod::Eip3009 { name, version } => Some(PaymentRequirementsExtra {
-                name: name.clone(),
-                version: version.clone(),
-            }),
-            AssetTransferMethod::Permit2 => {
-                todo!("Permit2 is not yet supported")
-            }
-        },
+        AssetTransferMethod::Eip3009 { name, version } => Some(PaymentRequirementsExtra {
+            name: name.clone(),
+            version: version.clone(),
+        }),
+        AssetTransferMethod::Permit2 => {
+            todo!("Permit2 is not yet supported")
+        }
     };
 
     let domain = assert_domain(chain, &contract, &asset_address.into(), &extra).await?;

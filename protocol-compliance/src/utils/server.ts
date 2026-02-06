@@ -65,10 +65,10 @@ export class TSServerHandle {
     const serverUrl = new URL(`http://localhost:${port}/`);
     console.log(`Starting TS test server at ${serverUrl}...`);
 
-    const ka = facilitatorUrl.href.replace(/(\/)+$/, "");
-    console.log(`Using facilitator at ${ka}`);
+    const normalizedFacilitatorUrl = facilitatorUrl.href.replace(/(\/)+$/, "");
+    console.log(`Using facilitator at ${normalizedFacilitatorUrl}`);
     const facilitatorClient = new HTTPFacilitatorClient({
-      url: ka
+      url: normalizedFacilitatorUrl,
     });
     const resourceServer = new x402ResourceServer(facilitatorClient)
       .register("eip155:84532", new ExactEvmScheme())
