@@ -357,11 +357,15 @@ impl PaymentProblem {
 pub struct PaymentRequiredV;
 
 impl ProtocolV for PaymentRequiredV {
-    type V1 = v1::PaymentRequired;
-    type V2 = v2::PaymentRequired;
+    type V1 = v1::PaymentRequired<OriginalJson>;
+    type V2 = v2::PaymentRequired<OriginalJson>;
 }
 
 /// A payment required response that can be either V1 or V2.
 ///
 /// This is returned with HTTP 402 status to indicate that payment is required.
 pub type PaymentRequired = ProtocolVersioned<PaymentRequiredV>;
+
+/// Verbatim JSON for PaymentRequirements and other places.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OriginalJson(pub Box<serde_json::value::RawValue>);
