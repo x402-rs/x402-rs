@@ -88,7 +88,8 @@ where
             .accepts
             .iter()
             .filter_map(|original_requirements_json| {
-                let requirements = types::PaymentRequirements::try_from(original_requirements_json).ok()?;
+                let requirements =
+                    types::PaymentRequirements::try_from(original_requirements_json).ok()?;
                 let chain_reference = Eip155ChainReference::try_from(&requirements.network).ok()?;
                 let candidate = PaymentCandidate {
                     chain_id: requirements.network.clone(),
