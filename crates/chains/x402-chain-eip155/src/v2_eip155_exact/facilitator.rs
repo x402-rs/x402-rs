@@ -14,9 +14,6 @@ use x402_types::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError,
 };
 
-#[cfg(feature = "telemetry")]
-use tracing::instrument;
-
 use crate::V2Eip155Exact;
 use crate::chain::{AssetTransferMethod, Eip155ChainReference, Eip155MetaTransactionProvider};
 use crate::v1_eip155_exact::facilitator::{
@@ -25,6 +22,9 @@ use crate::v1_eip155_exact::facilitator::{
 };
 use crate::v1_eip155_exact::{ExactScheme, PaymentRequirementsExtra};
 use crate::v2_eip155_exact::types;
+
+#[cfg(feature = "telemetry")]
+use tracing::instrument;
 
 impl<P> X402SchemeFacilitatorBuilder<P> for V2Eip155Exact
 where
@@ -74,6 +74,7 @@ where
     ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
         let k = serde_json::to_string(request).unwrap();
         println!("verify.0.request: {k}");
+
         let request = types::VerifyRequest::from_proto(request.clone())?;
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
@@ -160,7 +161,12 @@ async fn assert_valid_payment<P: Provider>(
     if payload_chain_id != &chain_id {
         return Err(PaymentVerificationError::ChainIdMismatch.into());
     }
-    let authorization = &payload.authorization;
+    let authorization = match &payload {
+        types::ExactEvmPayload::Eip3009(payload) => payload.authorization,
+        types::ExactEvmPayload::Permit2(payload) => {
+            todo!("Permit2 is not yet supported")
+        }
+    };
     if authorization.to != accepted.pay_to {
         return Err(PaymentVerificationError::RecipientMismatch.into());
     }
@@ -189,6 +195,13 @@ async fn assert_valid_payment<P: Provider>(
     assert_enough_balance(&contract, &authorization.from, amount_required.into()).await?;
     assert_enough_value(&authorization.value.into(), &amount_required.into())?;
 
+    let signature = match &payload {
+        types::ExactEvmPayload::Eip3009(payload) => payload.signature.clone(),
+        types::ExactEvmPayload::Permit2(payload) => {
+            todo!("Permit2 is not yet supported")
+        }
+    };
+
     let payment = ExactEvmPayment {
         from: authorization.from,
         to: authorization.to,
@@ -196,7 +209,7 @@ async fn assert_valid_payment<P: Provider>(
         valid_after: authorization.valid_after,
         valid_before: authorization.valid_before,
         nonce: authorization.nonce,
-        signature: payload.signature.clone(),
+        signature,
     };
 
     Ok((contract, payment, domain))
