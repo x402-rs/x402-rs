@@ -51,6 +51,9 @@ pub use client::*;
 pub mod types;
 pub use types::*;
 
+#[cfg(feature = "facilitator")]
+pub mod permit2_types;
+
 use x402_types::scheme::X402SchemeId;
 
 pub struct V2Eip155Exact;
