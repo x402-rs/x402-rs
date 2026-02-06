@@ -26,7 +26,6 @@
 use serde::{Deserialize, Serialize};
 use serde_with::{VecSkipError, serde_as};
 use std::collections::HashMap;
-use std::str::FromStr;
 
 use crate::chain::ChainId;
 use crate::scheme::SchemeHandlerSlug;
