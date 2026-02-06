@@ -79,7 +79,8 @@ where
             .accepts
             .iter()
             .filter_map(|original_requirements_json| {
-                let requirements = PaymentRequirements::try_from(original_requirements_json).ok()?;
+                let requirements =
+                    PaymentRequirements::try_from(original_requirements_json).ok()?;
                 let chain_id = requirements.network.clone();
                 if chain_id.namespace != "solana" {
                     return None;
