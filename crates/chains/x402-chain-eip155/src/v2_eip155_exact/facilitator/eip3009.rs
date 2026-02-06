@@ -22,9 +22,7 @@ pub async fn verify_eip3009_payment<P: Eip155MetaTransactionProvider + ChainProv
     payment_requirements: &Eip3009PaymentRequirements,
 ) -> Result<v2::VerifyResponse, X402SchemeFacilitatorError> {
     let accepted = &payment_payload.accepted;
-    if accepted != payment_requirements {
-        return Err(PaymentVerificationError::AcceptedRequirementsMismatch.into());
-    }
+    assert_requirements_match(accepted, payment_requirements)?;
     let (contract, payment, eip712_domain) = assert_valid_payment(
         provider.inner(),
         provider.chain(),
@@ -48,9 +46,7 @@ where
     Eip155ExactError: From<P::Error>,
 {
     let accepted = &payment_payload.accepted;
-    if accepted != payment_requirements {
-        return Err(PaymentVerificationError::AcceptedRequirementsMismatch.into());
-    }
+    assert_requirements_match(accepted, payment_requirements)?;
     let (contract, payment, eip712_domain) = assert_valid_payment(
         provider.inner(),
         provider.chain(),
@@ -96,15 +92,16 @@ pub async fn assert_valid_payment<P: Provider>(
     let asset_address = accepted.asset;
     let contract = IEIP3009::new(asset_address.into(), provider);
 
+    let amount_required = accepted.amount;
+    assert_enough_value(&authorization.value, &amount_required.into())?;
+
     let extra = Some(PaymentRequirementsExtra {
         name: accepted.extra.name.clone(),
         version: accepted.extra.version.clone(),
     });
     let domain = assert_domain(chain, &contract, &asset_address.into(), &extra).await?;
 
-    let amount_required = accepted.amount;
     assert_enough_balance(&contract, &authorization.from, amount_required.into()).await?;
-    assert_enough_value(&authorization.value, &amount_required.into())?;
 
     let signature = payload.signature.clone();
 
@@ -119,4 +116,15 @@ pub async fn assert_valid_payment<P: Provider>(
     };
 
     Ok((contract, payment, domain))
+}
+
+pub fn assert_requirements_match<T: PartialEq>(
+    accepted: &T,
+    payment_requirements: &T,
+) -> Result<(), Eip155ExactError> {
+    if accepted != payment_requirements {
+        Err(PaymentVerificationError::AcceptedRequirementsMismatch.into())
+    } else {
+        Ok(())
+    }
 }
