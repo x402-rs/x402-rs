@@ -8,26 +8,19 @@ pub mod eip3009;
 pub mod permit2;
 
 use alloy_provider::Provider;
-use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
-use x402_types::chain::{ChainId, ChainProviderOps};
+use x402_types::chain::ChainProviderOps;
 use x402_types::proto;
-use x402_types::proto::{PaymentVerificationError, v2};
+use x402_types::proto::v2;
 use x402_types::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError,
 };
 
 use crate::V2Eip155Exact;
-use crate::chain::{AssetTransferMethod, Eip155ChainReference, Eip155MetaTransactionProvider};
-use crate::v1_eip155_exact::facilitator::{
-    Eip155ExactError, ExactEvmPayment, IEIP3009, assert_domain, assert_enough_balance,
-    assert_enough_value, assert_time, settle_payment, verify_payment,
-};
-use crate::v1_eip155_exact::{ExactScheme, PaymentRequirementsExtra};
+use crate::chain::Eip155MetaTransactionProvider;
+use crate::v1_eip155_exact::ExactScheme;
+use crate::v1_eip155_exact::facilitator::Eip155ExactError;
 use crate::v2_eip155_exact::types;
-
-#[cfg(feature = "telemetry")]
-use tracing::instrument;
 
 impl<P> X402SchemeFacilitatorBuilder<P> for V2Eip155Exact
 where
@@ -102,32 +95,41 @@ where
                 .await?
             }
         };
-        Ok(verify_response)
+        Ok(verify_response.into())
     }
 
     async fn settle(
         &self,
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError> {
-        let request = types::SettleRequest::from_proto(request.clone())?;
-        let payload = &request.payment_payload;
-        assert_accepted_requirements(payload, &request.payment_requirements)?;
-        let (contract, payment, eip712_domain) = assert_valid_payment(
-            self.provider.inner(),
-            self.provider.chain(),
-            &payload.accepted,
-            &payload.payload,
-        )
-        .await?;
-
-        let tx_hash = settle_payment(&self.provider, &contract, &payment, &eip712_domain).await?;
-
-        Ok(v2::SettleResponse::Success {
-            payer: payment.from.to_string(),
-            transaction: tx_hash.to_string(),
-            network: payload.accepted.network.to_string(),
-        }
-        .into())
+        let settle_request = types::FacilitatorSettleRequest::try_from(request.clone())?;
+        let settle_response = match settle_request {
+            types::FacilitatorSettleRequest::Eip3009 {
+                payment_payload,
+                payment_requirements,
+                x402_version: _,
+            } => {
+                eip3009::settle_eip3009_payment(
+                    &self.provider,
+                    &payment_payload,
+                    &payment_requirements,
+                )
+                .await?
+            }
+            types::FacilitatorSettleRequest::Permit2 {
+                payment_requirements,
+                payment_payload,
+                x402_version: _,
+            } => {
+                permit2::settle_permit2_payment(
+                    &self.provider,
+                    &payment_payload,
+                    &payment_requirements,
+                )
+                .await?
+            }
+        };
+        Ok(settle_response.into())
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
@@ -148,86 +150,5 @@ where
             extensions: Vec::new(),
             signers,
         })
-    }
-}
-
-/// Runs all preconditions needed for a successful payment:
-/// - Valid scheme, network, and receiver.
-/// - Valid time window (validAfter/validBefore).
-/// - Correct EIP-712 domain construction.
-/// - Sufficient on-chain balance.
-/// - Sufficient value in payload.
-#[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
-async fn assert_valid_payment<P: Provider>(
-    provider: P,
-    chain: &Eip155ChainReference,
-    accepted: &types::PaymentRequirements,
-    payload: &types::ExactEvmPayload,
-) -> Result<(IEIP3009::IEIP3009Instance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
-    let chain_id: ChainId = chain.into();
-    let payload_chain_id = &accepted.network;
-    if payload_chain_id != &chain_id {
-        return Err(PaymentVerificationError::ChainIdMismatch.into());
-    }
-    let authorization = match &payload {
-        types::ExactEvmPayload::Eip3009(payload) => payload.authorization,
-        types::ExactEvmPayload::Permit2(payload) => {
-            todo!("Permit2 is not yet supported")
-        }
-    };
-    if authorization.to != accepted.pay_to {
-        return Err(PaymentVerificationError::RecipientMismatch.into());
-    }
-    let valid_after = authorization.valid_after;
-    let valid_before = authorization.valid_before;
-    assert_time(valid_after, valid_before)?;
-    let asset_address = accepted.asset;
-    let contract = IEIP3009::new(asset_address.into(), provider);
-
-    let extra = match &accepted.extra {
-        AssetTransferMethod::Eip3009 { name, version } => Some(PaymentRequirementsExtra {
-            name: name.clone(),
-            version: version.clone(),
-        }),
-        AssetTransferMethod::Permit2 => {
-            todo!("Permit2 is not yet supported")
-        }
-    };
-
-    let domain = assert_domain(chain, &contract, &asset_address.into(), &extra).await?;
-
-    let amount_required = accepted.amount;
-    assert_enough_balance(&contract, &authorization.from, amount_required.into()).await?;
-    assert_enough_value(&authorization.value.into(), &amount_required.into())?;
-
-    let signature = match &payload {
-        types::ExactEvmPayload::Eip3009(payload) => payload.signature.clone(),
-        types::ExactEvmPayload::Permit2(payload) => {
-            todo!("Permit2 is not yet supported")
-        }
-    };
-
-    let payment = ExactEvmPayment {
-        from: authorization.from,
-        to: authorization.to,
-        value: authorization.value.into(),
-        valid_after: authorization.valid_after,
-        valid_before: authorization.valid_before,
-        nonce: authorization.nonce,
-        signature,
-    };
-
-    Ok((contract, payment, domain))
-}
-
-pub fn assert_accepted_requirements(
-    payload: &types::PaymentPayload,
-    requirements: &types::PaymentRequirements,
-) -> Result<(), Eip155ExactError> {
-    let accepted = &payload.accepted;
-    if accepted != requirements {
-        Err(PaymentVerificationError::AcceptedRequirementsMismatch.into())
-    } else {
-        Ok(())
     }
 }

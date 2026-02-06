@@ -40,6 +40,7 @@ pub enum FacilitatorVerifyRequest {
         payment_requirements: Permit2PaymentRequirements,
     },
 }
+pub type FacilitatorSettleRequest = FacilitatorVerifyRequest;
 
 // FIXME Feature facilitator
 pub type Eip3009PaymentRequirements = v2::PaymentRequirements<
