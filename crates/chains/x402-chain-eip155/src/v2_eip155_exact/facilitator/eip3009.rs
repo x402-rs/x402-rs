@@ -108,7 +108,7 @@ pub async fn assert_valid_payment<P: Provider>(
     let payment = ExactEvmPayment {
         from: authorization.from,
         to: authorization.to,
-        value: authorization.value,
+        value: authorization.value.into(),
         valid_after: authorization.valid_after,
         valid_before: authorization.valid_before,
         nonce: authorization.nonce,
