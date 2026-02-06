@@ -19,7 +19,7 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     provider: &P,
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
-) -> Result<v2::VerifyResponse, X402SchemeFacilitatorError> {
+) -> Result<v2::VerifyResponse, PaymentVerificationError> {
     // Accepted must match the requirements
     let accepted = &payment_payload.accepted;
     assert_requirements_match(accepted, payment_requirements)?;
@@ -27,13 +27,13 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     // Spender must be the x402ExactPermit2Proxy contract address
     let authorization = &payment_payload.payload.permit_2_authorization;
     if authorization.spender.0 != EXACT_PERMIT2_PROXY_ADDRESS {
-        return Err(PaymentVerificationError::RecipientMismatch.into());
+        return Err(PaymentVerificationError::RecipientMismatch);
     }
 
     // Correct recipient
     let witness = &authorization.witness;
     if witness.to != payment_requirements.pay_to {
-        return Err(PaymentVerificationError::RecipientMismatch.into());
+        return Err(PaymentVerificationError::RecipientMismatch);
     }
 
     // Time validity
@@ -42,8 +42,13 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     assert_time(valid_after, valid_before)?;
 
     // Sufficient amount
-    let amount_required = payment_requirements.amount;
-    assert_enough_value(authorization.permitted.amount, amount_required)?;
+    let amount_required = &payment_requirements.amount;
+    assert_enough_value(&authorization.permitted.amount, amount_required)?;
+
+    // Same token
+    if authorization.permitted.token != payment_requirements.asset {
+        return Err(PaymentVerificationError::AssetMismatch);
+    }
 
     println!("---- Permit2 - verify_permit2_payment");
 
