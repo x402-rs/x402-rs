@@ -18,6 +18,7 @@ use alloy_provider::{
 use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, sol};
 use alloy_transport::TransportError;
 use std::collections::HashMap;
+use std::fmt::{Debug, Display};
 use x402_types::chain::{ChainId, ChainProviderOps};
 use x402_types::proto;
 use x402_types::proto::{PaymentVerificationError, v1};
@@ -367,10 +368,13 @@ pub async fn assert_enough_balance<P: Provider>(
     sent = %sent,
     max_amount_required = %max_amount_required
 )))]
-pub fn assert_enough_value(
-    sent: &U256,
-    max_amount_required: &U256,
-) -> Result<(), PaymentVerificationError> {
+pub fn assert_enough_value<V>(
+    sent: V,
+    max_amount_required: V,
+) -> Result<(), PaymentVerificationError>
+where
+    V: Display + Ord,
+{
     if sent < max_amount_required {
         Err(PaymentVerificationError::InvalidPaymentAmount)
     } else {
@@ -726,7 +730,7 @@ pub async fn verify_payment<P: Provider>(
             original,
         } => {
             // Prepare the call to validate EIP-6492 signature
-            let validator6492 = Validator6492::new(VALIDATOR_ADDRESS, &provider);
+            let validator6492 = Validator6492::new(VALIDATOR_ADDRESS, &provider); // TODO Configurable validator address per chain
             let is_valid_signature_call =
                 validator6492.isValidSigWithSideEffects(payer, hash, original);
             // Prepare the call to simulate transfer the funds
