@@ -72,9 +72,6 @@ where
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
-        let k = serde_json::to_string(request).unwrap();
-        println!("verify.0.request: {k}");
-
         let request = types::VerifyRequest::from_proto(request.clone())?;
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
