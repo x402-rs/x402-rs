@@ -22,7 +22,8 @@ use x402_types::scheme::client::{
 };
 use x402_types::util::Base64Bytes;
 
-use crate::chain::Eip155ChainReference;
+use crate::chain::{AssetTransferMethod, Eip155ChainReference};
+use crate::v1_eip155_exact::PaymentRequirementsExtra;
 use crate::v1_eip155_exact::client::{
     Eip3009SigningParams, SignerLike, sign_erc3009_authorization,
 };
@@ -123,13 +124,26 @@ where
     S: Sync + SignerLike,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
+        let extra = match &self.requirements.extra {
+            None => None,
+            Some(extra) => match extra {
+                AssetTransferMethod::Eip3009 { name, version } => Some(PaymentRequirementsExtra {
+                    name: name.clone(),
+                    version: version.clone(),
+                }),
+                AssetTransferMethod::Permit2 => {
+                    todo!("Permit2 is not yet supported")
+                }
+            },
+        };
+
         let params = Eip3009SigningParams {
             chain_id: self.chain_reference.inner(),
             asset_address: self.requirements.asset.0,
             pay_to: self.requirements.pay_to.into(),
             amount: self.requirements.amount.into(),
             max_timeout_seconds: self.requirements.max_timeout_seconds,
-            extra: self.requirements.extra.clone(),
+            extra,
         };
 
         let evm_payload = sign_erc3009_authorization(&self.signer, &params).await?;
