@@ -53,10 +53,7 @@ impl V1Eip155Exact {
         let network = chain_id
             .as_network_name()
             .unwrap_or_else(|| panic!("Can not get network name for chain id {}", chain_id));
-        let extra = asset
-            .token
-            .eip712
-            .and_then(|eip712| serde_json::to_value(&eip712).ok());
+        let extra = serde_json::to_value(asset.token.transfer_method).ok();
         v1::PriceTag {
             scheme: ExactScheme.to_string(),
             pay_to: pay_to.into().to_string(),
