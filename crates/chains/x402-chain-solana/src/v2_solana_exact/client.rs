@@ -19,9 +19,9 @@ use alloy_primitives::U256;
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use solana_signer::Signer;
-use x402_types::proto::PaymentRequired;
 use x402_types::proto::v2::ResourceInfo;
 use x402_types::proto::v2::X402Version2;
+use x402_types::proto::{OriginalJson, PaymentRequired};
 use x402_types::scheme::X402SchemeId;
 use x402_types::scheme::client::{
     PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
@@ -78,8 +78,8 @@ where
         payment_required
             .accepts
             .iter()
-            .filter_map(|v| {
-                let requirements: PaymentRequirements = v.as_concrete()?;
+            .filter_map(|original_requirements_json| {
+                let requirements = PaymentRequirements::try_from(original_requirements_json).ok()?;
                 let chain_id = requirements.network.clone();
                 if chain_id.namespace != "solana" {
                     return None;
@@ -94,8 +94,9 @@ where
                     signer: Box::new(PayloadSigner {
                         signer: self.signer.clone(),
                         rpc_client: self.rpc_client.clone(),
-                        requirements,
                         resource: payment_required.resource.clone(),
+                        requirements,
+                        requirements_json: original_requirements_json.clone(),
                     }),
                 };
                 Some(candidate)
@@ -109,22 +110,16 @@ where
 struct PayloadSigner<S, R> {
     signer: S,
     rpc_client: R,
-    requirements: PaymentRequirements,
     resource: ResourceInfo,
+    requirements: PaymentRequirements,
+    requirements_json: OriginalJson,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
 #[async_trait]
 impl<S: Signer + Sync, R: RpcClientLike + Sync> PaymentCandidateSigner for PayloadSigner<S, R> {
     async fn sign_payment(&self) -> Result<String, X402Error> {
-        let fee_payer = self
-            .requirements
-            .extra
-            .as_ref()
-            .map(|extra| extra.fee_payer.clone())
-            .ok_or(X402Error::SigningError(
-                "missing fee_payer in extra".to_string(),
-            ))?;
+        let fee_payer = self.requirements.extra.fee_payer.clone();
         let fee_payer_pubkey: Pubkey = fee_payer.into();
 
         let amount = self.requirements.amount.inner();
@@ -140,7 +135,7 @@ impl<S: Signer + Sync, R: RpcClientLike + Sync> PaymentCandidateSigner for Paylo
 
         let payload = PaymentPayload {
             x402_version: X402Version2,
-            accepted: self.requirements.clone(),
+            accepted: self.requirements_json.clone(),
             resource: Some(self.resource.clone()),
             payload: ExactSolanaPayload {
                 transaction: tx_b64,
