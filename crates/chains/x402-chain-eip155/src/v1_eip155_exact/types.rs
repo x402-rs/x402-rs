@@ -12,8 +12,6 @@ use x402_types::timestamp::UnixTimestamp;
 #[cfg(any(feature = "facilitator", feature = "client"))]
 use alloy_sol_types::sol;
 
-use crate::chain::TokenAmount;
-
 lit_str!(ExactScheme, "exact");
 
 /// Type alias for V1 verify requests using the exact EVM payment scheme.
@@ -60,7 +58,8 @@ pub struct ExactEvmPayloadAuthorization {
     pub to: Address,
 
     /// The amount of tokens to transfer (in token's smallest unit).
-    pub value: TokenAmount,
+    #[serde(with = "crate::decimal_u256")]
+    pub value: U256,
 
     /// The authorization is not valid before this timestamp (inclusive).
     pub valid_after: UnixTimestamp,
