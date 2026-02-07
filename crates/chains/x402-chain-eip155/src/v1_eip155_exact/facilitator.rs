@@ -43,6 +43,7 @@ use crate::v1_eip155_exact::{
 /// Signature verifier for EIP-6492, EIP-1271, EOA, universally deployed on the supported EVM chains
 /// If absent on a target chain, verification will fail; you should deploy the validator there.
 // Note: Expect deployed on every chain
+// TODO Configurable validator address per chain
 pub const VALIDATOR_ADDRESS: Address = address!("0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B");
 
 impl<P> X402SchemeFacilitatorBuilder<P> for V1Eip155Exact
@@ -728,7 +729,7 @@ pub async fn verify_payment<P: Provider>(
             original,
         } => {
             // Prepare the call to validate EIP-6492 signature
-            let validator6492 = Validator6492::new(VALIDATOR_ADDRESS, &provider); // TODO Configurable validator address per chain
+            let validator6492 = Validator6492::new(VALIDATOR_ADDRESS, &provider);
             let is_valid_signature_call =
                 validator6492.isValidSigWithSideEffects(payer, hash, original);
             // Prepare the call to simulate transfer the funds
