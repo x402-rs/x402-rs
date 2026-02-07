@@ -23,16 +23,7 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<v2::VerifyResponse, PaymentVerificationError> {
-    // Accepted must match the requirements
-    let accepted = &payment_payload.accepted;
-    assert_requirements_match(accepted, payment_requirements)?;
-
-    assert_valid_payment(
-        provider.inner(),
-        provider.chain(),
-        accepted,
-        &payment_payload.payload,
-    )?;
+    assert_offchain(payment_payload, payment_requirements)?;
 
     todo!("Permit2 - verify_permit2_payment")
 }
@@ -46,12 +37,14 @@ pub async fn settle_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     todo!("Permit2 - settle_permit2_payment")
 }
 
-pub fn assert_valid_payment<P: Provider>(
-    provider: P,
-    chain: &Eip155ChainReference,
-    accepted: &Permit2PaymentRequirements,
-    payload: &Permit2Payload,
+pub fn assert_offchain(
+    payment_payload: &Permit2PaymentPayload,
+    payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<(), PaymentVerificationError> {
+    let payload = &payment_payload.payload;
+    let accepted = &payment_payload.accepted;
+    assert_requirements_match(accepted, payment_requirements)?;
+
     // Spender must be the x402ExactPermit2Proxy contract address
     let authorization = &payload.permit_2_authorization;
     if authorization.spender.0 != EXACT_PERMIT2_PROXY_ADDRESS {
@@ -77,8 +70,5 @@ pub fn assert_valid_payment<P: Provider>(
     if authorization.permitted.token != accepted.asset {
         return Err(PaymentVerificationError::AssetMismatch);
     }
-
-    println!("---- Permit2 - verify_permit2_payment"); // TODO Continue
-
     Ok(())
 }
