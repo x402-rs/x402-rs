@@ -80,82 +80,25 @@ impl PartialEq<ChecksummedAddress> for Address {
     }
 }
 
-/// A token amount represented as a U256, serialized as a decimal string.
-///
-/// This wrapper ensures token amounts are serialized as decimal strings
-/// (e.g., `"1000000"`) rather than hex to maintain compatibility with
-/// the x402 protocol wire format and avoid precision issues in JSON.
-///
-/// # Example
-///
-/// ```
-/// use x402_chain_eip155::chain::TokenAmount;
-/// use alloy_primitives::U256;
-///
-/// let amount = TokenAmount(U256::from(1_000_000u64));
-/// let json = serde_json::to_string(&amount).unwrap();
-/// assert_eq!(json, "\"1000000\"");
-/// ```
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
-pub struct DecimalU256(pub U256);
+pub mod decimal_u256 {
+    use alloy_primitives::U256;
+    use serde::{Deserialize, Deserializer, Serializer};
 
-pub type TokenAmount = DecimalU256;
-
-impl Display for DecimalU256 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl FromStr for DecimalU256 {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let u256 = U256::from_str_radix(s, 10).map_err(|_| "invalid token amount".to_string())?;
-        Ok(Self(u256))
-    }
-}
-
-impl Serialize for DecimalU256 {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    /// Serialize a U256 as a decimal string.
+    pub fn serialize<S>(value: &U256, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        serializer.serialize_str(&self.0.to_string())
+        serializer.serialize_str(&value.to_string())
     }
-}
 
-impl<'de> Deserialize<'de> for DecimalU256 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    /// Deserialize a decimal string into a U256.
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<U256, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Self::from_str(&s).map_err(serde::de::Error::custom)
-    }
-}
-
-impl From<DecimalU256> for U256 {
-    fn from(value: DecimalU256) -> Self {
-        value.0
-    }
-}
-
-impl From<U256> for DecimalU256 {
-    fn from(value: U256) -> Self {
-        Self(value)
-    }
-}
-
-impl From<u128> for DecimalU256 {
-    fn from(value: u128) -> Self {
-        Self(U256::from(value))
-    }
-}
-
-impl From<u64> for DecimalU256 {
-    fn from(value: u64) -> Self {
-        Self(U256::from(value))
+        U256::from_str_radix(&s, 10).map_err(serde::de::Error::custom)
     }
 }
 
@@ -369,12 +312,9 @@ impl Eip155TokenDeployment {
     /// Creates a token amount from a raw value.
     ///
     /// The value should already be in the token's smallest unit (e.g., wei).
-    pub fn amount<V: Into<TokenAmount>>(
-        &self,
-        v: V,
-    ) -> DeployedTokenAmount<U256, Eip155TokenDeployment> {
+    pub fn amount<V: Into<u64>>(&self, v: V) -> DeployedTokenAmount<U256, Eip155TokenDeployment> {
         DeployedTokenAmount {
-            amount: v.into().0,
+            amount: U256::from(v.into()),
             token: self.clone(),
         }
     }

@@ -191,7 +191,7 @@ pub async fn assert_onchain_valid<P: Provider>(
 ) -> Result<(), Eip155ExactError> {
     let authorization = &payment_payload.payload.permit_2_authorization;
     let payer = authorization.from.0;
-    let required_amount = payment_payload.accepted.amount.0;
+    let required_amount = payment_payload.accepted.amount;
     let asset_address = payment_payload.accepted.asset.0;
 
     let token_contract = IERC20::new(asset_address, provider);

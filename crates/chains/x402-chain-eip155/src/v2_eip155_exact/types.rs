@@ -3,13 +3,13 @@
 //! This module re-exports types from V1 and defines V2-specific wire format
 //! types for ERC-3009 based payments on EVM chains.
 
-use alloy_primitives::Bytes;
+use alloy_primitives::{Bytes, U256};
 use serde::{Deserialize, Serialize};
 use x402_types::proto;
 use x402_types::proto::v2;
 use x402_types::timestamp::UnixTimestamp;
 
-use crate::chain::{AssetTransferMethod, ChecksummedAddress, DecimalU256, TokenAmount};
+use crate::chain::{AssetTransferMethod, ChecksummedAddress};
 
 /// Re-export the "exact" scheme identifier from V1 (same for both versions).
 pub use crate::v1_eip155_exact::types::{ExactEvmPayload as Eip3009Payload, ExactScheme};
@@ -43,22 +43,14 @@ pub enum FacilitatorVerifyRequest {
 pub type FacilitatorSettleRequest = FacilitatorVerifyRequest;
 
 // FIXME Feature facilitator
-pub type Eip3009PaymentRequirements = v2::PaymentRequirements<
-    ExactScheme,
-    TokenAmount,
-    ChecksummedAddress,
-    asset_transfer_method::Eip3009,
->;
+pub type Eip3009PaymentRequirements =
+    v2::PaymentRequirements<ExactScheme, U256, ChecksummedAddress, asset_transfer_method::Eip3009>;
 // FIXME Feature facilitator
 pub type Eip3009PaymentPayload = v2::PaymentPayload<Eip3009PaymentRequirements, Eip3009Payload>;
 
 // FIXME Feature facilitator
-pub type Permit2PaymentRequirements = v2::PaymentRequirements<
-    ExactScheme,
-    TokenAmount,
-    ChecksummedAddress,
-    asset_transfer_method::Permit2,
->;
+pub type Permit2PaymentRequirements =
+    v2::PaymentRequirements<ExactScheme, U256, ChecksummedAddress, asset_transfer_method::Permit2>;
 // FIXME Feature facilitator
 pub type Permit2PaymentPayload = v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>;
 
@@ -74,7 +66,7 @@ pub type PaymentPayload<TPaymentRequirements = PaymentRequirements> =
 /// V2 uses CAIP-2 chain IDs and embeds requirements directly in the payload,
 /// unlike V1 which uses network names and separate requirement objects.
 pub type PaymentRequirements =
-    v2::PaymentRequirements<ExactScheme, TokenAmount, ChecksummedAddress, AssetTransferMethod>;
+    v2::PaymentRequirements<ExactScheme, U256, ChecksummedAddress, AssetTransferMethod>;
 
 pub mod asset_transfer_method {
     use crate::chain::AssetTransferMethod;
@@ -143,7 +135,8 @@ impl TryFrom<proto::VerifyRequest> for FacilitatorVerifyRequest {
 pub struct Permit2Authorization {
     pub deadline: UnixTimestamp,
     pub from: ChecksummedAddress,
-    pub nonce: DecimalU256,
+    #[serde(with = "crate::decimal_u256")]
+    pub nonce: U256,
     pub permitted: Permit2AuthorizationPermitted,
     pub spender: ChecksummedAddress,
     pub witness: Permit2Witness,
@@ -162,7 +155,8 @@ pub struct Permit2Witness {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Permit2AuthorizationPermitted {
-    pub amount: TokenAmount,
+    #[serde(with = "crate::decimal_u256")]
+    pub amount: U256,
     pub token: ChecksummedAddress,
 }
 
