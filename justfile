@@ -24,6 +24,7 @@ clippy-all:
   cd facilitator/ && cargo clippy
   cd crates/chains/x402-chain-eip155 && cargo clippy
   cd crates/chains/x402-chain-solana && cargo clippy
+  cd crates/chains/x402-chain-aptos && cargo clippy
   cd crates/x402-types && cargo clippy
   cd crates/x402-axum && cargo clippy
   cd crates/x402-reqwest && cargo clippy
@@ -31,14 +32,15 @@ clippy-all:
   cd examples/x402-reqwest-example && cargo clippy
 
 check-all:
-  cd facilitator/ && cargo check
-  cd crates/chains/x402-chain-eip155 && cargo check
-  cd crates/chains/x402-chain-solana && cargo check
-  cd crates/x402-types && cargo check
-  cd crates/x402-axum && cargo check
-  cd crates/x402-reqwest && cargo check
-  cd examples/x402-axum-example && cargo check
-  cd examples/x402-reqwest-example && cargo check
+  cd facilitator/ && cargo check --features full
+  cd crates/chains/x402-chain-eip155 && cargo check --features full
+  cd crates/chains/x402-chain-solana && cargo check --features full
+  cd crates/chains/x402-chain-aptos && cargo check --features full
+  cd crates/x402-types && cargo check --features full
+  cd crates/x402-axum && cargo check --features full
+  cd crates/x402-reqwest && cargo check --features full
+  cd examples/x402-axum-example && cargo check --features full
+  cd examples/x402-reqwest-example && cargo check --features full
 
 test-all:
   cd facilitator/ && cargo test
