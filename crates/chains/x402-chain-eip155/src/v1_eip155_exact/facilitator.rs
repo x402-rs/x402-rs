@@ -695,7 +695,7 @@ pub struct TransferWithAuthorizationCall<P, TCall, TSignature> {
 /// Uses `eth_getCode` against this provider. This is useful after a counterfactual
 /// deployment to confirm visibility on the sending RPC before submitting a
 /// follow-up transaction.
-async fn is_contract_deployed<P: Provider>(
+pub async fn is_contract_deployed<P: Provider>(
     provider: &P,
     address: &Address,
 ) -> Result<bool, TransportError> {
