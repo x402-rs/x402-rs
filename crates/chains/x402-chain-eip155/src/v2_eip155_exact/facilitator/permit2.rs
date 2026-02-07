@@ -1,5 +1,6 @@
-use alloy_primitives::{Address, U256, address};
-use alloy_provider::Provider;
+use alloy_primitives::{Address, TxHash, U256, address};
+use alloy_provider::{MulticallItem, Provider};
+use alloy_rpc_types_eth::{BlockId, TransactionReceipt};
 use alloy_sol_types::{SolStruct, eip712_domain, sol};
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto::{PaymentVerificationError, v2};
@@ -10,10 +11,10 @@ use tracing::Instrument;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
 
-use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider};
+use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction};
 use crate::v1_eip155_exact::{
     Eip155ExactError, StructuredSignature, VALIDATOR_ADDRESS, Validator6492, assert_enough_value,
-    assert_time,
+    assert_time, tx_hash_from_receipt,
 };
 use crate::v2_eip155_exact::eip3009::assert_requirements_match;
 use crate::v2_eip155_exact::types::{Permit2PaymentPayload, Permit2PaymentRequirements};
@@ -79,23 +80,35 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     // 2. Verify onchain constraints
     let authorization = &payment_payload.payload.permit_2_authorization;
     let payer: Address = authorization.from.into();
-    assert_onchain_valid(provider.inner(), provider.chain(), payment_payload).await?;
+    assert_onchain_exact_permit2(provider.inner(), provider.chain(), payment_payload).await?;
 
     Ok(v2::VerifyResponse::valid(payer.to_string()))
 }
 
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
-pub async fn settle_permit2_payment<P: Eip155MetaTransactionProvider + ChainProviderOps>(
-    _provider: &P,
+pub async fn settle_permit2_payment<P, E>(
+    provider: &P,
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
-) -> Result<v2::SettleResponse, X402SchemeFacilitatorError> {
+) -> Result<v2::SettleResponse, X402SchemeFacilitatorError>
+where
+    P: Eip155MetaTransactionProvider<Error = E> + ChainProviderOps,
+    Eip155ExactError: From<E>,
+{
     // 1. Verify offchain constraints
     assert_offchain_valid(payment_payload, payment_requirements)?;
 
-    // 2. Try settle TODO
+    // 2. Try settle
+    let tx_hash = settle_exact_permit2(provider, payment_payload).await?;
+    let authorization = &payment_payload.payload.permit_2_authorization;
+    let payer = authorization.from;
+    let network = &payment_payload.accepted.network;
 
-    todo!("Permit2 - settle_permit2_payment")
+    Ok(v2::SettleResponse::Success {
+        payer: payer.to_string(),
+        transaction: tx_hash.to_string(),
+        network: network.to_string(),
+    })
 }
 
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
@@ -154,9 +167,10 @@ pub async fn assert_onchain_allowance<P: Provider>(
     #[cfg(not(feature = "telemetry"))]
     let allowance = allowance_fut.await?;
     if allowance < required_amount {
-        return Err(PaymentVerificationError::InsufficientAllowance.into());
+        Err(PaymentVerificationError::InsufficientAllowance.into())
+    } else {
+        Ok(())
     }
-    Ok(())
 }
 
 pub async fn assert_onchain_balance<P: Provider>(
@@ -184,7 +198,7 @@ pub async fn assert_onchain_balance<P: Provider>(
 }
 
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
-pub async fn assert_onchain_valid<P: Provider>(
+pub async fn assert_onchain_exact_permit2<P: Provider>(
     provider: &P,
     chain_reference: &Eip155ChainReference,
     payment_payload: &Permit2PaymentPayload,
@@ -340,4 +354,165 @@ pub async fn assert_onchain_valid<P: Provider>(
             Ok(())
         }
     }
+}
+
+pub async fn settle_exact_permit2<P, E>(
+    provider: &P,
+    payment_payload: &Permit2PaymentPayload,
+) -> Result<TxHash, Eip155ExactError>
+where
+    P: Eip155MetaTransactionProvider<Error = E> + ChainProviderOps,
+    Eip155ExactError: From<E>,
+{
+    let authorization = &payment_payload.payload.permit_2_authorization;
+    let payer = authorization.from.0;
+    let domain = eip712_domain! {
+        name: "Permit2",
+        chain_id: provider.chain().inner(),
+        verifying_contract: PERMIT2_ADDRESS,
+    };
+    let permit_witness_transfer_from = PermitWitnessTransferFrom {
+        permitted: ISignatureTransfer::TokenPermissions {
+            token: authorization.permitted.token.into(),
+            amount: authorization.permitted.amount.into(),
+        },
+        spender: EXACT_PERMIT2_PROXY_ADDRESS,
+        nonce: authorization.nonce.into(),
+        deadline: U256::from(authorization.deadline.as_secs()),
+        witness: x402BasePermit2Proxy::Witness {
+            to: authorization.witness.to.into(),
+            validAfter: U256::from(authorization.witness.valid_after.as_secs()),
+            extra: authorization.witness.extra.clone(),
+        },
+    };
+    let eip712_hash = permit_witness_transfer_from.eip712_signing_hash(&domain);
+    let structured_signature = StructuredSignature::try_from_bytes(
+        payment_payload.payload.signature.clone(),
+        payer,
+        &eip712_hash,
+    )?;
+
+    let exact_permit2_proxy =
+        X402ExactPermit2Proxy::new(EXACT_PERMIT2_PROXY_ADDRESS, provider.inner());
+    let receipt: TransactionReceipt = match structured_signature {
+        StructuredSignature::EIP6492 {
+            factory: _,
+            factory_calldata: _,
+            inner,
+            original,
+        } => {
+            // let validator6492 = Validator6492::new(VALIDATOR_ADDRESS, provider);
+            // let is_valid_signature_call =
+            //     validator6492.isValidSigWithSideEffects(payer, eip712_hash, original);
+            // let permit_transfer_from = ISignatureTransfer::PermitTransferFrom {
+            //     permitted: permit_witness_transfer_from.permitted,
+            //     nonce: permit_witness_transfer_from.nonce,
+            //     deadline: permit_witness_transfer_from.deadline,
+            // };
+            // let witness = permit_witness_transfer_from.witness;
+            // let settle_call =
+            //     exact_permit2_proxy.settle(permit_transfer_from, payer, witness, inner);
+            // let aggregate3 = provider
+            //     .multicall()
+            //     .add(is_valid_signature_call)
+            //     .add(settle_call);
+            // let aggregate3_call = aggregate3.aggregate3();
+            // #[cfg(feature = "telemetry")]
+            // let (is_valid_signature_result, transfer_result) = aggregate3_call
+            //     .instrument(tracing::info_span!("multi_call_settle_exact_permit2",
+            //         from = %payer,
+            //         to = %authorization.witness.to,
+            //         value = %authorization.permitted.amount,
+            //         valid_after = %authorization.witness.valid_after,
+            //         valid_before = %authorization.deadline,
+            //         nonce = %authorization.nonce,
+            //         token_contract = %authorization.permitted.token,
+            //         otel.kind = "client",
+            //     ))
+            //     .await?;
+            // #[cfg(not(feature = "telemetry"))]
+            // let (is_valid_signature_result, transfer_result) = aggregate3_call.await?;
+            // let is_valid_signature_result = is_valid_signature_result
+            //     .map_err(|e| PaymentVerificationError::InvalidSignature(e.to_string()))?;
+            // if !is_valid_signature_result {
+            //     return Err(PaymentVerificationError::InvalidSignature(
+            //         "Chain reported signature to be invalid".to_string(),
+            //     )
+            //     .into());
+            // }
+            // transfer_result
+            //     .map_err(|e| PaymentVerificationError::TransactionSimulation(e.to_string()))?;
+            // Ok(())
+            todo!("EIP6492 not supported yet")
+        }
+        StructuredSignature::EOA(signature) => {
+            let permit_transfer_from = ISignatureTransfer::PermitTransferFrom {
+                permitted: permit_witness_transfer_from.permitted,
+                nonce: permit_witness_transfer_from.nonce,
+                deadline: permit_witness_transfer_from.deadline,
+            };
+            let witness = permit_witness_transfer_from.witness;
+            let settle_call = exact_permit2_proxy.settle(
+                permit_transfer_from,
+                payer,
+                witness,
+                signature.as_bytes().into(),
+            );
+            let tx_fut = Eip155MetaTransactionProvider::send_transaction(
+                provider,
+                MetaTransaction {
+                    to: settle_call.target(),
+                    calldata: settle_call.calldata().clone(),
+                    confirmations: 1,
+                },
+            );
+            #[cfg(feature = "telemetry")]
+            let receipt = tx_fut
+                .instrument(tracing::info_span!("call_exact_permit2_proxy_settle",
+                    from = %payer,
+                    to = %authorization.witness.to,
+                    value = %authorization.permitted.amount,
+                    valid_after = %authorization.witness.valid_after,
+                    valid_before = %authorization.deadline,
+                    nonce = %authorization.nonce,
+                    token_contract = %authorization.permitted.token,
+                    signature = %signature,
+                    sig_kind="EOA",
+                    otel.kind = "client",
+                ))
+                .await?;
+            #[cfg(not(feature = "telemetry"))]
+            let receipt = tx_fut.await?;
+            receipt
+        }
+        StructuredSignature::EIP1271(signature) => {
+            // let permit_transfer_from = ISignatureTransfer::PermitTransferFrom {
+            //     permitted: permit_witness_transfer_from.permitted,
+            //     nonce: permit_witness_transfer_from.nonce,
+            //     deadline: permit_witness_transfer_from.deadline,
+            // };
+            // let witness = permit_witness_transfer_from.witness;
+            // let settle_call =
+            //     exact_permit2_proxy.settle(permit_transfer_from, payer, witness, signature);
+            // let settle_call_fut = settle_call.call().into_future();
+            // #[cfg(feature = "telemetry")]
+            // settle_call_fut
+            //     .instrument(tracing::info_span!("call_settle_exact_permit2",
+            //         from = %payer,
+            //         to = %authorization.witness.to,
+            //         value = %authorization.permitted.amount,
+            //         valid_after = %authorization.witness.valid_after,
+            //         valid_before = %authorization.deadline,
+            //         nonce = %authorization.nonce,
+            //         token_contract = %authorization.permitted.token,
+            //         otel.kind = "client",
+            //     ))
+            //     .await?;
+            // #[cfg(not(feature = "telemetry"))]
+            // settle_call_fut.await?;
+            // Ok(())
+            todo!("EIP1271 not supported yet")
+        }
+    };
+    tx_hash_from_receipt(&receipt)
 }
