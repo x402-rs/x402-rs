@@ -201,7 +201,7 @@ impl VerifyRequest {
                 let network_name = payment_payload.network;
                 let chain_id = ChainId::from_network_name(&network_name)?;
                 let scheme = payment_payload.scheme;
-                let slug = SchemeHandlerSlug::new(chain_id, x402_version.into(), scheme.into());
+                let slug = SchemeHandlerSlug::new(chain_id, x402_version.into(), scheme);
                 Some(slug)
             }
             VerifyRequestWire::V2 {
@@ -210,7 +210,7 @@ impl VerifyRequest {
             } => {
                 let chain_id = payment_payload.accepted.network;
                 let scheme = payment_payload.accepted.scheme;
-                let slug = SchemeHandlerSlug::new(chain_id, x402_version.into(), scheme.into());
+                let slug = SchemeHandlerSlug::new(chain_id, x402_version.into(), scheme);
                 Some(slug)
             }
         }
