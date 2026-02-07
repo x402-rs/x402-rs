@@ -26,7 +26,7 @@ pub async fn verify_eip3009_payment<P: Eip155MetaTransactionProvider + ChainProv
     let (contract, payment, eip712_domain) = assert_valid_payment(
         provider.inner(),
         provider.chain(),
-        &accepted,
+        accepted,
         &payment_payload.payload,
     )
     .await?;
@@ -50,7 +50,7 @@ where
     let (contract, payment, eip712_domain) = assert_valid_payment(
         provider.inner(),
         provider.chain(),
-        &accepted,
+        accepted,
         &payment_payload.payload,
     )
     .await?;
@@ -93,7 +93,7 @@ pub async fn assert_valid_payment<P: Provider>(
     let contract = IEIP3009::new(asset_address.into(), provider);
 
     let amount_required = accepted.amount;
-    assert_enough_value(&authorization.value, &amount_required.into())?;
+    assert_enough_value(&authorization.value, &amount_required)?;
 
     let extra = Some(PaymentRequirementsExtra {
         name: accepted.extra.name.clone(),
