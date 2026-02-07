@@ -133,22 +133,26 @@ pub async fn assert_onchain_allowance<P: Provider>(
     Ok(())
 }
 
-pub async fn assert_onchain_balance<P: Provider>(token_contract: &IERC20::IERC20Instance<P>, payer: Address, required_amount: U256) -> Result<(), Eip155ExactError> {
+pub async fn assert_onchain_balance<P: Provider>(
+    token_contract: &IERC20::IERC20Instance<P>,
+    payer: Address,
+    required_amount: U256,
+) -> Result<(), Eip155ExactError> {
     let balance_call = token_contract.balance_of(payer);
-     let balance_fut = balance_call.call().into_future();
-     #[cfg(feature = "telemetry")]
-     let balance = balance_fut
-         .instrument(tracing::info_span!(
-             "fetch_balance",
-             token_contract = %token_contract.address(),
-             sender = %payer,
-             otel.kind = "client"
-         ))
-         .await?;
-     #[cfg(not(feature = "telemetry"))]
-     let balance = balance_fut.await?;
-     if balance < required_amount {
-         return Err(PaymentVerificationError::InsufficientFunds.into());
-     }
-     Ok(())
+    let balance_fut = balance_call.call().into_future();
+    #[cfg(feature = "telemetry")]
+    let balance = balance_fut
+        .instrument(tracing::info_span!(
+            "fetch_balance",
+            token_contract = %token_contract.address(),
+            sender = %payer,
+            otel.kind = "client"
+        ))
+        .await?;
+    #[cfg(not(feature = "telemetry"))]
+    let balance = balance_fut.await?;
+    if balance < required_amount {
+        return Err(PaymentVerificationError::InsufficientFunds.into());
+    }
+    Ok(())
 }
