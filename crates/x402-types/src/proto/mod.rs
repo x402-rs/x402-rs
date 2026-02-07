@@ -261,6 +261,8 @@ pub enum PaymentVerificationError {
     /// The payer's on-chain balance is insufficient.
     #[error("Onchain balance is not enough to cover the payment amount")]
     InsufficientFunds,
+    #[error("Allowance is not enough to cover the payment amount")]
+    InsufficientAllowance,
     /// The payment signature is invalid.
     #[error("{0}")]
     InvalidSignature(String),
@@ -284,6 +286,9 @@ impl AsPaymentProblem for PaymentVerificationError {
             PaymentVerificationError::InvalidFormat(_) => ErrorReason::InvalidFormat,
             PaymentVerificationError::InvalidPaymentAmount => ErrorReason::InvalidPaymentAmount,
             PaymentVerificationError::InsufficientFunds => ErrorReason::InsufficientFunds,
+            PaymentVerificationError::InsufficientAllowance => {
+                ErrorReason::Permit2AllowanceRequired
+            }
             PaymentVerificationError::Early => ErrorReason::InvalidPaymentEarly,
             PaymentVerificationError::Expired => ErrorReason::InvalidPaymentExpired,
             PaymentVerificationError::ChainIdMismatch => ErrorReason::ChainIdMismatch,
@@ -338,6 +343,8 @@ pub enum ErrorReason {
     TransactionSimulation,
     /// Insufficient on-chain balance.
     InsufficientFunds,
+    /// Insufficient allowance.
+    Permit2AllowanceRequired,
     /// The chain is not supported.
     UnsupportedChain,
     /// The scheme is not supported.
