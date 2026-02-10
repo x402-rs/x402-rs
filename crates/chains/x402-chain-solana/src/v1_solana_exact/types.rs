@@ -5,7 +5,6 @@
 
 use serde::{Deserialize, Serialize};
 use solana_pubkey::{Pubkey, pubkey};
-use std::sync::LazyLock;
 use x402_types::proto::PaymentVerificationError;
 use x402_types::proto::util::U64String;
 use x402_types::{lit_str, proto};
@@ -29,13 +28,13 @@ use x402_types::util::Base64Bytes;
 
 lit_str!(ExactScheme, "exact");
 
+/// SPL Memo program ID - used to add transaction uniqueness and prevent duplicate transaction attacks
+/// See: https://github.com/coinbase/x402/issues/828
+pub static MEMO_PROGRAM_PUBKEY: Pubkey = pubkey!("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+
 /// Phantom Lighthouse program ID - security program injected by Phantom wallet on mainnet
 /// See: https://github.com/coinbase/x402/issues/828
-pub static PHANTOM_LIGHTHOUSE_PROGRAM: LazyLock<Pubkey> = LazyLock::new(|| {
-    "L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95"
-        .parse()
-        .expect("Invalid Lighthouse program ID")
-});
+pub static PHANTOM_LIGHTHOUSE_PROGRAM_PUBKEY: Pubkey = pubkey!("L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95");
 
 pub type VerifyRequest = proto::v1::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;

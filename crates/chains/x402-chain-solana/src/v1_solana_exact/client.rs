@@ -47,9 +47,10 @@ use x402_types::scheme::client::{
 use crate::chain::Address;
 use crate::chain::rpc::RpcClientLike;
 use crate::v1_solana_exact::types::{
-    ExactScheme, ExactSolanaPayload, PaymentPayload, PaymentRequirements,
+    ATA_PROGRAM_PUBKEY, ExactScheme, ExactSolanaPayload, MEMO_PROGRAM_PUBKEY, PaymentPayload,
+    PaymentRequirements,
 };
-use crate::v1_solana_exact::{ATA_PROGRAM_PUBKEY, TransactionInt, V1SolanaExact};
+use crate::v1_solana_exact::{TransactionInt, V1SolanaExact};
 
 /// Mint information for SPL tokens
 #[derive(Debug)]
@@ -190,6 +191,21 @@ pub fn update_or_append_set_compute_unit_limit(ixs: &mut Vec<Instruction>, units
     }
 }
 
+/// Build a memo instruction with a random nonce for transaction uniqueness.
+/// This prevents duplicate transaction attacks by ensuring each transaction has a unique message.
+/// The SPL Memo program requires valid UTF-8 data, so we hex-encode the random bytes.
+fn build_random_memo_ix() -> Instruction {
+    // Generate 16 random bytes for transaction uniqueness
+    let nonce: [u8; 16] = rand::random();
+    let memo_data = Base64Bytes::encode(nonce).to_string();
+
+    Instruction::new_with_bytes(
+        MEMO_PROGRAM_PUBKEY,
+        memo_data.as_bytes(),
+        Vec::new(), // Empty accounts - SPL Memo doesn't require signers
+    )
+}
+
 /// Build and sign a Solana token transfer transaction.
 /// Returns the base64-encoded signed transaction.
 pub async fn build_signed_transfer_transaction<S: Signer, R: RpcClientLike>(
@@ -267,11 +283,15 @@ pub async fn build_signed_transfer_transaction<S: Signer, R: RpcClientLike>(
 
     let estimated_cu = estimate_compute_units(rpc_client, &msg_to_sim).await?;
 
+    // Build memo instruction for transaction uniqueness (prevents duplicate transaction attacks)
+    let memo_ix = build_random_memo_ix();
+
     let cu_ix = ComputeBudgetInstruction::set_compute_unit_limit(estimated_cu);
     let msg = {
-        let mut final_instructions = Vec::with_capacity(instructions.len() + 1);
+        let mut final_instructions = Vec::with_capacity(instructions.len() + 2);
         final_instructions.push(cu_ix);
         final_instructions.extend(instructions);
+        final_instructions.push(memo_ix);
         MessageV0::try_compile(fee_payer, &final_instructions, &[], recent_blockhash)
             .map_err(|e| X402Error::SigningError(format!("{e:?}")))?
     };

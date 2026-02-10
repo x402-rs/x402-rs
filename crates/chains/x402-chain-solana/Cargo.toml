@@ -18,7 +18,7 @@ all-features = true
 [features]
 default = []
 telemetry = ["tracing", "tracing-core", "x402-types/telemetry"]
-client = ["alloy-primitives", "spl-token", "spl-token-2022", "solana-transaction", "solana-signer", "solana-client", "solana-signature", "solana-account", "solana-message", "solana-compute-budget-interface", "bincode", "solana-commitment-config"]
+client = ["alloy-primitives", "spl-token", "spl-token-2022", "solana-transaction", "solana-signer", "solana-client", "solana-signature", "solana-account", "solana-message", "solana-compute-budget-interface", "bincode", "solana-commitment-config", "rand"]
 server = []
 facilitator = ["solana-client", "spl-token", "spl-token-2022", "solana-keypair", "solana-account", "solana-signer", "solana-transaction", "solana-signature", "solana-message", "solana-commitment-config", "solana-compute-budget-interface", "bs58", "bincode", "futures-util", "url"]
 full = ["telemetry", "client", "server", "facilitator"]
@@ -29,6 +29,7 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
+rand = { version = "0.10", optional = true }
 alloy-primitives = { workspace = true, optional = true }
 serde_json = { workspace = true }
 

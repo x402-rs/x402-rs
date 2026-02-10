@@ -23,7 +23,8 @@ use crate::chain::Address;
 use crate::chain::provider::{SolanaChainProviderError, SolanaChainProviderLike};
 use crate::v1_solana_exact::types;
 use crate::v1_solana_exact::types::{
-    ATA_PROGRAM_PUBKEY, PHANTOM_LIGHTHOUSE_PROGRAM, SolanaExactError, TransactionInt,
+    ATA_PROGRAM_PUBKEY, MEMO_PROGRAM_PUBKEY, PHANTOM_LIGHTHOUSE_PROGRAM_PUBKEY, SolanaExactError,
+    TransactionInt,
 };
 
 impl<P> X402SchemeFacilitatorBuilder<P> for V1SolanaExact
@@ -535,7 +536,10 @@ fn default_max_instruction_count() -> usize {
 }
 
 fn default_allowed_program_ids() -> Vec<Address> {
-    vec![Address::new(*PHANTOM_LIGHTHOUSE_PROGRAM)]
+    vec![
+        Address::new(PHANTOM_LIGHTHOUSE_PROGRAM_PUBKEY),
+        Address::new(MEMO_PROGRAM_PUBKEY),
+    ]
 }
 
 fn default_require_fee_payer_not_in_instructions() -> bool {
