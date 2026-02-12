@@ -281,8 +281,12 @@ pub async fn build_signed_transfer_transaction<S: Signer, R: RpcClientLike>(
     // Build memo instruction for transaction uniqueness (prevents duplicate transaction attacks)
     let memo_ix = build_random_memo_ix();
     let full_transfer_instructions = vec![transfer_instruction, memo_ix];
-    let (msg_to_sim, instructions) =
-        build_message_to_simulate(*fee_payer, &full_transfer_instructions, fee, recent_blockhash)?;
+    let (msg_to_sim, instructions) = build_message_to_simulate(
+        *fee_payer,
+        &full_transfer_instructions,
+        fee,
+        recent_blockhash,
+    )?;
 
     let estimated_cu = estimate_compute_units(rpc_client, &msg_to_sim).await?;
 
