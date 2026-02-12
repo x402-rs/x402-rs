@@ -55,6 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let response = http_client.get(endpoint).send().await?;
 
+    println!("Status: {}", response.status());
     println!("Response: {:?}", response.text().await?);
 
     Ok(())
