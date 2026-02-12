@@ -34,7 +34,8 @@ pub static MEMO_PROGRAM_PUBKEY: Pubkey = pubkey!("MemoSq4gqABAXKb96qnH8TysNcWxMy
 
 /// Phantom Lighthouse program ID - security program injected by Phantom wallet on mainnet
 /// See: https://github.com/coinbase/x402/issues/828
-pub static PHANTOM_LIGHTHOUSE_PROGRAM_PUBKEY: Pubkey = pubkey!("L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95");
+pub static PHANTOM_LIGHTHOUSE_PROGRAM_PUBKEY: Pubkey =
+    pubkey!("L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95");
 
 pub type VerifyRequest = proto::v1::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;
