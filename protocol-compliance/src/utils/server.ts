@@ -2,12 +2,68 @@ import { Hono } from "hono";
 import { serve, ServerType } from "@hono/node-server";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
-import { HTTPFacilitatorClient } from "@x402/core/server";
+import {
+  HTTPFacilitatorClient,
+  RouteConfig,
+  RoutesConfig,
+} from "@x402/core/server";
 import { WORKSPACE_ROOT } from "./workspace-root";
 import { ProcessHandle } from "./process-handle";
 import { waitForUrl } from "./waitFor";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
 import getPort from "get-port";
+
+export const ROUTES = {
+  "/static-price-v2": {
+    method: "GET",
+    accepts: [
+      {
+        scheme: "exact",
+        price: "$0.001",
+        network: "eip155:84532",
+        payTo: "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07",
+      },
+      {
+        scheme: "exact",
+        price: "$0.001",
+        network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+        payTo: "EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV",
+      },
+    ],
+    description: "Access to premium content",
+  },
+  "/static-price-v2-permit2": {
+    method: "GET",
+    accepts: [
+      {
+        scheme: "exact",
+        price: {
+          amount: "10",
+          asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+          extra: {
+            assetTransferMethod: "permit2",
+            name: "USDC",
+            version: "2",
+          },
+        },
+        network: "eip155:84532",
+        payTo: "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07",
+      },
+    ],
+    description: "Access to premium content",
+  },
+} as const;
+
+type InputRoutes = Record<string, RouteConfig & { method: string }>;
+function asPaymentRoutes(routes: InputRoutes): RoutesConfig {
+  const paymentRoutes: RoutesConfig = {};
+  for (let [path, config] of Object.entries(routes)) {
+    const { method, ...rest } = config;
+    const route = `${method} ${path}`;
+    paymentRoutes[route] = rest;
+  }
+  return paymentRoutes;
+}
 
 export class RSServerHandle {
   readonly url: URL;
@@ -81,44 +137,7 @@ export class TSServerHandle {
     // Apply the payment middleware with configuration
     app.use(
       paymentMiddleware(
-        {
-          "GET /static-price-v2": {
-            accepts: [
-              {
-                scheme: "exact",
-                price: "$0.001",
-                network: "eip155:84532",
-                payTo: "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07",
-              },
-              {
-                scheme: "exact",
-                price: "$0.001",
-                network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-                payTo: "EGBQqKn968sVv5cQh5Cr72pSTHfxsuzq7o7asqYB5uEV",
-              },
-            ],
-            description: "Access to premium content",
-          },
-          "GET /static-price-v2-permit2": {
-            accepts: [
-              {
-                scheme: "exact",
-                price: {
-                  amount: "10",
-                  asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-                  extra: {
-                    assetTransferMethod: "permit2",
-                    name: "USDC",
-                    version: "2",
-                  }
-                },
-                network: "eip155:84532",
-                payTo: "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07",
-              },
-            ],
-            description: "Access to premium content",
-          },
-        },
+        asPaymentRoutes(ROUTES as unknown as InputRoutes),
         resourceServer,
       ),
     );
