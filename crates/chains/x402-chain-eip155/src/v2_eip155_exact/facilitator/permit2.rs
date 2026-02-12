@@ -12,13 +12,13 @@ use tracing::Instrument;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
 
+use crate::chain::permit2::{EXACT_PERMIT2_PROXY_ADDRESS, PERMIT2_ADDRESS};
 use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction};
 use crate::v1_eip155_exact::{
     Eip155ExactError, StructuredSignature, VALIDATOR_ADDRESS, Validator6492, assert_enough_value,
     assert_time, is_contract_deployed, tx_hash_from_receipt,
 };
 use crate::v2_eip155_exact::eip3009::assert_requirements_match;
-use crate::v2_eip155_exact::types;
 use crate::v2_eip155_exact::types::{
     ISignatureTransfer, Permit2PaymentPayload, Permit2PaymentRequirements,
     PermitWitnessTransferFrom, X402ExactPermit2Proxy, x402BasePermit2Proxy,
@@ -87,7 +87,7 @@ pub fn assert_offchain_valid(
 
     // Spender must be the x402ExactPermit2Proxy contract address
     let authorization = &payload.permit_2_authorization;
-    if authorization.spender.0 != types::EXACT_PERMIT2_PROXY_ADDRESS {
+    if authorization.spender.0 != EXACT_PERMIT2_PROXY_ADDRESS {
         return Err(PaymentVerificationError::RecipientMismatch);
     }
 
@@ -118,7 +118,7 @@ pub async fn assert_onchain_allowance<P: Provider>(
     payer: Address,
     required_amount: U256,
 ) -> Result<(), Eip155ExactError> {
-    let allowance_call = token_contract.allowance(payer, types::PERMIT2_ADDRESS);
+    let allowance_call = token_contract.allowance(payer, PERMIT2_ADDRESS);
     let allowance_fut = allowance_call.call().into_future();
     #[cfg(feature = "telemetry")]
     let allowance = allowance_fut
@@ -186,14 +186,14 @@ pub async fn assert_onchain_exact_permit2<P: Provider>(
     let domain = eip712_domain! {
         name: "Permit2",
         chain_id: chain_reference.inner(),
-        verifying_contract: types::PERMIT2_ADDRESS,
+        verifying_contract: PERMIT2_ADDRESS,
     };
     let permit_witness_transfer_from = PermitWitnessTransferFrom {
         permitted: ISignatureTransfer::TokenPermissions {
             token: authorization.permitted.token.into(),
             amount: authorization.permitted.amount,
         },
-        spender: types::EXACT_PERMIT2_PROXY_ADDRESS,
+        spender: EXACT_PERMIT2_PROXY_ADDRESS,
         nonce: authorization.nonce,
         deadline: U256::from(authorization.deadline.as_secs()),
         witness: x402BasePermit2Proxy::Witness {
@@ -209,8 +209,7 @@ pub async fn assert_onchain_exact_permit2<P: Provider>(
         &eip712_hash,
     )?;
 
-    let exact_permit2_proxy =
-        X402ExactPermit2Proxy::new(types::EXACT_PERMIT2_PROXY_ADDRESS, provider);
+    let exact_permit2_proxy = X402ExactPermit2Proxy::new(EXACT_PERMIT2_PROXY_ADDRESS, provider);
     match structured_signature {
         StructuredSignature::EIP6492 {
             factory: _,
@@ -335,14 +334,14 @@ where
     let domain = eip712_domain! {
         name: "Permit2",
         chain_id: provider.chain().inner(),
-        verifying_contract: types::PERMIT2_ADDRESS,
+        verifying_contract: PERMIT2_ADDRESS,
     };
     let permit_witness_transfer_from = PermitWitnessTransferFrom {
         permitted: ISignatureTransfer::TokenPermissions {
             token: authorization.permitted.token.into(),
             amount: authorization.permitted.amount,
         },
-        spender: types::EXACT_PERMIT2_PROXY_ADDRESS,
+        spender: EXACT_PERMIT2_PROXY_ADDRESS,
         nonce: authorization.nonce,
         deadline: U256::from(authorization.deadline.as_secs()),
         witness: x402BasePermit2Proxy::Witness {
@@ -359,7 +358,7 @@ where
     )?;
 
     let exact_permit2_proxy =
-        X402ExactPermit2Proxy::new(types::EXACT_PERMIT2_PROXY_ADDRESS, provider.inner());
+        X402ExactPermit2Proxy::new(EXACT_PERMIT2_PROXY_ADDRESS, provider.inner());
     let permit_transfer_from = ISignatureTransfer::PermitTransferFrom {
         permitted: permit_witness_transfer_from.permitted,
         nonce: permit_witness_transfer_from.nonce,
