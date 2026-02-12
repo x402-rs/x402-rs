@@ -278,20 +278,19 @@ pub async fn build_signed_transfer_transaction<S: Signer, R: RpcClientLike>(
         get_priority_fee_micro_lamports(rpc_client, &[*fee_payer, destination_ata, source_ata])
             .await?;
 
-    let (msg_to_sim, instructions) =
-        build_message_to_simulate(*fee_payer, &[transfer_instruction], fee, recent_blockhash)?;
-
-    let estimated_cu = estimate_compute_units(rpc_client, &msg_to_sim).await?;
-
     // Build memo instruction for transaction uniqueness (prevents duplicate transaction attacks)
     let memo_ix = build_random_memo_ix();
+    let full_transfer_instructions = vec![transfer_instruction, memo_ix];
+    let (msg_to_sim, instructions) =
+        build_message_to_simulate(*fee_payer, &full_transfer_instructions, fee, recent_blockhash)?;
+
+    let estimated_cu = estimate_compute_units(rpc_client, &msg_to_sim).await?;
 
     let cu_ix = ComputeBudgetInstruction::set_compute_unit_limit(estimated_cu);
     let msg = {
         let mut final_instructions = Vec::with_capacity(instructions.len() + 2);
         final_instructions.push(cu_ix);
         final_instructions.extend(instructions);
-        final_instructions.push(memo_ix);
         MessageV0::try_compile(fee_payer, &final_instructions, &[], recent_blockhash)
             .map_err(|e| X402Error::SigningError(format!("{e:?}")))?
     };

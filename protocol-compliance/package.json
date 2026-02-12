@@ -9,26 +9,26 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^25.2",
+    "@types/node": "^25.2.3",
     "@types/tmp": "^0.2.6",
-    "prettier": "^3.0.3",
+    "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0"
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",
-    "@scure/base": "^1.1.9",
-    "@solana/kit": "^6.0",
-    "@x402/core": "^2.2.0",
-    "@x402/evm": "^2.2.0",
-    "@x402/fetch": "^2.2.0",
-    "@x402/hono": "^2.2.0",
-    "@x402/svm": "^2.2.0",
-    "dotenv": "^17.2.3",
-    "get-port": "^7.0.0",
-    "hono": "^4.11.4",
+    "@scure/base": "^1.2.6",
+    "@solana/kit": "^6.0.1",
+    "@x402/core": "^2.3.1",
+    "@x402/evm": "^2.3.1",
+    "@x402/fetch": "^2.3.0",
+    "@x402/hono": "^2.3.0",
+    "@x402/svm": "^2.3.0",
+    "dotenv": "^17.2.4",
+    "get-port": "^7.1.0",
+    "hono": "^4.11.9",
     "tmp": "^0.2.5",
-    "viem": "^2.44.2"
+    "viem": "^2.45.3"
   }
 }
