@@ -27,6 +27,10 @@ use x402_types::scheme::client::{
 use x402_types::timestamp::UnixTimestamp;
 use x402_types::util::Base64Bytes;
 
+use crate::chain::permit2::{
+    EXACT_PERMIT2_PROXY_ADDRESS, PERMIT2_ADDRESS, Permit2Authorization,
+    Permit2AuthorizationPermitted, Permit2Payload, Permit2Witness,
+};
 use crate::chain::{AssetTransferMethod, Eip155ChainReference};
 use crate::v1_eip155_exact::PaymentRequirementsExtra;
 use crate::v1_eip155_exact::client::{
@@ -64,12 +68,12 @@ pub struct Permit2SigningParams {
 pub async fn sign_permit2_authorization<S: SignerLike + Sync>(
     signer: &S,
     params: &Permit2SigningParams,
-) -> Result<types::Permit2Payload, X402Error> {
+) -> Result<Permit2Payload, X402Error> {
     // Build EIP-712 domain for Permit2
     let domain = eip712_domain! {
         name: "Permit2",
         chain_id: params.chain_id,
-        verifying_contract: types::PERMIT2_ADDRESS,
+        verifying_contract: PERMIT2_ADDRESS,
     };
 
     // Build authorization with timing
@@ -89,7 +93,7 @@ pub async fn sign_permit2_authorization<S: SignerLike + Sync>(
             token: params.asset_address,
             amount: params.amount,
         },
-        spender: types::EXACT_PERMIT2_PROXY_ADDRESS,
+        spender: EXACT_PERMIT2_PROXY_ADDRESS,
         nonce,
         deadline: U256::from(deadline.as_secs()),
         witness: x402BasePermit2Proxy::Witness {
@@ -106,23 +110,23 @@ pub async fn sign_permit2_authorization<S: SignerLike + Sync>(
         .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
 
     // Build the Permit2Authorization for the payload
-    let authorization = types::Permit2Authorization {
+    let authorization = Permit2Authorization {
         deadline,
         from: signer.address().into(),
         nonce,
-        permitted: types::Permit2AuthorizationPermitted {
+        permitted: Permit2AuthorizationPermitted {
             amount: params.amount,
             token: params.asset_address.into(),
         },
-        spender: types::EXACT_PERMIT2_PROXY_ADDRESS.into(),
-        witness: types::Permit2Witness {
+        spender: EXACT_PERMIT2_PROXY_ADDRESS.into(),
+        witness: Permit2Witness {
             extra: permit_witness_transfer_from.witness.extra.clone(),
             to: params.pay_to.into(),
             valid_after,
         },
     };
 
-    Ok(types::Permit2Payload {
+    Ok(Permit2Payload {
         permit_2_authorization: authorization,
         signature: signature.as_bytes().into(),
     })

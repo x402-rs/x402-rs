@@ -12,6 +12,7 @@ use tracing::Instrument;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
 
+use crate::chain::permit2::{PERMIT2_ADDRESS, UPTO_PERMIT2_PROXY_ADDRESS};
 use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction};
 use crate::v1_eip155_exact::{
     Eip155ExactError, StructuredSignature, VALIDATOR_ADDRESS, Validator6492, assert_time,
@@ -23,6 +24,7 @@ use crate::v2_eip155_upto::types::{
     PermitWitnessTransferFrom, UptoSettleResponse, X402UptoPermit2Proxy, x402BasePermit2Proxy,
 };
 
+// FIXME Duplicated code
 sol!(
     #[allow(missing_docs)]
     #[allow(clippy::too_many_arguments)]
@@ -131,7 +133,7 @@ pub fn assert_offchain_valid(
 
     // Spender must be the x402UptoPermit2Proxy contract address
     let authorization = &payload.permit_2_authorization;
-    if authorization.spender.0 != types::UPTO_PERMIT2_PROXY_ADDRESS {
+    if authorization.spender.0 != UPTO_PERMIT2_PROXY_ADDRESS {
         return Err(PaymentVerificationError::RecipientMismatch);
     }
 
@@ -159,12 +161,13 @@ pub fn assert_offchain_valid(
     Ok(())
 }
 
+// FIXME Duplicated code
 pub async fn assert_onchain_allowance<P: Provider>(
     token_contract: &IERC20::IERC20Instance<P>,
     payer: Address,
     required_amount: U256,
 ) -> Result<(), Eip155ExactError> {
-    let allowance_call = token_contract.allowance(payer, types::PERMIT2_ADDRESS);
+    let allowance_call = token_contract.allowance(payer, PERMIT2_ADDRESS);
     let allowance_fut = allowance_call.call().into_future();
     #[cfg(feature = "telemetry")]
     let allowance = allowance_fut
@@ -184,6 +187,7 @@ pub async fn assert_onchain_allowance<P: Provider>(
     }
 }
 
+// FIXME Duplicated code
 pub async fn assert_onchain_balance<P: Provider>(
     token_contract: &IERC20::IERC20Instance<P>,
     payer: Address,
@@ -233,14 +237,14 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
     let domain = eip712_domain! {
         name: "Permit2",
         chain_id: chain_reference.inner(),
-        verifying_contract: types::PERMIT2_ADDRESS,
+        verifying_contract: PERMIT2_ADDRESS,
     };
     let permit_witness_transfer_from = PermitWitnessTransferFrom {
         permitted: ISignatureTransfer::TokenPermissions {
             token: authorization.permitted.token.into(),
             amount: authorization.permitted.amount,
         },
-        spender: types::UPTO_PERMIT2_PROXY_ADDRESS,
+        spender: UPTO_PERMIT2_PROXY_ADDRESS,
         nonce: authorization.nonce,
         deadline: U256::from(authorization.deadline.as_secs()),
         witness: x402BasePermit2Proxy::Witness {
@@ -256,7 +260,7 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
         &eip712_hash,
     )?;
 
-    let upto_permit2_proxy = X402UptoPermit2Proxy::new(types::UPTO_PERMIT2_PROXY_ADDRESS, provider);
+    let upto_permit2_proxy = X402UptoPermit2Proxy::new(UPTO_PERMIT2_PROXY_ADDRESS, provider);
     match structured_signature {
         StructuredSignature::EIP6492 {
             factory: _,
@@ -394,14 +398,14 @@ where
     let domain = eip712_domain! {
         name: "Permit2",
         chain_id: provider.chain().inner(),
-        verifying_contract: types::PERMIT2_ADDRESS,
+        verifying_contract: PERMIT2_ADDRESS,
     };
     let permit_witness_transfer_from = PermitWitnessTransferFrom {
         permitted: ISignatureTransfer::TokenPermissions {
             token: authorization.permitted.token.into(),
             amount: authorization.permitted.amount,
         },
-        spender: types::UPTO_PERMIT2_PROXY_ADDRESS,
+        spender: UPTO_PERMIT2_PROXY_ADDRESS,
         nonce: authorization.nonce,
         deadline: U256::from(authorization.deadline.as_secs()),
         witness: x402BasePermit2Proxy::Witness {
@@ -418,7 +422,7 @@ where
     )?;
 
     let upto_permit2_proxy =
-        X402UptoPermit2Proxy::new(types::UPTO_PERMIT2_PROXY_ADDRESS, provider.inner());
+        X402UptoPermit2Proxy::new(UPTO_PERMIT2_PROXY_ADDRESS, provider.inner());
     let permit_transfer_from = ISignatureTransfer::PermitTransferFrom {
         permitted: permit_witness_transfer_from.permitted,
         nonce: permit_witness_transfer_from.nonce,

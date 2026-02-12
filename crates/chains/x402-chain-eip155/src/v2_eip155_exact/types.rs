@@ -3,11 +3,11 @@
 //! This module re-exports types from V1 and defines V2-specific wire format
 //! types for ERC-3009 based payments on EVM chains.
 
-use alloy_primitives::{Bytes, U256};
+use alloy_primitives::U256;
 use serde::{Deserialize, Serialize};
 use x402_types::proto::v2;
-use x402_types::timestamp::UnixTimestamp;
 
+use crate::chain::permit2::Permit2Payload;
 use crate::chain::{AssetTransferMethod, ChecksummedAddress};
 
 /// Re-export the "exact" scheme identifier from V1 (same for both versions).
@@ -24,8 +24,9 @@ mod facilitator_only {
     use x402_types::proto::v2;
 
     use crate::chain::ChecksummedAddress;
+    use crate::chain::permit2::Permit2Payload;
     use crate::v1_eip155_exact::ExactScheme;
-    use crate::v2_eip155_exact::{Eip3009Payload, Permit2Payload, asset_transfer_method};
+    use crate::v2_eip155_exact::{Eip3009Payload, asset_transfer_method};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(untagged)]
@@ -102,14 +103,6 @@ pub enum ExactEvmPayload {
     Permit2(Permit2Payload),
 }
 
-// FIXME Docs
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Permit2Payload {
-    pub permit_2_authorization: Permit2Authorization,
-    pub signature: Bytes,
-}
-
 pub mod asset_transfer_method {
     use crate::chain::AssetTransferMethod;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -164,15 +157,7 @@ pub mod asset_transfer_method {
 
 #[cfg(any(feature = "facilitator", feature = "client"))]
 pub mod facilitator_client_only {
-    use alloy_primitives::{Address, address};
     use alloy_sol_types::sol;
-
-    /// The canonical Permit2 contract address deployed on most chains.
-    pub const PERMIT2_ADDRESS: Address = address!("0x000000000022D473030F116dDEE9F6B43aC78BA3");
-
-    /// The X402 ExactPermit2Proxy contract address for settling Permit2 payments.
-    pub const EXACT_PERMIT2_PROXY_ADDRESS: Address =
-        address!("0x4020615294c913F045dc10f0a5cdEbd86c280001");
 
     sol!(
         #[allow(missing_docs)]
@@ -200,34 +185,3 @@ pub mod facilitator_client_only {
 
 #[cfg(any(feature = "facilitator", feature = "client"))]
 pub use facilitator_client_only::*;
-
-// FIXME Docs
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Permit2Authorization {
-    pub deadline: UnixTimestamp,
-    pub from: ChecksummedAddress,
-    #[serde(with = "crate::decimal_u256")]
-    pub nonce: U256,
-    pub permitted: Permit2AuthorizationPermitted,
-    pub spender: ChecksummedAddress,
-    pub witness: Permit2Witness,
-}
-
-// FIXME Docs
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Permit2Witness {
-    pub extra: Bytes,
-    pub to: ChecksummedAddress,
-    pub valid_after: UnixTimestamp,
-}
-
-// FIXME Docs
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Permit2AuthorizationPermitted {
-    #[serde(with = "crate::decimal_u256")]
-    pub amount: U256,
-    pub token: ChecksummedAddress,
-}
