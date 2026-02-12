@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { RSFacilitatorHandle } from "../utils/facilitator.js";
 import { ROUTES, RSServerHandle } from "../utils/server.js";
-import { makeFetch, setAllowance } from "../utils/client.js";
+import {
+  EIP155_ACCOUNT,
+  getAllowance,
+  getBalance,
+  makeFetch,
+  setAllowance,
+} from "../utils/client.js";
 import { PERMIT2_ADDRESS } from "../utils/erc-abi";
 
 const PATH = "/static-price-v2-permit2";
@@ -45,17 +51,40 @@ describe("v2-eip155-exact-ts-rs-rs: x402 v2, eip155, exact, TS Client + Rust Ser
     expect(response.status).toBe(412);
   });
 
-  // it("should return 200 OK and VIP content when payment is provided via TS client", async () => {
-  //   // Make a request using the TypeScript client (simulated payment headers)
-  //   const fetchFn = await makeFetch("eip155");
-  //   const endpoint = new URL("./static-price-v2", server.url);
-  //   const response = await fetchFn(endpoint);
-  //
-  //   // Should succeed with 200 OK
-  //   expect(response.status).toBe(200);
-  //
-  //   // Verify the returned content
-  //   const text = await response.text();
-  //   expect(text).toBe("VIP content from /static-price-v2");
-  // });
+  it(
+    "should return 200 OK and VIP content when payment is provided via TS client",
+    { timeout: 10000 },
+    async () => {
+      const params = ROUTES[PATH];
+      const tokenAddress = params.accepts[0].price.asset;
+      const amount = BigInt(params.accepts[0].price.amount);
+      const balanceBefore = await getBalance(
+        tokenAddress,
+        EIP155_ACCOUNT.address,
+      );
+      // Set allowance
+      await setAllowance(tokenAddress, PERMIT2_ADDRESS, amount);
+
+      // Make a request using the TypeScript client (simulated payment headers)
+      const fetchFn = await makeFetch("eip155");
+      const endpoint = new URL(PATH, server.url);
+      const response = await fetchFn(endpoint);
+
+      // Should succeed with 200 OK
+      expect(response.status).toBe(200);
+
+      // Verify the returned content
+      const text = await response.text();
+      expect(text).toBe("VIP content from /static-price-v2-permit2");
+
+      const balanceAfter = await getBalance(
+        tokenAddress,
+        EIP155_ACCOUNT.address,
+      );
+      const balanceDelta = balanceAfter - balanceBefore;
+      expect(balanceDelta).toBe(-amount);
+      const allowanceAfter = await getAllowance(tokenAddress, PERMIT2_ADDRESS);
+      expect(allowanceAfter).toBe(0n);
+    },
+  );
 });
