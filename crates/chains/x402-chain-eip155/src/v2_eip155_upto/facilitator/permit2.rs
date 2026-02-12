@@ -20,7 +20,7 @@ use crate::v1_eip155_exact::{
 use crate::v2_eip155_upto::types;
 use crate::v2_eip155_upto::types::{
     ISignatureTransfer, Permit2PaymentPayload, Permit2PaymentRequirements,
-    PermitWitnessTransferFrom, X402UptoPermit2Proxy, x402BasePermit2Proxy,
+    PermitWitnessTransferFrom, UptoSettleResponse, X402UptoPermit2Proxy, x402BasePermit2Proxy,
 };
 
 sol!(
@@ -59,7 +59,7 @@ pub async fn settle_permit2_payment<P, E>(
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
     settle_amount: Option<U256>,
-) -> Result<v2::SettleResponse, X402SchemeFacilitatorError>
+) -> Result<UptoSettleResponse, X402SchemeFacilitatorError>
 where
     P: Eip155MetaTransactionProvider<Error = E> + ChainProviderOps,
     Eip155ExactError: From<E>,
@@ -85,11 +85,12 @@ where
     if actual_amount.is_zero() {
         let payer = authorization.from.clone();
         let network = &payment_payload.accepted.network;
-        return Ok(v2::SettleResponse::Success {
-            payer: payer.to_string(),
-            transaction: String::new(), // Empty transaction for $0 settlement
-            network: network.to_string(),
-        });
+        return Ok(UptoSettleResponse::success(
+            payer.to_string(),
+            String::new(), // Empty transaction for $0 settlement
+            network.to_string(),
+            "0".to_string(),
+        ));
     }
 
     // 5. Execute settlement
@@ -97,11 +98,12 @@ where
     let payer = authorization.from.clone();
     let network = &payment_payload.accepted.network;
 
-    Ok(v2::SettleResponse::Success {
-        payer: payer.to_string(),
-        transaction: tx_hash.to_string(),
-        network: network.to_string(),
-    })
+    Ok(UptoSettleResponse::success(
+        payer.to_string(),
+        tx_hash.to_string(),
+        network.to_string(),
+        actual_amount.to_string(),
+    ))
 }
 
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
@@ -254,8 +256,7 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
         &eip712_hash,
     )?;
 
-    let upto_permit2_proxy =
-        X402UptoPermit2Proxy::new(types::UPTO_PERMIT2_PROXY_ADDRESS, provider);
+    let upto_permit2_proxy = X402UptoPermit2Proxy::new(types::UPTO_PERMIT2_PROXY_ADDRESS, provider);
     match structured_signature {
         StructuredSignature::EIP6492 {
             factory: _,
@@ -273,8 +274,13 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
             };
             let witness = permit_witness_transfer_from.witness;
             // For verification, simulate with max amount
-            let settle_call =
-                upto_permit2_proxy.settle(permit_transfer_from, authorization.permitted.amount, payer, witness, inner);
+            let settle_call = upto_permit2_proxy.settle(
+                permit_transfer_from,
+                authorization.permitted.amount,
+                payer,
+                witness,
+                inner,
+            );
             let aggregate3 = provider
                 .multicall()
                 .add(is_valid_signature_call)
@@ -346,8 +352,13 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
                 deadline: permit_witness_transfer_from.deadline,
             };
             let witness = permit_witness_transfer_from.witness;
-            let settle_call =
-                upto_permit2_proxy.settle(permit_transfer_from, authorization.permitted.amount, payer, witness, signature);
+            let settle_call = upto_permit2_proxy.settle(
+                permit_transfer_from,
+                authorization.permitted.amount,
+                payer,
+                witness,
+                signature,
+            );
             let settle_call_fut = settle_call.call().into_future();
             #[cfg(feature = "telemetry")]
             settle_call_fut
@@ -423,8 +434,13 @@ where
             original: _,
         } => {
             let is_contract_deployed = is_contract_deployed(provider.inner(), &payer).await?;
-            let settle_call =
-                upto_permit2_proxy.settle(permit_transfer_from, actual_amount, payer, witness, inner.clone());
+            let settle_call = upto_permit2_proxy.settle(
+                permit_transfer_from,
+                actual_amount,
+                payer,
+                witness,
+                inner.clone(),
+            );
             if is_contract_deployed {
                 let tx_fut = Eip155MetaTransactionProvider::send_transaction(
                     provider,
@@ -480,19 +496,21 @@ where
                 );
                 #[cfg(feature = "telemetry")]
                 let receipt = tx_fut
-                    .instrument(tracing::info_span!("call_upto_permit2_proxy_settle.EIP6492.counterfactual",
-                        from = %payer,
-                        to = %authorization.witness.to,
-                        max_value = %authorization.permitted.amount,
-                        actual_value = %actual_amount,
-                        valid_after = %authorization.witness.valid_after,
-                        valid_before = %authorization.deadline,
-                        nonce = %authorization.nonce,
-                        token_contract = %authorization.permitted.token,
-                        signature = %inner,
-                        sig_kind="EIP6492.counterfactual",
-                        otel.kind = "client",
-                    ))
+                    .instrument(
+                        tracing::info_span!("call_upto_permit2_proxy_settle.EIP6492.counterfactual",
+                            from = %payer,
+                            to = %authorization.witness.to,
+                            max_value = %authorization.permitted.amount,
+                            actual_value = %actual_amount,
+                            valid_after = %authorization.witness.valid_after,
+                            valid_before = %authorization.deadline,
+                            nonce = %authorization.nonce,
+                            token_contract = %authorization.permitted.token,
+                            signature = %inner,
+                            sig_kind="EIP6492.counterfactual",
+                            otel.kind = "client",
+                        ),
+                    )
                     .await?;
                 #[cfg(not(feature = "telemetry"))]
                 let receipt = tx_fut.await?;
@@ -536,8 +554,13 @@ where
             receipt
         }
         StructuredSignature::EIP1271(signature) => {
-            let settle_call =
-                upto_permit2_proxy.settle(permit_transfer_from, actual_amount, payer, witness, signature.clone());
+            let settle_call = upto_permit2_proxy.settle(
+                permit_transfer_from,
+                actual_amount,
+                payer,
+                witness,
+                signature.clone(),
+            );
             let tx_fut = Eip155MetaTransactionProvider::send_transaction(
                 provider,
                 MetaTransaction {

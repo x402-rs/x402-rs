@@ -26,8 +26,8 @@ use x402_types::scheme::client::{
 use x402_types::timestamp::UnixTimestamp;
 use x402_types::util::Base64Bytes;
 
-use crate::chain::{Eip155ChainReference};
-use crate::v1_eip155_exact::client::{SignerLike};
+use crate::chain::Eip155ChainReference;
+use crate::v1_eip155_exact::client::SignerLike;
 use crate::v2_eip155_upto::V2Eip155Upto;
 use crate::v2_eip155_upto::types;
 use crate::v2_eip155_upto::types::{
