@@ -69,13 +69,8 @@ describe("v2-eip155-exact-ts-ts-rs: permit2: x402 v2, eip155, exact + permit2, T
         EIP155_ACCOUNT.address,
       );
       // Set allowance
-      const currentAllowance = await getAllowance(
-        tokenAddress,
-        PERMIT2_ADDRESS,
-      );
-      if (currentAllowance !== amount) {
-        await setAllowance(tokenAddress, PERMIT2_ADDRESS, amount);
-      }
+      await setAllowance(tokenAddress, PERMIT2_ADDRESS, amount);
+
       // Make a request using the TypeScript client (simulated payment headers)
       const fetchFn = await makeFetch("eip155");
       const endpoint = new URL(PATH, server.url);
