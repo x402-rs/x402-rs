@@ -50,6 +50,9 @@ pub mod provider;
 #[cfg(feature = "facilitator")]
 pub use provider::*;
 
+#[cfg(any(feature = "facilitator", feature = "client"))]
+pub mod erc20;
+
 pub mod types;
 pub use types::*;
 
