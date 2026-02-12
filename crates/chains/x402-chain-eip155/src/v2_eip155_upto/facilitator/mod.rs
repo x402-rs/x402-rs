@@ -88,14 +88,11 @@ where
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError> {
         let settle_request = types::SettleRequest::try_from(request)?;
-        // FIXME
-        // For now, settle the full authorized amount
-        // In a real implementation, this would be determined by resource consumption
         let settle_response = permit2::settle_permit2_payment(
             &self.provider,
             &settle_request.payment_payload,
             &settle_request.payment_requirements,
-            None, // None means use the full authorized amount
+            settle_request.payment_requirements.amount,
         )
         .await?;
         Ok(settle_response.into())
