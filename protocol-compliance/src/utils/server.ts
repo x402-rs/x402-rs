@@ -99,6 +99,25 @@ export class TSServerHandle {
             ],
             description: "Access to premium content",
           },
+          "GET /static-price-v2-permit2": {
+            accepts: [
+              {
+                scheme: "exact",
+                price: {
+                  amount: "10",
+                  asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+                  extra: {
+                    assetTransferMethod: "permit2",
+                    name: "USDC",
+                    version: "2",
+                  }
+                },
+                network: "eip155:84532",
+                payTo: "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07",
+              },
+            ],
+            description: "Access to premium content",
+          },
         },
         resourceServer,
       ),
@@ -110,6 +129,10 @@ export class TSServerHandle {
     // Protected route that returns VIP content
     app.get("/static-price-v2", async (c) => {
       return c.text("VIP content from /static-price-v2");
+    });
+
+    app.get("/static-price-v2-permit2", async (c) => {
+      return c.text("VIP content from /static-price-v2-permit2");
     });
 
     // Start the server
