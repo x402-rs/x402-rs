@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { RSFacilitatorHandle } from "../utils/facilitator.js";
-import { ROUTES, TSServerHandle } from "../utils/server.js";
-import { config, TEST_CONFIG } from "../utils/config.js";
+import { ROUTES, RSServerHandle } from "../utils/server.js";
 import {
   EIP155_ACCOUNT,
   getAllowance,
@@ -9,22 +8,28 @@ import {
   invokeRustClient,
   setAllowance,
 } from "../utils/client.js";
-import { PERMIT2_ADDRESS } from "../utils/erc-abi";
+import { config, TEST_CONFIG } from "../utils/config.js";
+import { PERMIT2_ADDRESS } from "@x402/evm";
 
 const PATH = "/static-price-v2-permit2";
 
-describe("v2-eip155-exact-rs-ts-rs: x402 v2, eip155, exact, Rust Client + TS Server + Rust Facilitator", () => {
+describe("v2-eip155-exact-rs-rs-rs: x402 v2, eip155, exact, Rust Client + Rust Server + Rust Facilitator", () => {
   let facilitator: RSFacilitatorHandle;
-  let server: TSServerHandle;
+  let server: RSServerHandle;
 
   beforeAll(async () => {
     facilitator = await RSFacilitatorHandle.spawn();
-    server = await TSServerHandle.spawn(facilitator.url);
+    server = await RSServerHandle.spawn(facilitator.url);
   }, 120000); // 2 minute timeout for starting services
 
   afterAll(async () => {
     await server.stop();
     await facilitator.stop();
+  });
+
+  it("should have facilitator running", async () => {
+    const response = await fetch(new URL("./health", facilitator.url));
+    expect(response.ok).toBe(true);
   });
 
   it("should return 402 Payment Required when no payment header on protected endpoint", async () => {

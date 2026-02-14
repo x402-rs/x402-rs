@@ -95,3 +95,6 @@ export async function makeFacilitatorConfig(): Promise<string> {
   await fs.writeFile(filename, JSON.stringify(FACILITATOR_CONFIG, null, 2));
   return filename;
 }
+
+export const TIMEOUT = 20000;
+export const TEST_CONFIG = { timeout: TIMEOUT } as const;
