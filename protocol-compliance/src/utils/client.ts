@@ -1,16 +1,17 @@
 import { x402Client, wrapFetchWithPayment } from "@x402/fetch";
-import { registerExactEvmScheme } from "@x402/evm/exact/client";
+import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { privateKeyToAccount } from "viem/accounts";
 import { config } from "./config.js";
 import { spawn } from "child_process";
 import { WORKSPACE_ROOT } from "./workspace-root";
 import { printLines } from "./process-handle";
-import { registerExactSvmScheme } from "@x402/svm/exact/client";
+import { ExactSvmScheme } from "@x402/svm/exact/client";
 import { createKeyPairSignerFromBytes } from "@solana/kit";
 import { base58 } from "@scure/base";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { baseSepoliaPreconf } from "viem/chains";
 import { ERC20_ABI, ERC20_APPROVE_ABI } from "./erc-abi";
+import { UptoEvmSchemeClient } from "./upto-evm-scheme";
 
 export async function invokeRustClient(
   endpoint: URL,
@@ -79,14 +80,15 @@ export async function makeFetch(
   const client = new x402Client();
   switch (chain) {
     case "eip155": {
-      registerExactEvmScheme(client, { signer: EIP155_ACCOUNT });
+      client.register("eip155:*", new ExactEvmScheme(EIP155_ACCOUNT));
+      client.register("eip155:*", new UptoEvmSchemeClient(EIP155_ACCOUNT));
       break;
     }
     case "solana": {
       const keypair = await createKeyPairSignerFromBytes(
         base58.decode(config.solanaDevnet.buyerPrivateKey),
       );
-      registerExactSvmScheme(client, { signer: keypair });
+      client.register("solana:*", new ExactSvmScheme(keypair));
       break;
     }
     default:
