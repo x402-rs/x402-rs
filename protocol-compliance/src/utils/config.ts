@@ -72,6 +72,10 @@ export const FACILITATOR_CONFIG = {
       chains: "eip155:*",
     },
     {
+      id: "v2-eip155-upto",
+      chains: "eip155:*",
+    },
+    {
       id: "v1-solana-exact",
       chains: "solana:*",
     },
