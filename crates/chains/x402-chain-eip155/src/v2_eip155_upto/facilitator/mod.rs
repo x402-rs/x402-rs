@@ -92,7 +92,6 @@ where
             &self.provider,
             &settle_request.payment_payload,
             &settle_request.payment_requirements,
-            settle_request.payment_requirements.amount,
         )
         .await?;
         Ok(settle_response.into())
