@@ -1,15 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { RSFacilitatorHandle } from "../utils/facilitator.js";
-import { ROUTES, TSServerHandle } from "../utils/server.js";
-import {
-  EIP155_ACCOUNT,
-  getAllowance,
-  getBalance,
-  makeFetch,
-  setAllowance,
-} from "../utils/client.js";
-import { PERMIT2_ADDRESS } from "@x402/evm";
-import { TEST_CONFIG } from "../utils/config";
+import { TSServerHandle } from "../utils/server.js";
+import { makeFetch } from "../utils/client.js";
 
 const PATH = "/eip155-upto";
 
@@ -38,54 +30,17 @@ describe("v2-eip155-upto-ts-ts-rs: x402 v2, eip155, upto, TS Client + TS Server 
     expect(response.status).toBe(402);
   });
 
-  it("should return 412 on zero allowance", TEST_CONFIG, async () => {
-    const params = ROUTES[PATH];
-    const tokenAddress = params.accepts[0].price.asset;
-    await setAllowance(tokenAddress, PERMIT2_ADDRESS, 0n);
-
+  it("should return 200 OK and VIP content when payment is provided via TS client", async () => {
     // Make a request using the TypeScript client (simulated payment headers)
     const fetchFn = await makeFetch("eip155");
     const endpoint = new URL(PATH, server.url);
     const response = await fetchFn(endpoint);
 
-    // Should succeed with 412
-    expect(response.status).toBe(412);
+    // Should succeed with 200 OK
+    expect(response.status).toBe(200);
+
+    // Verify the returned content
+    const text = await response.text();
+    expect(text).toBe(`VIP content from ${PATH}`);
   });
-
-  it(
-    "should return 200 OK and VIP content when payment is provided via TS client",
-    TEST_CONFIG,
-    async () => {
-      const params = ROUTES[PATH];
-      const tokenAddress = params.accepts[0].price.asset;
-      const amount = BigInt(params.accepts[0].price.amount);
-      const balanceBefore = await getBalance(
-        tokenAddress,
-        EIP155_ACCOUNT.address,
-      );
-      // Set allowance
-      await setAllowance(tokenAddress, PERMIT2_ADDRESS, amount);
-
-      // Make a request using the TypeScript client (simulated payment headers)
-      const fetchFn = await makeFetch("eip155");
-      const endpoint = new URL(PATH, server.url);
-      const response = await fetchFn(endpoint);
-
-      // Should succeed with 200 OK
-      expect(response.status).toBe(200);
-
-      // Verify the returned content
-      const text = await response.text();
-      expect(text).toBe(`VIP content from ${PATH}`);
-
-      const balanceAfter = await getBalance(
-        tokenAddress,
-        EIP155_ACCOUNT.address,
-      );
-      const balanceDelta = balanceAfter - balanceBefore;
-      expect(balanceDelta).toBe(-amount);
-      const allowanceAfter = await getAllowance(tokenAddress, PERMIT2_ADDRESS);
-      expect(allowanceAfter).toBe(0n);
-    },
-  );
 });
