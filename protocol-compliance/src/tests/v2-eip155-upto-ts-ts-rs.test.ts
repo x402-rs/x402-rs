@@ -83,9 +83,9 @@ describe("v2-eip155-upto-ts-ts-rs: x402 v2, eip155, upto, TS Client + TS Server 
         EIP155_ACCOUNT.address,
       );
       const balanceDelta = balanceAfter - balanceBefore;
-      expect(balanceDelta).toBe(-amount);
+      expect(balanceDelta).toBe(-params.settledAmount);
       const allowanceAfter = await getAllowance(tokenAddress, PERMIT2_ADDRESS);
-      expect(allowanceAfter).toBe(0n);
+      expect(allowanceAfter).toBe(amount - params.settledAmount);
     },
   );
 });
