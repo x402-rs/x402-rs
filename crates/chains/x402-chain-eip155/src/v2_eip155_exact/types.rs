@@ -132,6 +132,7 @@ impl TryFrom<proto::VerifyRequest> for FacilitatorVerifyRequest {
     type Error = proto::PaymentVerificationError;
 
     fn try_from(value: proto::VerifyRequest) -> Result<Self, Self::Error> {
+        println!("l.0");
         let value = serde_json::from_str(value.as_str())?;
         Ok(value)
     }

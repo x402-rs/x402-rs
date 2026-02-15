@@ -45,8 +45,6 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     let amount_required = payment_requirements.amount;
     assert_enough_value(authorization.permitted.amount, amount_required)?;
 
-    println!("---- Permit2 - verify_permit2_payment");
-
     todo!("Permit2 - verify_permit2_payment")
 }
 
