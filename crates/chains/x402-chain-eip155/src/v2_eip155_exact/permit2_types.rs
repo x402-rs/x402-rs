@@ -27,7 +27,7 @@
 //! )
 //! ```
 
-use alloy_primitives::{Address, B256, U256, address};
+use alloy_primitives::{address, Address, B256, U256};
 use serde::{Deserialize, Serialize};
 
 // TODO IS this all needed??
@@ -37,13 +37,11 @@ use alloy_sol_types::sol;
 
 /// Canonical Permit2 contract address (Uniswap Permit2).
 /// This is the same across all EVM chains.
-pub const CANONICAL_PERMIT2_ADDRESS: Address =
-    address!("0x000000000022D473030F116dDEE9F6B43aC78BA3");
+pub const CANONICAL_PERMIT2_ADDRESS: Address = address!("0x000000000022D473030F116dDEE9F6B43aC78BA3");
 
 /// x402Permit2Proxy contract address for V2 exact scheme.
 /// Deployed using CREATE2 for deterministic addresses.
-pub const EXACT_PERMIT2_PROXY_ADDRESS: Address =
-    address!("0x4020615294c913F045dc10f0a5cdEbd86c280001");
+pub const EXACT_PERMIT2_PROXY_ADDRESS: Address = address!("0x4020615294c913F045dc10f0a5cdEbd86c280001");
 
 #[cfg(any(feature = "facilitator", feature = "client"))]
 sol! {
