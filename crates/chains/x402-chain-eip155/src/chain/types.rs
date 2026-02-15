@@ -96,16 +96,10 @@ impl PartialEq<ChecksummedAddress> for Address {
 /// let json = serde_json::to_string(&amount).unwrap();
 /// assert_eq!(json, "\"1000000\"");
 /// ```
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DecimalU256(pub U256);
 
 pub type TokenAmount = DecimalU256;
-
-impl Display for DecimalU256 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
 
 impl FromStr for DecimalU256 {
     type Err = String;
