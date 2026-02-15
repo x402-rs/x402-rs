@@ -14,6 +14,8 @@ ID standard. It supports both V1 and V2 protocol versions with the "exact" payme
 - **V1 and V2 Protocol Support**: Implements both protocol versions with network name (V1) and CAIP-2 chain ID (V2)
   addressing
 - **ERC-3009 Payments**: Gasless token transfers using `transferWithAuthorization`
+- **Permit2 Payments (V2 only)**: Universal gasless token transfers using Uniswap's Permit2 contract
+- **Dual Transfer Methods (V2)**: Support for both EIP-3009 and Permit2 asset transfer methods
 - **Smart Wallet Support**:
   - EIP-1271 for deployed smart wallets
   - EIP-6492 for counterfactual (not-yet-deployed) smart wallets
@@ -112,6 +114,36 @@ signature format:
 
 For EIP-6492 counterfactual signatures, the facilitator can deploy the smart wallet on-chain if needed before settling
 the payment.
+
+## Permit2 Support (V2 Protocol Only)
+
+The V2 protocol adds support for Permit2, a universal token approval system from Uniswap that enables gasless transfers for any ERC-20 token. This provides a fallback payment method for tokens that don't natively support EIP-3009.
+
+### Asset Transfer Methods
+
+V2 payment requirements can specify an `assetTransferMethod`:
+- `eip3009`: Direct `transferWithAuthorization` for tokens with native support (e.g., USDC)
+- `permit2`: Universal proxy using Uniswap's canonical Permit2 contract
+
+### Permit2 Flow
+
+1. Client checks if user has Permit2 allowance for the token
+2. If insufficient allowance, returns 412 Precondition Failed
+3. Client generates EIP-712 signature with witness data
+4. Facilitator verifies signature (supports EIP-6492 and EIP-1271)
+5. Facilitator validates allowance, balance, and constraints
+6. Facilitator settles via X402ExactPermit2Proxy contract
+
+### Contract Addresses
+
+- **Permit2 (Canonical)**: `0x000000000022D473030F116dDEE9F6B43aC78BA3`
+- **X402ExactPermit2Proxy**: `0x4020615294c913F045dc10f0a5cdEbd86c280001`
+
+### Future Extensions
+
+The Permit2 implementation is designed to support gasless approval extensions:
+- **EIP-2612 Gas Sponsoring**: Facilitator accepts permit signatures for approval
+- **ERC-20 Approval Gas Sponsoring**: Facilitator sponsors approval transactions
 
 ## Configuration
 
