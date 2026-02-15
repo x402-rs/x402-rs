@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+
 //! EIP-155 (EVM) chain support for the x402 payment protocol.
 //!
 //! This crate provides implementations of the x402 payment protocol for EVM-compatible
