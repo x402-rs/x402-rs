@@ -1,6 +1,7 @@
-use alloy_primitives::{Address, U256, address};
+use alloy_primitives::{Address, Bytes, U256, address, hex};
 use alloy_provider::Provider;
-use alloy_sol_types::{SolStruct, eip712_domain, sol};
+use alloy_sol_types::{Eip712Domain, SolStruct, eip712_domain, sol};
+use std::str::FromStr;
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
@@ -10,29 +11,28 @@ use tracing::Instrument;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
 
-use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider};
+use crate::chain::Eip155MetaTransactionProvider;
 use crate::v1_eip155_exact::{
     Eip155ExactError, StructuredSignature, assert_enough_value, assert_time,
 };
 use crate::v2_eip155_exact::eip3009::assert_requirements_match;
-use crate::v2_eip155_exact::types::{Permit2PaymentPayload, Permit2PaymentRequirements};
+use crate::v2_eip155_exact::types::{
+    Permit2Payload, Permit2PaymentPayload, Permit2PaymentRequirements,
+};
 
-// Note: Expect deployed on every chain
 pub const EXACT_PERMIT2_PROXY_ADDRESS: Address =
     address!("0x4020615294c913F045dc10f0a5cdEbd86c280001");
 
-// Note: Expect deployed on every chain
 pub const PERMIT2_ADDRESS: Address = address!("0x000000000022D473030F116dDEE9F6B43aC78BA3");
 
-// FIXME Remove this
-// sol!(
-//     #[allow(missing_docs)]
-//     #[allow(clippy::too_many_arguments)]
-//     #[derive(Debug)]
-//     #[sol(rpc)]
-//     IERC20Permit,
-//     "abi/IERC20Permit.json"
-// );
+sol!(
+    #[allow(missing_docs)]
+    #[allow(clippy::too_many_arguments)]
+    #[derive(Debug)]
+    #[sol(rpc)]
+    IERC20Permit,
+    "abi/IERC20Permit.json"
+);
 
 sol!(
     #[allow(missing_docs)]
@@ -44,25 +44,29 @@ sol!(
 );
 
 sol!(
-    #[allow(missing_docs)]
-    #[allow(clippy::too_many_arguments)]
-    #[derive(Debug)]
-    #[sol(rpc)]
-    X402ExactPermit2Proxy,
-    "abi/X402ExactPermit2Proxy.json"
-);
-
-sol!(
-    /// Signature struct to do settle through [`X402ExactPermit2Proxy`]
-    /// Depends on availability of [`X402ExactPermit2Proxy`]
     #[allow(clippy::too_many_arguments)]
     #[derive(Debug)]
     struct PermitWitnessTransferFrom {
-        ISignatureTransfer.TokenPermissions permitted;
+        TokenPermissions permitted;
         address spender;
         uint256 nonce;
         uint256 deadline;
-        x402BasePermit2Proxy.Witness witness;
+        Witness witness;
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[derive(Debug)]
+    struct TokenPermissions {
+        address token;
+        uint256 amount;
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[derive(Debug)]
+    struct Witness {
+        address to;
+        uint256 validAfter;
+        bytes extra;
     }
 );
 
@@ -72,28 +76,75 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<v2::VerifyResponse, Eip155ExactError> {
-    // 1. Verify offchain constraints
-    assert_offchain_valid(payment_payload, payment_requirements)?;
+    assert_offchain(payment_payload, payment_requirements)?;
 
-    // 2. Verify onchain constraints
     let authorization = &payment_payload.payload.permit_2_authorization;
     let payer: Address = authorization.from.into();
-    assert_onchain_valid(provider.inner(), provider.chain(), payment_payload).await?;
+    let required_amount: U256 = payment_payload.accepted.amount.into();
+    let asset_address: Address = payment_payload.accepted.asset.into();
 
-    Ok(v2::VerifyResponse::valid(payer.to_string()))
+    let token_contract = IERC20::new(asset_address, provider.inner());
+
+    // Allowance from payer to Permit2 contract is enough
+    assert_onchain_allowance(&token_contract, payer, required_amount).await?;
+    // User balance is enough
+    assert_onchain_balance(&token_contract, payer, required_amount).await?;
+
+    let chain_reference = provider.chain().inner();
+    let domain = eip712_domain! {
+        name: "Permit2",
+        chain_id: chain_reference,
+        verifying_contract: PERMIT2_ADDRESS,
+    };
+    let transfer = PermitWitnessTransferFrom {
+        permitted: TokenPermissions {
+            token: authorization.permitted.token.into(),
+            amount: authorization.permitted.amount.into(),
+        },
+        spender: EXACT_PERMIT2_PROXY_ADDRESS,
+        nonce: authorization.nonce.into(),
+        deadline: U256::from(authorization.deadline.as_secs()),
+        witness: Witness {
+            to: authorization.witness.to.into(),
+            validAfter: U256::from(authorization.witness.valid_after.as_secs()),
+            extra: authorization.witness.extra.clone(),
+        },
+    };
+    let eip712_hash = transfer.eip712_signing_hash(&domain);
+    let structured_signature: StructuredSignature = StructuredSignature::try_from_bytes(
+        payment_payload.payload.signature.clone(),
+        payer,
+        &eip712_hash,
+    )?;
+    println!("s.9 {:?}", structured_signature);
+
+    match structured_signature {
+        StructuredSignature::EIP6492 { .. } => {
+            todo!("EIP6492 signature verification")
+        }
+        StructuredSignature::EOA(_) => {
+            todo!("EOA signature verification")
+        }
+        StructuredSignature::EIP1271(_) => {
+            todo!("EIP1271 signature verification")
+        }
+    }
+
+    // TODO signature
+
+    todo!("Permit2 - verify_permit2_payment")
 }
 
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 pub async fn settle_permit2_payment<P: Eip155MetaTransactionProvider + ChainProviderOps>(
-    _provider: &P,
-    _payment_payload: &Permit2PaymentPayload,
-    _payment_requirements: &Permit2PaymentRequirements,
+    provider: &P,
+    payment_payload: &Permit2PaymentPayload,
+    payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<v2::SettleResponse, X402SchemeFacilitatorError> {
     todo!("Permit2 - settle_permit2_payment")
 }
 
-#[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
-pub fn assert_offchain_valid(
+pub fn assert_offchain(
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<(), PaymentVerificationError> {
@@ -175,102 +226,4 @@ pub async fn assert_onchain_balance<P: Provider>(
         return Err(PaymentVerificationError::InsufficientFunds.into());
     }
     Ok(())
-}
-
-#[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
-pub async fn assert_onchain_valid<P: Provider>(
-    provider: &P,
-    chain_reference: &Eip155ChainReference,
-    payment_payload: &Permit2PaymentPayload,
-) -> Result<(), Eip155ExactError> {
-    let authorization = &payment_payload.payload.permit_2_authorization;
-    let payer = authorization.from.0;
-    let required_amount = payment_payload.accepted.amount.0;
-    let asset_address = payment_payload.accepted.asset.0;
-
-    let token_contract = IERC20::new(asset_address, provider);
-
-    // Allowance from payer to Permit2 contract is enough
-    let onchain_allowance_fut = assert_onchain_allowance(&token_contract, payer, required_amount);
-    // User balance is enough
-    let onchain_balance_fut = assert_onchain_balance(&token_contract, payer, required_amount);
-    tokio::try_join!(onchain_allowance_fut, onchain_balance_fut)?;
-
-    // ... and below is a check if we can do the settle
-
-    let domain = eip712_domain! {
-        name: "Permit2",
-        chain_id: chain_reference.inner(),
-        verifying_contract: PERMIT2_ADDRESS,
-    };
-    let permit_witness_transfer_from = PermitWitnessTransferFrom {
-        permitted: ISignatureTransfer::TokenPermissions {
-            token: authorization.permitted.token.into(),
-            amount: authorization.permitted.amount.into(),
-        },
-        spender: EXACT_PERMIT2_PROXY_ADDRESS,
-        nonce: authorization.nonce.into(),
-        deadline: U256::from(authorization.deadline.as_secs()),
-        witness: x402BasePermit2Proxy::Witness {
-            to: authorization.witness.to.into(),
-            validAfter: U256::from(authorization.witness.valid_after.as_secs()),
-            extra: authorization.witness.extra.clone(),
-        },
-    };
-    let eip712_hash = permit_witness_transfer_from.eip712_signing_hash(&domain);
-    let structured_signature = StructuredSignature::try_from_bytes(
-        payment_payload.payload.signature.clone(),
-        payer,
-        &eip712_hash,
-    )?;
-
-    let exact_permit2_proxy = X402ExactPermit2Proxy::new(EXACT_PERMIT2_PROXY_ADDRESS, provider);
-    match structured_signature {
-        StructuredSignature::EIP6492 { .. } => {
-            // FIXME TODO EIP6492 signature
-            Err(PaymentVerificationError::InvalidFormat(
-                "EIP6492 signature is not supported".to_string(),
-            )
-            .into())
-        }
-        StructuredSignature::EOA(signature) => {
-            let permit_transfer_from = ISignatureTransfer::PermitTransferFrom {
-                permitted: permit_witness_transfer_from.permitted,
-                nonce: permit_witness_transfer_from.nonce,
-                deadline: permit_witness_transfer_from.deadline,
-            };
-            let witness = permit_witness_transfer_from.witness;
-            let settle_call = exact_permit2_proxy.settle(
-                permit_transfer_from,
-                payer,
-                witness,
-                signature.as_bytes().into(),
-            );
-            let settle_call_fut = settle_call.call().into_future();
-            #[cfg(feature = "telemetry")]
-            settle_call_fut
-                .instrument(tracing::info_span!("call_settle_exact_permit2",
-                    from = %payer,
-                    to = %authorization.witness.to,
-                    value = %authorization.permitted.amount,
-                    valid_after = %authorization.witness.valid_after,
-                    valid_before = %authorization.deadline,
-                    nonce = %authorization.nonce,
-                    signature = %signature,
-                    token_contract = %authorization.permitted.token,
-                    otel.kind = "client",
-                ))
-                .await?;
-            #[cfg(not(feature = "telemetry"))]
-            settle_call_fut.await?;
-            Ok(())
-        }
-        StructuredSignature::EIP1271(_) => {
-            // FIXME TODO EIP1271 signature
-            Err(PaymentVerificationError::InvalidFormat(
-                "EIP1271 signature is not supported".to_string(),
-            )
-            .into())
-        }
-    }
 }
