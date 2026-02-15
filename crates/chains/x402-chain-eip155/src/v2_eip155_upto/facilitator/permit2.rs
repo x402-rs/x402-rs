@@ -52,7 +52,7 @@ pub async fn settle_permit2_payment<P, E>(
     provider: &P,
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
-    settle_amount: U256,
+    settle_amount: Option<U256>,
 ) -> Result<UptoSettleResponse, X402SchemeFacilitatorError>
 where
     P: Eip155MetaTransactionProvider<Error = E> + ChainProviderOps,
@@ -64,9 +64,10 @@ where
     // 2. Determine the actual settlement amount
     let authorization = &payment_payload.payload.permit_2_authorization;
     let max_amount = authorization.permitted.amount;
+    let actual_amount = settle_amount.unwrap_or(max_amount);
 
     // 3. Validate settlement amount doesn't exceed maximum
-    if settle_amount > max_amount {
+    if actual_amount > max_amount {
         return Err(X402SchemeFacilitatorError::PaymentVerification(
             PaymentVerificationError::InvalidFormat(
                 "invalid_upto_evm_payload_settlement_exceeds_amount".to_string(),
@@ -75,7 +76,7 @@ where
     }
 
     // 4. Handle zero settlement - no on-chain transaction needed
-    if settle_amount.is_zero() {
+    if actual_amount.is_zero() {
         let payer = authorization.from;
         let network = &payment_payload.accepted.network;
         return Ok(UptoSettleResponse::success(
@@ -87,7 +88,7 @@ where
     }
 
     // 5. Execute settlement
-    let tx_hash = settle_upto_permit2(provider, payment_payload, settle_amount).await?;
+    let tx_hash = settle_upto_permit2(provider, payment_payload, actual_amount).await?;
     let payer = authorization.from;
     let network = &payment_payload.accepted.network;
 
@@ -95,7 +96,7 @@ where
         payer.to_string(),
         tx_hash.to_string(),
         network.to_string(),
-        settle_amount.to_string(),
+        actual_amount.to_string(),
     ))
 }
 
