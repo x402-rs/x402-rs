@@ -7,14 +7,13 @@
 //!
 //! # Supported Schemes
 //!
-//! | Scheme            | Chains        | Description                                    |
-//! |-------------------|---------------|------------------------------------------------|
-//! | [`V1Eip155Exact`] | EIP-155 (EVM) | V1 protocol with exact amount on EVM           |
-//! | [`V1SolanaExact`] | Solana        | V1 protocol with exact amount on Solana        |
-//! | [`V2Eip155Exact`] | EIP-155 (EVM) | V2 protocol with exact amount on EVM           |
-//! | [`V2Eip155Upto`]  | EIP-155 (EVM) | V2 protocol with server-selected amount on EVM |
-//! | [`V2SolanaExact`] | Solana        | V2 protocol with exact amount on Solana        |
-//! | [`V2AptosExact`]  | Aptos         | V2 protocol with exact amount on Aptos         |
+//! | Scheme | Chains | Description |
+//! |--------|--------|-------------|
+//! | [`V1Eip155Exact`] | EIP-155 (EVM) | V1 protocol with exact amount on EVM |
+//! | [`V2Eip155Exact`] | EIP-155 (EVM) | V2 protocol with exact amount on EVM |
+//! | [`V1SolanaExact`] | Solana | V1 protocol with exact amount on Solana |
+//! | [`V2SolanaExact`] | Solana | V2 protocol with exact amount on Solana |
+//! | [`V2AptosExact`] | Aptos | V2 protocol with exact amount on Aptos |
 //!
 //! # Example
 //!
@@ -39,7 +38,7 @@ use x402_types::scheme::{X402SchemeFacilitator, X402SchemeFacilitatorBuilder};
 #[cfg(feature = "chain-aptos")]
 use x402_chain_aptos::V2AptosExact;
 #[cfg(feature = "chain-eip155")]
-use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact, V2Eip155Upto};
+use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact};
 #[cfg(feature = "chain-solana")]
 use x402_chain_solana::{V1SolanaExact, V2SolanaExact};
 
@@ -79,23 +78,6 @@ impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2SolanaExact {
 
 #[cfg(feature = "chain-eip155")]
 impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2Eip155Exact {
-    fn build(
-        &self,
-        provider: &ChainProvider,
-        config: Option<serde_json::Value>,
-    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        #[allow(irrefutable_let_patterns)] // For when just chain-aptos is enabled
-        let eip155_provider = if let ChainProvider::Eip155(provider) = provider {
-            Arc::clone(provider)
-        } else {
-            return Err("V2Eip155Exact::build: provider must be an Eip155ChainProvider".into());
-        };
-        self.build(eip155_provider, config)
-    }
-}
-
-#[cfg(feature = "chain-eip155")]
-impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2Eip155Upto {
     fn build(
         &self,
         provider: &ChainProvider,
