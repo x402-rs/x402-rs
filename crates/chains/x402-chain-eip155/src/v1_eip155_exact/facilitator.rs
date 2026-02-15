@@ -177,49 +177,6 @@ pub struct ExactEvmPayment {
     pub signature: Bytes,
 }
 
-impl ExactEvmPayment {
-    /// Construct a [`SignedMessage`] from an [`ExactEvmPayment`] and its
-    /// corresponding [`Eip712Domain`].
-    ///
-    /// This helper ties together:
-    /// - The **payment intent** (an ERC-3009 `TransferWithAuthorization` struct),
-    /// - The **EIP-712 domain** used for signing,
-    /// - And the raw signature bytes attached to the payment.
-    ///
-    /// Steps performed:
-    /// 1. Build an in-memory [`TransferWithAuthorization`] struct from the
-    ///    `ExactEvmPayment` fields (`from`, `to`, `value`, validity window, `nonce`).
-    /// 2. Compute the **EIP-712 struct hash** for that transfer under the given
-    ///    `domain`. This becomes the `hash` field of the signed message.
-    /// 3. Parse the raw signature bytes into a [`StructuredSignature`], which
-    ///    distinguishes between:
-    ///    - EIP-1271 (plain signature), and
-    ///    - EIP-6492 (counterfactual signature wrapper).
-    /// 4. Assemble all parts into a [`SignedMessage`] and return it.
-    pub fn as_signed_message(
-        &self,
-        domain: &Eip712Domain,
-    ) -> Result<SignedMessage, StructuredSignatureFormatError> {
-        let transfer_with_authorization = TransferWithAuthorization {
-            from: self.from,
-            to: self.to,
-            value: self.value,
-            validAfter: U256::from(self.valid_after.as_secs()),
-            validBefore: U256::from(self.valid_before.as_secs()),
-            nonce: self.nonce,
-        };
-        let eip712_hash = transfer_with_authorization.eip712_signing_hash(domain);
-        let structured_signature: StructuredSignature =
-            StructuredSignature::try_from_bytes(self.signature.clone(), self.from, &eip712_hash)?;
-        let signed_message = SignedMessage {
-            address: self.from,
-            hash: eip712_hash,
-            signature: structured_signature,
-        };
-        Ok(signed_message)
-    }
-}
-
 sol!(
     #[allow(missing_docs)]
     #[allow(clippy::too_many_arguments)]
@@ -427,13 +384,59 @@ where
 
 /// Canonical data required to verify a signature.
 #[derive(Debug, Clone)]
-pub struct SignedMessage {
+struct SignedMessage {
     /// Expected signer (an EOA or contract wallet).
     address: Address,
     /// 32-byte digest that was signed (typically an EIP-712 hash).
     hash: B256,
-    /// Structured signature, either EIP-6492 or EIP-1271 or EOA.
+    /// Structured signature, either EIP-6492 or EIP-1271.
     signature: StructuredSignature,
+}
+
+impl SignedMessage {
+    /// Construct a [`SignedMessage`] from an [`ExactEvmPayment`] and its
+    /// corresponding [`Eip712Domain`].
+    ///
+    /// This helper ties together:
+    /// - The **payment intent** (an ERC-3009 `TransferWithAuthorization` struct),
+    /// - The **EIP-712 domain** used for signing,
+    /// - And the raw signature bytes attached to the payment.
+    ///
+    /// Steps performed:
+    /// 1. Build an in-memory [`TransferWithAuthorization`] struct from the
+    ///    `ExactEvmPayment` fields (`from`, `to`, `value`, validity window, `nonce`).
+    /// 2. Compute the **EIP-712 struct hash** for that transfer under the given
+    ///    `domain`. This becomes the `hash` field of the signed message.
+    /// 3. Parse the raw signature bytes into a [`StructuredSignature`], which
+    ///    distinguishes between:
+    ///    - EIP-1271 (plain signature), and
+    ///    - EIP-6492 (counterfactual signature wrapper).
+    /// 4. Assemble all parts into a [`SignedMessage`] and return it.
+    pub fn extract(
+        payment: &ExactEvmPayment,
+        domain: &Eip712Domain,
+    ) -> Result<Self, StructuredSignatureFormatError> {
+        let transfer_with_authorization = TransferWithAuthorization {
+            from: payment.from,
+            to: payment.to,
+            value: payment.value,
+            validAfter: U256::from(payment.valid_after.as_secs()),
+            validBefore: U256::from(payment.valid_before.as_secs()),
+            nonce: payment.nonce,
+        };
+        let eip712_hash = transfer_with_authorization.eip712_signing_hash(domain);
+        let structured_signature: StructuredSignature = StructuredSignature::try_from_bytes(
+            payment.signature.clone(),
+            payment.from,
+            &eip712_hash,
+        )?;
+        let signed_message = Self {
+            address: payment.from,
+            hash: eip712_hash,
+            signature: structured_signature,
+        };
+        Ok(signed_message)
+    }
 }
 
 /// A structured representation of an Ethereum signature.
@@ -445,7 +448,7 @@ pub struct SignedMessage {
 ///   signature that the wallet contract will validate after deployment.
 /// - **EIP-1271 signatures**: plain contract (or EOA-style) signatures.
 #[derive(Debug, Clone)]
-pub enum StructuredSignature {
+enum StructuredSignature {
     /// An EIP-6492 wrapped signature.
     EIP6492 {
         /// Factory contract that can deploy the wallet deterministically
@@ -715,7 +718,7 @@ pub async fn verify_payment<P: Provider>(
     payment: &ExactEvmPayment,
     eip712_domain: &Eip712Domain,
 ) -> Result<Address, Eip155ExactError> {
-    let signed_message = payment.as_signed_message(eip712_domain)?;
+    let signed_message = SignedMessage::extract(payment, eip712_domain)?;
 
     let payer = signed_message.address;
     let hash = signed_message.hash;
@@ -825,7 +828,7 @@ where
     P: Eip155MetaTransactionProvider<Error = E>,
     Eip155ExactError: From<E>,
 {
-    let signed_message = payment.as_signed_message(eip712_domain)?;
+    let signed_message = SignedMessage::extract(payment, eip712_domain)?;
     let payer = payment.from;
     let receipt = match signed_message.signature {
         StructuredSignature::EIP6492 {
