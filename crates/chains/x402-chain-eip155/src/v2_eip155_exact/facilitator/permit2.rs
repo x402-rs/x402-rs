@@ -10,7 +10,7 @@ use tracing::Instrument;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
 
-use crate::chain::Eip155MetaTransactionProvider;
+use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider};
 use crate::v1_eip155_exact::{Eip155ExactError, assert_enough_value, assert_time};
 use crate::v2_eip155_exact::eip3009::assert_requirements_match;
 use crate::v2_eip155_exact::types::{
@@ -138,7 +138,7 @@ pub async fn assert_onchain_balance<P: Provider>(
     payer: Address,
     required_amount: U256,
 ) -> Result<(), Eip155ExactError> {
-    let balance_call = token_contract.balanceOf(payer);
+    let balance_call = token_contract.balance_of(payer);
     let balance_fut = balance_call.call().into_future();
     #[cfg(feature = "telemetry")]
     let balance = balance_fut
