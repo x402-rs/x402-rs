@@ -128,14 +128,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             })),
         )
-        // TODO CONTINUE Set price (and feature-based docs.rs)
-        .route(
-            "/eip155-upto",
-            get(eip155_upto_handler).layer(x402.with_price_tag(V2Eip155Upto::price_tag(
+        // TODO CONTINUE Set price
+        .route("/eip155-upto", get(eip155_upto_handler).layer(x402.with_price_tag(
+            V2Eip155Upto::price_tag(
                 address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"),
                 usdc_base_sepolia_permit2.amount(10u64),
-            ))),
-        );
+            ),
+        )));
 
     tracing::info!("Using facilitator on {}", x402.facilitator_url());
 

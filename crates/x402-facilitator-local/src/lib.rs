@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+
 //! Local facilitator implementation for the x402 payment protocol.
 //!
 //! This crate provides [`FacilitatorLocal`], a [`Facilitator`](x402_types::facilitator::Facilitator)
