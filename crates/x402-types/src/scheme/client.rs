@@ -46,20 +46,6 @@ pub struct PaymentCandidate {
     pub signer: Box<dyn PaymentCandidateSigner + Send + Sync>,
 }
 
-impl std::fmt::Debug for PaymentCandidate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PaymentCandidate")
-            .field("chain_id", &self.chain_id)
-            .field("asset", &self.asset)
-            .field("amount", &self.amount)
-            .field("scheme", &self.scheme)
-            .field("x402_version", &self.x402_version)
-            .field("pay_to", &self.pay_to)
-            .field("signer", &"<dyn PaymentCandidateSigner>")
-            .finish()
-    }
-}
-
 impl PaymentCandidate {
     /// Signs this payment candidate, producing a payment payload.
     #[allow(dead_code)] // Public for consumption by downstream crates.

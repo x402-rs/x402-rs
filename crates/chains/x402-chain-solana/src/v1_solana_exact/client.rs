@@ -359,8 +359,8 @@ where
         payment_required
             .accepts
             .iter()
-            .filter_map(|original_requirements_json| {
-                let requirements = PaymentRequirements::try_from(original_requirements_json).ok()?;
+            .filter_map(|v| {
+                let requirements: PaymentRequirements = v.as_concrete()?;
                 let chain_id = ChainId::from_network_name(&requirements.network)?;
                 if chain_id.namespace != "solana" {
                     return None;

@@ -286,7 +286,7 @@ pub struct Eip155TokenDeployment {
     pub transfer_method: AssetTransferMethod,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(tag = "assetTransferMethod")]
 pub enum AssetTransferMethod {
     /// EIP-712 domain parameters for signature verification of EIP3009 transfers.
@@ -300,62 +300,6 @@ pub enum AssetTransferMethod {
     /// Permit2 transfer method.
     #[serde(rename = "permit2")]
     Permit2,
-}
-
-impl<'de> Deserialize<'de> for AssetTransferMethod {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // --- Wire types (private) ---
-
-        #[derive(Debug, Deserialize)]
-        #[serde(untagged)]
-        #[allow(dead_code)]
-        enum AssetTransferMethodWire {
-            // { "assetTransferMethod": "permit2" }
-            Permit2Tagged {
-                #[serde(rename = "assetTransferMethod")]
-                asset_transfer_method: Permit2Tag,
-            },
-            // { "assetTransferMethod": "eip3009", "name": "...", "version": "..." }
-            Eip3009Tagged {
-                #[serde(rename = "assetTransferMethod")]
-                asset_transfer_method: Eip3009Tag,
-                name: String,
-                version: String,
-            },
-            // { "name": "...", "version": "..." }  (implicit)
-            Eip3009Implicit {
-                name: String,
-                version: String,
-            },
-        }
-
-        #[derive(Debug, Deserialize)]
-        #[serde(rename_all = "lowercase")]
-        enum Permit2Tag {
-            Permit2,
-        }
-
-        #[derive(Debug, Deserialize)]
-        #[serde(rename_all = "lowercase")]
-        enum Eip3009Tag {
-            Eip3009,
-        }
-
-        let wire = AssetTransferMethodWire::deserialize(deserializer)
-            .map_err(|e| serde::de::Error::custom(format!("invalid asset transfer method: {e}")))?;
-
-        Ok(match wire {
-            AssetTransferMethodWire::Permit2Tagged { .. } => AssetTransferMethod::Permit2,
-
-            AssetTransferMethodWire::Eip3009Tagged { name, version, .. }
-            | AssetTransferMethodWire::Eip3009Implicit { name, version } => {
-                AssetTransferMethod::Eip3009 { name, version }
-            }
-        })
-    }
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
