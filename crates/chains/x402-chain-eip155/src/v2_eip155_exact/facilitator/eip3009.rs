@@ -1,6 +1,7 @@
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use x402_types::chain::{ChainId, ChainProviderOps};
+use x402_types::proto;
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
 
@@ -10,7 +11,7 @@ use tracing::instrument;
 use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider};
 use crate::v1_eip155_exact::{
     Eip155ExactError, ExactEvmPayment, IEIP3009, PaymentRequirementsExtra, assert_domain,
-    assert_enough_balance, assert_enough_value, assert_time, settle_payment, verify_payment,
+    assert_enough_balance, assert_enough_value, assert_time, verify_payment,
 };
 use crate::v2_eip155_exact::Eip3009Payload;
 use crate::v2_eip155_exact::types::{Eip3009PaymentPayload, Eip3009PaymentRequirements};
@@ -20,7 +21,7 @@ pub async fn verify_eip3009_payment<P: Eip155MetaTransactionProvider + ChainProv
     provider: &P,
     payment_payload: &Eip3009PaymentPayload,
     payment_requirements: &Eip3009PaymentRequirements,
-) -> Result<v2::VerifyResponse, X402SchemeFacilitatorError> {
+) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
     let accepted = &payment_payload.accepted;
     if accepted != payment_requirements {
         return Err(PaymentVerificationError::AcceptedRequirementsMismatch.into());
@@ -34,46 +35,9 @@ pub async fn verify_eip3009_payment<P: Eip155MetaTransactionProvider + ChainProv
     .await?;
 
     let payer = verify_payment(provider.inner(), &contract, &payment, &eip712_domain).await?;
-    Ok(v2::VerifyResponse::valid(payer.to_string()))
+    Ok(v2::VerifyResponse::valid(payer.to_string()).into())
 }
 
-#[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
-pub async fn settle_eip3009_payment<P>(
-    provider: &P,
-    payment_payload: &Eip3009PaymentPayload,
-    payment_requirements: &Eip3009PaymentRequirements,
-) -> Result<v2::SettleResponse, X402SchemeFacilitatorError>
-where
-    P: Eip155MetaTransactionProvider + ChainProviderOps,
-    Eip155ExactError: From<P::Error>,
-{
-    let accepted = &payment_payload.accepted;
-    if accepted != payment_requirements {
-        return Err(PaymentVerificationError::AcceptedRequirementsMismatch.into());
-    }
-    let (contract, payment, eip712_domain) = assert_valid_payment(
-        provider.inner(),
-        provider.chain(),
-        &accepted,
-        &payment_payload.payload,
-    )
-    .await?;
-
-    let tx_hash = settle_payment(provider, &contract, &payment, &eip712_domain).await?;
-
-    Ok(v2::SettleResponse::Success {
-        payer: payment.from.to_string(),
-        transaction: tx_hash.to_string(),
-        network: accepted.network.to_string(),
-    })
-}
-
-/// Runs all preconditions needed for a successful payment:
-/// - Valid scheme, network, and receiver.
-/// - Valid time window (validAfter/validBefore).
-/// - Correct EIP-712 domain construction.
-/// - Sufficient on-chain balance.
-/// - Sufficient value in payload.
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 pub async fn assert_valid_payment<P: Provider>(
     provider: P,
