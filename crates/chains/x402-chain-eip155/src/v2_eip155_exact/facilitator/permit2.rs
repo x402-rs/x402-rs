@@ -1,7 +1,6 @@
-use alloy_primitives::{Address, Bytes, U256, address, hex};
+use alloy_primitives::{Address, U256, address};
 use alloy_provider::Provider;
-use alloy_sol_types::{Eip712Domain, SolStruct, eip712_domain, sol};
-use std::str::FromStr;
+use alloy_sol_types::sol;
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
@@ -12,9 +11,7 @@ use tracing::Instrument;
 use tracing::instrument;
 
 use crate::chain::Eip155MetaTransactionProvider;
-use crate::v1_eip155_exact::{
-    Eip155ExactError, StructuredSignature, assert_enough_value, assert_time,
-};
+use crate::v1_eip155_exact::{Eip155ExactError, assert_enough_value, assert_time};
 use crate::v2_eip155_exact::eip3009::assert_requirements_match;
 use crate::v2_eip155_exact::types::{
     Permit2Payload, Permit2PaymentPayload, Permit2PaymentRequirements,
@@ -43,33 +40,6 @@ sol!(
     "abi/IERC20.json"
 );
 
-sol!(
-    #[allow(clippy::too_many_arguments)]
-    #[derive(Debug)]
-    struct PermitWitnessTransferFrom {
-        TokenPermissions permitted;
-        address spender;
-        uint256 nonce;
-        uint256 deadline;
-        Witness witness;
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    #[derive(Debug)]
-    struct TokenPermissions {
-        address token;
-        uint256 amount;
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    #[derive(Debug)]
-    struct Witness {
-        address to;
-        uint256 validAfter;
-        bytes extra;
-    }
-);
-
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProviderOps>(
     provider: &P,
@@ -78,57 +48,16 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
 ) -> Result<v2::VerifyResponse, Eip155ExactError> {
     assert_offchain(payment_payload, payment_requirements)?;
 
-    let authorization = &payment_payload.payload.permit_2_authorization;
-    let payer: Address = authorization.from.into();
-    let required_amount: U256 = payment_payload.accepted.amount.into();
-    let asset_address: Address = payment_payload.accepted.asset.into();
+    let payer = payment_payload.payload.permit_2_authorization.from;
+    let required_amount = payment_payload.accepted.amount;
+    let asset_address = payment_payload.accepted.asset;
 
-    let token_contract = IERC20::new(asset_address, provider.inner());
+    let token_contract = IERC20::new(asset_address.0, provider.inner());
 
     // Allowance from payer to Permit2 contract is enough
-    assert_onchain_allowance(&token_contract, payer, required_amount).await?;
+    assert_onchain_allowance(&token_contract, payer.0, required_amount.0).await?;
     // User balance is enough
-    assert_onchain_balance(&token_contract, payer, required_amount).await?;
-
-    let chain_reference = provider.chain().inner();
-    let domain = eip712_domain! {
-        name: "Permit2",
-        chain_id: chain_reference,
-        verifying_contract: PERMIT2_ADDRESS,
-    };
-    let transfer = PermitWitnessTransferFrom {
-        permitted: TokenPermissions {
-            token: authorization.permitted.token.into(),
-            amount: authorization.permitted.amount.into(),
-        },
-        spender: EXACT_PERMIT2_PROXY_ADDRESS,
-        nonce: authorization.nonce.into(),
-        deadline: U256::from(authorization.deadline.as_secs()),
-        witness: Witness {
-            to: authorization.witness.to.into(),
-            validAfter: U256::from(authorization.witness.valid_after.as_secs()),
-            extra: authorization.witness.extra.clone(),
-        },
-    };
-    let eip712_hash = transfer.eip712_signing_hash(&domain);
-    let structured_signature: StructuredSignature = StructuredSignature::try_from_bytes(
-        payment_payload.payload.signature.clone(),
-        payer,
-        &eip712_hash,
-    )?;
-    println!("s.9 {:?}", structured_signature);
-
-    match structured_signature {
-        StructuredSignature::EIP6492 { .. } => {
-            todo!("EIP6492 signature verification")
-        }
-        StructuredSignature::EOA(_) => {
-            todo!("EOA signature verification")
-        }
-        StructuredSignature::EIP1271(_) => {
-            todo!("EIP1271 signature verification")
-        }
-    }
+    assert_onchain_balance(&token_contract, payer.0, required_amount.0).await?;
 
     // TODO signature
 
