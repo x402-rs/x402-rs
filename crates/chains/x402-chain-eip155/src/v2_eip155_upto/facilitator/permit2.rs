@@ -2,7 +2,7 @@ use alloy_primitives::{Address, TxHash, U256};
 use alloy_provider::bindings::IMulticall3;
 use alloy_provider::{MULTICALL3_ADDRESS, MulticallItem, Provider};
 use alloy_rpc_types_eth::TransactionReceipt;
-use alloy_sol_types::{SolCall, SolStruct, eip712_domain};
+use alloy_sol_types::{SolCall, SolStruct, eip712_domain, sol};
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
@@ -12,7 +12,6 @@ use tracing::Instrument;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
 
-use crate::chain::erc20::IERC20;
 use crate::chain::permit2::{PERMIT2_ADDRESS, UPTO_PERMIT2_PROXY_ADDRESS};
 use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction};
 use crate::v1_eip155_exact::{
@@ -25,7 +24,15 @@ use crate::v2_eip155_upto::types::{
     PermitWitnessTransferFrom, UptoSettleResponse, X402UptoPermit2Proxy, x402BasePermit2Proxy,
 };
 
-// FIXME DUPLCIATED CODE
+// FIXME Duplicated code
+sol!(
+    #[allow(missing_docs)]
+    #[allow(clippy::too_many_arguments)]
+    #[derive(Debug)]
+    #[sol(rpc)]
+    IERC20,
+    "abi/IERC20.json"
+);
 
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProviderOps>(
