@@ -4,9 +4,6 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-[features]
-full = []
-
 [dependencies]
 x402-types = { workspace = true }
 x402-chain-eip155 = { workspace = true, features = ["server", "telemetry"] }
