@@ -132,7 +132,7 @@ pub struct SupportedResponse {
 ///
 /// The inner JSON structure varies by protocol version and scheme.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VerifyRequest(Box<serde_json::value::RawValue>);
+pub struct VerifyRequest(serde_json::Value);
 
 /// Request to settle a verified payment on-chain.
 ///
@@ -140,15 +140,16 @@ pub struct VerifyRequest(Box<serde_json::value::RawValue>);
 /// payload that was previously verified.
 pub type SettleRequest = VerifyRequest;
 
-impl From<Box<serde_json::value::RawValue>> for VerifyRequest {
-    fn from(value: Box<serde_json::value::RawValue>) -> Self {
+impl From<serde_json::Value> for VerifyRequest {
+    fn from(value: serde_json::Value) -> Self {
         Self(value)
     }
 }
 
 impl VerifyRequest {
-    pub fn as_str(&self) -> &str {
-        self.0.get()
+    /// Consumes the request and returns the inner JSON value.
+    pub fn into_json(self) -> serde_json::Value {
+        self.0
     }
 
     /// Extracts the scheme handler slug from the request.
@@ -158,62 +159,33 @@ impl VerifyRequest {
     ///
     /// Returns `None` if the request format is invalid or the scheme is unknown.
     pub fn scheme_handler_slug(&self) -> Option<SchemeHandlerSlug> {
-        #[derive(Debug, Deserialize, Serialize)]
-        #[serde(untagged)]
-        enum VerifyRequestWire {
-            #[serde(rename_all = "camelCase")]
-            V1 {
-                x402_version: v1::X402Version1,
-                payment_payload: PaymentPayloadV1,
-            },
-            #[serde(rename_all = "camelCase")]
-            V2 {
-                x402_version: v2::X402Version2,
-                payment_payload: PaymentPayloadV2,
-            },
-        }
-
-        #[derive(Debug, Deserialize, Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct PaymentPayloadV1 {
-            pub network: String,
-            pub scheme: String,
-        }
-
-        #[derive(Debug, Deserialize, Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct PaymentPayloadV2 {
-            pub accepted: PaymentPayloadV2Accepted,
-        }
-
-        #[derive(Debug, Deserialize, Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct PaymentPayloadV2Accepted {
-            pub network: ChainId,
-            pub scheme: String,
-        }
-
-        let wire = serde_json::from_str::<VerifyRequestWire>(self.as_str()).ok()?;
-        match wire {
-            VerifyRequestWire::V1 {
-                payment_payload,
-                x402_version,
-            } => {
-                let network_name = payment_payload.network;
-                let chain_id = ChainId::from_network_name(&network_name)?;
-                let scheme = payment_payload.scheme;
-                let slug = SchemeHandlerSlug::new(chain_id, x402_version.into(), scheme.into());
+        let x402_version: u8 = self.0.get("x402Version")?.as_u64()?.try_into().ok()?;
+        match x402_version {
+            v1::X402Version1::VALUE => {
+                let network_name = self.0.get("paymentPayload")?.get("network")?.as_str()?;
+                let chain_id = ChainId::from_network_name(network_name)?;
+                let scheme = self.0.get("paymentPayload")?.get("scheme")?.as_str()?;
+                let slug = SchemeHandlerSlug::new(chain_id, 1, scheme.into());
                 Some(slug)
             }
-            VerifyRequestWire::V2 {
-                payment_payload,
-                x402_version,
-            } => {
-                let chain_id = payment_payload.accepted.network;
-                let scheme = payment_payload.accepted.scheme;
-                let slug = SchemeHandlerSlug::new(chain_id, x402_version.into(), scheme.into());
+            v2::X402Version2::VALUE => {
+                let chain_id_string = self
+                    .0
+                    .get("paymentPayload")?
+                    .get("accepted")?
+                    .get("network")?
+                    .as_str()?;
+                let chain_id = ChainId::from_str(chain_id_string).ok()?;
+                let scheme = self
+                    .0
+                    .get("paymentPayload")?
+                    .get("accepted")?
+                    .get("scheme")?
+                    .as_str()?;
+                let slug = SchemeHandlerSlug::new(chain_id, 2, scheme.into());
                 Some(slug)
             }
+            _ => None,
         }
     }
 }

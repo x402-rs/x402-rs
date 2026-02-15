@@ -4,9 +4,6 @@
 //! It reuses most of the V1 verification and settlement logic but handles V2-specific
 //! payload structures with embedded requirements and CAIP-2 chain IDs.
 
-pub mod eip3009;
-pub mod permit2;
-
 use alloy_provider::Provider;
 use alloy_sol_types::Eip712Domain;
 use std::collections::HashMap;
@@ -75,34 +72,21 @@ where
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
-        let verify_request = types::FacilitatorVerifyRequest::try_from(request.clone())?;
-        let verify_response = match verify_request {
-            types::FacilitatorVerifyRequest::Eip3009 {
-                payment_payload,
-                payment_requirements,
-                x402_version: _,
-            } => {
-                eip3009::verify_eip3009_payment(
-                    &self.provider,
-                    &payment_payload,
-                    &payment_requirements,
-                )
-                .await?
-            }
-            types::FacilitatorVerifyRequest::Permit2 {
-                payment_requirements,
-                payment_payload,
-                x402_version: _,
-            } => {
-                permit2::verify_permit2_payment(
-                    &self.provider,
-                    &payment_payload,
-                    &payment_requirements,
-                )
-                .await?
-            }
-        };
-        Ok(verify_response)
+        let request = types::VerifyRequest::from_proto(request.clone())?;
+        let payload = &request.payment_payload;
+        assert_accepted_requirements(payload, &request.payment_requirements)?;
+
+        let (contract, payment, eip712_domain) = assert_valid_payment(
+            self.provider.inner(),
+            self.provider.chain(),
+            &payload.accepted,
+            &payload.payload,
+        )
+        .await?;
+
+        let payer =
+            verify_payment(self.provider.inner(), &contract, &payment, &eip712_domain).await?;
+        Ok(v2::VerifyResponse::valid(payer.to_string()).into())
     }
 
     async fn settle(

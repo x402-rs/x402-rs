@@ -302,11 +302,10 @@ where
     Self: DeserializeOwned,
 {
     pub fn from_proto(
-        // FIXME REMOVE THIS
         request: proto::VerifyRequest,
     ) -> Result<Self, proto::PaymentVerificationError> {
-        let value = serde_json::from_str(request.as_str())?;
-        Ok(value)
+        let deserialized: Self = serde_json::from_value(request.into_json())?;
+        Ok(deserialized)
     }
 }
 
@@ -319,8 +318,7 @@ where
     type Error = serde_json::Error;
     fn try_into(self) -> Result<proto::VerifyRequest, Self::Error> {
         let json = serde_json::to_value(self)?;
-        let raw = serde_json::value::to_raw_value(&json)?;
-        Ok(proto::VerifyRequest(raw))
+        Ok(proto::VerifyRequest(json))
     }
 }
 

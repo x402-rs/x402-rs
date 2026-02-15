@@ -149,7 +149,7 @@ where
         let evm_payload = sign_erc3009_authorization(&self.signer, &params).await?;
 
         // Build the payment payload
-        let payload = v2::PaymentPayload {
+        let payload = types::PaymentPayload {
             x402_version: v2::X402Version2,
             accepted: self.requirements_json.clone(),
             resource: self.resource_info.clone(),
