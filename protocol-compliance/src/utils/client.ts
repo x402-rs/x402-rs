@@ -113,11 +113,6 @@ export async function setAllowance(
   spender: `0x${string}`,
   amount: bigint,
 ) {
-  const currentAllowance = await getAllowance(tokenAddress, spender);
-  if (currentAllowance === amount) {
-    return;
-  }
-
   const approveTxHash = await WALLET_CLIENT.writeContract({
     address: tokenAddress,
     abi: ERC20_APPROVE_ABI,
