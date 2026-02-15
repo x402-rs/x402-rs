@@ -19,12 +19,13 @@ use crate::v1_eip155_exact::{
     Eip155ExactError, StructuredSignature, VALIDATOR_ADDRESS, Validator6492, assert_time,
     is_contract_deployed, tx_hash_from_receipt,
 };
-use crate::v2_eip155_exact::permit2::{assert_onchain_allowance, assert_onchain_balance};
 use crate::v2_eip155_upto::types;
 use crate::v2_eip155_upto::types::{
     ISignatureTransfer, Permit2PaymentPayload, Permit2PaymentRequirements,
     PermitWitnessTransferFrom, UptoSettleResponse, X402UptoPermit2Proxy, x402BasePermit2Proxy,
 };
+
+// FIXME DUPLCIATED CODE
 
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProviderOps>(
@@ -149,6 +150,57 @@ pub fn assert_offchain_valid(
     // Same token
     if authorization.permitted.token != accepted.asset {
         return Err(PaymentVerificationError::AssetMismatch);
+    }
+    Ok(())
+}
+
+// FIXME Duplicated code
+pub async fn assert_onchain_allowance<P: Provider>(
+    token_contract: &IERC20::IERC20Instance<P>,
+    payer: Address,
+    required_amount: U256,
+) -> Result<(), Eip155ExactError> {
+    let allowance_call = token_contract.allowance(payer, PERMIT2_ADDRESS);
+    let allowance_fut = allowance_call.call().into_future();
+    #[cfg(feature = "telemetry")]
+    let allowance = allowance_fut
+        .instrument(tracing::info_span!(
+            "fetch_permit2_allowance",
+            token_contract = %token_contract.address(),
+            sender = %payer,
+            otel.kind = "client"
+        ))
+        .await?;
+    #[cfg(not(feature = "telemetry"))]
+    let allowance = allowance_fut.await?;
+    if allowance < required_amount {
+        Err(PaymentVerificationError::InsufficientAllowance.into())
+    } else {
+        Ok(())
+    }
+}
+
+// FIXME Duplicated code
+pub async fn assert_onchain_balance<P: Provider>(
+    token_contract: &IERC20::IERC20Instance<P>,
+    payer: Address,
+    required_amount: U256,
+) -> Result<(), Eip155ExactError> {
+    let balance_call = token_contract.balanceOf(payer);
+    let balance_fut = balance_call.call().into_future();
+    #[cfg(feature = "telemetry")]
+    let balance = balance_fut
+        .instrument(tracing::info_span!(
+            "fetch_balance",
+            token_contract = %token_contract.address(),
+            sender = %payer,
+            otel.kind = "client"
+        ))
+        .await?;
+    #[cfg(not(feature = "telemetry"))]
+    let balance = balance_fut.await?;
+    if balance < required_amount {
+        return Err(PaymentVerificationError::InsufficientFunds.into());
     }
     Ok(())
 }
