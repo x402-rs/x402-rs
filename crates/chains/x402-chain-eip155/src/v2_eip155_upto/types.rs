@@ -72,7 +72,7 @@ mod facilitator_only {
     use x402_types::proto::v2;
 
     use crate::chain::ChecksummedAddress;
-    use crate::v2_eip155_upto::{Permit2Payload, UptoExtra, UptoScheme};
+    use crate::v2_eip155_upto::{UptoScheme, Permit2Payload, UptoExtra};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
@@ -96,70 +96,13 @@ mod facilitator_only {
 
     pub type FacilitatorSettleRequest = FacilitatorVerifyRequest;
 
-    pub type Permit2PaymentRequirements =
-        v2::PaymentRequirements<UptoScheme, U256, ChecksummedAddress, UptoExtra>;
+    pub type Permit2PaymentRequirements = v2::PaymentRequirements<
+        UptoScheme,
+        U256,
+        ChecksummedAddress,
+        UptoExtra,
+    >;
     pub type Permit2PaymentPayload = v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>;
-
-    /// Settlement response for the upto scheme.
-    ///
-    /// Includes the actual settled amount, which may be less than the authorized maximum.
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    pub struct UptoSettleResponse {
-        /// Whether the settlement was successful.
-        pub success: bool,
-        /// Error reason if settlement failed.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub error_reason: Option<String>,
-        /// The payer's address.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub payer: Option<String>,
-        /// The transaction hash (empty string for zero settlement).
-        pub transaction: String,
-        /// The network identifier (CAIP-2 format).
-        pub network: String,
-        /// The actual settled amount in atomic token units.
-        pub amount: String,
-    }
-
-    impl UptoSettleResponse {
-        /// Creates a successful settlement response.
-        pub fn success(
-            payer: String,
-            transaction: String,
-            network: String,
-            amount: String,
-        ) -> Self {
-            Self {
-                success: true,
-                error_reason: None,
-                payer: Some(payer),
-                transaction,
-                network,
-                amount,
-            }
-        }
-
-        /// Creates an error settlement response.
-        pub fn error(network: String, reason: String) -> Self {
-            Self {
-                success: false,
-                error_reason: Some(reason),
-                payer: None,
-                transaction: String::new(),
-                network,
-                amount: "0".to_string(),
-            }
-        }
-    }
-
-    impl From<UptoSettleResponse> for proto::SettleResponse {
-        fn from(val: UptoSettleResponse) -> Self {
-            proto::SettleResponse(
-                serde_json::to_value(val).expect("UptoSettleResponse serialization failed"),
-            )
-        }
-    }
 }
 
 #[cfg(feature = "facilitator")]
