@@ -17,7 +17,7 @@ lit_str!(UptoScheme, "upto");
 pub type VerifyRequest = v2::VerifyRequest<PaymentPayload, PaymentRequirements>;
 
 pub type Permit2PaymentRequirements =
-    v2::PaymentRequirements<UptoScheme, U256, ChecksummedAddress>;
+    v2::PaymentRequirements<UptoScheme, U256, ChecksummedAddress, UptoExtra>;
 pub type Permit2PaymentPayload = v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>;
 
 /// Settlement response for the upto scheme.
@@ -88,7 +88,19 @@ pub type PaymentPayload<TPaymentRequirements = PaymentRequirements> =
 /// V2 uses CAIP-2 chain IDs and embeds requirements directly in the payload.
 /// The `amount` field represents the maximum authorized amount.
 pub type PaymentRequirements =
-    v2::PaymentRequirements<UptoScheme, U256, ChecksummedAddress>;
+    v2::PaymentRequirements<UptoScheme, U256, ChecksummedAddress, UptoExtra>;
+
+/// Extra fields for upto payment requirements.
+///
+/// Contains token name and version for EIP-712 domain construction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UptoExtra {
+    /// The token name (e.g., "USDC")
+    pub name: String,
+    /// The token version (e.g., "2")
+    pub version: String,
+}
 
 #[cfg(any(feature = "facilitator", feature = "client"))]
 pub mod facilitator_client_only {
