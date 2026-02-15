@@ -18,12 +18,12 @@ use x402_types::scheme::{
 use tracing::instrument;
 
 use crate::V2Eip155Exact;
-use crate::chain::{AssetTransferMethod, Eip155ChainReference, Eip155MetaTransactionProvider};
+use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider};
+use crate::v1_eip155_exact::ExactScheme;
 use crate::v1_eip155_exact::facilitator::{
     Eip155ExactError, ExactEvmPayment, IEIP3009, assert_domain, assert_enough_balance,
     assert_enough_value, assert_time, settle_payment, verify_payment,
 };
-use crate::v1_eip155_exact::{ExactScheme, PaymentRequirementsExtra};
 use crate::v2_eip155_exact::types;
 
 impl<P> X402SchemeFacilitatorBuilder<P> for V2Eip155Exact
@@ -72,8 +72,6 @@ where
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
-        let k = serde_json::to_string(request).unwrap();
-        println!("verify.0.request: {k}");
         let request = types::VerifyRequest::from_proto(request.clone())?;
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
@@ -170,20 +168,7 @@ async fn assert_valid_payment<P: Provider>(
     let asset_address = accepted.asset;
     let contract = IEIP3009::new(asset_address.into(), provider);
 
-    let extra = match &accepted.extra {
-        None => None,
-        Some(extra) => match extra {
-            AssetTransferMethod::Eip3009 { name, version } => Some(PaymentRequirementsExtra {
-                name: name.clone(),
-                version: version.clone(),
-            }),
-            AssetTransferMethod::Permit2 => {
-                todo!("Permit2 is not yet supported")
-            }
-        },
-    };
-
-    let domain = assert_domain(chain, &contract, &asset_address.into(), &extra).await?;
+    let domain = assert_domain(chain, &contract, &asset_address.into(), &accepted.extra).await?;
 
     let amount_required = accepted.amount;
     assert_enough_balance(&contract, &authorization.from, amount_required.into()).await?;
