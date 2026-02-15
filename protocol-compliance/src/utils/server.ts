@@ -13,9 +13,6 @@ import { waitForUrl } from "./waitFor";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
 import getPort from "get-port";
 import { UptoEvmSchemeServer } from "./upto-evm-scheme";
-import { AsyncLocalStorage } from "node:async_hooks";
-import { paymentRequired } from "./payment-required";
-import { PaymentOption } from "@x402/core/http";
 
 export const ROUTES = {
   "/static-price-v2": {
@@ -58,8 +55,6 @@ export const ROUTES = {
   },
   "/eip155-upto": {
     method: "GET",
-    customSDK: true,
-    settledAmount: 3n, // set in the handler
     accepts: [
       {
         scheme: "upto",
@@ -84,11 +79,8 @@ function asPaymentRoutes(routes: InputRoutes): RoutesConfig {
   const paymentRoutes: RoutesConfig = {};
   for (let [path, config] of Object.entries(routes)) {
     const { method, ...rest } = config;
-    const isExcluded = "customSDK" in rest && rest.customSDK === true;
-    if (!isExcluded) {
-      const route = `${method} ${path}`;
-      paymentRoutes[route] = rest;
-    }
+    const route = `${method} ${path}`;
+    paymentRoutes[route] = rest;
   }
   return paymentRoutes;
 }
@@ -170,16 +162,6 @@ export class TSServerHandle {
         new ExactSvmScheme(),
       );
 
-    resourceServer.onBeforeVerify(async (k) => {
-      console.log("44--44--44--44--44--44--44--44--44--44--44--44--");
-      console.log(k);
-    });
-
-    resourceServer.onBeforeSettle(async (k) => {
-      console.log("55--55--55--55--55--55--55--55--55--55--55--55--55--");
-      console.log(k);
-    });
-
     const app = new Hono();
     // Apply the payment middleware with configuration
     app.use(
@@ -201,17 +183,9 @@ export class TSServerHandle {
       return c.text("VIP content from /static-price-v2-permit2");
     });
 
-    app.get(
-      route("/eip155-upto"),
-      paymentRequired(
-        ROUTES["/eip155-upto"] as unknown as RouteConfig,
-        resourceServer,
-      ),
-      async (c) => {
-        c.var.setAmountToSettle(ROUTES["/eip155-upto"].settledAmount);
-        return c.text("VIP content from /eip155-upto");
-      },
-    );
+    app.get(route("/eip155-upto"), async (c) => {
+      return c.text("VIP content from /eip155-upto");
+    });
 
     // Start the server
     const server = await new Promise<ServerType>((resolve, reject) => {
