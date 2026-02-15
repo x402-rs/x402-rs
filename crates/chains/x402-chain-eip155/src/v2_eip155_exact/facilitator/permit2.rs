@@ -87,14 +87,9 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 pub async fn settle_permit2_payment<P: Eip155MetaTransactionProvider + ChainProviderOps>(
     _provider: &P,
-    payment_payload: &Permit2PaymentPayload,
-    payment_requirements: &Permit2PaymentRequirements,
+    _payment_payload: &Permit2PaymentPayload,
+    _payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<v2::SettleResponse, X402SchemeFacilitatorError> {
-    // 1. Verify offchain constraints
-    assert_offchain_valid(payment_payload, payment_requirements)?;
-
-    // 2. Try settle TODO
-
     todo!("Permit2 - settle_permit2_payment")
 }
 
