@@ -120,8 +120,6 @@ pub enum VerificationError {
     NoPaymentMatching,
     #[error("Verification failed: {0}")]
     VerificationFailed(String),
-    #[error("Precondition failed: {0}")]
-    PreconditionFailed(String),
 }
 
 /// Paygate error type that wraps verification and settlement errors.
@@ -339,11 +337,6 @@ impl PaygateProtocol for v2::PriceTag {
     ) -> Response {
         match err {
             PaygateError::Verification(err) => {
-                let status_code = if let VerificationError::PreconditionFailed(_) = &err {
-                    StatusCode::PRECONDITION_FAILED
-                } else {
-                    StatusCode::PAYMENT_REQUIRED
-                };
                 let payment_required_response = v2::PaymentRequired {
                     error: Some(err.to_string()),
                     accepts: accepts.iter().map(|pt| pt.requirements.clone()).collect(),
@@ -358,7 +351,7 @@ impl PaygateProtocol for v2::PriceTag {
                     .expect("Failed to create header value");
 
                 Response::builder()
-                    .status(status_code)
+                    .status(StatusCode::PAYMENT_REQUIRED)
                     .header("Payment-Required", header_value)
                     .body(Body::empty())
                     .expect("Fail to construct response")
@@ -389,12 +382,8 @@ impl PaygateProtocol for v2::PriceTag {
 
         match verify_response_v2 {
             v2::VerifyResponse::Valid { .. } => Ok(()),
-            v2::VerifyResponse::Invalid { reason, payer: _ } => {
-                if reason == "permit2_allowance_required" {
-                    Err(VerificationError::PreconditionFailed(reason))
-                } else {
-                    Err(VerificationError::VerificationFailed(reason))
-                }
+            v2::VerifyResponse::Invalid { reason, .. } => {
+                Err(VerificationError::VerificationFailed(reason))
             }
         }
     }

@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use x402_types::facilitator::Facilitator;
 use x402_types::proto;
-use x402_types::proto::{AsPaymentProblem, ErrorReason, PaymentVerificationError};
+use x402_types::proto::{AsPaymentProblem, ErrorReason};
 use x402_types::scheme::X402SchemeFacilitatorError;
 
 #[cfg(feature = "telemetry")]
@@ -241,7 +241,12 @@ impl IntoResponse for FacilitatorLocalError {
                     invalid_reason_details: problem.details(),
                     payer: "",
                 };
-                let status_code = scheme_error_to_status_code(&scheme_handler_error);
+                let status_code = match scheme_handler_error {
+                    X402SchemeFacilitatorError::PaymentVerification(_) => StatusCode::BAD_REQUEST,
+                    X402SchemeFacilitatorError::OnchainFailure(_) => {
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    }
+                };
                 (status_code, Json(verification_error_response)).into_response()
             }
             FacilitatorLocalError::Settlement(scheme_handler_error) => {
@@ -254,22 +259,14 @@ impl IntoResponse for FacilitatorLocalError {
                     error_reason_details: problem.details(),
                     payer: "",
                 };
-                let status_code = scheme_error_to_status_code(&scheme_handler_error);
+                let status_code = match scheme_handler_error {
+                    X402SchemeFacilitatorError::PaymentVerification(_) => StatusCode::BAD_REQUEST,
+                    X402SchemeFacilitatorError::OnchainFailure(_) => {
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    }
+                };
                 (status_code, Json(settlement_error_response)).into_response()
             }
         }
-    }
-}
-
-fn scheme_error_to_status_code(error: &X402SchemeFacilitatorError) -> StatusCode {
-    match error {
-        X402SchemeFacilitatorError::PaymentVerification(e) => {
-            if let PaymentVerificationError::InsufficientAllowance = e {
-                StatusCode::PRECONDITION_FAILED
-            } else {
-                StatusCode::BAD_REQUEST
-            }
-        }
-        X402SchemeFacilitatorError::OnchainFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
