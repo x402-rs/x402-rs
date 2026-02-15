@@ -166,16 +166,6 @@ export class TSServerHandle {
         new ExactSvmScheme(),
       );
 
-    resourceServer.onBeforeVerify(async (k) => {
-      console.log("44--44--44--44--44--44--44--44--44--44--44--44--");
-      console.log(k);
-    });
-
-    resourceServer.onBeforeSettle(async (k) => {
-      console.log("55--55--55--55--55--55--55--55--55--55--55--55--55--");
-      console.log(JSON.stringify(k, null, 2));
-    });
-
     const app = new Hono();
     // Apply the payment middleware with configuration
     app.use(

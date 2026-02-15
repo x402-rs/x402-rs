@@ -32,7 +32,6 @@ export class UptoEvmSchemeServer implements SchemeNetworkServer {
     },
     _facilitatorExtensions: string[],
   ): Promise<PaymentRequirements> {
-    console.log("11--11--11--11--11--11--11--11--11--11--11--11--11--11--");
     return paymentRequirements;
   }
 }
@@ -94,7 +93,6 @@ export class UptoEvmSchemeClient implements SchemeNetworkClient {
       permit2Authorization,
     };
 
-    console.log("00--00--00--00--00--00--00--00--00--");
     return {
       x402Version,
       payload,
