@@ -191,10 +191,10 @@ pub async fn assert_onchain_exact_permit2<P: Provider>(
     let permit_witness_transfer_from = PermitWitnessTransferFrom {
         permitted: ISignatureTransfer::TokenPermissions {
             token: authorization.permitted.token.into(),
-            amount: authorization.permitted.amount,
+            amount: authorization.permitted.amount.into(),
         },
         spender: types::EXACT_PERMIT2_PROXY_ADDRESS,
-        nonce: authorization.nonce,
+        nonce: authorization.nonce.into(),
         deadline: U256::from(authorization.deadline.as_secs()),
         witness: x402BasePermit2Proxy::Witness {
             to: authorization.witness.to.into(),
@@ -340,10 +340,10 @@ where
     let permit_witness_transfer_from = PermitWitnessTransferFrom {
         permitted: ISignatureTransfer::TokenPermissions {
             token: authorization.permitted.token.into(),
-            amount: authorization.permitted.amount,
+            amount: authorization.permitted.amount.into(),
         },
         spender: types::EXACT_PERMIT2_PROXY_ADDRESS,
-        nonce: authorization.nonce,
+        nonce: authorization.nonce.into(),
         deadline: U256::from(authorization.deadline.as_secs()),
         witness: x402BasePermit2Proxy::Witness {
             to: authorization.witness.to.into(),
