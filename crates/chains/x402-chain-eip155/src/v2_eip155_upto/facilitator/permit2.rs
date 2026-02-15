@@ -1,4 +1,4 @@
-use alloy_primitives::{TxHash, U256};
+use alloy_primitives::{Address, TxHash, U256};
 use alloy_provider::bindings::IMulticall3;
 use alloy_provider::{MULTICALL3_ADDRESS, MulticallItem, Provider};
 use alloy_rpc_types_eth::TransactionReceipt;
@@ -33,18 +33,12 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<v2::VerifyResponse, Eip155ExactError> {
     // 1. Verify offchain constraints
-    let required_amount = assert_offchain_valid_verify(payment_payload, payment_requirements)?;
+    assert_offchain_valid(payment_payload, payment_requirements)?;
 
     // 2. Verify onchain constraints
     let authorization = &payment_payload.payload.permit_2_authorization;
-    let payer = authorization.from;
-    assert_onchain_upto_permit2(
-        provider.inner(),
-        provider.chain(),
-        payment_payload,
-        required_amount,
-    )
-    .await?;
+    let payer: Address = authorization.from.into();
+    assert_onchain_upto_permit2(provider.inner(), provider.chain(), payment_payload).await?;
 
     Ok(v2::VerifyResponse::valid(payer.to_string()))
 }
@@ -58,21 +52,31 @@ pub async fn settle_permit2_payment<P, E>(
     provider: &P,
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
+    settle_amount: U256,
 ) -> Result<UptoSettleResponse, X402SchemeFacilitatorError>
 where
     P: Eip155MetaTransactionProvider<Error = E> + ChainProviderOps,
     Eip155ExactError: From<E>,
 {
     // 1. Verify offchain constraints
-    let required_amount = assert_offchain_valid_settle(payment_payload, payment_requirements)?;
+    assert_offchain_valid(payment_payload, payment_requirements)?;
 
+    // 2. Determine the actual settlement amount
     let authorization = &payment_payload.payload.permit_2_authorization;
-    let payer = authorization.from;
+    let max_amount = authorization.permitted.amount;
 
-    // 2. Handle zero settlement - no on-chain transaction needed
-    // Allowing $0 settlements means unused authorizations naturally expire without on-chain transactions, reducing gas costs and blockchain bloat
-    // TODO Document this
-    if required_amount.is_zero() {
+    // 3. Validate settlement amount doesn't exceed maximum
+    if settle_amount > max_amount {
+        return Err(X402SchemeFacilitatorError::PaymentVerification(
+            PaymentVerificationError::InvalidFormat(
+                "invalid_upto_evm_payload_settlement_exceeds_amount".to_string(),
+            ),
+        ));
+    }
+
+    // 4. Handle zero settlement - no on-chain transaction needed
+    if settle_amount.is_zero() {
+        let payer = authorization.from;
         let network = &payment_payload.accepted.network;
         return Ok(UptoSettleResponse::success(
             payer.to_string(),
@@ -82,8 +86,8 @@ where
         ));
     }
 
-    // 3. Execute settlement
-    let tx_hash = settle_upto_permit2(provider, payment_payload, required_amount).await?;
+    // 5. Execute settlement
+    let tx_hash = settle_upto_permit2(provider, payment_payload, settle_amount).await?;
     let payer = authorization.from;
     let network = &payment_payload.accepted.network;
 
@@ -91,45 +95,8 @@ where
         payer.to_string(),
         tx_hash.to_string(),
         network.to_string(),
-        required_amount.to_string(),
+        settle_amount.to_string(),
     ))
-}
-
-#[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
-pub fn assert_offchain_valid_verify(
-    payment_payload: &Permit2PaymentPayload,
-    payment_requirements: &Permit2PaymentRequirements,
-) -> Result<U256, PaymentVerificationError> {
-    assert_offchain_valid(payment_payload, payment_requirements)?;
-    // Authorized amount must EQUAL the required amount (client authorizes exact max)
-    // The server can then settle for any amount <= this max
-    let authorization = &payment_payload.payload.permit_2_authorization;
-    let accepted_amount = payment_payload.accepted.amount;
-    if authorization.permitted.amount != accepted_amount {
-        return Err(PaymentVerificationError::InvalidPaymentAmount);
-    }
-    Ok(accepted_amount)
-}
-
-#[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
-pub fn assert_offchain_valid_settle(
-    payment_payload: &Permit2PaymentPayload,
-    payment_requirements: &Permit2PaymentRequirements,
-) -> Result<U256, PaymentVerificationError> {
-    assert_offchain_valid(payment_payload, payment_requirements)?;
-    // Authorized amount must EQUAL the required amount (client authorizes exact max)
-    // The server can then settle for any amount <= this max
-    let authorization = &payment_payload.payload.permit_2_authorization;
-    let permitted_amount = authorization.permitted.amount;
-    let accepted = &payment_payload.accepted;
-    if permitted_amount != accepted.amount {
-        return Err(PaymentVerificationError::InvalidPaymentAmount);
-    }
-    let amount_to_settle = payment_requirements.amount;
-    if permitted_amount < amount_to_settle {
-        return Err(PaymentVerificationError::InvalidPaymentAmount);
-    }
-    Ok(amount_to_settle)
 }
 
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
@@ -172,6 +139,12 @@ pub fn assert_offchain_valid(
     let valid_before = authorization.deadline;
     assert_time(valid_after, valid_before)?;
 
+    // For upto: authorized amount must EQUAL the required amount (client authorizes exact max)
+    // The server can then settle for any amount <= this max
+    if authorization.permitted.amount != accepted.amount {
+        return Err(PaymentVerificationError::InvalidPaymentAmount);
+    }
+
     // Same token
     if authorization.permitted.token != accepted.asset {
         return Err(PaymentVerificationError::AssetMismatch);
@@ -184,10 +157,10 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
     provider: &P,
     chain_reference: &Eip155ChainReference,
     payment_payload: &Permit2PaymentPayload,
-    required_amount: U256,
 ) -> Result<(), Eip155ExactError> {
     let authorization = &payment_payload.payload.permit_2_authorization;
     let payer = authorization.from.0;
+    let required_amount = payment_payload.accepted.amount;
     let asset_address = payment_payload.accepted.asset.0;
 
     let token_contract = IERC20::new(asset_address, provider);
