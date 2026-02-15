@@ -12,8 +12,7 @@ use tracing::instrument;
 
 use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider};
 use crate::v1_eip155_exact::{
-    Eip155ExactError, StructuredSignature, VALIDATOR_ADDRESS, Validator6492, assert_enough_value,
-    assert_time,
+    Eip155ExactError, StructuredSignature, assert_enough_value, assert_time,
 };
 use crate::v2_eip155_exact::eip3009::assert_requirements_match;
 use crate::v2_eip155_exact::types::{Permit2PaymentPayload, Permit2PaymentRequirements};
@@ -227,54 +226,12 @@ pub async fn assert_onchain_valid<P: Provider>(
 
     let exact_permit2_proxy = X402ExactPermit2Proxy::new(EXACT_PERMIT2_PROXY_ADDRESS, provider);
     match structured_signature {
-        StructuredSignature::EIP6492 {
-            factory: _,
-            factory_calldata: _,
-            inner,
-            original,
-        } => {
-            let validator6492 = Validator6492::new(VALIDATOR_ADDRESS, provider);
-            let is_valid_signature_call =
-                validator6492.isValidSigWithSideEffects(payer, eip712_hash, original);
-            let permit_transfer_from = ISignatureTransfer::PermitTransferFrom {
-                permitted: permit_witness_transfer_from.permitted,
-                nonce: permit_witness_transfer_from.nonce,
-                deadline: permit_witness_transfer_from.deadline,
-            };
-            let witness = permit_witness_transfer_from.witness;
-            let settle_call =
-                exact_permit2_proxy.settle(permit_transfer_from, payer, witness, inner);
-            let aggregate3 = provider
-                .multicall()
-                .add(is_valid_signature_call)
-                .add(settle_call);
-            let aggregate3_call = aggregate3.aggregate3();
-            #[cfg(feature = "telemetry")]
-            let (is_valid_signature_result, transfer_result) = aggregate3_call
-                .instrument(tracing::info_span!("multi_call_settle_exact_permit2",
-                    from = %payer,
-                    to = %authorization.witness.to,
-                    value = %authorization.permitted.amount,
-                    valid_after = %authorization.witness.valid_after,
-                    valid_before = %authorization.deadline,
-                    nonce = %authorization.nonce,
-                    token_contract = %authorization.permitted.token,
-                    otel.kind = "client",
-                ))
-                .await?;
-            #[cfg(not(feature = "telemetry"))]
-            let (is_valid_signature_result, transfer_result) = aggregate3_call.await?;
-            let is_valid_signature_result = is_valid_signature_result
-                .map_err(|e| PaymentVerificationError::InvalidSignature(e.to_string()))?;
-            if !is_valid_signature_result {
-                return Err(PaymentVerificationError::InvalidSignature(
-                    "Chain reported signature to be invalid".to_string(),
-                )
-                .into());
-            }
-            transfer_result
-                .map_err(|e| PaymentVerificationError::TransactionSimulation(e.to_string()))?;
-            Ok(())
+        StructuredSignature::EIP6492 { .. } => {
+            // FIXME TODO EIP6492 signature
+            Err(PaymentVerificationError::InvalidFormat(
+                "EIP6492 signature is not supported".to_string(),
+            )
+            .into())
         }
         StructuredSignature::EOA(signature) => {
             let permit_transfer_from = ISignatureTransfer::PermitTransferFrom {
@@ -299,6 +256,7 @@ pub async fn assert_onchain_valid<P: Provider>(
                     valid_after = %authorization.witness.valid_after,
                     valid_before = %authorization.deadline,
                     nonce = %authorization.nonce,
+                    signature = %signature,
                     token_contract = %authorization.permitted.token,
                     otel.kind = "client",
                 ))
@@ -307,32 +265,12 @@ pub async fn assert_onchain_valid<P: Provider>(
             settle_call_fut.await?;
             Ok(())
         }
-        StructuredSignature::EIP1271(signature) => {
-            let permit_transfer_from = ISignatureTransfer::PermitTransferFrom {
-                permitted: permit_witness_transfer_from.permitted,
-                nonce: permit_witness_transfer_from.nonce,
-                deadline: permit_witness_transfer_from.deadline,
-            };
-            let witness = permit_witness_transfer_from.witness;
-            let settle_call =
-                exact_permit2_proxy.settle(permit_transfer_from, payer, witness, signature);
-            let settle_call_fut = settle_call.call().into_future();
-            #[cfg(feature = "telemetry")]
-            settle_call_fut
-                .instrument(tracing::info_span!("call_settle_exact_permit2",
-                    from = %payer,
-                    to = %authorization.witness.to,
-                    value = %authorization.permitted.amount,
-                    valid_after = %authorization.witness.valid_after,
-                    valid_before = %authorization.deadline,
-                    nonce = %authorization.nonce,
-                    token_contract = %authorization.permitted.token,
-                    otel.kind = "client",
-                ))
-                .await?;
-            #[cfg(not(feature = "telemetry"))]
-            settle_call_fut.await?;
-            Ok(())
+        StructuredSignature::EIP1271(_) => {
+            // FIXME TODO EIP1271 signature
+            Err(PaymentVerificationError::InvalidFormat(
+                "EIP1271 signature is not supported".to_string(),
+            )
+            .into())
         }
     }
 }
