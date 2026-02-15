@@ -77,7 +77,7 @@ where
 
     // 4. Handle zero settlement - no on-chain transaction needed
     if actual_amount.is_zero() {
-        let payer = authorization.from;
+        let payer = authorization.from.clone();
         let network = &payment_payload.accepted.network;
         return Ok(UptoSettleResponse::success(
             payer.to_string(),
@@ -89,7 +89,7 @@ where
 
     // 5. Execute settlement
     let tx_hash = settle_upto_permit2(provider, payment_payload, actual_amount).await?;
-    let payer = authorization.from;
+    let payer = authorization.from.clone();
     let network = &payment_payload.accepted.network;
 
     Ok(UptoSettleResponse::success(
