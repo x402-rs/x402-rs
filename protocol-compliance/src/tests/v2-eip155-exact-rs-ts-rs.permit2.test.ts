@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { RSFacilitatorHandle } from "../utils/facilitator.js";
 import { ROUTES, TSServerHandle } from "../utils/server.js";
-import { config, TEST_CONFIG } from "../utils/config.js";
+import { config } from "../utils/config.js";
 import {
   EIP155_ACCOUNT,
   getAllowance,
@@ -33,7 +33,16 @@ describe("v2-eip155-exact-rs-ts-rs: x402 v2, eip155, exact, Rust Client + TS Ser
     expect(response.status).toBe(402);
   });
 
-  it("should return 412 on zero allowance", TEST_CONFIG, async () => {
+  // it("should return 200 OK and VIP content when payment is provided via Rust client", async () => {
+  //   const privateKey = config.baseSepolia.buyerPrivateKey;
+  //   const endpoint = new URL(`${PATH}`, server.url);
+  //   const stdout = await invokeRustClient(endpoint, {
+  //     eip155: privateKey,
+  //   });
+  //   expect(stdout).toContain("VIP content from /static-price-v2");
+  // });
+
+  it("should return 412 on zero allowance", { timeout: 10000 }, async () => {
     const privateKey = config.baseSepolia.buyerPrivateKey;
     const endpoint = new URL(`${PATH}`, server.url);
     const params = ROUTES[PATH];
@@ -50,7 +59,7 @@ describe("v2-eip155-exact-rs-ts-rs: x402 v2, eip155, exact, Rust Client + TS Ser
 
   it(
     "should return 200 OK and VIP content when payment is provided via TS client",
-    TEST_CONFIG,
+    { timeout: 10000 },
     async () => {
       const privateKey = config.baseSepolia.buyerPrivateKey;
       const endpoint = new URL(`${PATH}`, server.url);
