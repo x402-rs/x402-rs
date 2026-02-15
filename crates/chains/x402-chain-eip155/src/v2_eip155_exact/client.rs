@@ -27,8 +27,8 @@ use crate::v1_eip155_exact::PaymentRequirementsExtra;
 use crate::v1_eip155_exact::client::{
     Eip3009SigningParams, SignerLike, sign_erc3009_authorization,
 };
+use crate::v2_eip155_exact::V2Eip155Exact;
 use crate::v2_eip155_exact::types;
-use crate::v2_eip155_exact::{ExactEvmPayload, V2Eip155Exact};
 
 /// Client for signing V2 EIP-155 exact scheme payments.
 ///
@@ -153,7 +153,7 @@ where
             x402_version: v2::X402Version2,
             accepted: self.requirements.clone(),
             resource: self.resource_info.clone(),
-            payload: ExactEvmPayload::Eip3009(evm_payload), // FIXME Permit2
+            payload: evm_payload,
         };
         let json = serde_json::to_vec(&payload)?;
         let b64 = Base64Bytes::encode(&json);

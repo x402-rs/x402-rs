@@ -97,11 +97,9 @@ impl PartialEq<ChecksummedAddress> for Address {
 /// assert_eq!(json, "\"1000000\"");
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DecimalU256(pub U256);
+pub struct TokenAmount(pub U256);
 
-pub type TokenAmount = DecimalU256;
-
-impl FromStr for DecimalU256 {
+impl FromStr for TokenAmount {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -110,7 +108,7 @@ impl FromStr for DecimalU256 {
     }
 }
 
-impl Serialize for DecimalU256 {
+impl Serialize for TokenAmount {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -119,7 +117,7 @@ impl Serialize for DecimalU256 {
     }
 }
 
-impl<'de> Deserialize<'de> for DecimalU256 {
+impl<'de> Deserialize<'de> for TokenAmount {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -129,25 +127,25 @@ impl<'de> Deserialize<'de> for DecimalU256 {
     }
 }
 
-impl From<DecimalU256> for U256 {
-    fn from(value: DecimalU256) -> Self {
+impl From<TokenAmount> for U256 {
+    fn from(value: TokenAmount) -> Self {
         value.0
     }
 }
 
-impl From<U256> for DecimalU256 {
+impl From<U256> for TokenAmount {
     fn from(value: U256) -> Self {
         Self(value)
     }
 }
 
-impl From<u128> for DecimalU256 {
+impl From<u128> for TokenAmount {
     fn from(value: u128) -> Self {
         Self(U256::from(value))
     }
 }
 
-impl From<u64> for DecimalU256 {
+impl From<u64> for TokenAmount {
     fn from(value: u64) -> Self {
         Self(U256::from(value))
     }
@@ -375,12 +373,9 @@ mod tests {
         let chain_ref = Eip155ChainReference::new(1); // Mainnet
         Eip155TokenDeployment {
             chain_reference: chain_ref,
-            address: Address::ZERO,
+            address: alloy_primitives::Address::ZERO,
             decimals,
-            transfer_method: AssetTransferMethod::Eip3009 {
-                name: "TestToken".into(),
-                version: "2".into(),
-            },
+            eip712: None,
         }
     }
 
