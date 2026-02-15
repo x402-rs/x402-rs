@@ -74,13 +74,12 @@ where
     ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
         let request = types::VerifyRequest::from_proto(request.clone())?;
         let payload = &request.payment_payload;
-        assert_accepted_requirements(payload, &request.payment_requirements)?;
-
+        let requirements = &request.payment_requirements;
         let (contract, payment, eip712_domain) = assert_valid_payment(
             self.provider.inner(),
             self.provider.chain(),
-            &payload.accepted,
-            &payload.payload,
+            payload,
+            requirements,
         )
         .await?;
 
@@ -95,12 +94,12 @@ where
     ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError> {
         let request = types::SettleRequest::from_proto(request.clone())?;
         let payload = &request.payment_payload;
-        assert_accepted_requirements(payload, &request.payment_requirements)?;
+        let requirements = &request.payment_requirements;
         let (contract, payment, eip712_domain) = assert_valid_payment(
             self.provider.inner(),
             self.provider.chain(),
-            &payload.accepted,
-            &payload.payload,
+            payload,
+            requirements,
         )
         .await?;
 
@@ -145,9 +144,15 @@ where
 async fn assert_valid_payment<P: Provider>(
     provider: P,
     chain: &Eip155ChainReference,
-    accepted: &types::PaymentRequirements,
-    payload: &types::ExactEvmPayload,
+    payload: &types::PaymentPayload,
+    requirements: &types::PaymentRequirements,
 ) -> Result<(IEIP3009::IEIP3009Instance<P>, ExactEvmPayment, Eip712Domain), Eip155ExactError> {
+    let accepted = &payload.accepted;
+    if accepted != requirements {
+        return Err(PaymentVerificationError::AcceptedRequirementsMismatch.into());
+    }
+    let payload = &payload.payload;
+
     let chain_id: ChainId = chain.into();
     let payload_chain_id = &accepted.network;
     if payload_chain_id != &chain_id {
@@ -202,16 +207,4 @@ async fn assert_valid_payment<P: Provider>(
     };
 
     Ok((contract, payment, domain))
-}
-
-pub fn assert_accepted_requirements(
-    payload: &types::PaymentPayload,
-    requirements: &types::PaymentRequirements,
-) -> Result<(), Eip155ExactError> {
-    let accepted = &payload.accepted;
-    if accepted != requirements {
-        Err(PaymentVerificationError::AcceptedRequirementsMismatch.into())
-    } else {
-        Ok(())
-    }
 }

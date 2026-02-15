@@ -360,8 +360,7 @@ where
             .accepts
             .iter()
             .filter_map(|original_requirements_json| {
-                let requirements =
-                    PaymentRequirements::try_from(original_requirements_json).ok()?;
+                let requirements = PaymentRequirements::try_from(original_requirements_json).ok()?;
                 let chain_id = ChainId::from_network_name(&requirements.network)?;
                 if chain_id.namespace != "solana" {
                     return None;
