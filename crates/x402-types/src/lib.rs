@@ -1,5 +1,3 @@
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
-
 //! Core types for the x402 payment protocol.
 //!
 //! This crate provides the foundational types used throughout the x402 ecosystem

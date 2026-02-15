@@ -16,8 +16,7 @@ lit_str!(UptoScheme, "upto");
 /// Type alias for V2 verify requests using the upto EVM payment scheme.
 pub type VerifyRequest = v2::VerifyRequest<PaymentPayload, PaymentRequirements>;
 
-pub type Permit2PaymentRequirements =
-    v2::PaymentRequirements<UptoScheme, U256, ChecksummedAddress>;
+pub type Permit2PaymentRequirements = v2::PaymentRequirements<UptoScheme, U256, ChecksummedAddress>;
 pub type Permit2PaymentPayload = v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>;
 
 /// Settlement response for the upto scheme.
@@ -87,8 +86,7 @@ pub type PaymentPayload<TPaymentRequirements = PaymentRequirements> =
 ///
 /// V2 uses CAIP-2 chain IDs and embeds requirements directly in the payload.
 /// The `amount` field represents the maximum authorized amount.
-pub type PaymentRequirements =
-    v2::PaymentRequirements<UptoScheme, U256, ChecksummedAddress>;
+pub type PaymentRequirements = v2::PaymentRequirements<UptoScheme, U256, ChecksummedAddress>;
 
 #[cfg(any(feature = "facilitator", feature = "client"))]
 pub mod facilitator_client_only {

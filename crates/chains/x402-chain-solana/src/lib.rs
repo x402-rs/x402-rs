@@ -1,5 +1,3 @@
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
-
 //! Solana chain support for the x402 payment protocol.
 //!
 //! This crate provides implementations of the x402 payment protocol for Solana blockchain.
