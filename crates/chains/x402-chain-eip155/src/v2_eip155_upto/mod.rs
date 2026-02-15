@@ -52,6 +52,7 @@ pub use client::*;
 #[cfg(feature = "server")]
 pub mod server;
 #[cfg(feature = "server")]
+#[allow(unused_imports)] // Public for consumption by downstream crates.
 pub use server::*;
 
 pub mod types;
