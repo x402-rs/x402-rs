@@ -66,10 +66,6 @@ export const ROUTES = {
         price: {
           amount: "10",
           asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-          extra: {
-            name: "USDC",
-            version: "2",
-          },
         },
         network: "eip155:84532",
         payTo: "0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07",
@@ -177,7 +173,7 @@ export class TSServerHandle {
 
     resourceServer.onBeforeSettle(async (k) => {
       console.log("55--55--55--55--55--55--55--55--55--55--55--55--55--");
-      console.log(k);
+      console.log(JSON.stringify(k, null, 2));
     });
 
     const app = new Hono();
