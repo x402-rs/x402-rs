@@ -15,7 +15,6 @@ use alloy_provider::bindings::IMulticall3;
 use alloy_provider::{
     MULTICALL3_ADDRESS, MulticallError, MulticallItem, PendingTransactionError, Provider,
 };
-use alloy_rpc_types_eth::TransactionReceipt;
 use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, SolType, eip712_domain, sol};
 use alloy_transport::TransportError;
 use std::collections::HashMap;
@@ -975,11 +974,6 @@ where
             receipt
         }
     };
-    tx_hash_from_receipt(&receipt)
-}
-
-// FIXME Docs
-pub fn tx_hash_from_receipt(receipt: &TransactionReceipt) -> Result<TxHash, Eip155ExactError> {
     let success = receipt.status();
     if success {
         #[cfg(feature = "telemetry")]
