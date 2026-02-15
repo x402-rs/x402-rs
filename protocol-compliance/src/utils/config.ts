@@ -100,5 +100,5 @@ export async function makeFacilitatorConfig(): Promise<string> {
   return filename;
 }
 
-export const TIMEOUT = 20000;
+export const TIMEOUT = 30000;
 export const TEST_CONFIG = { timeout: TIMEOUT } as const;

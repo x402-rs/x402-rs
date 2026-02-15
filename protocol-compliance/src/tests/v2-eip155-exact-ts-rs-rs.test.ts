@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { RSFacilitatorHandle } from "../utils/facilitator.js";
 import { RSServerHandle } from "../utils/server.js";
 import { makeFetch } from "../utils/client.js";
+import { TEST_CONFIG } from "../utils/config";
 
 describe("v2-eip155-exact-ts-rs-rs: x402 v2, eip155, exact, TS Client + Rust Server + Rust Facilitator", () => {
   let facilitator: RSFacilitatorHandle;
@@ -28,17 +29,21 @@ describe("v2-eip155-exact-ts-rs-rs: x402 v2, eip155, exact, TS Client + Rust Ser
     expect(response.status).toBe(402);
   });
 
-  it("should return 200 OK and VIP content when payment is provided via TS client", async () => {
-    // Make a request using the TypeScript client (simulated payment headers)
-    const fetchFn = await makeFetch("eip155");
-    const endpoint = new URL("./static-price-v2", server.url);
-    const response = await fetchFn(endpoint);
+  it(
+    "should return 200 OK and VIP content when payment is provided via TS client",
+    TEST_CONFIG,
+    async () => {
+      // Make a request using the TypeScript client (simulated payment headers)
+      const fetchFn = await makeFetch("eip155");
+      const endpoint = new URL("./static-price-v2", server.url);
+      const response = await fetchFn(endpoint);
 
-    // Should succeed with 200 OK
-    expect(response.status).toBe(200);
+      // Should succeed with 200 OK
+      expect(response.status).toBe(200);
 
-    // Verify the returned content
-    const text = await response.text();
-    expect(text).toBe("VIP content from /static-price-v2");
-  });
+      // Verify the returned content
+      const text = await response.text();
+      expect(text).toBe("VIP content from /static-price-v2");
+    },
+  );
 });

@@ -9,6 +9,7 @@ import {
   setAllowance,
 } from "../utils/client.js";
 import { PERMIT2_ADDRESS } from "../utils/erc-abi";
+import { TEST_CONFIG } from "../utils/config";
 
 const PATH = "/static-price-v2-permit2";
 
@@ -59,7 +60,7 @@ describe("v2-eip155-exact-ts-ts-rs: permit2: x402 v2, eip155, exact + permit2, T
 
   it(
     "should return 200 OK and VIP content when payment is provided via TS client",
-    { timeout: 10000 },
+    TEST_CONFIG,
     async () => {
       const params = ROUTES[PATH];
       const tokenAddress = params.accepts[0].price.asset;

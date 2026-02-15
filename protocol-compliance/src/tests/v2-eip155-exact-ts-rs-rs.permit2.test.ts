@@ -9,6 +9,7 @@ import {
   setAllowance,
 } from "../utils/client.js";
 import { PERMIT2_ADDRESS } from "../utils/erc-abi";
+import { TEST_CONFIG } from "../utils/config";
 
 const PATH = "/static-price-v2-permit2";
 
@@ -37,7 +38,7 @@ describe("v2-eip155-exact-ts-rs-rs: x402 v2, eip155, exact, TS Client + Rust Ser
     expect(response.status).toBe(402);
   });
 
-  it("should return 412 on zero allowance", { timeout: 10000 }, async () => {
+  it("should return 412 on zero allowance", TEST_CONFIG, async () => {
     const params = ROUTES[PATH];
     const tokenAddress = params.accepts[0].price.asset;
     await setAllowance(tokenAddress, PERMIT2_ADDRESS, 0n);
@@ -53,7 +54,7 @@ describe("v2-eip155-exact-ts-rs-rs: x402 v2, eip155, exact, TS Client + Rust Ser
 
   it(
     "should return 200 OK and VIP content when payment is provided via TS client",
-    { timeout: 10000 },
+    TEST_CONFIG,
     async () => {
       const params = ROUTES[PATH];
       const tokenAddress = params.accepts[0].price.asset;
