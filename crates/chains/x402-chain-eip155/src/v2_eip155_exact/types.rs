@@ -20,8 +20,7 @@ pub type VerifyRequest = v2::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;
 
 /// Type alias for V2 payment payloads with embedded requirements and EVM-specific data.
-pub type PaymentPayload<TPaymentRequirements = PaymentRequirements> =
-    v2::PaymentPayload<TPaymentRequirements, ExactEvmPayload>;
+pub type PaymentPayload = v2::PaymentPayload<PaymentRequirements, ExactEvmPayload>;
 
 /// Type alias for V2 payment requirements with EVM-specific types.
 ///

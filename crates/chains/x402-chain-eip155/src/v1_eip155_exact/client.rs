@@ -93,8 +93,8 @@ where
         payment_required
             .accepts
             .iter()
-            .filter_map(|original_json| {
-                let requirements = types::PaymentRequirements::try_from(original_json).ok()?;
+            .filter_map(|v| {
+                let requirements: types::PaymentRequirements = v.as_concrete()?;
                 let chain_id = ChainId::from_network_name(&requirements.network)?;
                 let chain_reference = Eip155ChainReference::try_from(chain_id.clone()).ok()?;
                 let candidate = PaymentCandidate {

@@ -8,7 +8,7 @@ use reqwest::{Request, Response};
 use reqwest_middleware as rqm;
 use std::sync::Arc;
 use x402_types::proto;
-use x402_types::proto::{OriginalJson, v1, v2};
+use x402_types::proto::{v1, v2};
 use x402_types::scheme::client::{
     FirstMatch, PaymentCandidate, PaymentSelector, X402Error, X402SchemeClient,
 };
@@ -290,7 +290,7 @@ pub async fn parse_payment_required(response: Response) -> Option<proto::Payment
     let v2_payment_required = headers
         .get("Payment-Required")
         .and_then(|h| Base64Bytes::from(h.as_bytes()).decode().ok())
-        .and_then(|b| serde_json::from_slice::<v2::PaymentRequired<OriginalJson>>(&b).ok());
+        .and_then(|b| serde_json::from_slice::<v2::PaymentRequired>(&b).ok());
     if let Some(v2_payment_required) = v2_payment_required {
         #[cfg(feature = "telemetry")]
         debug!("Parsed V2 payment required from header");
@@ -302,7 +302,7 @@ pub async fn parse_payment_required(response: Response) -> Option<proto::Payment
         .bytes()
         .await
         .ok()
-        .and_then(|b| serde_json::from_slice::<v1::PaymentRequired<OriginalJson>>(&b).ok());
+        .and_then(|b| serde_json::from_slice::<v1::PaymentRequired>(&b).ok());
     if let Some(v1_payment_required) = v1_payment_required {
         #[cfg(feature = "telemetry")]
         debug!("Parsed V1 payment required from body");
