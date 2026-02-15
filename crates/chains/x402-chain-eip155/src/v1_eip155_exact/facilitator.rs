@@ -286,12 +286,12 @@ async fn assert_valid_payment<'a, P: Provider>(
 
     let amount_required = requirements.max_amount_required;
     assert_enough_balance(&contract, &authorization.from, amount_required).await?;
-    assert_enough_value(&authorization.value, &amount_required)?;
+    assert_enough_value(&authorization.value.into(), &amount_required)?;
 
     let payment = ExactEvmPayment {
         from: authorization.from,
         to: authorization.to,
-        value: authorization.value,
+        value: authorization.value.into(),
         valid_after: authorization.valid_after,
         valid_before: authorization.valid_before,
         nonce: authorization.nonce,

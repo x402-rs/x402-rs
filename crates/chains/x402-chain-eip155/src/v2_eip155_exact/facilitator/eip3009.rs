@@ -101,14 +101,14 @@ pub async fn assert_valid_payment<P: Provider>(
     });
     let domain = assert_domain(chain, &contract, &asset_address.into(), &extra).await?;
 
-    assert_enough_balance(&contract, &authorization.from, amount_required).await?;
+    assert_enough_balance(&contract, &authorization.from, amount_required.into()).await?;
 
     let signature = payload.signature.clone();
 
     let payment = ExactEvmPayment {
         from: authorization.from,
         to: authorization.to,
-        value: authorization.value,
+        value: authorization.value.into(),
         valid_after: authorization.valid_after,
         valid_before: authorization.valid_before,
         nonce: authorization.nonce,

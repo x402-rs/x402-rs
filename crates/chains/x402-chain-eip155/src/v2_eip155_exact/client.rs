@@ -192,7 +192,7 @@ where
                 let candidate = PaymentCandidate {
                     chain_id: requirements.network.clone(),
                     asset: requirements.asset.to_string(),
-                    amount: requirements.amount,
+                    amount: requirements.amount.into(),
                     scheme: self.scheme().to_string(),
                     x402_version: self.x402_version(),
                     pay_to: requirements.pay_to.to_string(),
@@ -237,7 +237,7 @@ where
                     chain_id: self.chain_reference.inner(),
                     asset_address: self.requirements.asset.0,
                     pay_to: self.requirements.pay_to.into(),
-                    amount: self.requirements.amount,
+                    amount: self.requirements.amount.into(),
                     max_timeout_seconds: self.requirements.max_timeout_seconds,
                     extra,
                 };
@@ -255,7 +255,7 @@ where
                     chain_id: self.chain_reference.inner(),
                     asset_address: self.requirements.asset.0,
                     pay_to: self.requirements.pay_to.into(),
-                    amount: self.requirements.amount,
+                    amount: self.requirements.amount.into(),
                     max_timeout_seconds: self.requirements.max_timeout_seconds,
                     extra: None,
                 };
