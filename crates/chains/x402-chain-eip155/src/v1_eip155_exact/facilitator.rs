@@ -42,7 +42,6 @@ use crate::v1_eip155_exact::{
 
 /// Signature verifier for EIP-6492, EIP-1271, EOA, universally deployed on the supported EVM chains
 /// If absent on a target chain, verification will fail; you should deploy the validator there.
-// Note: Expect deployed on every chain
 pub const VALIDATOR_ADDRESS: Address = address!("0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B");
 
 impl<P> X402SchemeFacilitatorBuilder<P> for V1Eip155Exact

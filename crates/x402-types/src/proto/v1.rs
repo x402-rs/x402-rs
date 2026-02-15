@@ -234,7 +234,7 @@ struct VerifyResponseWire {
     is_valid: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     payer: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     invalid_reason: Option<String>,
 }
 
