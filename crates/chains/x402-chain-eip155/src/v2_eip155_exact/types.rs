@@ -5,6 +5,7 @@
 
 use alloy_primitives::{Bytes, U256};
 use serde::{Deserialize, Serialize};
+use x402_types::proto;
 use x402_types::proto::v2;
 use x402_types::timestamp::UnixTimestamp;
 
@@ -16,70 +17,42 @@ pub use crate::v1_eip155_exact::types::{ExactEvmPayload as Eip3009Payload, Exact
 /// Type alias for V2 verify requests using the exact EVM payment scheme.
 pub type VerifyRequest = v2::VerifyRequest<PaymentPayload, PaymentRequirements>;
 
-#[cfg(feature = "facilitator")]
-mod facilitator_only {
-    use alloy_primitives::U256;
-    use serde::{Deserialize, Serialize};
-    use x402_types::proto;
-    use x402_types::proto::v2;
-
-    use crate::chain::ChecksummedAddress;
-    use crate::v1_eip155_exact::ExactScheme;
-    use crate::v2_eip155_exact::{Eip3009Payload, Permit2Payload, asset_transfer_method};
-
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    #[serde(untagged)]
-    pub enum FacilitatorVerifyRequest {
-        #[serde(rename_all = "camelCase")]
-        Eip3009 {
-            /// Protocol version (always 2).
-            x402_version: v2::X402Version2,
-            /// The signed payment authorization.
-            payment_payload: Eip3009PaymentPayload,
-            /// The payment requirements to verify against.
-            payment_requirements: Eip3009PaymentRequirements,
-        },
-        #[serde(rename_all = "camelCase")]
-        Permit2 {
-            /// Protocol version (always 2).
-            x402_version: v2::X402Version2,
-            /// The signed payment authorization.
-            payment_payload: Permit2PaymentPayload,
-            /// The payment requirements to verify against.
-            payment_requirements: Permit2PaymentRequirements,
-        },
-    }
-
-    impl TryFrom<proto::VerifyRequest> for FacilitatorVerifyRequest {
-        type Error = proto::PaymentVerificationError;
-
-        fn try_from(value: proto::VerifyRequest) -> Result<Self, Self::Error> {
-            let value = serde_json::from_str(value.as_str())?;
-            Ok(value)
-        }
-    }
-
-    pub type FacilitatorSettleRequest = FacilitatorVerifyRequest;
-
-    pub type Eip3009PaymentRequirements = v2::PaymentRequirements<
-        ExactScheme,
-        U256,
-        ChecksummedAddress,
-        asset_transfer_method::Eip3009,
-    >;
-    pub type Eip3009PaymentPayload = v2::PaymentPayload<Eip3009PaymentRequirements, Eip3009Payload>;
-
-    pub type Permit2PaymentRequirements = v2::PaymentRequirements<
-        ExactScheme,
-        U256,
-        ChecksummedAddress,
-        asset_transfer_method::Permit2,
-    >;
-    pub type Permit2PaymentPayload = v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+// FIXME Feature facilitator
+pub enum FacilitatorVerifyRequest {
+    #[serde(rename_all = "camelCase")]
+    Eip3009 {
+        /// Protocol version (always 2).
+        x402_version: v2::X402Version2,
+        /// The signed payment authorization.
+        payment_payload: Eip3009PaymentPayload,
+        /// The payment requirements to verify against.
+        payment_requirements: Eip3009PaymentRequirements,
+    },
+    #[serde(rename_all = "camelCase")]
+    Permit2 {
+        /// Protocol version (always 2).
+        x402_version: v2::X402Version2,
+        /// The signed payment authorization.
+        payment_payload: Permit2PaymentPayload,
+        /// The payment requirements to verify against.
+        payment_requirements: Permit2PaymentRequirements,
+    },
 }
+pub type FacilitatorSettleRequest = FacilitatorVerifyRequest;
 
-#[cfg(feature = "facilitator")]
-pub use facilitator_only::*;
+// FIXME Feature facilitator
+pub type Eip3009PaymentRequirements =
+    v2::PaymentRequirements<ExactScheme, U256, ChecksummedAddress, asset_transfer_method::Eip3009>;
+// FIXME Feature facilitator
+pub type Eip3009PaymentPayload = v2::PaymentPayload<Eip3009PaymentRequirements, Eip3009Payload>;
+
+// FIXME Feature facilitator
+pub type Permit2PaymentRequirements =
+    v2::PaymentRequirements<ExactScheme, U256, ChecksummedAddress, asset_transfer_method::Permit2>;
+// FIXME Feature facilitator
+pub type Permit2PaymentPayload = v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>;
 
 /// Type alias for V2 settle requests (same structure as verify requests).
 pub type SettleRequest = VerifyRequest;
@@ -94,21 +67,6 @@ pub type PaymentPayload<TPaymentRequirements = PaymentRequirements> =
 /// unlike V1 which uses network names and separate requirement objects.
 pub type PaymentRequirements =
     v2::PaymentRequirements<ExactScheme, U256, ChecksummedAddress, AssetTransferMethod>;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum ExactEvmPayload {
-    Eip3009(Eip3009Payload),
-    Permit2(Permit2Payload),
-}
-
-// FIXME Docs
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Permit2Payload {
-    pub permit_2_authorization: Permit2Authorization,
-    pub signature: Bytes,
-}
 
 pub mod asset_transfer_method {
     use crate::chain::AssetTransferMethod;
@@ -162,44 +120,14 @@ pub mod asset_transfer_method {
     }
 }
 
-#[cfg(any(feature = "facilitator", feature = "client"))]
-pub mod facilitator_client_only {
-    use alloy_primitives::{Address, address};
-    use alloy_sol_types::sol;
+impl TryFrom<proto::VerifyRequest> for FacilitatorVerifyRequest {
+    type Error = proto::PaymentVerificationError;
 
-    /// The canonical Permit2 contract address deployed on most chains.
-    pub const PERMIT2_ADDRESS: Address = address!("0x000000000022D473030F116dDEE9F6B43aC78BA3");
-
-    /// The X402 ExactPermit2Proxy contract address for settling Permit2 payments.
-    pub const EXACT_PERMIT2_PROXY_ADDRESS: Address =
-        address!("0x4020615294c913F045dc10f0a5cdEbd86c280001");
-
-    sol!(
-        #[allow(missing_docs)]
-        #[allow(clippy::too_many_arguments)]
-        #[derive(Debug)]
-        #[sol(rpc)]
-        X402ExactPermit2Proxy,
-        "abi/X402ExactPermit2Proxy.json"
-    );
-
-    sol!(
-        /// Signature struct to do settle through [`X402ExactPermit2Proxy`]
-        /// Depends on availability of [`X402ExactPermit2Proxy`]
-        #[allow(clippy::too_many_arguments)]
-        #[derive(Debug)]
-        struct PermitWitnessTransferFrom {
-            ISignatureTransfer.TokenPermissions permitted;
-            address spender;
-            uint256 nonce;
-            uint256 deadline;
-            x402BasePermit2Proxy.Witness witness;
-        }
-    );
+    fn try_from(value: proto::VerifyRequest) -> Result<Self, Self::Error> {
+        let value = serde_json::from_str(value.as_str())?;
+        Ok(value)
+    }
 }
-
-#[cfg(any(feature = "facilitator", feature = "client"))]
-pub use facilitator_client_only::*;
 
 // FIXME Docs
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,4 +158,19 @@ pub struct Permit2AuthorizationPermitted {
     #[serde(with = "crate::decimal_u256")]
     pub amount: U256,
     pub token: ChecksummedAddress,
+}
+
+// FIXME Docs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Permit2Payload {
+    pub permit_2_authorization: Permit2Authorization,
+    pub signature: Bytes,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ExactEvmPayload {
+    Eip3009(Eip3009Payload),
+    Permit2(Permit2Payload),
 }
