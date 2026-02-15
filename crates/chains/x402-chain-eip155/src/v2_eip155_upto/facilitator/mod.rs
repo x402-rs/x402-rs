@@ -73,7 +73,7 @@ where
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
-        let verify_request = types::VerifyRequest::try_from(request)?;
+        let verify_request = types::FacilitatorVerifyRequest::try_from(request.clone())?;
         let verify_response = permit2::verify_permit2_payment(
             &self.provider,
             &verify_request.payment_payload,
@@ -87,8 +87,7 @@ where
         &self,
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError> {
-        let settle_request = types::SettleRequest::try_from(request)?;
-        // FIXME
+        let settle_request = types::FacilitatorSettleRequest::try_from(request.clone())?;
         // For now, settle the full authorized amount
         // In a real implementation, this would be determined by resource consumption
         let settle_response = permit2::settle_permit2_payment(
