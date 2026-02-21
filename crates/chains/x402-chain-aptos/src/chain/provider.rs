@@ -201,6 +201,11 @@ impl AptosChainProvider {
     pub fn private_key(&self) -> Option<&Ed25519PrivateKey> {
         self.fee_payer_private_key.as_ref()
     }
+
+    /// Returns the chain reference for this provider.
+    pub fn chain_reference(&self) -> AptosChainReference {
+        self.chain
+    }
 }
 
 impl ChainProviderOps for AptosChainProvider {

@@ -69,8 +69,8 @@ impl KnownNetworkAptos<AptosTokenDeployment> for USDC {
     }
 
     fn aptos_testnet() -> AptosTokenDeployment {
-        // USDC on Aptos testnet (this is a placeholder address, actual testnet USDC may differ)
-        let address: Address = "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b"
+        // USDC on Aptos testnet (fungible asset metadata address)
+        let address: Address = "0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832"
             .parse()
             .expect("Invalid USDC address");
         AptosTokenDeployment::new(AptosChainReference::aptos_testnet(), address, 6)
