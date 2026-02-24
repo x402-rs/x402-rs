@@ -58,9 +58,9 @@ use x402_types::util::Base64Bytes;
 #[derive(Debug, Clone)]
 pub struct ResourceInfoBuilder {
     /// Description of the protected resource
-    pub description: String,
+    pub description: Option<String>,
     /// MIME type of the protected resource
-    pub mime_type: String,
+    pub mime_type: Option<String>,
     /// Optional explicit URL of the protected resource
     pub url: Option<String>,
 }
@@ -68,8 +68,8 @@ pub struct ResourceInfoBuilder {
 impl Default for ResourceInfoBuilder {
     fn default() -> Self {
         Self {
-            description: "".to_string(),
-            mime_type: "application/json".to_string(),
+            description: None,
+            mime_type: None,
             url: None,
         }
     }
@@ -282,7 +282,7 @@ fn price_tag_to_v1_requirements_with_resource(
         network: price_tag.network.clone(),
         max_amount_required: price_tag.amount.clone(),
         resource: resource.url.clone(),
-        description: resource.description.clone(),
+        description: resource.description.clone().unwrap_or_default(),
         mime_type: resource.mime_type.clone(),
         output_schema: None,
         pay_to: price_tag.pay_to.clone(),

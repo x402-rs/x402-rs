@@ -376,7 +376,7 @@ pub struct PaymentRequirements<
     /// Human-readable description of the resource.
     pub description: String,
     /// MIME type of the resource.
-    pub mime_type: String,
+    pub mime_type: Option<String>,
     /// Optional JSON schema for the resource output.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_schema: Option<serde_json::Value>,

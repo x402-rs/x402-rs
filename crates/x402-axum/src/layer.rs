@@ -284,7 +284,7 @@ impl<TSource, TFacilitator> X402LayerBuilder<TSource, TFacilitator> {
     /// This is included in 402 responses to inform clients what they're paying for.
     pub fn with_description(mut self, description: String) -> Self {
         let mut new_resource = (*self.resource).clone();
-        new_resource.description = description;
+        new_resource.description = Some(description);
         self.resource = Arc::new(new_resource);
         self
     }
@@ -294,7 +294,7 @@ impl<TSource, TFacilitator> X402LayerBuilder<TSource, TFacilitator> {
     /// Defaults to `application/json` if not specified.
     pub fn with_mime_type(mut self, mime: String) -> Self {
         let mut new_resource = (*self.resource).clone();
-        new_resource.mime_type = mime;
+        new_resource.mime_type = Some(mime);
         self.resource = Arc::new(new_resource);
         self
     }

@@ -100,12 +100,14 @@ pub type SettleResponse = v1::SettleResponse;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceInfo {
-    /// Human-readable description of the resource.
-    pub description: String,
-    /// MIME type of the resource content.
-    pub mime_type: String,
     /// URL of the resource.
     pub url: String,
+    /// Human-readable description of the resource.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// MIME type of the resource content.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
 }
 
 /// Request to verify a V2 payment.
