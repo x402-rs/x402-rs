@@ -55,6 +55,7 @@
 //!   parses command-line arguments to determine the config file path.
 
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use std::fs;
 use std::net::IpAddr;
 use std::ops::{Deref, DerefMut};
@@ -175,6 +176,15 @@ where
         S: serde::Serializer,
     {
         self.0.serialize(serializer)
+    }
+}
+
+impl<T> Display for LiteralOrEnv<T>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 

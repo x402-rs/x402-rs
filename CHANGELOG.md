@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-02-25
+
+### Added
+
+- `x402-types`: Implemented `Display` for `LiteralOrEnv<T>`, allowing env-var-wrapped config values to be formatted directly.
+
+### Changed
+
+- `x402-chain-eip155`: `RpcConfig::http` field type changed from `Url` to `LiteralOrEnv<Url>`, enabling the RPC endpoint URL to be supplied via an environment variable reference in config files.
+- `x402-chain-solana`: `SolanaChainConfigInner::rpc` and `pubsub` fields changed from `Url` / `Option<Url>` to `LiteralOrEnv<Url>` / `Option<LiteralOrEnv<Url>>`, enabling RPC and pubsub endpoint URLs to be supplied via environment variable references in config files.
+- `x402-chain-solana`: `SolanaChainConfig::pubsub()` return type changed from `&Option<Url>` to `Option<&Url>` for a more idiomatic API.
+
 ## [1.1.0] - 2026-02-05
 
 ### Fixed

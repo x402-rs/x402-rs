@@ -61,8 +61,8 @@ impl SolanaChainConfig {
     }
 
     /// Returns the optional WebSocket pubsub endpoint URL.
-    pub fn pubsub(&self) -> &Option<Url> {
-        &self.inner.pubsub
+    pub fn pubsub(&self) -> Option<&Url> {
+        self.inner.pubsub.as_ref().map(|u| u.deref())
     }
 }
 
@@ -73,10 +73,10 @@ pub struct SolanaChainConfigInner {
     /// A single private key (base58 format, 64 bytes) or env var reference.
     pub signer: SolanaSignerConfig,
     /// RPC provider configuration for this chain (required).
-    pub rpc: Url,
+    pub rpc: LiteralOrEnv<Url>,
     /// RPC pubsub provider endpoint (optional)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pubsub: Option<Url>,
+    pub pubsub: Option<LiteralOrEnv<Url>>,
     /// Maximum compute unit limit for transactions (optional)
     #[serde(default = "solana_chain_config::default_max_compute_unit_limit")]
     pub max_compute_unit_limit: u32,

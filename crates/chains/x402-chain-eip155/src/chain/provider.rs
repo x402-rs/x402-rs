@@ -14,6 +14,7 @@ use alloy_transport::TransportError;
 use alloy_transport::layers::{FallbackLayer, ThrottleLayer};
 use alloy_transport_http::Http;
 use std::num::NonZeroUsize;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceBuilder;
@@ -86,7 +87,7 @@ impl Eip155ChainProvider {
                 if !is_http {
                     return None;
                 }
-                let rpc_url = provider_config.http.clone();
+                let rpc_url = provider_config.http.deref().clone();
                 #[cfg(feature = "telemetry")]
                 tracing::info!(chain=%chain_id, rpc_url=%rpc_url, rate_limit=?provider_config.rate_limit, "Using HTTP transport");
                 let rate_limit = provider_config.rate_limit.unwrap_or(u32::MAX);

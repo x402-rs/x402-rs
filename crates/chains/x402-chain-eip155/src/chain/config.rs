@@ -101,7 +101,7 @@ mod eip155_chain_config {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RpcConfig {
     /// HTTP URL for the RPC endpoint.
-    pub http: Url,
+    pub http: LiteralOrEnv<Url>,
     /// Rate limit for requests per second (optional).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rate_limit: Option<u32>,
