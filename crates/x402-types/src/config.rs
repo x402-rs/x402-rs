@@ -82,11 +82,11 @@ use crate::scheme::SchemeConfig;
 ///
 /// The wrapper implements `Deref` to provide transparent access to the inner type.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LiteralOrEnv<T>(T);
+pub struct LiteralOrEnv<T>(T, Option<String>);
 
 impl<T> LiteralOrEnv<T> {
     pub fn from_literal(value: T) -> Self {
-        Self(value)
+        Self(value, None)
     }
 
     /// Get a reference to the inner value
@@ -147,15 +147,16 @@ where
         let s = String::deserialize(deserializer)?;
 
         // Check if it's an environment variable reference
-        let value = if let Some(var_name) = Self::parse_env_var_syntax(&s) {
-            std::env::var(&var_name).map_err(|_| {
+        let (value, var_name) = if let Some(var_name) = Self::parse_env_var_syntax(&s) {
+            let value = std::env::var(&var_name).map_err(|_| {
                 serde::de::Error::custom(format!(
                     "Environment variable '{}' not found (referenced as '{}')",
                     var_name, s
                 ))
-            })?
+            })?;
+            (value, Some(var_name))
         } else {
-            s
+            (s, None)
         };
 
         // Parse the value as type T
@@ -163,7 +164,7 @@ where
             .parse::<T>()
             .map_err(|e| serde::de::Error::custom(format!("Failed to parse value: {}", e)))?;
 
-        Ok(LiteralOrEnv(parsed))
+        Ok(LiteralOrEnv(parsed, var_name))
     }
 }
 
@@ -184,7 +185,10 @@ where
     T: Display,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        match self.1.as_ref() {
+            None => self.0.fmt(f),
+            Some(var_name) => write!(f, "${}", var_name),
+        }
     }
 }
 
