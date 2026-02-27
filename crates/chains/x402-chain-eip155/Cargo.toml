@@ -58,7 +58,7 @@ alloy-network = { version = "1.4", optional = true }
 alloy-rpc-client = { version = "1.4", optional = true }
 alloy-rpc-types-eth = { version = "1.4", optional = true }
 alloy-transport = { version = "1.4", features = ["throttle"], optional = true }
-alloy-transport-http = { version = "1.4", optional = true }
+alloy-transport-http = { version = "1.4", optional = true, features = ["traceparent"] }
 alloy-signer = { version = "1.4", optional = true }
 alloy-signer-local = { version = "1.4", optional = true }
 alloy-contract = { version = "1.4", optional = true }
