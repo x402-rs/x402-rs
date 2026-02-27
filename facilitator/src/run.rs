@@ -68,13 +68,12 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
     #[cfg(feature = "telemetry")]
-    let telemetry_layer = {
-        let telemetry = Telemetry::new()
-            .with_name(env!("CARGO_PKG_NAME"))
-            .with_version(env!("CARGO_PKG_VERSION"))
-            .register();
-        telemetry.http_tracing()
-    };
+    let telemetry_providers = Telemetry::new()
+        .with_name(env!("CARGO_PKG_NAME"))
+        .with_version(env!("CARGO_PKG_VERSION"))
+        .register();
+    #[cfg(feature = "telemetry")]
+    let telemetry_layer = telemetry_providers.http_tracing();
 
     let config = Config::load()?;
 
