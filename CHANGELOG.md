@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2026-02-27
+
+### Added
+
+- `x402-chain-eip155`: Enabled the `traceparent` feature on `alloy-transport-http`, so outgoing EVM RPC calls now propagate W3C `traceparent` headers for distributed tracing.
+
+### Changed
+
+- `facilitator`: Refactored telemetry layer initialization — `Telemetry::register()` now returns the providers handle directly, and `http_tracing()` is called on it in a separate `#[cfg(feature = "telemetry")]` statement, making the initialization sequence clearer and easier to extend.
+
 ## [1.4.1] - 2026-02-25
 
 ### Changed
