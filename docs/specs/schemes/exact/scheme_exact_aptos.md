@@ -1,10 +1,3 @@
----
-Document Type: Scheme Implementation
-Description: "exact" scheme implementation for Aptos blockchain.
-Source: https://github.com/coinbase/x402/blob/main/specs/schemes/exact/scheme_exact_aptos.md
-Downloaded At: 2026-02-03
----
-
 # Scheme: `exact` on `Aptos`
 
 ## Summary
@@ -15,11 +8,11 @@ The `exact` scheme on Aptos transfers a specific amount of a stablecoin (such as
 
 ## Protocol Sequencing
 
-The protocol flow for `exact` on Aptos is client-driven. When the facilitator supports sponsorship, it sets `extra.sponsored` to `true` in the payment requirements. This signals to the client that sponsored (gasless) transactions are available.
+The protocol flow for `exact` on Aptos is client-driven. When the facilitator supports sponsorship, it provides `extra.feePayer` in the payment requirements with the address of the account that will pay gas fees. This signals to the client that sponsored (gasless) transactions are available.
 
-1. Client makes a request to a `resource server` and receives a `402 Payment Required` response. The `extra.sponsored` field indicates sponsorship is available.
-2. Client constructs a fee payer transaction to transfer the fungible asset to the resource server's address. The fee payer address field should be set to `0x0` as a placeholder—this field will be populated by the facilitator during settlement.
-3. Client signs the transaction (the client's signature covers the transaction payload but not the fee payer address, allowing the facilitator to fill it in later).
+1. Client makes a request to a `resource server` and receives a `402 Payment Required` response. The `extra.feePayer` field indicates sponsorship is available and specifies which account will pay gas.
+2. Client constructs a fee payer transaction to transfer the fungible asset to the resource server's address. The fee payer address field should be set to the value from `extra.feePayer` provided in the payment requirements.
+3. Client signs the transaction (the client's signature covers the transaction payload but not the fee payer address).
 4. Client serializes the signed transaction using BCS (Binary Canonical Serialization) and encodes it as Base64.
 5. Client resends the request to the `resource server` including the payment in the `PAYMENT-SIGNATURE` header.
 6. `resource server` passes the payment payload to the `facilitator` for verification.
@@ -52,7 +45,7 @@ In addition to the standard x402 `PaymentRequirements` fields, the `exact` schem
   "payTo": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
   "maxTimeoutSeconds": 60,
   "extra": {
-    "sponsored": true
+    "feePayer": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
   }
 }
 ```
@@ -65,7 +58,7 @@ In addition to the standard x402 `PaymentRequirements` fields, the `exact` schem
 - `asset`: The metadata address of the fungible asset (e.g., USDC on Aptos mainnet: `0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b`)
 - `payTo`: The recipient address (32-byte hex string with `0x` prefix)
 - `maxTimeoutSeconds`: Maximum time in seconds before the payment expires
-- `extra.sponsored`: (Optional) Boolean indicating whether the facilitator will sponsor gas fees. When `true`, the client can construct a fee payer transaction without including gas payment. When absent or `false`, the client must pay their own gas fees.
+- `extra.feePayer`: (Optional) The address of the facilitator's fee payer account that will sponsor the transaction. When present, the client can construct a fee payer transaction without including gas payment. When absent, the client must pay their own gas fees.
 
 ## PaymentPayload `payload` Field
 
@@ -99,7 +92,7 @@ Full `PaymentPayload` object:
     "payTo": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     "maxTimeoutSeconds": 60,
     "extra": {
-      "sponsored": true
+      "feePayer": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
     }
   },
   "payload": {
@@ -116,20 +109,20 @@ Steps to verify a payment for the `exact` scheme:
 2. Verify `x402Version` is `2`.
 3. Verify the network matches the agreed upon chain (CAIP-2 format: `aptos:1` or `aptos:2`).
 4. Deserialize the BCS-encoded transaction and verify the signature is valid.
-5. Verify the transaction sender has sufficient balance of the `asset` to cover the required amount.
-6. Verify the transaction contains a fungible asset transfer operation (e.g., `0x1::primary_fungible_store::transfer` or `0x1::fungible_asset::transfer`).
+5. Verify the transaction has not expired (check expiration timestamp). Note: A buffer time should be considered to account for network propagation delays and processing time.
+6. Verify the transaction contains a fungible asset transfer operation (`0x1::primary_fungible_store::transfer` or `0x1::fungible_asset::transfer`).
 7. Verify the transfer is for the correct asset (matching `requirements.asset`).
 8. Verify the transfer amount matches `requirements.amount`.
 9. Verify the transfer recipient matches `requirements.payTo`.
-10. Simulate the transaction using the Aptos REST API to ensure it would succeed and has not already been executed/committed to the chain.
-11. Verify the transaction has not expired (check sequence number and expiration timestamp). Note: A buffer time should be considered to account for network propagation delays and processing time.
+10. Verify the transaction sender has sufficient balance of the `asset` to cover the required amount.
+11. Simulate the transaction using the Aptos REST API to ensure it would succeed and has not already been executed/committed to the chain. This also validates the sequence number to prevent replay attacks.
 
 ## Settlement
 
 Settlement is performed by sponsoring and submitting the transaction:
 
 1. Facilitator receives the client-signed transaction (deserialized from Base64/BCS).
-2. Facilitator populates the fee payer address field in the transaction. In Aptos fee payer transactions, this field is separate from the signed payload—the client's signature remains valid because it covers only the transaction payload (sender, recipient, amount, asset), not the fee payer field.
+2. Facilitator verifies the fee payer address field matches the expected fee payer account.
 3. Facilitator signs the transaction as the fee payer (this is an additional signature appended to the transaction, not a replacement).
 4. The fully-signed transaction (with both client signature and fee payer signature) is submitted to the Aptos network.
 5. Transaction hash is returned to the resource server.
@@ -168,14 +161,14 @@ For Aptos-specific information like the ledger version, clients can query the tr
 
 ### Sponsored Transactions
 
-When `extra.sponsored` is `true`, the facilitator will pay gas fees on behalf of the client using Aptos's native [fee payer mechanism](https://aptos.dev/build/guides/sponsored-transactions).
+When `extra.feePayer` is present, the facilitator will pay gas fees on behalf of the client using Aptos's native [fee payer mechanism](https://aptos.dev/build/guides/sponsored-transactions). The `feePayer` value specifies which facilitator account will sponsor the transaction.
 
-**Fee Payer Placeholder:** When constructing a sponsored transaction, the client sets the fee payer address field to `0x0` as a placeholder. The facilitator replaces this with its actual fee payer address during settlement. The client's signature remains valid because it covers only the transaction payload, not the fee payer address.
+**Fee Payer Address:** When constructing a sponsored transaction, the client sets the fee payer address field to the value from `extra.feePayer` provided in the payment requirements. The client's signature remains valid because it covers only the transaction payload, not the fee payer address.
 
 Facilitators can implement sponsorship in two ways:
 
 **Direct Fee Payer:**
-The facilitator maintains a wallet and signs transactions as the fee payer directly at settlement time. This is the simplest approach.
+The facilitator maintains one or more wallets and signs transactions as the fee payer directly at settlement time. This is the simplest approach. Multiple addresses enable load balancing across accounts.
 
 **Gas Station Service:**
 The facilitator operates (or integrates with) a gas station service that handles fee payment. This approach enables additional features:
@@ -185,11 +178,11 @@ The facilitator operates (or integrates with) a gas station service that handles
 - Budget controls and usage tracking
 - Abuse prevention policies
 
-Both approaches are transparent to the client - they simply see `sponsored: true` and construct their transaction accordingly.
+Both approaches are transparent to the client - they simply check for `extra.feePayer` and construct their transaction accordingly.
 
 ### Non-Sponsored Transactions
 
-If `extra.sponsored` is absent or `false`, the client must pay their own gas fees:
+If `extra.feePayer` is absent, the client must pay their own gas fees:
 
 1. Client constructs a regular transaction including gas payment from their own account.
 2. Client fully signs the transaction.
