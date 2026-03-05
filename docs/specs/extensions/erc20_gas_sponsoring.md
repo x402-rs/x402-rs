@@ -1,8 +1,8 @@
 ---
 Document Type: Extension Specification
-Description: x402 extension for ERC-20 gasless approval flow on EVM.
+Description: ERC-20 gasless approval flow extension for x402 protocol
 Source: https://github.com/coinbase/x402/blob/main/specs/extensions/erc20_gas_sponsoring.md
-Downloaded At: 2026-02-03
+Downloaded At: 2026-03-05
 ---
 
 # Extension: `erc20ApprovalGasSponsoring`
@@ -223,7 +223,7 @@ The Facilitator must simulate in a single atomic batch transaction:
 
 1. **Funding** → sending native gas token to the user (if needed)
 2. **Approval Relay** → broadcasting the user's signed approval
-3. **Settlement** → calling `x402Permit2Proxy.settle`
+3. **Settlement** → calling `x402Permit2Proxy.settle()`
 
 ---
 

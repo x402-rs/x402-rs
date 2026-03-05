@@ -1,3 +1,10 @@
+---
+Document Type: Scheme Implementation
+Description: Solana (SVM) implementation of the 'exact' payment scheme
+Source: https://github.com/coinbase/x402/blob/main/specs/schemes/exact/scheme_exact_svm.md
+Downloaded At: 2026-03-05
+---
+
 # Exact Payment Scheme for Solana Virtual Machine (SVM) (`exact`)
 
 This document specifies the `exact` payment scheme for the x402 protocol on Solana.

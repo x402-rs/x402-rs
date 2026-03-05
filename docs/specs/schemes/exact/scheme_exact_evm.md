@@ -1,3 +1,10 @@
+---
+Document Type: Scheme Implementation
+Description: EVM implementation of the 'exact' payment scheme using EIP-3009 and Permit2
+Source: https://github.com/coinbase/x402/blob/main/specs/schemes/exact/scheme_exact_evm.md
+Downloaded At: 2026-03-05
+---
+
 # Scheme: `exact` on `EVM`
 
 ## Summary

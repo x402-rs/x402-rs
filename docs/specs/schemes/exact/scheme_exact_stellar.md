@@ -1,8 +1,8 @@
 ---
 Document Type: Scheme Implementation
-Description: "exact" scheme implementation for Stellar blockchain.
+Description: Stellar implementation of the 'exact' payment scheme using Soroban token transfers
 Source: https://github.com/coinbase/x402/blob/main/specs/schemes/exact/scheme_exact_stellar.md
-Downloaded At: 2026-02-03
+Downloaded At: 2026-03-05
 ---
 
 # Scheme: `exact` on `Stellar`
@@ -92,7 +92,7 @@ The `transaction` field contains the base64-encoded XDR of a Stellar transaction
     "scheme": "exact",
     "network": "stellar:testnet",
     "amount": "10000000",
-    "asset": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+    "asset": "6YBZJUCBIELTK5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
     "payTo": "GBHEGW3KWOY2OFH767EDALFGCUTBOEVBDQMCKU4APMDLQNBW5QV3W3KO",
     "maxTimeoutSeconds": 60,
     "extra": {
@@ -191,7 +191,7 @@ Key concepts for understanding Stellar transaction composition and authorization
 
 ### Transaction Hierarchy
 
-Per the transaction hierarchy below, the client builds and signs the contract invocation (innermost component) and sends it to the resource server. During settlement, the facilitator attaches the signed invocation to a transaction for Stellar network submission, handling fees and [sequence numbers][sequence number].
+Per the transaction hierarchy below, the client builds and signs the contract invocation (innermost component) and sends it to the resource server. During settlement, the facilitator attaches the signed invocation to a transaction for Stellar network submission, handling fees and [sequence number].
 
 ![Stellar Transaction Hierarchy](../../../static/stellar-transaction-hierarchy.png)
 

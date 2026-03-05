@@ -1,3 +1,10 @@
+---
+Document Type: Specification
+Description: X402 Protocol Specification version 1 - Core protocol fundamentals, payment schemes, and facilitator interface
+Source: https://github.com/coinbase/x402/blob/main/specs/x402-specification-v1.md
+Downloaded At: 2026-03-05
+---
+
 # X402 Protocol Specification
 
 **Protocol Version**: 1
@@ -118,10 +125,10 @@ Each `PaymentRequirements` object in the `accepts` array contains:
 | `payTo`             | `string` | Required | Recipient wallet address for the payment                                 |
 | `resource`          | `string` | Required | URL of the protected resource                                            |
 | `description`       | `string` | Required | Human-readable description of the resource                               |
-| `mimeType`          | `string` | Optional | MIME type of the expected response                                     |
-| `outputSchema`      | `object` | Optional | JSON schema describing the response format                             |
-| `maxTimeoutSeconds` | `number` | Required | Maximum time allowed for payment completion                             |
-| `extra`             | `object` | Optional | Scheme-specific additional information                                  |
+| `mimeType`          | `string` | Optional | MIME type of the expected response                                       |
+| `outputSchema`      | `object` | Optional | JSON schema describing the response format                               |
+| `maxTimeoutSeconds` | `number` | Required | Maximum time allowed for payment completion                              |
+| `extra`             | `object` | Optional | Scheme-specific additional information                                   |
 
 **5.2 PaymentPayload Schema**
 
@@ -156,7 +163,7 @@ The `PaymentPayload` schema contains the following fields:
 
 | Field Name    | Type     | Description                                                              |
 | ------------- | -------- | ------------------------------------------------------------------------ |
-| `x402Version` | `number` | Protocol version identifier (must be 1)                                 |
+| `x402Version` | `number` | Protocol version identifier (must be 1)                                  |
 | `scheme`      | `string` | Payment scheme identifier (e.g., "exact")                                |
 | `network`     | `string` | Blockchain network identifier (e.g., "base-sepolia", "ethereum-mainnet") |
 | `payload`     | `object` | Payment data object                                                      |
@@ -181,7 +188,7 @@ The `Authorization` object contains the following fields:
 | `value`       | `string` | Payment amount in atomic units                  |
 | `validAfter`  | `string` | Unix timestamp when authorization becomes valid |
 | `validBefore` | `string` | Unix timestamp when authorization expires       |
-| `nonce`       | `string` | 32-byte random nonce to prevent replay attacks |
+| `nonce`       | `string` | 32-byte random nonce to prevent replay attacks  |
 
 **5.3 SettlementResponse Schema**
 
@@ -205,10 +212,10 @@ The `SettlementResponse` schema contains the following fields:
 | Field Name    | Type      | Required | Description                                                     |
 | ------------- | --------- | -------- | --------------------------------------------------------------- |
 | `success`     | `boolean` | Required | Indicates whether the payment settlement was successful         |
-| `errorReason` | `string`  | Optional | Error reason if settlement failed (omitted if successful)     |
+| `errorReason` | `string`  | Optional | Error reason if settlement failed (omitted if successful)      |
 | `transaction` | `string`  | Required | Blockchain transaction hash (empty string if settlement failed) |
 | `network`     | `string`  | Required | Blockchain network identifier                                  |
-| `payer`       | `string`  | Required | Address of the payer's wallet                                  |
+| `payer`       | `string`  | Required | Address of the payer's wallet                                   |
 
 **6. Payment Schemes (The Logic)**
 
@@ -280,6 +287,7 @@ Verifies a payment authorization without executing the transaction on the blockc
 
 ```json
 {
+  "x402Version": 1,
   "paymentPayload": {
     /* PaymentPayload schema */
   },
@@ -293,6 +301,7 @@ Example with actual data:
 
 ```json
 {
+  "x402Version": 1,
   "paymentPayload": {
     "x402Version": 1,
     "scheme": "exact",
@@ -427,9 +436,9 @@ List discoverable x402 resources from the Bazaar.
 
 | Parameter | Type     | Required | Description                                 | Default |
 | --------- | -------- | -------- | ------------------------------------------- | ------- |
-| `type`    | `string` | Optional | Filter by resource type (e.g., "http")     | -       |
-| `limit`   | `number` | Optional | Maximum number of results to return (1-100) | 20     |
-| `offset`  | `number` | Optional | Number of results to skip for pagination   | 0      |
+| `type`    | `string` | Optional | Filter by resource type (e.g., "http")      | -       |
+| `limit`   | `number` | Optional | Maximum number of results to return (1-100) | 20      |
+| `offset`  | `number` | Optional | Number of results to skip for pagination    | 0       |
 
 **Response:**
 
@@ -477,12 +486,12 @@ List discoverable x402 resources from the Bazaar.
 
 | Field Name    | Type     | Required | Description                                                     |
 | ------------- | -------- | -------- | --------------------------------------------------------------- |
-| `resource`    | `string` | Required | The resource URL or identifier being monetized                |
-| `type`        | `string` | Required | Resource type (currently "http" for HTTP endpoints)           |
-| `x402Version` | `number` | Required | Protocol version supported by the resource                     |
+| `resource`    | `string` | Required | The resource URL or identifier being monetized                  |
+| `type`        | `string` | Required | Resource type (currently "http" for HTTP endpoints)             |
+| `x402Version` | `number` | Required | Protocol version supported by the resource                      |
 | `accepts`     | `array`  | Required | Array of PaymentRequirements objects specifying payment methods |
-| `lastUpdated` | `number` | Required | Unix timestamp of when the resource was last updated          |
-| `metadata`    | `object` | Optional | Additional metadata (category, provider, etc.)                |
+| `lastUpdated` | `number` | Required | Unix timestamp of when the resource was last updated            |
+| `metadata`    | `object` | Optional | Additional metadata (category, provider, etc.)                  |
 
 **8.3 Bazaar Concept**
 
@@ -595,7 +604,7 @@ x402 integrates across multiple transport layers:
 - **A2A (Agent-to-Agent Protocol)**: Direct agent-to-agent payments
 - **Custom Protocols**: Any request-response based system can implement x402 payment flows
 
-### 12.3 Server Frameworks
+### 12.4 Server Frameworks
 
 x402 integrates with popular frameworks:
 
@@ -605,7 +614,7 @@ x402 integrates with popular frameworks:
 - **Next.js**: Fullstack integration
 - **ai/agents**: AI agent and MCP frameworks
 
-### 12.4 Client Libraries
+### 12.5 Client Libraries
 
 Clients across different transports can be enhanced with x402 payment capabilities:
 
@@ -614,7 +623,7 @@ Clients across different transports can be enhanced with x402 payment capabiliti
 - **A2A**: x402_a2a (python)
 - **Custom integrations**: Application-specific payment handling
 
-### 12.5 Advanced Patterns
+### 12.6 Advanced Patterns
 
 The protocol enables sophisticated monetization strategies:
 

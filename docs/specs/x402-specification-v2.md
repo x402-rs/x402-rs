@@ -1,3 +1,10 @@
+---
+Document Type: Specification
+Description: X402 Protocol Specification version 2 - Core protocol fundamentals with CAIP-2 networks, restructured PaymentPayload, and extensions support
+Source: https://github.com/coinbase/x402/blob/main/specs/x402-specification-v2.md
+Downloaded At: 2026-03-05
+---
+
 # X402 Protocol Specification
 
 **Protocol Version**: 2
@@ -108,7 +115,7 @@ The `PaymentRequired` schema contains the following fields:
 | `error`       | `string` | Optional | Human-readable error message explaining why payment is required        |
 | `resource`    | `object` | Required | ResourceInfo object describing the protected resource                  |
 | `accepts`     | `array`  | Required | Array of payment requirement objects defining acceptable payment methods |
-| `extensions`  | `object` | Optional | Protocol extensions data                                               |
+| `extensions`  | `object` | Optional | Protocol extensions data                                              |
 
 Each `PaymentRequirements` object in the `accepts` array contains:
 
@@ -116,10 +123,10 @@ Each `PaymentRequirements` object in the `accepts` array contains:
 | ------------------- | -------- | -------- | ----------------------------------------------------------------------------- |
 | `scheme`            | `string` | Required | Payment scheme identifier (e.g., "exact")                                     |
 | `network`           | `string` | Required | Blockchain network identifier in CAIP-2 format (e.g., "eip155:84532")         |
-| `amount`            | `string` | Required | Required payment amount in atomic token units                                 |
+| `amount`            | `string` | Required | Required payment amount in atomic token units                                |
 | `asset`             | `string` | Required | Token contract address or ISO 4217 currency code for fiat     |
 | `payTo`             | `string` | Required | Recipient wallet address or role constant (e.g., "merchant")                  |
-| `maxTimeoutSeconds` | `number` | Required | Maximum time allowed for payment completion                                   |
+| `maxTimeoutSeconds` | `number` | Required | Maximum time allowed for payment completion                                  |
 | `extra`             | `object` | Optional | Scheme-specific additional information                                        |
 
 The `ResourceInfo` object contains:
@@ -134,7 +141,7 @@ The `Extensions` object is a key-value map where each key is an extension identi
 
 | Field Name | Type     | Required | Description                                              |
 | ---------- | -------- | -------- | -------------------------------------------------------- |
-| `info`     | `object` | Required | Extension-specific data provided by the server           |
+| `info`     | `object` | Required | Extension-specific data provided by the server            |
 | `schema`   | `object` | Required | JSON Schema defining the expected structure of `info`    |
 
 Extensions enable modular optional functionality beyond core payment mechanics. Servers advertise supported extensions in `PaymentRequired`, and clients echo them in `PaymentPayload`. The client must include at least the info received; it may append additional info but cannot delete or overwrite existing info.
@@ -188,7 +195,7 @@ The `PaymentPayload` schema contains the following fields:
 | ------------- | -------- | -------- | ------------------------------------------------------------------- |
 | `x402Version` | `number` | Required | Protocol version identifier                                         |
 | `resource`    | `object` | Optional | ResourceInfo object describing the resource being accessed          |
-| `accepted`    | `object` | Required | PaymentRequirements object indicating the payment method chosen     |
+| `accepted`    | `object` | Required | PaymentRequirements object indicating the payment method chosen    |
 | `payload`     | `object` | Required | Scheme-specific payment data                                        |
 | `extensions`  | `object` | Optional | Protocol extensions data                                            |
 
@@ -210,7 +217,7 @@ The `Authorization` object contains the following fields:
 | `value`       | `string` | Required | Payment amount in atomic units                  |
 | `validAfter`  | `string` | Required | Unix timestamp when authorization becomes valid |
 | `validBefore` | `string` | Required | Unix timestamp when authorization expires       |
-| `nonce`       | `string` | Required | 32-byte random nonce to prevent replay attacks |
+| `nonce`       | `string` | Required | 32-byte random nonce to prevent replay attacks  |
 
 **5.3 SettlementResponse Schema**
 
@@ -234,10 +241,10 @@ The `SettleResponse` schema contains the following fields:
 | Field Name    | Type      | Required | Description                                                           |
 | ------------- | --------- | -------- | --------------------------------------------------------------------- |
 | `success`     | `boolean` | Required | Indicates whether the payment settlement was successful               |
-| `errorReason` | `string`  | Optional | Error reason if settlement failed (omitted if successful)           |
+| `errorReason` | `string`  | Optional | Error reason if settlement failed (omitted if successful)             |
 | `payer`       | `string`  | Optional | Address of the payer's wallet                                         |
-| `transaction` | `string`  | Required | Blockchain transaction hash (empty string if settlement failed)       |
-| `network`     | `string`  | Required | Blockchain network identifier in CAIP-2 format                       |
+| `transaction` | `string`  | Required | Blockchain transaction hash (empty string if settlement failed)        |
+| `network`     | `string`  | Required | Blockchain network identifier in CAIP-2 format                        |
 | `extensions`  | `object`  | Optional | Protocol extensions data          |
 
 **5.4 VerifyResponse Schema**
@@ -289,7 +296,7 @@ The facilitator performs the following verification steps:
 
 1. **Signature Validation**: Verify the EIP-712 signature is valid and properly signed by the payer
 2. **Balance Verification**: Confirm the payer has sufficient token balance for the transfer
-3. **Amount Validation**: Ensure the payment amount meets or exceeds the required amount
+3. **Amount Validation**: Ensure the payment amount exactly matches the required amount
 4. **Time Window Check**: Verify the authorization is within its valid time range
 5. **Parameter Matching**: Confirm authorization parameters match the original payment requirements
 6. **Transaction Simulation**: Simulate the `transferWithAuthorization` transaction to ensure it would succeed
@@ -322,6 +329,7 @@ Verifies a payment authorization without executing the transaction on the blockc
 
 ```json
 {
+  "x402Version": 2,
   "paymentPayload": {
     /* PaymentPayload schema */
   },
@@ -335,6 +343,7 @@ Example with actual data:
 
 ```json
 {
+  "x402Version": 2,
   "paymentPayload": {
     "x402Version": 2,
     "resource": {
@@ -404,7 +413,9 @@ Example with actual data:
 
 Executes a verified payment by broadcasting the transaction to the blockchain.
 
-**Request:** Same as `/verify` endpoint
+**Request:** Same structure as `/verify` endpoint (contains `paymentPayload` and `paymentRequirements`).
+
+> **Note**: While the request structure is identical, some payment schemes may assign different semantics to fields at settlement time versus verification time. For example, in the `upto` scheme, the `amount` field in `PaymentRequirements` represents the maximum authorized amount at verification time, but the actual amount to settle at settlement time. See individual scheme specifications for details.
 
 **Successful Response:**
 
@@ -481,7 +492,7 @@ Each `SupportedKind` object in the `kinds` array contains:
 | ------------- | -------- | -------- | ---------------------------------------------------------- |
 | `x402Version` | `number` | Required | Protocol version supported (2 for v2)                      |
 | `scheme`      | `string` | Required | Payment scheme identifier (e.g., "exact")                  |
-| `network`     | `string` | Required | Blockchain network identifier in CAIP-2 format           |
+| `network`     | `string` | Required | Blockchain network identifier in CAIP-2 format             |
 | `extra`       | `object` | Optional | Additional scheme-specific configuration                   |
 
 **8. Discovery API**
@@ -498,7 +509,7 @@ List discoverable x402 resources from the Bazaar.
 
 | Parameter | Type     | Required | Description                                 | Default |
 | --------- | -------- | -------- | ------------------------------------------- | ------- |
-| `type`    | `string` | Optional | Filter by resource type (e.g., "http")     | -       |
+| `type`    | `string` | Optional | Filter by resource type (e.g., "http")      | -       |
 | `limit`   | `number` | Optional | Maximum number of results to return (1-100) | 20      |
 | `offset`  | `number` | Optional | Number of results to skip for pagination    | 0       |
 
@@ -545,8 +556,8 @@ List discoverable x402 resources from the Bazaar.
 
 | Field Name    | Type     | Required | Description                                                     |
 | ------------- | -------- | -------- | --------------------------------------------------------------- |
-| `resource`    | `string` | Required | The resource URL or identifier being monetized                |
-| `type`        | `string` | Required | Resource type (currently "http" for HTTP endpoints)           |
+| `resource`    | `string` | Required | The resource URL or identifier being monetized                  |
+| `type`        | `string` | Required | Resource type (currently "http" for HTTP endpoints)            |
 | `x402Version` | `number` | Required | Protocol version supported by the resource                      |
 | `accepts`     | `array`  | Required | Array of PaymentRequirements objects specifying payment methods |
 | `lastUpdated` | `number` | Required | Unix timestamp of when the resource was last updated            |
@@ -578,7 +589,7 @@ The x402 protocol defines standard error codes that may be returned by facilitat
 - **`insufficient_funds`**: Client does not have enough tokens to complete the payment
 - **`invalid_exact_evm_payload_authorization_valid_after`**: Payment authorization is not yet valid (before validAfter timestamp)
 - **`invalid_exact_evm_payload_authorization_valid_before`**: Payment authorization has expired (after validBefore timestamp)
-- **`invalid_exact_evm_payload_authorization_value`**: Payment amount is insufficient for the required payment
+- **`invalid_exact_evm_payload_authorization_value_mismatch`**: Payment amount does not exactly match the required amount
 - **`invalid_exact_evm_payload_signature`**: Payment authorization signature is invalid or improperly signed
 - **`invalid_exact_evm_payload_recipient_mismatch`**: Recipient address does not match payment requirements
 - **`invalid_network`**: Specified blockchain network is not supported

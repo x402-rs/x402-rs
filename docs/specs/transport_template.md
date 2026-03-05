@@ -1,8 +1,8 @@
 ---
 Document Type: Template
-Description: Template for writing new transport specification documents.
+Description: Template for creating new x402 transport specification documents
 Source: https://github.com/coinbase/x402/blob/main/specs/transport_template.md
-Downloaded At: 2026-02-03
+Downloaded At: 2026-03-05
 ---
 
 # Transport: `<name>`

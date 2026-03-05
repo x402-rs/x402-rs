@@ -1,3 +1,10 @@
+---
+Document Type: Scheme Implementation
+Description: Aptos implementation of the 'exact' payment scheme using fungible assets
+Source: https://github.com/coinbase/x402/blob/main/specs/schemes/exact/scheme_exact_aptos.md
+Downloaded At: 2026-03-05
+---
+
 # Scheme: `exact` on `Aptos`
 
 ## Summary
