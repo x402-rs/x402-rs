@@ -40,19 +40,6 @@
   },
   {
     "type": "function",
-    "name": "initialize",
-    "inputs": [
-      {
-        "name": "_permit2",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "settle",
     "inputs": [
       {
@@ -97,7 +84,7 @@
       {
         "name": "witness",
         "type": "tuple",
-        "internalType": "struct x402BasePermit2Proxy.Witness",
+        "internalType": "struct x402ExactPermit2Proxy.Witness",
         "components": [
           {
             "name": "to",
@@ -108,11 +95,6 @@
             "name": "validAfter",
             "type": "uint256",
             "internalType": "uint256"
-          },
-          {
-            "name": "extra",
-            "type": "bytes",
-            "internalType": "bytes"
           }
         ]
       },
@@ -132,7 +114,7 @@
       {
         "name": "permit2612",
         "type": "tuple",
-        "internalType": "struct x402BasePermit2Proxy.EIP2612Permit",
+        "internalType": "struct x402ExactPermit2Proxy.EIP2612Permit",
         "components": [
           {
             "name": "value",
@@ -203,7 +185,7 @@
       {
         "name": "witness",
         "type": "tuple",
-        "internalType": "struct x402BasePermit2Proxy.Witness",
+        "internalType": "struct x402ExactPermit2Proxy.Witness",
         "components": [
           {
             "name": "to",
@@ -214,11 +196,6 @@
             "name": "validAfter",
             "type": "uint256",
             "internalType": "uint256"
-          },
-          {
-            "name": "extra",
-            "type": "bytes",
-            "internalType": "bytes"
           }
         ]
       },
@@ -245,7 +222,7 @@
   },
   {
     "type": "error",
-    "name": "AlreadyInitialized",
+    "name": "InvalidAmount",
     "inputs": []
   },
   {
@@ -266,6 +243,11 @@
   {
     "type": "error",
     "name": "PaymentTooEarly",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Permit2612AmountMismatch",
     "inputs": []
   },
   {

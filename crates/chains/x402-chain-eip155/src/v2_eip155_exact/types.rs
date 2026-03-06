@@ -7,7 +7,7 @@ use alloy_primitives::U256;
 use serde::{Deserialize, Serialize};
 use x402_types::proto::v2;
 
-use crate::chain::permit2::Permit2Payload;
+use crate::chain::permit2::ExactPermit2Payload;
 use crate::chain::{AssetTransferMethod, ChecksummedAddress};
 
 /// Re-export the "exact" scheme identifier from V1 (same for both versions).
@@ -24,7 +24,7 @@ mod facilitator_only {
     use x402_types::proto::v2;
 
     use crate::chain::ChecksummedAddress;
-    use crate::chain::permit2::Permit2Payload;
+    use crate::chain::permit2::ExactPermit2Payload;
     use crate::v1_eip155_exact::ExactScheme;
     use crate::v2_eip155_exact::{Eip3009Payload, asset_transfer_method};
 
@@ -76,7 +76,8 @@ mod facilitator_only {
         ChecksummedAddress,
         asset_transfer_method::Permit2,
     >;
-    pub type Permit2PaymentPayload = v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>;
+    pub type Permit2PaymentPayload =
+        v2::PaymentPayload<Permit2PaymentRequirements, ExactPermit2Payload>;
 }
 
 #[cfg(feature = "facilitator")]
@@ -100,7 +101,7 @@ pub type PaymentRequirements =
 #[serde(untagged)]
 pub enum ExactEvmPayload {
     Eip3009(Eip3009Payload),
-    Permit2(Permit2Payload),
+    Permit2(ExactPermit2Payload),
 }
 
 pub mod asset_transfer_method {
@@ -178,7 +179,7 @@ pub mod facilitator_client_only {
             address spender;
             uint256 nonce;
             uint256 deadline;
-            x402BasePermit2Proxy.Witness witness;
+            x402ExactPermit2Proxy.Witness witness;
         }
     );
 }

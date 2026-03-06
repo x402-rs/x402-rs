@@ -28,8 +28,8 @@ use x402_types::util::Base64Bytes;
 
 use crate::chain::Eip155ChainReference;
 use crate::chain::permit2::{
-    PERMIT2_ADDRESS, Permit2Authorization, Permit2AuthorizationPermitted, Permit2Payload,
-    Permit2Witness, UPTO_PERMIT2_PROXY_ADDRESS,
+    PERMIT2_ADDRESS, Permit2Authorization, Permit2AuthorizationPermitted,
+    UPTO_PERMIT2_PROXY_ADDRESS, UptoPermit2Payload, UptoPermit2Witness,
 };
 use crate::v1_eip155_exact::client::SignerLike;
 use crate::v2_eip155_upto::V2Eip155Upto;
@@ -66,7 +66,7 @@ pub struct Permit2UptoSigningParams {
 pub async fn sign_permit2_upto_authorization<S: SignerLike + Sync>(
     signer: &S,
     params: &Permit2UptoSigningParams,
-) -> Result<Permit2Payload, X402Error> {
+) -> Result<UptoPermit2Payload, X402Error> {
     // Build EIP-712 domain for Permit2
     let domain = eip712_domain! {
         name: "Permit2",
@@ -117,14 +117,14 @@ pub async fn sign_permit2_upto_authorization<S: SignerLike + Sync>(
             token: params.asset_address.into(),
         },
         spender: UPTO_PERMIT2_PROXY_ADDRESS.into(),
-        witness: Permit2Witness {
+        witness: UptoPermit2Witness {
             extra: permit_witness_transfer_from.witness.extra.clone(),
             to: params.pay_to.into(),
             valid_after,
         },
     };
 
-    Ok(Permit2Payload {
+    Ok(UptoPermit2Payload {
         permit_2_authorization: authorization,
         signature: signature.as_bytes().into(),
     })

@@ -217,7 +217,7 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
         witness: x402BasePermit2Proxy::Witness {
             to: authorization.witness.to.into(),
             validAfter: U256::from(authorization.witness.valid_after.as_secs()),
-            extra: authorization.witness.extra.clone(),
+            extra: Default::default(),
         },
     };
     let eip712_hash = permit_witness_transfer_from.eip712_signing_hash(&domain);
@@ -378,7 +378,7 @@ where
         witness: x402BasePermit2Proxy::Witness {
             to: authorization.witness.to.into(),
             validAfter: U256::from(authorization.witness.valid_after.as_secs()),
-            extra: authorization.witness.extra.clone(),
+            extra: Default::default(),
         },
     };
     let eip712_hash = permit_witness_transfer_from.eip712_signing_hash(&domain);

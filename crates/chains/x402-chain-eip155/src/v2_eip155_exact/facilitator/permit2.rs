@@ -22,7 +22,7 @@ use crate::v1_eip155_exact::{
 use crate::v2_eip155_exact::eip3009::assert_requirements_match;
 use crate::v2_eip155_exact::types::{
     ISignatureTransfer, Permit2PaymentPayload, Permit2PaymentRequirements,
-    PermitWitnessTransferFrom, X402ExactPermit2Proxy, x402BasePermit2Proxy,
+    PermitWitnessTransferFrom, X402ExactPermit2Proxy, x402ExactPermit2Proxy,
 };
 
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
@@ -188,10 +188,9 @@ pub async fn assert_onchain_exact_permit2<P: Provider>(
         spender: EXACT_PERMIT2_PROXY_ADDRESS,
         nonce: authorization.nonce,
         deadline: U256::from(authorization.deadline.as_secs()),
-        witness: x402BasePermit2Proxy::Witness {
+        witness: x402ExactPermit2Proxy::Witness {
             to: authorization.witness.to.into(),
             validAfter: U256::from(authorization.witness.valid_after.as_secs()),
-            extra: authorization.witness.extra.clone(),
         },
     };
     let eip712_hash = permit_witness_transfer_from.eip712_signing_hash(&domain);
@@ -336,10 +335,9 @@ where
         spender: EXACT_PERMIT2_PROXY_ADDRESS,
         nonce: authorization.nonce,
         deadline: U256::from(authorization.deadline.as_secs()),
-        witness: x402BasePermit2Proxy::Witness {
+        witness: x402ExactPermit2Proxy::Witness {
             to: authorization.witness.to.into(),
             validAfter: U256::from(authorization.witness.valid_after.as_secs()),
-            extra: authorization.witness.extra.clone(),
         },
     };
     let eip712_hash = permit_witness_transfer_from.eip712_signing_hash(&domain);

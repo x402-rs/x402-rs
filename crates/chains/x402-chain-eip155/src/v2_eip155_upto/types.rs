@@ -9,7 +9,7 @@ use x402_types::proto::v2;
 use x402_types::{lit_str, proto};
 
 use crate::chain::ChecksummedAddress;
-use crate::chain::permit2::Permit2Payload;
+use crate::chain::permit2::UptoPermit2Payload;
 
 lit_str!(UptoScheme, "upto");
 
@@ -17,7 +17,7 @@ lit_str!(UptoScheme, "upto");
 pub type VerifyRequest = v2::VerifyRequest<PaymentPayload, PaymentRequirements>;
 
 pub type Permit2PaymentRequirements = v2::PaymentRequirements<UptoScheme, U256, ChecksummedAddress>;
-pub type Permit2PaymentPayload = v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>;
+pub type Permit2PaymentPayload = v2::PaymentPayload<Permit2PaymentRequirements, UptoPermit2Payload>;
 
 /// Settlement response for the upto scheme.
 ///
@@ -80,7 +80,7 @@ pub type SettleRequest = VerifyRequest;
 
 /// Type alias for V2 payment payloads with embedded requirements and EVM-specific data.
 pub type PaymentPayload<TPaymentRequirements = PaymentRequirements> =
-    v2::PaymentPayload<TPaymentRequirements, Permit2Payload>;
+    v2::PaymentPayload<TPaymentRequirements, UptoPermit2Payload>;
 
 /// Type alias for V2 payment requirements with EVM-specific types for the upto scheme.
 ///
