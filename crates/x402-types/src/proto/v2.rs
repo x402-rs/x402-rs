@@ -186,6 +186,9 @@ pub struct PaymentPayload<TPaymentRequirements, TPayload> {
     pub resource: Option<ResourceInfo>,
     /// Protocol version (always 2).
     pub x402_version: X402Version2,
+    /// Optional extension data provided by the client.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extensions: Option<serde_json::Value>, // FIXME Should be Box<raw value>
 }
 
 /// Payment requirements set by the seller (V2 format).

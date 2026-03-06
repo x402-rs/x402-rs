@@ -248,6 +248,7 @@ where
                     accepted: self.requirements_json.clone(),
                     resource: self.resource_info.clone(),
                     payload: ExactEvmPayload::Eip3009(evm_payload),
+                    extensions: None,
                 }
             }
             AssetTransferMethod::Permit2 => {
@@ -265,6 +266,7 @@ where
                     accepted: self.requirements_json.clone(),
                     resource: self.resource_info.clone(),
                     payload: ExactEvmPayload::Permit2(permit2_payload),
+                    extensions: None,
                 }
             }
         };

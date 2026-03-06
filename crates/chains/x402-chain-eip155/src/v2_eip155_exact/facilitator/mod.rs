@@ -4,6 +4,7 @@
 //! It reuses most of the V1 verification and settlement logic but handles V2-specific
 //! payload structures with embedded requirements and CAIP-2 chain IDs.
 
+pub mod eip2612;
 pub mod eip3009;
 pub mod permit2;
 
@@ -147,7 +148,10 @@ where
         };
         Ok(proto::SupportedResponse {
             kinds,
-            extensions: Vec::new(),
+            // Advertise EIP-2612 gas-sponsoring support for permit2-based payments.
+            // This tells the client it may include an EIP-2612 permit in the payload,
+            // allowing the facilitator to call `settleWithPermit` atomically.
+            extensions: vec![eip2612::EXTENSION_KEY.to_string()],
             signers,
         })
     }

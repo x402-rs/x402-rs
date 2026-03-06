@@ -248,6 +248,7 @@ where
             accepted: self.requirements_json.clone(),
             resource: self.resource_info.clone(),
             payload: permit2_payload,
+            extensions: None,
         };
 
         let json = serde_json::to_vec(&payload)?;
