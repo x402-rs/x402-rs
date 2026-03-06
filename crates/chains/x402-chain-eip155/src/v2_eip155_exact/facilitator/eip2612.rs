@@ -6,32 +6,32 @@
 //! 2. Simulates (verify) or executes (settle) `x402Permit2Proxy.settleWithPermit`
 //!    which atomically calls `IERC20Permit.permit` then Permit2 `permitTransferFrom`.
 
-use alloy_primitives::{Address, Bytes, FixedBytes, TxHash, U256};
+use alloy_primitives::{Address, Bytes, TxHash, U256};
 use alloy_provider::bindings::IMulticall3;
 use alloy_provider::{MULTICALL3_ADDRESS, MulticallItem, Provider};
 use alloy_rpc_types_eth::TransactionReceipt;
 use alloy_sol_types::SolCall;
+use alloy_sol_types::{SolStruct, eip712_domain};
 use serde::{Deserialize, Serialize};
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto::PaymentVerificationError;
 use x402_types::timestamp::UnixTimestamp;
-use alloy_sol_types::{SolStruct, eip712_domain};
 
 #[cfg(feature = "telemetry")]
 use tracing::Instrument;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
 
-use crate::chain::ChecksummedAddress;
+use crate::chain::permit2::EXACT_PERMIT2_PROXY_ADDRESS;
 use crate::chain::permit2::PERMIT2_ADDRESS;
+use crate::chain::{ChecksummedAddress, EOASignature, EOASignatureExt};
 use crate::chain::{Eip155MetaTransactionProvider, MetaTransaction};
+use crate::v1_eip155_exact::StructuredSignature;
 use crate::v1_eip155_exact::{Eip155ExactError, is_contract_deployed, tx_hash_from_receipt};
+use crate::v2_eip155_exact::types::PermitWitnessTransferFrom;
 use crate::v2_eip155_exact::types::{
     ISignatureTransfer, Permit2PaymentPayload, X402ExactPermit2Proxy, x402ExactPermit2Proxy,
 };
-use crate::chain::permit2::EXACT_PERMIT2_PROXY_ADDRESS;
-use crate::v1_eip155_exact::StructuredSignature;
-use crate::v2_eip155_exact::types::PermitWitnessTransferFrom;
 
 /// The EIP-2612 gas sponsoring extension key as it appears in the `extensions` JSON object.
 pub const EXTENSION_KEY: &str = "eip2612GasSponsoring";
@@ -59,7 +59,7 @@ pub struct Eip2612GasSponsoringInfo {
     /// The deadline for the EIP-2612 permit signature.
     pub deadline: UnixTimestamp,
     /// The 65-byte concatenated EIP-2612 signature `r ++ s ++ v` as a hex bytes string.
-    pub signature: Bytes,
+    pub signature: EOASignature,
     /// Extension schema version (currently `"1"`).
     pub version: String,
 }
@@ -73,7 +73,8 @@ pub struct Eip2612GasSponsoring {
 /// Top-level extensions object that may appear in a payment payload.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PaymentPayloadExtensions { // FIXME THis is not used realy
+pub struct PaymentPayloadExtensions {
+    // FIXME THis is not used realy
     /// Optional EIP-2612 gas-sponsoring permit data.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub eip2612_gas_sponsoring: Option<Eip2612GasSponsoring>,
@@ -83,7 +84,8 @@ pub struct PaymentPayloadExtensions { // FIXME THis is not used realy
 ///
 /// Returns `None` if the field is absent.
 /// Returns an error if the field is present but malformed.
-pub fn extract_eip2612_info( // FIXME This whole "extraction thing" feels backward
+pub fn extract_eip2612_info(
+    // FIXME This whole "extraction thing" feels backward
     extensions: &serde_json::Value,
 ) -> Result<Option<Eip2612GasSponsoringInfo>, PaymentVerificationError> {
     let Some(ext_obj) = extensions.as_object() else {
@@ -97,21 +99,6 @@ pub fn extract_eip2612_info( // FIXME This whole "extraction thing" feels backwa
     let sponsoring: Eip2612GasSponsoring = serde_json::from_value(raw.clone())
         .map_err(|e| PaymentVerificationError::InvalidFormat(e.to_string()))?;
     Ok(Some(sponsoring.info))
-}
-
-/// Split a 65-byte `r ++ s ++ v` signature into its components.
-fn split_signature(sig: &Bytes) -> Result<(FixedBytes<32>, FixedBytes<32>, u8), Eip155ExactError> {
-    if sig.len() != 65 {
-        return Err(PaymentVerificationError::InvalidSignature(format!(
-            "EIP-2612 signature must be 65 bytes, got {}",
-            sig.len()
-        ))
-        .into());
-    }
-    let r: FixedBytes<32> = FixedBytes::from_slice(&sig[0..32]);
-    let s: FixedBytes<32> = FixedBytes::from_slice(&sig[32..64]);
-    let v: u8 = sig[64];
-    Ok((r, s, v))
 }
 
 /// Verify the offchain constraints of the EIP-2612 gas-sponsoring extension.
@@ -198,13 +185,12 @@ pub async fn assert_onchain_exact_permit2_with_eip2612<P: Provider>(
         &eip712_hash,
     )?;
 
-    let (r, s, v) = split_signature(&info.signature)?;
     let permit2612 = x402ExactPermit2Proxy::EIP2612Permit {
         value: info.amount,
         deadline: U256::from(info.deadline.as_secs()),
-        r,
-        s,
-        v,
+        r: info.signature.r_bytes(),
+        s: info.signature.s_bytes(),
+        v: info.signature.v_legacy(),
     };
 
     let exact_permit2_proxy = X402ExactPermit2Proxy::new(EXACT_PERMIT2_PROXY_ADDRESS, provider);
@@ -291,13 +277,12 @@ where
         &eip712_hash,
     )?;
 
-    let (r, s, v) = split_signature(&info.signature)?;
     let permit2612 = x402ExactPermit2Proxy::EIP2612Permit {
         value: info.amount,
         deadline: U256::from(info.deadline.as_secs()),
-        r,
-        s,
-        v,
+        r: info.signature.r_bytes(),
+        s: info.signature.s_bytes(),
+        v: info.signature.v_legacy(),
     };
 
     let exact_permit2_proxy =
