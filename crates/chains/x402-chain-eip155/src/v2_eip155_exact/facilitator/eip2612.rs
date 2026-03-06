@@ -6,12 +6,11 @@
 //! 2. Simulates (verify) or executes (settle) `x402Permit2Proxy.settleWithPermit`
 //!    which atomically calls `IERC20Permit.permit` then Permit2 `permitTransferFrom`.
 
-use alloy_primitives::{Address, Bytes, TxHash, U256};
+use alloy_primitives::{Bytes, TxHash, U256};
 use alloy_provider::bindings::IMulticall3;
 use alloy_provider::{MULTICALL3_ADDRESS, MulticallItem, Provider};
 use alloy_rpc_types_eth::TransactionReceipt;
 use alloy_sol_types::SolCall;
-use alloy_sol_types::{SolStruct, eip712_domain};
 use serde::{Deserialize, Serialize};
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto::PaymentVerificationError;
@@ -28,10 +27,7 @@ use crate::chain::{ChecksummedAddress, EOASignature, EOASignatureExt};
 use crate::chain::{Eip155MetaTransactionProvider, MetaTransaction};
 use crate::v1_eip155_exact::StructuredSignature;
 use crate::v1_eip155_exact::{Eip155ExactError, is_contract_deployed, tx_hash_from_receipt};
-use crate::v2_eip155_exact::types::PermitWitnessTransferFrom;
-use crate::v2_eip155_exact::types::{
-    ISignatureTransfer, Permit2PaymentPayload, X402ExactPermit2Proxy, x402ExactPermit2Proxy,
-};
+use crate::v2_eip155_exact::types::{Permit2PaymentPayload, X402ExactPermit2Proxy, x402ExactPermit2Proxy};
 
 /// The EIP-2612 gas sponsoring extension key as it appears in the `extensions` JSON object.
 pub const EXTENSION_KEY: &str = "eip2612GasSponsoring";
@@ -152,38 +148,18 @@ pub async fn assert_onchain_exact_permit2_with_eip2612<P: Provider>(
     payment_payload: &Permit2PaymentPayload,
     info: &Eip2612GasSponsoringInfo,
 ) -> Result<(), Eip155ExactError> {
-    use crate::chain::permit2::EXACT_PERMIT2_PROXY_ADDRESS;
-    use crate::v1_eip155_exact::StructuredSignature;
-    use crate::v2_eip155_exact::types::PermitWitnessTransferFrom;
-    use alloy_sol_types::{SolStruct, eip712_domain};
+    use super::permit2::PreparedExactPermit2;
 
+    #[cfg(feature = "telemetry")]
     let authorization = &payment_payload.payload.permit_2_authorization;
-    let payer: Address = authorization.from.into();
 
-    let domain = eip712_domain! {
-        name: "Permit2",
-        chain_id: chain_reference.inner(),
-        verifying_contract: PERMIT2_ADDRESS,
-    };
-    let permit_witness_transfer_from = PermitWitnessTransferFrom {
-        permitted: ISignatureTransfer::TokenPermissions {
-            token: authorization.permitted.token.into(),
-            amount: authorization.permitted.amount,
-        },
-        spender: EXACT_PERMIT2_PROXY_ADDRESS,
-        nonce: authorization.nonce,
-        deadline: U256::from(authorization.deadline.as_secs()),
-        witness: x402ExactPermit2Proxy::Witness {
-            to: authorization.witness.to.into(),
-            validAfter: U256::from(authorization.witness.valid_after.as_secs()),
-        },
-    };
-    let eip712_hash = permit_witness_transfer_from.eip712_signing_hash(&domain);
-    let structured_signature = StructuredSignature::try_from_bytes(
-        payment_payload.payload.signature.clone(),
+    let PreparedExactPermit2 {
         payer,
-        &eip712_hash,
-    )?;
+        eip712_hash: _,
+        structured_signature,
+        permit_transfer_from,
+        witness,
+    } = PreparedExactPermit2::try_new(chain_reference, payment_payload)?;
 
     let permit2612 = x402ExactPermit2Proxy::EIP2612Permit {
         value: info.amount,
@@ -194,12 +170,6 @@ pub async fn assert_onchain_exact_permit2_with_eip2612<P: Provider>(
     };
 
     let exact_permit2_proxy = X402ExactPermit2Proxy::new(EXACT_PERMIT2_PROXY_ADDRESS, provider);
-    let permit_transfer_from = ISignatureTransfer::PermitTransferFrom {
-        permitted: permit_witness_transfer_from.permitted,
-        nonce: permit_witness_transfer_from.nonce,
-        deadline: permit_witness_transfer_from.deadline,
-    };
-    let witness = permit_witness_transfer_from.witness;
 
     let sig_bytes: Bytes = match &structured_signature {
         StructuredSignature::EIP6492 { inner, .. } => inner.clone(),
@@ -249,33 +219,18 @@ where
     P: Eip155MetaTransactionProvider<Error = E> + ChainProviderOps,
     Eip155ExactError: From<E>,
 {
-    let authorization = &payment_payload.payload.permit_2_authorization;
-    let payer: Address = authorization.from.into();
+    use super::permit2::PreparedExactPermit2;
 
-    let domain = eip712_domain! {
-        name: "Permit2",
-        chain_id: provider.chain().inner(),
-        verifying_contract: PERMIT2_ADDRESS,
-    };
-    let permit_witness_transfer_from = PermitWitnessTransferFrom {
-        permitted: ISignatureTransfer::TokenPermissions {
-            token: authorization.permitted.token.into(),
-            amount: authorization.permitted.amount,
-        },
-        spender: EXACT_PERMIT2_PROXY_ADDRESS,
-        nonce: authorization.nonce,
-        deadline: U256::from(authorization.deadline.as_secs()),
-        witness: x402ExactPermit2Proxy::Witness {
-            to: authorization.witness.to.into(),
-            validAfter: U256::from(authorization.witness.valid_after.as_secs()),
-        },
-    };
-    let eip712_hash = permit_witness_transfer_from.eip712_signing_hash(&domain);
-    let structured_signature = StructuredSignature::try_from_bytes(
-        payment_payload.payload.signature.clone(),
+    #[cfg(feature = "telemetry")]
+    let authorization = &payment_payload.payload.permit_2_authorization;
+
+    let PreparedExactPermit2 {
         payer,
-        &eip712_hash,
-    )?;
+        eip712_hash: _,
+        structured_signature,
+        permit_transfer_from,
+        witness,
+    } = PreparedExactPermit2::try_new(provider.chain(), payment_payload)?;
 
     let permit2612 = x402ExactPermit2Proxy::EIP2612Permit {
         value: info.amount,
@@ -287,12 +242,6 @@ where
 
     let exact_permit2_proxy =
         X402ExactPermit2Proxy::new(EXACT_PERMIT2_PROXY_ADDRESS, provider.inner());
-    let permit_transfer_from = ISignatureTransfer::PermitTransferFrom {
-        permitted: permit_witness_transfer_from.permitted,
-        nonce: permit_witness_transfer_from.nonce,
-        deadline: permit_witness_transfer_from.deadline,
-    };
-    let witness = permit_witness_transfer_from.witness;
 
     let receipt: TransactionReceipt = match structured_signature {
         StructuredSignature::EIP6492 {
