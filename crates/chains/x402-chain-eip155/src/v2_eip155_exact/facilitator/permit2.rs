@@ -41,8 +41,7 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     let payer: Address = authorization.from.into();
 
     // Check if the client provided EIP-2612 gas-sponsoring extension data
-    let eip2612_gas_sponsoring = payment_payload.eip2612_gas_sponsoring()?;
-
+    let eip2612_gas_sponsoring = payment_payload.eip2612_gas_sponsoring();
     if let Some(eip2612_gas_sponsoring) = &eip2612_gas_sponsoring {
         eip2612::assert_eip2612_offchain_valid(eip2612_gas_sponsoring, payment_payload)?;
         eip2612::assert_onchain_exact_permit2_with_eip2612(
@@ -73,7 +72,7 @@ where
     assert_offchain_valid(payment_payload, payment_requirements)?;
 
     // Check if the client provided EIP-2612 gas-sponsoring extension data
-    let eip2612_gas_sponsoring = payment_payload.eip2612_gas_sponsoring()?;
+    let eip2612_gas_sponsoring = payment_payload.eip2612_gas_sponsoring();
 
     // 2. Try settle (with or without EIP-2612 permit)
     let tx_hash = if let Some(eip2612_gas_sponsoring) = &eip2612_gas_sponsoring {

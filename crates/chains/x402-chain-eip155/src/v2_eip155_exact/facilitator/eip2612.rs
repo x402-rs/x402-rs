@@ -38,20 +38,16 @@ pub trait Permit2PaymentPayloadExt {
     ///
     /// Returns `Ok(None)` if no EIP-2612 extension is present.
     /// Returns `Err` if the extension is present but malformed.
-    fn eip2612_gas_sponsoring(
-        &self,
-    ) -> Result<Option<Eip2612GasSponsoringInfo>, PaymentVerificationError>;
+    fn eip2612_gas_sponsoring(&self) -> Option<Eip2612GasSponsoringInfo>;
 }
 
 impl Permit2PaymentPayloadExt for Permit2PaymentPayload {
-    fn eip2612_gas_sponsoring(
-        &self,
-    ) -> Result<Option<Eip2612GasSponsoringInfo>, PaymentVerificationError> {
-        self.extensions
-            .as_ref()
-            .map(extract_eip2612_info)
-            .transpose()
-            .map(|opt| opt.flatten())
+    fn eip2612_gas_sponsoring(&self) -> Option<Eip2612GasSponsoringInfo> {
+        let extensions = self.extensions.as_ref()?;
+        let ext_obj = extensions.as_object()?;
+        let raw = ext_obj.get(EXTENSION_KEY)?;
+        let sponsoring: Eip2612GasSponsoring = serde_json::from_value(raw.clone()).ok()?;
+        Some(sponsoring.info)
     }
 }
 
@@ -90,37 +86,6 @@ pub struct Eip2612GasSponsoringInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Eip2612GasSponsoring {
     pub info: Eip2612GasSponsoringInfo,
-}
-
-/// Top-level extensions object that may appear in a payment payload.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PaymentPayloadExtensions {
-    // FIXME THis is not used realy
-    /// Optional EIP-2612 gas-sponsoring permit data.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub eip2612_gas_sponsoring: Option<Eip2612GasSponsoring>,
-}
-
-/// Extract [`Eip2612GasSponsoringInfo`] from the raw `extensions` value of a payment payload.
-///
-/// Returns `None` if the field is absent.
-/// Returns an error if the field is present but malformed.
-pub fn extract_eip2612_info(
-    // FIXME This whole "extraction thing" feels backward
-    extensions: &serde_json::Value,
-) -> Result<Option<Eip2612GasSponsoringInfo>, PaymentVerificationError> {
-    let Some(ext_obj) = extensions.as_object() else {
-        return Err(PaymentVerificationError::InvalidFormat(
-            "extensions is not an object".to_string(),
-        ));
-    };
-    let Some(raw) = ext_obj.get(EXTENSION_KEY) else {
-        return Ok(None);
-    };
-    let sponsoring: Eip2612GasSponsoring = serde_json::from_value(raw.clone())
-        .map_err(|e| PaymentVerificationError::InvalidFormat(e.to_string()))?;
-    Ok(Some(sponsoring.info))
 }
 
 /// Verify the offchain constraints of the EIP-2612 gas-sponsoring extension.

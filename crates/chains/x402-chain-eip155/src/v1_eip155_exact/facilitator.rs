@@ -987,7 +987,7 @@ pub fn tx_hash_from_receipt(receipt: &TransactionReceipt) -> Result<TxHash, Eip1
         tracing::event!(Level::INFO,
             status = "ok",
             tx = %receipt.transaction_hash,
-            "transferWithAuthorization_0 succeeded"
+            "transfer succeeded"
         );
         Ok(receipt.transaction_hash)
     } else {
@@ -996,7 +996,7 @@ pub fn tx_hash_from_receipt(receipt: &TransactionReceipt) -> Result<TxHash, Eip1
             Level::WARN,
             status = "failed",
             tx = %receipt.transaction_hash,
-            "transferWithAuthorization_0 failed"
+            "transfer failed"
         );
         Err(Eip155ExactError::TransactionReverted(
             receipt.transaction_hash,
