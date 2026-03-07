@@ -347,6 +347,16 @@ pub struct MetaTransaction {
     pub confirmations: u64,
 }
 
+impl MetaTransaction {
+    pub fn new(to: Address, calldata: Bytes) -> Self {
+        Self {
+            to,
+            calldata,
+            confirmations: 1,
+        }
+    }
+}
+
 /// Trait for sending meta-transactions with custom target and calldata.
 pub trait Eip155MetaTransactionProvider {
     /// Error type for operations.
