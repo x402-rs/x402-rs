@@ -44,7 +44,7 @@ where
 // FIXME Doc comment
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-struct V2Eip155ExactFacilitatorConfig {
+pub struct V2Eip155ExactFacilitatorConfig {
     #[serde(default)]
     pub eip2612_gas_sponsoring: bool,
 }
@@ -106,6 +106,7 @@ where
             } => {
                 permit2::verify_permit2_payment(
                     &self.provider,
+                    self.eip2612_gas_sponsoring,
                     &payment_payload,
                     &payment_requirements,
                 )
@@ -140,6 +141,7 @@ where
             } => {
                 permit2::settle_permit2_payment(
                     &self.provider,
+                    self.eip2612_gas_sponsoring,
                     &payment_payload,
                     &payment_requirements,
                 )
@@ -162,12 +164,16 @@ where
             signers.insert(chain_id, self.provider.signer_addresses());
             signers
         };
+        let mut extensions = vec![];
+        // Conditionally include EIP-2612 gas-sponsoring extension based on config.
+        // This tells the client it may include an EIP-2612 permit in the payload,
+        // allowing the facilitator to call `settleWithPermit` atomically.
+        if self.eip2612_gas_sponsoring {
+            extensions.push(eip2612::EXTENSION_KEY.to_string());
+        }
         Ok(proto::SupportedResponse {
             kinds,
-            // Advertise EIP-2612 gas-sponsoring support for permit2-based payments.
-            // This tells the client it may include an EIP-2612 permit in the payload,
-            // allowing the facilitator to call `settleWithPermit` atomically.
-            extensions: vec![eip2612::EXTENSION_KEY.to_string()],
+            extensions,
             signers,
         })
     }

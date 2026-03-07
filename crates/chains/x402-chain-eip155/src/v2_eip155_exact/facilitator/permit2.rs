@@ -30,6 +30,7 @@ use crate::v2_eip155_exact::types::{
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProviderOps>(
     provider: &P,
+    eip2612_gas_sponsoring: bool,
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<v2::VerifyResponse, Eip155ExactError> {
@@ -41,14 +42,21 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     let payer: Address = authorization.from.into();
 
     // Check if the client provided EIP-2612 gas-sponsoring extension data
-    let eip2612_gas_sponsoring = payment_payload.eip2612_gas_sponsoring();
-    if let Some(eip2612_gas_sponsoring) = &eip2612_gas_sponsoring {
-        eip2612::assert_eip2612_offchain_valid(eip2612_gas_sponsoring, payment_payload)?;
+    let eip2612_gas_sponsoring_payload = payment_payload.eip2612_gas_sponsoring();
+    if let Some(eip2612_gas_sponsoring_payload) = &eip2612_gas_sponsoring_payload {
+        // Reject EIP-2612 gas sponsoring if not enabled in config
+        if !eip2612_gas_sponsoring {
+            return Err(PaymentVerificationError::InvalidSignature(
+                "EIP-2612 gas sponsoring is not enabled by this facilitator".to_string(),
+            )
+            .into());
+        }
+        eip2612::assert_eip2612_offchain_valid(eip2612_gas_sponsoring_payload, payment_payload)?;
         eip2612::assert_onchain_exact_permit2_with_eip2612(
             provider.inner(),
             provider.chain(),
             payment_payload,
-            eip2612_gas_sponsoring,
+            eip2612_gas_sponsoring_payload,
         )
         .await?;
     } else {
@@ -61,6 +69,7 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 pub async fn settle_permit2_payment<P, E>(
     provider: &P,
+    eip2612_gas_sponsoring: bool,
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<v2::SettleResponse, X402SchemeFacilitatorError>
@@ -72,15 +81,22 @@ where
     assert_offchain_valid(payment_payload, payment_requirements)?;
 
     // Check if the client provided EIP-2612 gas-sponsoring extension data
-    let eip2612_gas_sponsoring = payment_payload.eip2612_gas_sponsoring();
+    let eip2612_gas_sponsoring_payload = payment_payload.eip2612_gas_sponsoring();
 
     // 2. Try settle (with or without EIP-2612 permit)
-    let tx_hash = if let Some(eip2612_gas_sponsoring) = &eip2612_gas_sponsoring {
-        eip2612::assert_eip2612_offchain_valid(eip2612_gas_sponsoring, payment_payload)?;
+    let tx_hash = if let Some(eip2612_gas_sponsoring_payload) = &eip2612_gas_sponsoring_payload {
+        // Reject EIP-2612 gas sponsoring if not enabled in config
+        if !eip2612_gas_sponsoring {
+            return Err(PaymentVerificationError::InvalidSignature(
+                "EIP-2612 gas sponsoring is not enabled by this facilitator".to_string(),
+            )
+            .into());
+        }
+        eip2612::assert_eip2612_offchain_valid(eip2612_gas_sponsoring_payload, payment_payload)?;
         eip2612::settle_exact_permit2_with_eip2612(
             provider,
             payment_payload,
-            eip2612_gas_sponsoring,
+            eip2612_gas_sponsoring_payload,
         )
         .await?
     } else {
