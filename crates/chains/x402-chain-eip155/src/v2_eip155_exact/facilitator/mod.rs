@@ -9,6 +9,7 @@ pub mod eip3009;
 pub mod permit2;
 
 use alloy_provider::Provider;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto;
@@ -31,10 +32,21 @@ where
     fn build(
         &self,
         provider: P,
-        _config: Option<serde_json::Value>,
+        config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        Ok(Box::new(V2Eip155ExactFacilitator::new(provider)))
+        let config: V2Eip155ExactFacilitatorConfig = config
+            .and_then(|config| serde_json::from_value(config).ok())
+            .unwrap_or_default();
+        Ok(Box::new(V2Eip155ExactFacilitator::new(provider, config)))
     }
+}
+
+// FIXME Doc comment
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct V2Eip155ExactFacilitatorConfig {
+    #[serde(default)]
+    pub eip2612_gas_sponsoring: bool,
 }
 
 /// Facilitator for V2 EIP-155 exact scheme payments.
@@ -49,12 +61,16 @@ where
 ///   and [`ChainProviderOps`]
 pub struct V2Eip155ExactFacilitator<P> {
     provider: P,
+    eip2612_gas_sponsoring: bool,
 }
 
 impl<P> V2Eip155ExactFacilitator<P> {
     /// Creates a new V2 EIP-155 exact scheme facilitator with the given provider.
-    pub fn new(provider: P) -> Self {
-        Self { provider }
+    pub fn new(provider: P, config: V2Eip155ExactFacilitatorConfig) -> Self {
+        Self {
+            provider,
+            eip2612_gas_sponsoring: config.eip2612_gas_sponsoring,
+        }
     }
 }
 
