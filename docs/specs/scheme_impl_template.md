@@ -1,8 +1,8 @@
 ---
 Document Type: Template
-Description: Template for writing chain-specific scheme implementation documents.
+Description: Template for creating chain-specific x402 scheme implementation documents
 Source: https://github.com/coinbase/x402/blob/main/specs/scheme_impl_template.md
-Downloaded At: 2026-02-03
+Downloaded At: 2026-03-05
 ---
 
 # Scheme: `<name>` `<network kind>`

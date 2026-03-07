@@ -1,15 +1,15 @@
 ---
 Document Type: Extension Specification
-Description: x402 extension for resource discovery and cataloging (Bazaar protocol).
+Description: Resource discovery and cataloging extension for x402 protocol
 Source: https://github.com/coinbase/x402/blob/main/specs/extensions/bazaar.md
-Downloaded At: 2026-02-03
+Downloaded At: 2026-03-05
 ---
 
 # Extension: `bazaar`
 
 ## Summary
 
-The `bazaar` extension enables **resource discovery and cataloging** for x402-enabled endpoints. Resource servers declare their endpoint specifications (HTTP method, input parameters, and output format) so that facilitators can catalog and index them in a discovery service.
+The `bazaar` extension enables **resource discovery and cataloging** for x402-enabled endpoints and MCP tools. Resource servers declare their endpoint specifications (HTTP method or MCP tool name, input parameters, and output format) so that facilitators can catalog and index them in a discovery service.
 
 ---
 
@@ -18,8 +18,12 @@ The `bazaar` extension enables **resource discovery and cataloging** for x402-en
 A resource server advertises its endpoint specification by including the `bazaar` extension in the `extensions` object of the **402 Payment Required** response.
 
 The extension follows the standard v2 pattern:
-- **`info`**: Contains the actual discovery data (HTTP method, parameters, output format)
+- **`info`**: Contains the actual discovery data (HTTP method or MCP tool name, input parameters, and output format)
 - **`schema`**: JSON Schema that validates the structure of `info`
+
+The `info.input` object uses a discriminated union type, distinguished by the `type` field:
+- `input.type: "http"` — HTTP endpoints (further discriminated by `method` into query parameter methods vs body methods)
+- `input.type: "mcp"` — MCP (Model Context Protocol) tools
 
 ### Example: GET Endpoint
 
@@ -67,6 +71,12 @@ The extension follows the standard v2 pattern:
                   "city": { "type": "string" }
                 },
                 "required": ["city"]
+              },
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             },
             "required": ["type", "method"],
@@ -128,9 +138,94 @@ The extension follows the standard v2 pattern:
               "type": { "type": "string", "const": "http" },
               "method": { "type": "string", "enum": ["POST", "PUT", "PATCH"] },
               "bodyType": { "type": "string", "enum": ["json", "form-data", "text"] },
-              "body": { "type": "object" }
+              "body": { "type": "object" },
+              "queryParams": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
             },
             "required": ["type", "method", "bodyType", "body"],
+            "additionalProperties": false
+          },
+          "output": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "example": { "type": "object" }
+            },
+            "required": ["type"]
+          }
+        },
+        "required": ["input"]
+      }
+    }
+  }
+}
+```
+
+### Example: MCP Tool
+
+```json
+{
+  "x402Version": 2,
+  "error": "Payment required",
+  "resource": {
+    "url": "https://api.example.com/mcp",
+    "description": "Advanced AI-powered financial tools",
+    "mimeType": "application/json"
+  },
+  "accepts": [ ... ],
+  "extensions": {
+    "bazaar": {
+      "info": {
+        "input": {
+          "type": "mcp",
+          "tool": "financial_analysis",
+          "description": "Advanced AI-powered financial analysis",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ticker": { "type": "string" },
+              "analysis_type": { "type": "string", "enum": ["quick", "deep"] }
+            },
+            "required": ["ticker"]
+          },
+          "example": {
+            "ticker": "AAPL",
+            "analysis_type": "deep"
+          }
+        },
+        "output": {
+          "type": "json",
+          "example": {
+            "summary": "Strong fundamentals...",
+            "score": 8.5
+          }
+        }
+      },
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "const": "mcp" },
+              "tool": { "type": "string" },
+              "description": { "type": "string" },
+              "transport": { "type": "string", "enum": ["streamable-http", "sse"] },
+              "inputSchema": { "type": "object" },
+              "example": { "type": "object" }
+            },
+            "required": ["type", "tool", "inputSchema"],
             "additionalProperties": false
           },
           "output": {
@@ -155,7 +250,7 @@ The extension follows the standard v2 pattern:
 
 ### Input Types
 
-The `info.input` object describes how to call the endpoint.
+The `info.input` object describes how to call the endpoint or tool.
 
 #### Query Parameter Methods (GET, HEAD, DELETE)
 
@@ -177,6 +272,19 @@ The `info.input` object describes how to call the endpoint.
 | `queryParams` | object | No | Query parameter examples |
 | `headers` | object | No | Custom header examples |
 
+#### MCP Tools
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Always `"mcp"` |
+| `tool` | string | Yes | MCP tool name (matches what's passed to `tools/call`) |
+| `description` | string | No | Human-readable description of the tool |
+| `inputSchema` | object | Yes | JSON Schema for the tool's `arguments`, following the MCP [`Tool.inputSchema`](https://spec.modelcontextprotocol.io/) format (a JSON Schema subset with `type: "object"`, `properties`, and `required`). Servers should reuse the same schema their MCP tool already declares. |
+| `transport` | string | No | MCP transport protocol. One of `"streamable-http"` or `"sse"`. Defaults to `"streamable-http"` if omitted. |
+| `example` | object | No | Example `arguments` object |
+
+> **Note:** For MCP tools, the unique resource identifier is the tuple (`resource.url`, `input.tool`). Since MCP multiplexes multiple tools over a single server endpoint, `resource.url` alone may not be unique. Facilitators **must** use both fields when cataloging MCP tools.
+
 ### Output Types
 
 The `info.output` object (optional) describes the expected response format:
@@ -186,6 +294,20 @@ The `info.output` object (optional) describes the expected response format:
 | `type` | string | Yes | Response content type (e.g., `"json"`, `"text"`) |
 | `format` | string | No | Additional format information |
 | `example` | any | No | Example response value |
+
+> **Note:** For MCP tools, if `output` is omitted, facilitators should assume arbitrary text content (MCP's default response type).
+
+### Input Type Discriminator
+
+The `input.type` field acts as a discriminator for the discovery info structure:
+
+| `input.type` | Structure | Description |
+|--------------|-----------|-------------|
+| `"http"` | QueryDiscoveryInfo | HTTP GET/HEAD/DELETE with query parameters |
+| `"http"` | BodyDiscoveryInfo | HTTP POST/PUT/PATCH with request body (has `bodyType`) |
+| `"mcp"` | MCPDiscoveryInfo | MCP tool invocation |
+
+Facilitators should use `input.type` to determine which validation rules apply. For HTTP inputs, the presence of `bodyType` further distinguishes between query and body methods.
 
 ---
 
@@ -197,10 +319,44 @@ The `schema` field contains a JSON Schema (Draft 2020-12) that validates the str
 - Must use JSON Schema Draft 2020-12
 - Must define an `input` property (required)
 - May define an `output` property (optional)
-- Must validate that `input.type` equals `"http"`
-- Must validate the appropriate `method` enum based on operation type
+- Must validate that `input.type` equals `"http"` (for HTTP endpoints) or `"mcp"` (for MCP tools)
+- For HTTP endpoints: Must validate the appropriate `method` enum based on operation type
+- For MCP tools: Must require `tool` and `inputSchema` fields
 
 Facilitators **must** validate `info` against `schema` before cataloging.
+
+### MCP Schema Example
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "const": "mcp" },
+        "tool": { "type": "string" },
+        "description": { "type": "string" },
+        "transport": { "type": "string", "enum": ["streamable-http", "sse"] },
+        "inputSchema": { "type": "object" },
+        "example": { "type": "object" }
+      },
+      "required": ["type", "tool", "inputSchema"],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "example": {}
+      },
+      "required": ["type"]
+    }
+  },
+  "required": ["input"]
+}
+```
 
 ---
 
@@ -209,7 +365,7 @@ Facilitators **must** validate `info` against `schema` before cataloging.
 When a facilitator receives a `PaymentPayload` containing the `bazaar` extension, it should:
 
 1. **Validate** the `info` field against the provided `schema`
-2. **Extract** the discovery information (resource URL, method, input/output specs)
+2. **Extract** the discovery information (resource URL, HTTP method or MCP tool name, input/output specs)
 
 How a facilitator stores, indexes, and exposes discovered resources is an implementation detail. Facilitators may choose to catalog resources in a database, expose them via a discovery API, or process them in any manner they see fit.
 

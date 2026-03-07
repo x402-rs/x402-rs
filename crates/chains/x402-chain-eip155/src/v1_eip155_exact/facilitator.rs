@@ -35,7 +35,8 @@ use tracing_core::Level;
 
 use crate::V1Eip155Exact;
 use crate::chain::{
-    Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction, MetaTransactionSendError,
+    EOASignatureExt, Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction,
+    MetaTransactionSendError,
 };
 use crate::v1_eip155_exact::{
     ExactScheme, PaymentRequirementsExtra, TransferWithAuthorization, types,
@@ -637,9 +638,9 @@ impl<'a, P: Provider> TransferWithAuthorization1Call<&'a P> {
         let valid_after = U256::from(payment.valid_after.as_secs());
         let valid_before = U256::from(payment.valid_before.as_secs());
         let nonce = payment.nonce;
-        let v = 27 + (signature.v() as u8);
-        let r = B256::from(signature.r());
-        let s = B256::from(signature.s());
+        let v = signature.v_legacy();
+        let r = signature.r_bytes();
+        let s = signature.s_bytes();
         let tx = contract.transferWithAuthorization_1(
             from,
             to,
@@ -986,7 +987,7 @@ pub fn tx_hash_from_receipt(receipt: &TransactionReceipt) -> Result<TxHash, Eip1
         tracing::event!(Level::INFO,
             status = "ok",
             tx = %receipt.transaction_hash,
-            "transferWithAuthorization_0 succeeded"
+            "transfer succeeded"
         );
         Ok(receipt.transaction_hash)
     } else {
@@ -995,7 +996,7 @@ pub fn tx_hash_from_receipt(receipt: &TransactionReceipt) -> Result<TxHash, Eip1
             Level::WARN,
             status = "failed",
             tx = %receipt.transaction_hash,
-            "transferWithAuthorization_0 failed"
+            "transfer failed"
         );
         Err(Eip155ExactError::TransactionReverted(
             receipt.transaction_hash,

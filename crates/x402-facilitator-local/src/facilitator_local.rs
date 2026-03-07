@@ -32,7 +32,7 @@
 //! If no matching handler is found, the request returns an error with
 //! [`PaymentVerificationError::UnsupportedScheme`](x402_types::proto::PaymentVerificationError::UnsupportedScheme).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use x402_types::facilitator::Facilitator;
 use x402_types::proto;
 use x402_types::proto::PaymentVerificationError;
@@ -124,6 +124,7 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
 
     async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
         let mut kinds = vec![];
+        let mut extensions = HashSet::new();
         let mut signers = HashMap::new();
         for provider in self.handlers.values() {
             let supported = provider.supported().await.ok();
@@ -132,11 +133,12 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
                 for (chain_id, signer_addresses) in supported.signers {
                     signers.entry(chain_id).or_insert(signer_addresses);
                 }
+                extensions.extend(supported.extensions);
             }
         }
         Ok(proto::SupportedResponse {
             kinds,
-            extensions: Vec::new(),
+            extensions: extensions.into_iter().collect(),
             signers,
         })
     }

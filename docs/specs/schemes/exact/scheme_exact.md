@@ -1,16 +1,15 @@
 ---
 Document Type: Scheme Specification
-Description: Overview of the "exact" payment scheme for x402.
+Description: Overview of the 'exact' payment scheme that transfers a specific amount of funds
 Source: https://github.com/coinbase/x402/blob/main/specs/schemes/exact/scheme_exact.md
-Downloaded At: 2026-02-03
+Downloaded At: 2026-03-05
 ---
 
 # Scheme: `exact`
 
 ## Summary
 
-`exact` is a scheme that transfers a specific amount of funds from a client to a resource server. The resource server must know in advance the exact
-amount of funds they need to be transferred.
+`exact` is a scheme that transfers a specific amount of funds from a client to a resource server. The resource server must know in advance the exact amount of funds they need to be transferred.
 
 ## Example Use Cases
 

@@ -1,8 +1,8 @@
 ---
 Document Type: Scheme Implementation
-Description: "exact" scheme implementation for EVM blockchains.
+Description: EVM implementation of the 'exact' payment scheme using EIP-3009 and Permit2
 Source: https://github.com/coinbase/x402/blob/main/specs/schemes/exact/scheme_exact_evm.md
-Downloaded At: 2026-02-03
+Downloaded At: 2026-03-05
 ---
 
 # Scheme: `exact` on `EVM`
@@ -16,7 +16,7 @@ This is implemented via one of two asset transfer methods, depending on the toke
 | AssetTransferMethod | Use Case                                                     | Recommendation                                 |
 | :------------------ | :----------------------------------------------------------- | :--------------------------------------------- |
 | **1. EIP-3009**     | Tokens with native `transferWithAuthorization` (e.g., USDC). | **Recommended** (Simplest, truly gasless).     |
-| **2. Permit2**      | Tokens without EIP-3009. Uses a Proxy + Permit2.             | **Universal Fallback** (Works for any ERC-20). |
+| **2. Permit2**      | Tokens without EIP-3009. Uses a Proxy + permit2.             | **Universal Fallback** (Works for any ERC-20). |
 
 If no `assetTransferMethod` is specified in the payload, the implementation should prioritize `eip3009` (if compatible) and then `permit2`.
 
@@ -88,7 +88,7 @@ Settlement is performed via the facilitator calling the `transferWithAuthorizati
 
 ## 2. AssetTransferMethod: `Permit2`
 
-This asset transfer method uses the `permitWitnessTransferFrom` from the [canonical **Permit2** contract](#canonical-permit2) combined with a [`x402Permit2Proxy`](#reference-implementation-x402permit2proxy) to enforce receiver address security via the "Witness" pattern.
+This asset transfer method uses the `permitWitnessTransferFrom` from the [canonical **Permit2** contract](#canonical-permit2) combined with a [`x402ExactPermit2Proxy`](#reference-implementation-x402ExactPermit2Proxy) to enforce receiver address security via the "Witness" pattern.
 
 ### Phase 1: One-Time Gas Approval
 
@@ -112,7 +112,7 @@ The Facilitator pays the gas for the approval transaction on the user's behalf.
 If the token supports EIP-2612, the user signs a permit authorizing Permit2.
 
 - _Prerequisite:_ Token supports EIP-2612.
-- _Flow:_ Facilitator calls `x402Permit2Proxy.settleWithPermit()`
+- _Flow:_ Facilitator calls `x402ExactPermit2Proxy.settleWithPermit()`
 
 ### Phase 2: `PAYMENT-SIGNATURE` Header Payload
 
@@ -121,7 +121,7 @@ The `payload` field must contain:
 - `signature`: The signature for `permitWitnessTransferFrom`.
 - `permit2Authorization`: Parameters to reconstruct the message.
 
-**Important Logic:** The `spender` in the signature is the [**x402Permit2Proxy**](#reference-implementation-x402permit2proxy), not the Facilitator. This Proxy enforces that funds are only sent to the `witness.to` address.
+**Important Logic:** The `spender` in the signature is the [**x402ExactPermit2Proxy**](#reference-implementation-x402ExactPermit2Proxy), not the Facilitator. This Proxy enforces that funds are only sent to the `witness.to` address.
 
 > **Requirement**: This contract will be deployed to the same address across all supported EVM chains using `CREATE2` to ensure consistent behavior and simpler integration.
 
@@ -151,7 +151,7 @@ The `payload` field must contain:
         "amount": "10000"
       },
       "from": "0x857b06519E91e3A54538791bDbb0E22373e36b66",
-      "spender": "0xx402Permit2ProxyAddress",
+      "spender": "0x4020CD856C882D5fb903D99CE35316A085Bb0001", // Canonical x402ExactPermit2Proxy address
       "nonce": "0xf3746613c2d920b5fdabc0856f2aeb2d4f88ee6037b8cc5d04a71a4462f13480",
       "deadline": "1740672154",
       "witness": {
@@ -189,22 +189,28 @@ The verifier must execute these checks in order:
 
 7.  **Simulation:**
 
-    - _Standard:_ Simulate `x402Permit2Proxy.settle`.
+    - _Standard:_ Simulate `x402ExactPermit2Proxy.settle`.
     - _With "Sponsored ERC20 Approval" (Extension):_ Simulate batch `transfer` -> `approve` -> `settle`.
-    - _With "EIP2612 Permit" (Extension):_ Simulate `x402Permit2Proxy.settleWithPermit`.
+    - _With "EIP2612 Permit" (Extension):_ Simulate `x402ExactPermit2Proxy.settleWithPermit`.
 
 ### Phase 4: Settlement Logic
 
-Settlement is performed by calling the `x402Permit2Proxy`.
+Settlement is performed by calling the `x402ExactPermit2Proxy`.
 
 1.  **Standard Settlement:**
-    If the user has a sufficient direct allowance, call `x402Permit2Proxy.settle`.
+    If the user has a sufficient direct allowance, call `x402ExactPermit2Proxy.settle`.
 
 2.  **With Sponsored ERC20 Approval (Extension):**
-    If `erc20ApprovalGasSponsoring` is used, the facilitator must construct a batched transaction that executes the sponsored `ERC20.approve` call strictly before the `x402Permit2Proxy.settle` call.
+    If `erc20ApprovalGasSponsoring` is used, the facilitator must construct a batched transaction that executes the sponsored `ERC20.approve` call strictly before the `x402ExactPermit2Proxy.settle` call.
 
 3.  **With EIP-2612 Permit (Extension):**
-    If `eip2612GasSponsoring` is used, call `x402Permit2Proxy.settleWithPermit`.
+    If `eip2612GasSponsoring` is used, call `x402ExactPermit2Proxy.settleWithPermit`.
+
+---
+
+## Implementer Notes
+
+- **Permit2 Dependency:** Both the Permit2 contract and the x402ExactPermit2Proxy are audited, battle-tested contracts. However, integrators inherit their security properties and any future vulnerabilities discovered in either dependency.
 
 ---
 
@@ -214,11 +220,13 @@ Settlement is performed by calling the `x402Permit2Proxy`.
 
 The Canonical Permit2 contract address can be found at [https://docs.uniswap.org/contracts/v4/deployments](https://docs.uniswap.org/contracts/v4/deployments).
 
-### Reference Implementation: `x402Permit2Proxy`
+### Reference Implementation: `x402ExactPermit2Proxy`
 
 This contract acts as the authorized Spender. It validates the Witness data to ensure the destination cannot be altered by the Facilitator.
 
 > **Requirement**: This contract will be deployed to the same address across all supported EVM chains using `CREATE2` to ensure consistent behavior and simpler integration.
+
+**Canonical Address:** `0x4020CD856C882D5fb903D99CE35316A085Bb0001`
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -231,7 +239,7 @@ interface IERC20Permit {
     function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
 }
 
-contract x402Permit2Proxy {
+contract x402ExactPermit2Proxy {
     ISignatureTransfer public immutable PERMIT2;
 
     event x402PermitTransfer(address from, address to, uint256 amount, address asset);

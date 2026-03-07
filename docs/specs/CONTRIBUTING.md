@@ -1,8 +1,8 @@
 ---
 Document Type: Contributing Guide
-Description: Guidelines for proposing and documenting new x402 specifications.
+Description: Guide for proposing and documenting new x402 specifications
 Source: https://github.com/coinbase/x402/blob/main/specs/CONTRIBUTING.md
-Downloaded At: 2026-02-03
+Downloaded At: 2026-03-05
 ---
 
 # Specs Contributing Guide

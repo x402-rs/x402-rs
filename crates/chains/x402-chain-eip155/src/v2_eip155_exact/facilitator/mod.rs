@@ -4,10 +4,12 @@
 //! It reuses most of the V1 verification and settlement logic but handles V2-specific
 //! payload structures with embedded requirements and CAIP-2 chain IDs.
 
+pub mod eip2612;
 pub mod eip3009;
 pub mod permit2;
 
 use alloy_provider::Provider;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto;
@@ -30,10 +32,45 @@ where
     fn build(
         &self,
         provider: P,
-        _config: Option<serde_json::Value>,
+        config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        Ok(Box::new(V2Eip155ExactFacilitator::new(provider)))
+        let config: V2Eip155ExactFacilitatorConfig = config
+            .and_then(|config| serde_json::from_value(config).ok())
+            .unwrap_or_default();
+        Ok(Box::new(V2Eip155ExactFacilitator::new(provider, config)))
     }
+}
+
+/// Configuration for the V2 EIP-155 exact scheme facilitator.
+///
+/// This struct holds optional configuration parameters that control
+/// the facilitator's behavior for V2 exact payments on EVM chains.
+///
+/// # Fields
+///
+/// - `eip2612_gas_sponsoring`: Whether to enable EIP-2612 gas-sponsoring extension.
+///   When enabled, the facilitator supports atomic settlement with EIP-2612 permits,
+///   allowing the payer to have their gas fees covered by the facilitator.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct V2Eip155ExactFacilitatorConfig {
+    #[serde(default)]
+    pub eip2612_gas_sponsoring: bool,
+}
+
+/// Extra data for the V2 EIP-155 exact scheme facilitator.
+///
+/// This struct holds additional response data returned by the facilitator's
+/// `supported` method, including supported extensions.
+///
+/// # Fields
+///
+/// - `extensions`: Optional list of supported extension identifiers.
+///   These extensions indicate additional features the facilitator supports,
+///   such as EIP-2612 gas sponsoring.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct V2Eip155ExactFacilitatorExtra {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extensions: Option<Vec<String>>,
 }
 
 /// Facilitator for V2 EIP-155 exact scheme payments.
@@ -48,12 +85,16 @@ where
 ///   and [`ChainProviderOps`]
 pub struct V2Eip155ExactFacilitator<P> {
     provider: P,
+    eip2612_gas_sponsoring: bool,
 }
 
 impl<P> V2Eip155ExactFacilitator<P> {
     /// Creates a new V2 EIP-155 exact scheme facilitator with the given provider.
-    pub fn new(provider: P) -> Self {
-        Self { provider }
+    pub fn new(provider: P, config: V2Eip155ExactFacilitatorConfig) -> Self {
+        Self {
+            provider,
+            eip2612_gas_sponsoring: config.eip2612_gas_sponsoring,
+        }
     }
 }
 
@@ -89,6 +130,7 @@ where
             } => {
                 permit2::verify_permit2_payment(
                     &self.provider,
+                    self.eip2612_gas_sponsoring,
                     &payment_payload,
                     &payment_requirements,
                 )
@@ -123,6 +165,7 @@ where
             } => {
                 permit2::settle_permit2_payment(
                     &self.provider,
+                    self.eip2612_gas_sponsoring,
                     &payment_payload,
                     &payment_requirements,
                 )
@@ -134,11 +177,22 @@ where
 
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
+        let mut extensions = vec![];
+        // Conditionally include EIP-2612 gas-sponsoring extension based on config.
+        // This tells the client it may include an EIP-2612 permit in the payload,
+        // allowing the facilitator to call `settleWithPermit` atomically.
+        if self.eip2612_gas_sponsoring {
+            extensions.push(eip2612::EXTENSION_KEY.to_string());
+        }
+        let extra = V2Eip155ExactFacilitatorExtra {
+            extensions: Some(extensions.clone()),
+        };
+        let extra = serde_json::to_value(extra).ok();
         let kinds = vec![proto::SupportedPaymentKind {
             x402_version: v2::X402Version2.into(),
             scheme: ExactScheme.to_string(),
             network: chain_id.clone().into(),
-            extra: None,
+            extra,
         }];
         let signers = {
             let mut signers = HashMap::with_capacity(1);
@@ -147,7 +201,7 @@ where
         };
         Ok(proto::SupportedResponse {
             kinds,
-            extensions: Vec::new(),
+            extensions,
             signers,
         })
     }

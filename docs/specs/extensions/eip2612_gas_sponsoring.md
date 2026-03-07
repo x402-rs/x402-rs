@@ -1,8 +1,8 @@
 ---
 Document Type: Extension Specification
-Description: x402 extension for EIP-2612 gasless approval flow on EVM.
+Description: EIP-2612 gasless approval flow extension for x402 protocol
 Source: https://github.com/coinbase/x402/blob/main/specs/extensions/eip2612_gas_sponsoring.md
-Downloaded At: 2026-02-03
+Downloaded At: 2026-03-05
 ---
 
 # Extension: `eip2612GasSponsoring`

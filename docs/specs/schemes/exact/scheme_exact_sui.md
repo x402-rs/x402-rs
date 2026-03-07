@@ -1,8 +1,8 @@
 ---
 Document Type: Scheme Implementation
-Description: "exact" scheme implementation for Sui blockchain.
+Description: Sui implementation of the 'exact' payment scheme
 Source: https://github.com/coinbase/x402/blob/main/specs/schemes/exact/scheme_exact_sui.md
-Downloaded At: 2026-02-03
+Downloaded At: 2026-03-05
 ---
 
 # Scheme: `exact` on `Sui`

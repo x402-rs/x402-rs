@@ -55,7 +55,7 @@ use x402_types::util::Base64Bytes;
 // ============================================================================
 
 /// Builder for resource information that can be used with both V1 and V2 protocols.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ResourceInfoBuilder {
     /// Description of the protected resource
     pub description: Option<String>,
@@ -63,16 +63,6 @@ pub struct ResourceInfoBuilder {
     pub mime_type: Option<String>,
     /// Optional explicit URL of the protected resource
     pub url: Option<String>,
-}
-
-impl Default for ResourceInfoBuilder {
-    fn default() -> Self {
-        Self {
-            description: None,
-            mime_type: None,
-            url: None,
-        }
-    }
 }
 
 impl ResourceInfoBuilder {

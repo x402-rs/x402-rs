@@ -3,8 +3,9 @@
 //! This module provides types that handle serialization and deserialization
 //! of EVM-specific values in the x402 protocol wire format.
 
-use alloy_primitives::{Address, U256, hex};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use alloy_primitives::{Address, B256, Signature, U256, hex};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::ops::Mul;
 use std::str::FromStr;
@@ -366,6 +367,106 @@ impl Eip155TokenDeployment {
             amount: value,
             token: self.clone(),
         })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EOASignature(Signature); // FIXME Add to EOA variant
+
+impl AsRef<Signature> for EOASignature {
+    fn as_ref(&self) -> &Signature {
+        &self.0
+    }
+}
+
+impl Serialize for EOASignature {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = self.0.as_bytes(); // [u8; 65]
+        let hex = format!("0x{}", hex::encode(bytes));
+        serializer.serialize_str(&hex)
+    }
+}
+
+impl<'de> Deserialize<'de> for EOASignature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct EOASignatureVisitor;
+
+        impl<'de> de::Visitor<'de> for EOASignatureVisitor {
+            type Value = EOASignature;
+
+            fn expecting(&self, f: &mut Formatter) -> fmt::Result {
+                f.write_str("a 0x-prefixed 65-byte Ethereum signature hex string")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                let hex = value
+                    .strip_prefix("0x")
+                    .ok_or_else(|| E::custom("signature must start with 0x"))?;
+
+                let bytes = hex::decode(hex)
+                    .map_err(|err| E::custom(format!("invalid hex signature: {err}")))?;
+
+                let arr: [u8; 65] = bytes
+                    .try_into()
+                    .map_err(|_| E::custom("signature must be exactly 65 bytes"))?;
+
+                let sig = alloy_primitives::Signature::from_raw(&arr)
+                    .map_err(|err| E::custom(format!("invalid signature: {err}")))?;
+
+                Ok(EOASignature(sig))
+            }
+        }
+
+        deserializer.deserialize_str(EOASignatureVisitor)
+    }
+}
+
+pub trait EOASignatureExt {
+    fn r_bytes(&self) -> B256;
+    fn s_bytes(&self) -> B256;
+    fn v_legacy(&self) -> u8;
+}
+
+impl EOASignatureExt for EOASignature {
+    #[inline]
+    fn r_bytes(&self) -> B256 {
+        self.0.r_bytes()
+    }
+
+    #[inline]
+    fn s_bytes(&self) -> B256 {
+        self.0.s_bytes()
+    }
+
+    #[inline]
+    fn v_legacy(&self) -> u8 {
+        self.0.v_legacy()
+    }
+}
+
+impl EOASignatureExt for Signature {
+    #[inline]
+    fn r_bytes(&self) -> B256 {
+        B256::from(self.r())
+    }
+
+    #[inline]
+    fn s_bytes(&self) -> B256 {
+        B256::from(self.s())
+    }
+
+    #[inline]
+    fn v_legacy(&self) -> u8 {
+        27 + (self.v() as u8)
     }
 }
 

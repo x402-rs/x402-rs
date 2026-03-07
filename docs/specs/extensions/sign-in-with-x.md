@@ -1,8 +1,8 @@
 ---
 Document Type: Extension Specification
-Description: x402 extension for wallet-based authentication (Sign-In With X, CAIP-122).
+Description: CAIP-122 compliant wallet-based authentication extension for x402 protocol
 Source: https://github.com/coinbase/x402/blob/main/specs/extensions/sign-in-with-x.md
-Downloaded At: 2026-02-03
+Downloaded At: 2026-03-05
 ---
 
 # Extension: `sign-in-with-x`

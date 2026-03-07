@@ -141,6 +141,7 @@ impl<S: Signer + Sync, R: RpcClientLike + Sync> PaymentCandidateSigner for Paylo
             payload: ExactSolanaPayload {
                 transaction: tx_b64,
             },
+            extensions: None,
         };
         let json = serde_json::to_vec(&payload)?;
         let b64 = Base64Bytes::encode(&json);
