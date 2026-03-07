@@ -26,9 +26,34 @@ use crate::v1_eip155_exact::Eip155ExactError;
 use crate::v1_eip155_exact::StructuredSignature;
 use crate::v2_eip155_exact::facilitator::permit2::execute_permit2_settlement;
 use crate::v2_eip155_exact::permit2::PreparedExactPermit2;
-use crate::v2_eip155_exact::types::{
-    Permit2PaymentPayload, X402ExactPermit2Proxy, x402ExactPermit2Proxy,
-};
+use crate::v2_eip155_exact::types::Permit2PaymentPayload;
+use crate::v2_eip155_exact::types::{X402ExactPermit2Proxy, x402ExactPermit2Proxy};
+
+/// Extension trait for extracting EIP-2612 gas sponsoring info from payment payloads.
+///
+/// This trait provides a unified method to extract EIP-2612 extension data,
+/// eliminating duplication across verify and settle code paths.
+pub trait Permit2PaymentPayloadExt {
+    /// Extract EIP-2612 gas sponsoring info from the payment payload extensions.
+    ///
+    /// Returns `Ok(None)` if no EIP-2612 extension is present.
+    /// Returns `Err` if the extension is present but malformed.
+    fn eip2612_gas_sponsoring(
+        &self,
+    ) -> Result<Option<Eip2612GasSponsoringInfo>, PaymentVerificationError>;
+}
+
+impl Permit2PaymentPayloadExt for Permit2PaymentPayload {
+    fn eip2612_gas_sponsoring(
+        &self,
+    ) -> Result<Option<Eip2612GasSponsoringInfo>, PaymentVerificationError> {
+        self.extensions
+            .as_ref()
+            .map(extract_eip2612_info)
+            .transpose()
+            .map(|opt| opt.flatten())
+    }
+}
 
 /// The EIP-2612 gas sponsoring extension key as it appears in the `extensions` JSON object.
 pub const EXTENSION_KEY: &str = "eip2612GasSponsoring";

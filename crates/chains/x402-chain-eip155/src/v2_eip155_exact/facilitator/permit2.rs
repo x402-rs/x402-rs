@@ -7,7 +7,7 @@ use x402_types::chain::ChainProviderOps;
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
 
-use super::eip2612;
+use super::eip2612::{self, Permit2PaymentPayloadExt};
 
 #[cfg(feature = "telemetry")]
 use tracing::Instrument;
@@ -41,20 +41,15 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     let payer: Address = authorization.from.into();
 
     // Check if the client provided EIP-2612 gas-sponsoring extension data
-    let eip2612_info = payment_payload
-        .extensions
-        .as_ref()
-        .map(|ext| eip2612::extract_eip2612_info(ext))
-        .transpose()?
-        .flatten(); // FIXME Duplication see above
+    let eip2612_gas_sponsoring = payment_payload.eip2612_gas_sponsoring()?;
 
-    if let Some(ref info) = eip2612_info {
-        eip2612::assert_eip2612_offchain_valid(info, payment_payload)?;
+    if let Some(eip2612_gas_sponsoring) = &eip2612_gas_sponsoring {
+        eip2612::assert_eip2612_offchain_valid(eip2612_gas_sponsoring, payment_payload)?;
         eip2612::assert_onchain_exact_permit2_with_eip2612(
             provider.inner(),
             provider.chain(),
             payment_payload,
-            info,
+            eip2612_gas_sponsoring,
         )
         .await?;
     } else {
@@ -78,17 +73,17 @@ where
     assert_offchain_valid(payment_payload, payment_requirements)?;
 
     // Check if the client provided EIP-2612 gas-sponsoring extension data
-    let eip2612_info = payment_payload
-        .extensions
-        .as_ref()
-        .map(|ext| eip2612::extract_eip2612_info(ext))
-        .transpose()?
-        .flatten(); // FIXME See settle above, duplication
+    let eip2612_gas_sponsoring = payment_payload.eip2612_gas_sponsoring()?;
 
     // 2. Try settle (with or without EIP-2612 permit)
-    let tx_hash = if let Some(info) = &eip2612_info {
-        eip2612::assert_eip2612_offchain_valid(info, payment_payload)?;
-        eip2612::settle_exact_permit2_with_eip2612(provider, payment_payload, info).await?
+    let tx_hash = if let Some(eip2612_gas_sponsoring) = &eip2612_gas_sponsoring {
+        eip2612::assert_eip2612_offchain_valid(eip2612_gas_sponsoring, payment_payload)?;
+        eip2612::settle_exact_permit2_with_eip2612(
+            provider,
+            payment_payload,
+            eip2612_gas_sponsoring,
+        )
+        .await?
     } else {
         settle_exact_permit2(provider, payment_payload).await?
     };
