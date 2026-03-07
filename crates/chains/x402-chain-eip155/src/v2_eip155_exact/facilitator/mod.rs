@@ -41,12 +41,36 @@ where
     }
 }
 
-// FIXME Doc comment
+/// Configuration for the V2 EIP-155 exact scheme facilitator.
+///
+/// This struct holds optional configuration parameters that control
+/// the facilitator's behavior for V2 exact payments on EVM chains.
+///
+/// # Fields
+///
+/// - `eip2612_gas_sponsoring`: Whether to enable EIP-2612 gas-sponsoring extension.
+///   When enabled, the facilitator supports atomic settlement with EIP-2612 permits,
+///   allowing the payer to have their gas fees covered by the facilitator.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct V2Eip155ExactFacilitatorConfig {
     #[serde(default)]
     pub eip2612_gas_sponsoring: bool,
+}
+
+/// Extra data for the V2 EIP-155 exact scheme facilitator.
+///
+/// This struct holds additional response data returned by the facilitator's
+/// `supported` method, including supported extensions.
+///
+/// # Fields
+///
+/// - `extensions`: Optional list of supported extension identifiers.
+///   These extensions indicate additional features the facilitator supports,
+///   such as EIP-2612 gas sponsoring.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct V2Eip155ExactFacilitatorExtra {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extensions: Option<Vec<String>>,
 }
 
 /// Facilitator for V2 EIP-155 exact scheme payments.
@@ -153,17 +177,6 @@ where
 
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
-        let kinds = vec![proto::SupportedPaymentKind {
-            x402_version: v2::X402Version2.into(),
-            scheme: ExactScheme.to_string(),
-            network: chain_id.clone().into(),
-            extra: None,
-        }];
-        let signers = {
-            let mut signers = HashMap::with_capacity(1);
-            signers.insert(chain_id, self.provider.signer_addresses());
-            signers
-        };
         let mut extensions = vec![];
         // Conditionally include EIP-2612 gas-sponsoring extension based on config.
         // This tells the client it may include an EIP-2612 permit in the payload,
@@ -171,6 +184,21 @@ where
         if self.eip2612_gas_sponsoring {
             extensions.push(eip2612::EXTENSION_KEY.to_string());
         }
+        let extra = V2Eip155ExactFacilitatorExtra {
+            extensions: Some(extensions.clone()),
+        };
+        let extra = serde_json::to_value(extra).ok();
+        let kinds = vec![proto::SupportedPaymentKind {
+            x402_version: v2::X402Version2.into(),
+            scheme: ExactScheme.to_string(),
+            network: chain_id.clone().into(),
+            extra,
+        }];
+        let signers = {
+            let mut signers = HashMap::with_capacity(1);
+            signers.insert(chain_id, self.provider.signer_addresses());
+            signers
+        };
         Ok(proto::SupportedResponse {
             kinds,
             extensions,
