@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3] - 2026-03-10
+
+### Added
+
+- `x402-chain-eip155`: Added EIP-2612 gas sponsoring support for Permit2-based payments with new `Permit2PaymentPayloadExt` trait for unified EIP-2612 gas sponsoring handling.
+- `x402-chain-eip155`: Added new `EOASignature` type for improved signature handling.
+- `docs`: Added x402 specification v1 and v2 documentation.
+
+### Changed
+
+- `x402-chain-eip155`: Consolidated Permit2 settlement logic with shared execution flow, eliminating duplication in signature and EIP-712 handling between exact/upto schemes.
+- `x402-chain-eip155`: Updated `X402ExactPermit2Proxy.json` to current SDK version.
+
 ## [1.4.2] - 2026-02-27
 
 ### Added
