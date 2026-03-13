@@ -34,6 +34,7 @@ x402-reqwest = { version = "1.0", path = "crates/x402-reqwest" }
 x402-types = { version = "1.0", path = "crates/x402-types" }
 
 alloy-primitives = { version = "1.4.1" } # To represent token amounts
+prometheus = { version = "0.13", features = ["process"] }
 async-trait = { version = "0.1" }
 axum = { version = "0.8" }
 dotenvy = { version = "0.15.7" }

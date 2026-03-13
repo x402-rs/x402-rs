@@ -63,6 +63,7 @@
 
 pub mod facilitator_local;
 pub mod handlers;
+pub mod metrics;
 pub mod util;
 
 pub use facilitator_local::*;

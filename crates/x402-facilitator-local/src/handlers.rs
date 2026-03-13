@@ -16,6 +16,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::time::Instant;
 use x402_types::facilitator::Facilitator;
 use x402_types::proto;
 use x402_types::proto::{AsPaymentProblem, ErrorReason, PaymentVerificationError};
@@ -25,6 +26,7 @@ use x402_types::scheme::X402SchemeFacilitatorError;
 use tracing::instrument;
 
 use crate::facilitator_local::FacilitatorLocalError;
+use crate::metrics;
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.
 ///
@@ -101,6 +103,7 @@ where
         .route("/settle", post(post_settle::<A>))
         .route("/health", get(get_health::<A>))
         .route("/supported", get(get_supported::<A>))
+        .route("/metrics", get(metrics::get_metrics))
 }
 
 /// `GET /`: Returns a simple greeting message from the facilitator.
@@ -161,8 +164,17 @@ where
     A: Facilitator,
     A::Error: IntoResponse,
 {
-    match facilitator.verify(&body).await {
-        Ok(valid_response) => (StatusCode::OK, Json(valid_response)).into_response(),
+    let (scheme, chain) = extract_labels(&body);
+
+    let start = Instant::now();
+    let result = facilitator.verify(&body).await;
+    let duration = start.elapsed().as_secs_f64();
+
+    match result {
+        Ok(valid_response) => {
+            metrics::record_verify("ok", &scheme, &chain, duration);
+            (StatusCode::OK, Json(valid_response)).into_response()
+        }
         Err(error) => {
             #[cfg(feature = "telemetry")]
             tracing::warn!(
@@ -170,7 +182,9 @@ where
                 body = %serde_json::to_string(&body).unwrap_or_else(|_| "<can-not-serialize>".to_string()),
                 "Verification failed"
             );
-            error.into_response()
+            let response = error.into_response();
+            metrics::record_verify(status_label(response.status()), &scheme, &chain, duration);
+            response
         }
     }
 }
@@ -196,8 +210,17 @@ where
     A: Facilitator,
     A::Error: IntoResponse,
 {
-    match facilitator.settle(&body).await {
-        Ok(valid_response) => (StatusCode::OK, Json(valid_response)).into_response(),
+    let (scheme, chain) = extract_labels(&body);
+
+    let start = Instant::now();
+    let result = facilitator.settle(&body).await;
+    let duration = start.elapsed().as_secs_f64();
+
+    match result {
+        Ok(valid_response) => {
+            metrics::record_settle("ok", &scheme, &chain, duration);
+            (StatusCode::OK, Json(valid_response)).into_response()
+        }
         Err(error) => {
             #[cfg(feature = "telemetry")]
             tracing::warn!(
@@ -205,8 +228,38 @@ where
                 body = %serde_json::to_string(&body).unwrap_or_else(|_| "<can-not-serialize>".to_string()),
                 "Settlement failed"
             );
-            error.into_response()
+            let response = error.into_response();
+            metrics::record_settle(status_label(response.status()), &scheme, &chain, duration);
+            response
         }
+    }
+}
+
+/// Extract scheme and chain labels from a request body.
+///
+/// Returns `("unknown", "unknown")` for requests that cannot be parsed into a
+/// valid [`SchemeHandlerSlug`](x402_types::scheme::SchemeHandlerSlug). This
+/// bounds label cardinality to the set of configured schemes + one "unknown"
+/// fallback per dimension.
+fn extract_labels(body: &proto::VerifyRequest) -> (String, String) {
+    body.scheme_handler_slug()
+        .map(|s| (s.name, s.chain_id.to_string()))
+        .unwrap_or_else(|| ("unknown".into(), "unknown".into()))
+}
+
+/// Map an HTTP status code to a metrics label.
+///
+/// Groups responses into `client_error` (4xx) and `server_error` (5xx) so
+/// operators can separate retriable failures from client-side issues in their
+/// dashboards. Works with any `Facilitator` implementation, not just
+/// `FacilitatorLocal`.
+fn status_label(status: StatusCode) -> &'static str {
+    if status.is_client_error() {
+        "client_error"
+    } else if status.is_server_error() {
+        "server_error"
+    } else {
+        "unknown_error"
     }
 }
 
