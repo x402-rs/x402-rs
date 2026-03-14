@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.4] - 2026-03-14
+
+### Changed
+- Made `resource` fields optional in `paygate.rs`, `v2.rs`, `v2_eip155_exact`, and `v2_solana_exact` to use `Option<ResourceInfo>`, improving flexibility and consistency.
+
 ## [1.4.3] - 2026-03-10
 
 ### Added
