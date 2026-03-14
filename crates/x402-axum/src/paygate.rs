@@ -338,7 +338,7 @@ impl PaygateProtocol for v2::PriceTag {
                     error: Some(err.to_string()),
                     accepts: accepts.iter().map(|pt| pt.requirements.clone()).collect(),
                     x402_version: v2::X402Version2,
-                    resource: resource.clone(),
+                    resource: Some(resource.clone()),
                 };
                 // V2 sends payment required in the "Payment-Required" header (base64 encoded)
                 let payment_required_bytes =

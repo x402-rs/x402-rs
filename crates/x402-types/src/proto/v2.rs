@@ -255,7 +255,7 @@ pub struct PaymentRequired<TAccepts = PaymentRequirements> {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     /// Information about the resource being paid for.
-    pub resource: ResourceInfo,
+    pub resource: Option<ResourceInfo>,
     /// List of acceptable payment methods.
     #[serde(default = "Vec::default")]
     pub accepts: Vec<TAccepts>,

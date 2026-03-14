@@ -197,7 +197,7 @@ where
                     x402_version: self.x402_version(),
                     pay_to: requirements.pay_to.to_string(),
                     signer: Box::new(PayloadSigner {
-                        resource_info: Some(payment_required.resource.clone()),
+                        resource_info: payment_required.resource.clone(),
                         signer: self.signer.clone(),
                         chain_reference,
                         requirements,

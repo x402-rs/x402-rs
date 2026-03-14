@@ -111,7 +111,7 @@ where
 struct PayloadSigner<S, R> {
     signer: S,
     rpc_client: R,
-    resource: ResourceInfo,
+    resource: Option<ResourceInfo>,
     requirements: PaymentRequirements,
     requirements_json: OriginalJson,
 }
@@ -137,7 +137,7 @@ impl<S: Signer + Sync, R: RpcClientLike + Sync> PaymentCandidateSigner for Paylo
         let payload = PaymentPayload {
             x402_version: X402Version2,
             accepted: self.requirements_json.clone(),
-            resource: Some(self.resource.clone()),
+            resource: self.resource.clone(),
             payload: ExactSolanaPayload {
                 transaction: tx_b64,
             },
