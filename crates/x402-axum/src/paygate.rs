@@ -532,6 +532,7 @@ where
             tracing::debug!("Settling payment before request execution");
 
             let settlement = self.settle_payment(&verify_request).await?;
+            validate_settlement(&settlement)?;
 
             let header_value = settlement_to_header(settlement)?;
 
@@ -564,6 +565,7 @@ where
             }
 
             let settlement = self.settle_payment(&verify_request).await?;
+            validate_settlement(&settlement)?;
 
             let header_value = settlement_to_header(settlement)?;
 
@@ -617,6 +619,38 @@ where
     let base64 = Base64Bytes::from(header_bytes).decode().ok()?;
     let value = serde_json::from_slice(base64.as_ref()).ok()?;
     Some(value)
+}
+
+/// Validates that a [`proto::SettleResponse`] indicates successful settlement.
+///
+/// The facilitator may return HTTP 200 with `{ "success": false }` when on-chain
+/// settlement fails (e.g., insufficient funds, reverted transaction). Without this
+/// check, the paygate would serve the protected resource despite failed payment.
+///
+/// # Fail-safe behavior
+///
+/// - `success: true` → Ok
+/// - `success: false` → Error with `errorReason` extracted if available
+/// - `success` missing or non-boolean → Error (non-compliant facilitator response)
+///
+/// See: <https://github.com/x402-rs/x402-rs/issues/65>
+fn validate_settlement(settlement: &proto::SettleResponse) -> Result<(), PaygateError> {
+    match settlement.0.get("success").and_then(|v| v.as_bool()) {
+        Some(true) => Ok(()),
+        Some(false) => {
+            let reason = settlement
+                .0
+                .get("errorReason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            Err(PaygateError::Settlement(format!(
+                "facilitator returned success: false (reason: {reason})"
+            )))
+        }
+        None => Err(PaygateError::Settlement(
+            "settlement response missing boolean 'success' field".into(),
+        )),
+    }
 }
 
 /// Converts a [`proto::SettleResponse`] into an HTTP header value.
@@ -842,5 +876,68 @@ where
         base_url: Option<&Url>,
     ) -> Vec<Self::PriceTag> {
         (self.callback)(headers, uri, base_url).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn settle_response(value: serde_json::Value) -> proto::SettleResponse {
+        proto::SettleResponse(value)
+    }
+
+    #[test]
+    fn validate_settlement_success_true() {
+        let resp = settle_response(json!({ "success": true, "txHash": "0xabc" }));
+        assert!(validate_settlement(&resp).is_ok());
+    }
+
+    #[test]
+    fn validate_settlement_success_false_with_reason() {
+        let resp = settle_response(json!({
+            "success": false,
+            "errorReason": "insufficient_funds"
+        }));
+        let err = validate_settlement(&resp).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("success: false"), "got: {msg}");
+        assert!(msg.contains("insufficient_funds"), "got: {msg}");
+    }
+
+    #[test]
+    fn validate_settlement_success_false_no_reason() {
+        let resp = settle_response(json!({ "success": false }));
+        let err = validate_settlement(&resp).unwrap_err();
+        assert!(err.to_string().contains("unknown"));
+    }
+
+    #[test]
+    fn validate_settlement_missing_success_field() {
+        let resp = settle_response(json!({ "txHash": "0xabc" }));
+        let err = validate_settlement(&resp).unwrap_err();
+        assert!(err.to_string().contains("missing boolean"));
+    }
+
+    #[test]
+    fn validate_settlement_success_is_string() {
+        let resp = settle_response(json!({ "success": "true" }));
+        let err = validate_settlement(&resp).unwrap_err();
+        assert!(err.to_string().contains("missing boolean"));
+    }
+
+    #[test]
+    fn validate_settlement_success_is_number() {
+        let resp = settle_response(json!({ "success": 1 }));
+        let err = validate_settlement(&resp).unwrap_err();
+        assert!(err.to_string().contains("missing boolean"));
+    }
+
+    #[test]
+    fn validate_settlement_empty_object() {
+        let resp = settle_response(json!({}));
+        let err = validate_settlement(&resp).unwrap_err();
+        assert!(err.to_string().contains("missing boolean"));
     }
 }
