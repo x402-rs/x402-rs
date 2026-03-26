@@ -161,15 +161,60 @@ where
     A: Facilitator,
     A::Error: IntoResponse,
 {
+    #[cfg(feature = "telemetry")]
+    let start = std::time::Instant::now();
+
+    #[cfg(feature = "telemetry")]
+    let slug = body.scheme_handler_slug();
+
     match facilitator.verify(&body).await {
-        Ok(valid_response) => (StatusCode::OK, Json(valid_response)).into_response(),
+        Ok(valid_response) => {
+            #[cfg(feature = "telemetry")]
+            {
+                let duration = start.elapsed().as_secs_f64();
+                let (chain, scheme) = slug
+                    .as_ref()
+                    .map(|s| (s.chain_id.to_string(), s.name.clone()))
+                    .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
+                tracing::info!(
+                    monotonic_counter.facilitator_verify_requests_total = 1_u64,
+                    status = "ok",
+                    chain = %chain,
+                    scheme = %scheme,
+                );
+                tracing::info!(
+                    histogram.facilitator_verify_duration_seconds = duration,
+                    chain = %chain,
+                    scheme = %scheme,
+                );
+            }
+            (StatusCode::OK, Json(valid_response)).into_response()
+        }
         Err(error) => {
             #[cfg(feature = "telemetry")]
-            tracing::warn!(
-                error = ?error,
-                body = %serde_json::to_string(&body).unwrap_or_else(|_| "<can-not-serialize>".to_string()),
-                "Verification failed"
-            );
+            {
+                let duration = start.elapsed().as_secs_f64();
+                let (chain, scheme) = slug
+                    .as_ref()
+                    .map(|s| (s.chain_id.to_string(), s.name.clone()))
+                    .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
+                tracing::warn!(
+                    error = ?error,
+                    body = %serde_json::to_string(&body).unwrap_or_else(|_| "<can-not-serialize>".to_string()),
+                    "Verification failed"
+                );
+                tracing::info!(
+                    monotonic_counter.facilitator_verify_requests_total = 1_u64,
+                    status = "error",
+                    chain = %chain,
+                    scheme = %scheme,
+                );
+                tracing::info!(
+                    histogram.facilitator_verify_duration_seconds = duration,
+                    chain = %chain,
+                    scheme = %scheme,
+                );
+            }
             error.into_response()
         }
     }
@@ -196,15 +241,60 @@ where
     A: Facilitator,
     A::Error: IntoResponse,
 {
+    #[cfg(feature = "telemetry")]
+    let start = std::time::Instant::now();
+
+    #[cfg(feature = "telemetry")]
+    let slug = body.scheme_handler_slug();
+
     match facilitator.settle(&body).await {
-        Ok(valid_response) => (StatusCode::OK, Json(valid_response)).into_response(),
+        Ok(valid_response) => {
+            #[cfg(feature = "telemetry")]
+            {
+                let duration = start.elapsed().as_secs_f64();
+                let (chain, scheme) = slug
+                    .as_ref()
+                    .map(|s| (s.chain_id.to_string(), s.name.clone()))
+                    .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
+                tracing::info!(
+                    monotonic_counter.facilitator_settle_requests_total = 1_u64,
+                    status = "ok",
+                    chain = %chain,
+                    scheme = %scheme,
+                );
+                tracing::info!(
+                    histogram.facilitator_settle_duration_seconds = duration,
+                    chain = %chain,
+                    scheme = %scheme,
+                );
+            }
+            (StatusCode::OK, Json(valid_response)).into_response()
+        }
         Err(error) => {
             #[cfg(feature = "telemetry")]
-            tracing::warn!(
-                error = ?error,
-                body = %serde_json::to_string(&body).unwrap_or_else(|_| "<can-not-serialize>".to_string()),
-                "Settlement failed"
-            );
+            {
+                let duration = start.elapsed().as_secs_f64();
+                let (chain, scheme) = slug
+                    .as_ref()
+                    .map(|s| (s.chain_id.to_string(), s.name.clone()))
+                    .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
+                tracing::warn!(
+                    error = ?error,
+                    body = %serde_json::to_string(&body).unwrap_or_else(|_| "<can-not-serialize>".to_string()),
+                    "Settlement failed"
+                );
+                tracing::info!(
+                    monotonic_counter.facilitator_settle_requests_total = 1_u64,
+                    status = "error",
+                    chain = %chain,
+                    scheme = %scheme,
+                );
+                tracing::info!(
+                    histogram.facilitator_settle_duration_seconds = duration,
+                    chain = %chain,
+                    scheme = %scheme,
+                );
+            }
             error.into_response()
         }
     }
