@@ -46,10 +46,7 @@ impl V2Eip155Exact {
         asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,
     ) -> v2::PriceTag {
         let chain_id: ChainId = asset.token.chain_reference.into();
-        let extra = asset
-            .token
-            .eip712
-            .and_then(|eip712| serde_json::to_value(&eip712).ok());
+        let extra = serde_json::to_value(asset.token.transfer_method).ok();
         let requirements = v2::PaymentRequirements {
             scheme: ExactScheme.to_string(),
             pay_to: pay_to.into().to_string(),

@@ -6,6 +6,8 @@
       "_comment": "Base Sepolia"
       "eip1559": true,
       "flashblocks": true,
+      "poll_interval_ms": 500,
+      "sync_send": true,
       "signers": [
           "0xWALLET"
       ],
@@ -24,22 +26,26 @@
     }
   },
   "schemes": [
-      {
-        "id": "v1-eip155-exact",
-        "chains": "eip155:*"
-      },
-      {
-        "id": "v2-eip155-exact",
-        "chains": "eip155:*"
-      },
-      {
-        "_comment": "Solana schemes allow Phantom Lighthouse program by default",
-        "id": "v1-solana-exact",
-        "chains": "solana:*"
-      },
-      {
-        "id": "v2-solana-exact",
-        "chains": "solana:*"
-      }
-    ]
+    {
+      "id": "v1-eip155-exact",
+      "chains": "eip155:*"
+    },
+    {
+      "id": "v2-eip155-exact",
+      "chains": "eip155:*"
+    },
+    {
+      "id": "v2-eip155-upto",
+      "chains": "eip155:*"
+    },
+    {
+      "_comment": "Solana schemes allow Phantom Lighthouse program by default",
+      "id": "v1-solana-exact",
+      "chains": "solana:*"
+    },
+    {
+      "id": "v2-solana-exact",
+      "chains": "solana:*"
+    }
+  ]
 }

@@ -37,18 +37,23 @@
 //! // amount.amount is now 10_500_000 (10.50 * 10^6)
 //! ```
 
-pub mod types;
-
 #[cfg(feature = "facilitator")]
 pub mod config;
+
 #[cfg(feature = "facilitator")]
 pub mod pending_nonce_manager;
 #[cfg(feature = "facilitator")]
-pub mod provider;
+pub use pending_nonce_manager::*;
 
 #[cfg(feature = "facilitator")]
-pub use pending_nonce_manager::*;
+pub mod provider;
 #[cfg(feature = "facilitator")]
 pub use provider::*;
 
+#[cfg(any(feature = "facilitator", feature = "client"))]
+pub mod erc20;
+
+pub mod types;
 pub use types::*;
+
+pub mod permit2;

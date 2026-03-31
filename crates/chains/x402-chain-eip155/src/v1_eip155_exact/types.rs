@@ -58,6 +58,7 @@ pub struct ExactEvmPayloadAuthorization {
     pub to: Address,
 
     /// The amount of tokens to transfer (in token's smallest unit).
+    #[serde(with = "crate::decimal_u256")]
     pub value: U256,
 
     /// The authorization is not valid before this timestamp (inclusive).

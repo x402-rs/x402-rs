@@ -394,7 +394,11 @@ impl FacilitatorClient {
             .await
             .map_err(|e| FacilitatorClientError::Http { context, source: e })?;
 
-        let result = if http_response.status() == StatusCode::OK {
+        let status = http_response.status();
+        let can_deserialize = status == StatusCode::OK
+            || status == StatusCode::PRECONDITION_FAILED
+            || status == StatusCode::BAD_REQUEST;
+        let result = if can_deserialize {
             http_response
                 .json::<R>()
                 .await

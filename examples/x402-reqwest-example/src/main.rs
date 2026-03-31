@@ -50,11 +50,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let http_client = Client::new().with_payments(x402_client).build();
 
-    let response = http_client
-        .get("http://localhost:3000/protected-route")
-        .send()
-        .await?;
+    let endpoint =
+        env::var("ENDPOINT").unwrap_or("http://localhost:3000/protected-route".to_string());
 
+    let response = http_client.get(endpoint).send().await?;
+
+    println!("Status: {}", response.status());
     println!("Response: {:?}", response.text().await?);
 
     Ok(())

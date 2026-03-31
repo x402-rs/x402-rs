@@ -207,7 +207,7 @@ impl SolanaChainProvider {
 impl FromConfig<SolanaChainConfig> for SolanaChainProvider {
     async fn from_config(config: &SolanaChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let rpc_url = config.rpc();
-        let pubsub_url = config.pubsub().clone().map(|url| url.to_string());
+        let pubsub_url = config.pubsub().map(|url| url.to_string());
         let keypair = Keypair::from_base58_string(&config.signer().to_string());
         let max_compute_unit_limit = config.max_compute_unit_limit();
         let max_compute_unit_price = config.max_compute_unit_price();

@@ -60,6 +60,16 @@ impl Eip155ChainConfig {
         &self.inner.rpc
     }
 
+    /// Returns the poll interval in milliseconds, if configured.
+    pub fn poll_interval_ms(&self) -> Option<u64> {
+        self.inner.poll_interval_ms
+    }
+
+    /// Returns whether this chain uses synchronous transaction sending (EIP-7966).
+    pub fn sync_send(&self) -> bool {
+        self.inner.sync_send
+    }
+
     /// Returns the numeric chain reference.
     pub fn chain_reference(&self) -> Eip155ChainReference {
         self.chain_reference
@@ -83,6 +93,19 @@ pub struct Eip155ChainConfigInner {
     /// How long to wait till the transaction receipt is available (optional)
     #[serde(default = "eip155_chain_config::default_receipt_timeout_secs")]
     pub receipt_timeout_secs: u64,
+    /// Poll interval in milliseconds for receipt detection (optional).
+    /// Lower values improve receipt detection latency on fast-finality chains like Monad.
+    /// Default: None (uses alloy default of 7000ms for remote transports).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub poll_interval_ms: Option<u64>,
+    /// Whether to use `eth_sendRawTransactionSync` (EIP-7966) for transaction submission.
+    /// When enabled, transactions are sent synchronously and the receipt is returned in a
+    /// single RPC call, eliminating the polling loop entirely.
+    /// Only supported by chains that implement EIP-7966 (e.g., Monad).
+    /// When `true`, `poll_interval_ms` and `receipt_timeout_secs` have no effect on settlement.
+    /// Default: false (uses standard send + poll).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sync_send: bool,
 }
 
 mod eip155_chain_config {
@@ -101,7 +124,7 @@ mod eip155_chain_config {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RpcConfig {
     /// HTTP URL for the RPC endpoint.
-    pub http: Url,
+    pub http: LiteralOrEnv<Url>,
     /// Rate limit for requests per second (optional).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rate_limit: Option<u32>,

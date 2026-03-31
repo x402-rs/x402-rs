@@ -1,5 +1,3 @@
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
-
 //! x402 Facilitator Server
 //!
 //! A production-ready HTTP server implementing the [x402](https://www.x402.org) payment protocol.

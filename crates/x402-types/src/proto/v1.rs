@@ -17,11 +17,10 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::Display;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::proto;
-use crate::proto::SupportedResponse;
+use crate::proto::{OriginalJson, SupportedResponse};
 
 /// Version marker for x402 protocol version 1.
 ///
@@ -235,7 +234,7 @@ struct VerifyResponseWire {
     is_valid: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     payer: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     invalid_reason: Option<String>,
 }
 
@@ -303,10 +302,11 @@ where
     Self: DeserializeOwned,
 {
     pub fn from_proto(
+        // FIXME REMOVE THIS
         request: proto::VerifyRequest,
     ) -> Result<Self, proto::PaymentVerificationError> {
-        let deserialized: Self = serde_json::from_value(request.into_json())?;
-        Ok(deserialized)
+        let value = serde_json::from_str(request.as_str())?;
+        Ok(value)
     }
 }
 
@@ -319,7 +319,8 @@ where
     type Error = serde_json::Error;
     fn try_into(self) -> Result<proto::VerifyRequest, Self::Error> {
         let json = serde_json::to_value(self)?;
-        Ok(proto::VerifyRequest(json))
+        let raw = serde_json::value::to_raw_value(&json)?;
+        Ok(proto::VerifyRequest(raw))
     }
 }
 
@@ -375,7 +376,7 @@ pub struct PaymentRequirements<
     /// Human-readable description of the resource.
     pub description: String,
     /// MIME type of the resource.
-    pub mime_type: String,
+    pub mime_type: Option<String>,
     /// Optional JSON schema for the resource output.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_schema: Option<serde_json::Value>,
@@ -390,37 +391,19 @@ pub struct PaymentRequirements<
     pub extra: Option<TExtra>,
 }
 
-impl PaymentRequirements {
-    #[allow(dead_code)] // Public for consumption by downstream crates.
-    pub fn as_concrete<
-        TScheme: FromStr,
-        TAmount: FromStr,
-        TAddress: FromStr,
-        TExtra: DeserializeOwned,
-    >(
-        &self,
-    ) -> Option<PaymentRequirements<TScheme, TAmount, TAddress, TExtra>> {
-        let scheme = self.scheme.parse::<TScheme>().ok()?;
-        let max_amount_required = self.max_amount_required.parse::<TAmount>().ok()?;
-        let pay_to = self.pay_to.parse::<TAddress>().ok()?;
-        let asset = self.asset.parse::<TAddress>().ok()?;
-        let extra = self
-            .extra
-            .as_ref()
-            .and_then(|v| serde_json::from_value(v.clone()).ok());
-        Some(PaymentRequirements {
-            scheme,
-            network: self.network.clone(),
-            max_amount_required,
-            resource: self.resource.clone(),
-            description: self.description.clone(),
-            mime_type: self.mime_type.clone(),
-            output_schema: self.output_schema.clone(),
-            pay_to,
-            max_timeout_seconds: self.max_timeout_seconds,
-            asset,
-            extra,
-        })
+impl<TScheme, TAmount, TAddress, TExtra> TryFrom<&OriginalJson>
+    for PaymentRequirements<TScheme, TAmount, TAddress, TExtra>
+where
+    TScheme: for<'a> serde::Deserialize<'a>,
+    TAmount: for<'a> serde::Deserialize<'a>,
+    TAddress: for<'a> serde::Deserialize<'a>,
+    TExtra: for<'a> serde::Deserialize<'a>,
+{
+    type Error = serde_json::Error;
+
+    fn try_from(value: &OriginalJson) -> Result<Self, Self::Error> {
+        let payment_requirements = serde_json::from_str(value.0.get())?;
+        Ok(payment_requirements)
     }
 }
 
@@ -430,12 +413,12 @@ impl PaymentRequirements {
 /// the list of acceptable payment methods.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PaymentRequired {
+pub struct PaymentRequired<TAccepts = PaymentRequirements> {
     /// Protocol version (always 1).
     pub x402_version: X402Version1,
     /// List of acceptable payment methods.
-    #[serde(default)]
-    pub accepts: Vec<PaymentRequirements>,
+    #[serde(default = "Vec::default")]
+    pub accepts: Vec<TAccepts>,
     /// Optional error message if the request was malformed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,

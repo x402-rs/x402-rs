@@ -20,16 +20,16 @@
 //! - [`ResourceInfo`] - Metadata about the paid resource
 //! - [`PriceTag`] - Builder for creating payment requirements
 
-use crate::chain::ChainId;
-use crate::proto;
-use crate::proto::SupportedResponse;
-use crate::proto::v1;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use std::str::FromStr;
 use std::sync::Arc;
+
+use crate::chain::ChainId;
+use crate::proto;
+use crate::proto::v1;
+use crate::proto::{OriginalJson, SupportedResponse};
 
 /// Version marker for x402 protocol version 2.
 ///
@@ -100,12 +100,14 @@ pub type SettleResponse = v1::SettleResponse;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceInfo {
-    /// Human-readable description of the resource.
-    pub description: String,
-    /// MIME type of the resource content.
-    pub mime_type: String,
     /// URL of the resource.
     pub url: String,
+    /// Human-readable description of the resource.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// MIME type of the resource content.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
 }
 
 /// Request to verify a V2 payment.
@@ -122,15 +124,45 @@ pub struct VerifyRequest<TPayload, TRequirements> {
     pub payment_requirements: TRequirements,
 }
 
+impl<TPayload, TRequirements> TryFrom<&VerifyRequest<TPayload, TRequirements>>
+    for proto::VerifyRequest
+where
+    TPayload: Serialize,
+    TRequirements: Serialize,
+{
+    type Error = serde_json::Error;
+
+    fn try_from(value: &VerifyRequest<TPayload, TRequirements>) -> Result<Self, Self::Error> {
+        let json = serde_json::to_string(value)?;
+        let raw = serde_json::value::RawValue::from_string(json)?;
+        Ok(Self(raw))
+    }
+}
+
+impl<TPayload, TRequirements> TryFrom<&proto::VerifyRequest>
+    for VerifyRequest<TPayload, TRequirements>
+where
+    TPayload: DeserializeOwned,
+    TRequirements: DeserializeOwned,
+{
+    type Error = proto::PaymentVerificationError;
+
+    fn try_from(value: &proto::VerifyRequest) -> Result<Self, Self::Error> {
+        let deserialized = serde_json::from_str(value.as_str())?;
+        Ok(deserialized)
+    }
+}
+
 impl<TPayload, TRequirements> VerifyRequest<TPayload, TRequirements>
 where
     Self: DeserializeOwned,
 {
     pub fn from_proto(
+        // FIXME REMOVE THIS
         request: proto::VerifyRequest,
     ) -> Result<Self, proto::PaymentVerificationError> {
-        let deserialized: Self = serde_json::from_value(request.into_json())?;
-        Ok(deserialized)
+        let value = serde_json::from_str(request.as_str())?;
+        Ok(value)
     }
 }
 
@@ -145,15 +177,18 @@ where
 /// - `TPayload` - The scheme-specific payload type
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PaymentPayload<TAccepted, TPayload> {
+pub struct PaymentPayload<TPaymentRequirements, TPayload> {
     /// The payment requirements the buyer accepted.
-    pub accepted: TAccepted,
+    pub accepted: TPaymentRequirements,
     /// The scheme-specific signed payload.
     pub payload: TPayload,
     /// Information about the resource being paid for.
     pub resource: Option<ResourceInfo>,
     /// Protocol version (always 2).
     pub x402_version: X402Version2,
+    /// Optional extension data provided by the client.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extensions: Option<serde_json::Value>,
 }
 
 /// Payment requirements set by the seller (V2 format).
@@ -166,14 +201,14 @@ pub struct PaymentPayload<TAccepted, TPayload> {
 /// - `TScheme` - The scheme identifier type (default: `String`)
 /// - `TAmount` - The amount type (default: `String`)
 /// - `TAddress` - The address type (default: `String`)
-/// - `TExtra` - Scheme-specific extra data type (default: `serde_json::Value`)
+/// - `TExtra` - Scheme-specific extra data type (default: `Option<serde_json::Value>`)
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentRequirements<
     TScheme = String,
     TAmount = String,
     TAddress = String,
-    TExtra = serde_json::Value,
+    TExtra = Option<serde_json::Value>,
 > {
     /// The payment scheme (e.g., "exact").
     pub scheme: TScheme,
@@ -188,37 +223,22 @@ pub struct PaymentRequirements<
     /// The token asset address.
     pub asset: TAddress,
     /// Scheme-specific extra data.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra: Option<TExtra>,
+    pub extra: TExtra,
 }
 
-impl PaymentRequirements {
-    #[allow(dead_code)] // Public for consumption by downstream crates.
-    pub fn as_concrete<
-        TScheme: FromStr,
-        TAmount: FromStr,
-        TAddress: FromStr,
-        TExtra: DeserializeOwned,
-    >(
-        &self,
-    ) -> Option<PaymentRequirements<TScheme, TAmount, TAddress, TExtra>> {
-        let scheme = self.scheme.parse::<TScheme>().ok()?;
-        let amount = self.amount.parse::<TAmount>().ok()?;
-        let pay_to = self.pay_to.parse::<TAddress>().ok()?;
-        let asset = self.asset.parse::<TAddress>().ok()?;
-        let extra = self
-            .extra
-            .as_ref()
-            .and_then(|v| serde_json::from_value(v.clone()).ok());
-        Some(PaymentRequirements {
-            scheme,
-            network: self.network.clone(),
-            amount,
-            pay_to,
-            max_timeout_seconds: self.max_timeout_seconds,
-            asset,
-            extra,
-        })
+impl<TScheme, TAmount, TAddress, TExtra> TryFrom<&OriginalJson>
+    for PaymentRequirements<TScheme, TAmount, TAddress, TExtra>
+where
+    TScheme: for<'a> serde::Deserialize<'a>,
+    TAmount: for<'a> serde::Deserialize<'a>,
+    TAddress: for<'a> serde::Deserialize<'a>,
+    TExtra: for<'a> serde::Deserialize<'a>,
+{
+    type Error = serde_json::Error;
+
+    fn try_from(value: &OriginalJson) -> Result<Self, Self::Error> {
+        let payment_requirements = serde_json::from_str(value.0.get())?;
+        Ok(payment_requirements)
     }
 }
 
@@ -228,17 +248,17 @@ impl PaymentRequirements {
 /// the list of acceptable payment methods and resource metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PaymentRequired {
+pub struct PaymentRequired<TAccepts = PaymentRequirements> {
     /// Protocol version (always 2).
     pub x402_version: X402Version2,
     /// Optional error message if the request was malformed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     /// Information about the resource being paid for.
-    pub resource: ResourceInfo,
+    pub resource: Option<ResourceInfo>,
     /// List of acceptable payment methods.
-    #[serde(default)]
-    pub accepts: Vec<PaymentRequirements>,
+    #[serde(default = "Vec::default")]
+    pub accepts: Vec<TAccepts>,
 }
 
 /// Builder for creating V2 payment requirements.

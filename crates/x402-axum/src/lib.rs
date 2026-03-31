@@ -1,5 +1,3 @@
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
-
 //! Axum middleware for enforcing [x402](https://www.x402.org) payments on protected routes.
 //!
 //! This middleware validates incoming payment headers using a configured x402 facilitator,

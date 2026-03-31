@@ -60,7 +60,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::time::Duration;
 use tower_http::trace::{MakeSpan, OnResponse, TraceLayer};
-use tracing::Span;
+use tracing::{Span, Level};
 use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer, OpenTelemetrySpanExt};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -114,7 +114,7 @@ impl TelemetryProtocol {
 /// - `OTEL_SERVICE_NAME`
 /// - `OTEL_SERVICE_VERSION`
 /// - `OTEL_SERVICE_DEPLOYMENT`
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Telemetry {
     /// Optional service name (e.g., `"x402-facilitator"`).
     ///
@@ -128,12 +128,44 @@ pub struct Telemetry {
     ///
     /// May be overridden by the `OTEL_SERVICE_DEPLOYMENT` environment variable.
     pub deployment: Option<Value>,
+
+    /// Default log level for telemetry if not set through env vars.
+    /// "trace" by default.
+    pub default_level: Level,
+
+    /// Whether to warn about missing OTEL configuration.
+    /// false by default.
+    pub otel_warning: bool,
+}
+
+impl Default for Telemetry {
+    fn default() -> Self {
+        Self {
+            name: None,
+            version: None,
+            deployment: None,
+            default_level: Level::TRACE,
+            otel_warning: false,
+        }
+    }
 }
 
 impl Telemetry {
     /// Creates a new, empty [`Telemetry`] instance.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn with_level(&self, level: Level) -> Self {
+        let mut this = self.clone();
+        this.default_level = level;
+        this
+    }
+
+    pub fn with_otel_warning(&self, otel_warning: bool) -> Self {
+        let mut this = self.clone();
+        this.otel_warning = otel_warning;
+        this
     }
 
     /// Sets the service name.
@@ -331,13 +363,16 @@ impl Telemetry {
                 }
             }
             None => {
+                let default_level = self.default_level;
                 // Fallback: just use local logging
                 tracing_subscriber::registry()
-                    .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "trace".into()))
+                    .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| default_level.to_string().into()))
                     .with(tracing_subscriber::fmt::layer())
                     .init();
 
-                tracing::info!("OpenTelemetry is not enabled");
+                if self.otel_warning {
+                    tracing::info!("OpenTelemetry is not enabled");
+                }
 
                 TelemetryProviders {
                     tracer_provider: None,

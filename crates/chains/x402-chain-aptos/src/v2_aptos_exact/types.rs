@@ -19,7 +19,7 @@ pub type PaymentPayload = v2::PaymentPayload<PaymentRequirements, ExactAptosPayl
 
 /// The payment requirements for Aptos exact scheme.
 pub type PaymentRequirements =
-    v2::PaymentRequirements<ExactScheme, String, Address, SupportedPaymentKindExtra>;
+    v2::PaymentRequirements<ExactScheme, String, Address, Option<AptosPaymentRequirementsExtra>>;
 
 /// The transaction payload containing the base64-encoded BCS transaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,11 +30,13 @@ pub struct ExactAptosPayload {
 }
 
 /// Extra requirements for sponsored transactions.
+///
+/// When present, `fee_payer` indicates the facilitator address that will
+/// sponsor gas fees for the transaction.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SupportedPaymentKindExtra {
-    /// The address of the fee payer (facilitator).
-    pub fee_payer: Address,
-    /// Whether this is a sponsored (gasless) transaction.
-    pub sponsored: bool,
+pub struct AptosPaymentRequirementsExtra {
+    /// The address of the fee payer (facilitator). When present, sponsorship is enabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fee_payer: Option<Address>,
 }

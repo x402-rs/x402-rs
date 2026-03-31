@@ -26,7 +26,6 @@
 use serde::{Deserialize, Serialize};
 use serde_with::{VecSkipError, serde_as};
 use std::collections::HashMap;
-use std::str::FromStr;
 
 use crate::chain::ChainId;
 use crate::scheme::SchemeHandlerSlug;
@@ -132,7 +131,7 @@ pub struct SupportedResponse {
 ///
 /// The inner JSON structure varies by protocol version and scheme.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VerifyRequest(serde_json::Value);
+pub struct VerifyRequest(Box<serde_json::value::RawValue>);
 
 /// Request to settle a verified payment on-chain.
 ///
@@ -140,16 +139,15 @@ pub struct VerifyRequest(serde_json::Value);
 /// payload that was previously verified.
 pub type SettleRequest = VerifyRequest;
 
-impl From<serde_json::Value> for VerifyRequest {
-    fn from(value: serde_json::Value) -> Self {
+impl From<Box<serde_json::value::RawValue>> for VerifyRequest {
+    fn from(value: Box<serde_json::value::RawValue>) -> Self {
         Self(value)
     }
 }
 
 impl VerifyRequest {
-    /// Consumes the request and returns the inner JSON value.
-    pub fn into_json(self) -> serde_json::Value {
-        self.0
+    pub fn as_str(&self) -> &str {
+        self.0.get()
     }
 
     /// Extracts the scheme handler slug from the request.
@@ -159,33 +157,62 @@ impl VerifyRequest {
     ///
     /// Returns `None` if the request format is invalid or the scheme is unknown.
     pub fn scheme_handler_slug(&self) -> Option<SchemeHandlerSlug> {
-        let x402_version: u8 = self.0.get("x402Version")?.as_u64()?.try_into().ok()?;
-        match x402_version {
-            v1::X402Version1::VALUE => {
-                let network_name = self.0.get("paymentPayload")?.get("network")?.as_str()?;
-                let chain_id = ChainId::from_network_name(network_name)?;
-                let scheme = self.0.get("paymentPayload")?.get("scheme")?.as_str()?;
-                let slug = SchemeHandlerSlug::new(chain_id, 1, scheme.into());
+        #[derive(Debug, Deserialize, Serialize)]
+        #[serde(untagged)]
+        enum VerifyRequestWire {
+            #[serde(rename_all = "camelCase")]
+            V1 {
+                x402_version: v1::X402Version1,
+                payment_payload: PaymentPayloadV1,
+            },
+            #[serde(rename_all = "camelCase")]
+            V2 {
+                x402_version: v2::X402Version2,
+                payment_payload: PaymentPayloadV2,
+            },
+        }
+
+        #[derive(Debug, Deserialize, Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct PaymentPayloadV1 {
+            pub network: String,
+            pub scheme: String,
+        }
+
+        #[derive(Debug, Deserialize, Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct PaymentPayloadV2 {
+            pub accepted: PaymentPayloadV2Accepted,
+        }
+
+        #[derive(Debug, Deserialize, Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct PaymentPayloadV2Accepted {
+            pub network: ChainId,
+            pub scheme: String,
+        }
+
+        let wire = serde_json::from_str::<VerifyRequestWire>(self.as_str()).ok()?;
+        match wire {
+            VerifyRequestWire::V1 {
+                payment_payload,
+                x402_version,
+            } => {
+                let network_name = payment_payload.network;
+                let chain_id = ChainId::from_network_name(&network_name)?;
+                let scheme = payment_payload.scheme;
+                let slug = SchemeHandlerSlug::new(chain_id, x402_version.into(), scheme);
                 Some(slug)
             }
-            v2::X402Version2::VALUE => {
-                let chain_id_string = self
-                    .0
-                    .get("paymentPayload")?
-                    .get("accepted")?
-                    .get("network")?
-                    .as_str()?;
-                let chain_id = ChainId::from_str(chain_id_string).ok()?;
-                let scheme = self
-                    .0
-                    .get("paymentPayload")?
-                    .get("accepted")?
-                    .get("scheme")?
-                    .as_str()?;
-                let slug = SchemeHandlerSlug::new(chain_id, 2, scheme.into());
+            VerifyRequestWire::V2 {
+                payment_payload,
+                x402_version,
+            } => {
+                let chain_id = payment_payload.accepted.network;
+                let scheme = payment_payload.accepted.scheme;
+                let slug = SchemeHandlerSlug::new(chain_id, x402_version.into(), scheme);
                 Some(slug)
             }
-            _ => None,
         }
     }
 }
@@ -234,6 +261,8 @@ pub enum PaymentVerificationError {
     /// The payer's on-chain balance is insufficient.
     #[error("Onchain balance is not enough to cover the payment amount")]
     InsufficientFunds,
+    #[error("Allowance is not enough to cover the payment amount")]
+    InsufficientAllowance,
     /// The payment signature is invalid.
     #[error("{0}")]
     InvalidSignature(String),
@@ -257,6 +286,9 @@ impl AsPaymentProblem for PaymentVerificationError {
             PaymentVerificationError::InvalidFormat(_) => ErrorReason::InvalidFormat,
             PaymentVerificationError::InvalidPaymentAmount => ErrorReason::InvalidPaymentAmount,
             PaymentVerificationError::InsufficientFunds => ErrorReason::InsufficientFunds,
+            PaymentVerificationError::InsufficientAllowance => {
+                ErrorReason::Permit2AllowanceRequired
+            }
             PaymentVerificationError::Early => ErrorReason::InvalidPaymentEarly,
             PaymentVerificationError::Expired => ErrorReason::InvalidPaymentExpired,
             PaymentVerificationError::ChainIdMismatch => ErrorReason::ChainIdMismatch,
@@ -311,6 +343,8 @@ pub enum ErrorReason {
     TransactionSimulation,
     /// Insufficient on-chain balance.
     InsufficientFunds,
+    /// Insufficient allowance.
+    Permit2AllowanceRequired,
     /// The chain is not supported.
     UnsupportedChain,
     /// The scheme is not supported.
@@ -357,11 +391,15 @@ impl PaymentProblem {
 pub struct PaymentRequiredV;
 
 impl ProtocolV for PaymentRequiredV {
-    type V1 = v1::PaymentRequired;
-    type V2 = v2::PaymentRequired;
+    type V1 = v1::PaymentRequired<OriginalJson>;
+    type V2 = v2::PaymentRequired<OriginalJson>;
 }
 
 /// A payment required response that can be either V1 or V2.
 ///
 /// This is returned with HTTP 402 status to indicate that payment is required.
 pub type PaymentRequired = ProtocolVersioned<PaymentRequiredV>;
+
+/// Verbatim JSON for PaymentRequirements and other places.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OriginalJson(pub Box<serde_json::value::RawValue>);

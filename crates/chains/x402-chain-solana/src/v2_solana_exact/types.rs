@@ -13,6 +13,7 @@ pub use crate::v1_solana_exact::types::ExactScheme;
 
 pub type VerifyRequest = v2::VerifyRequest<PaymentPayload, PaymentRequirements>;
 pub type SettleRequest = VerifyRequest;
-pub type PaymentPayload = v2::PaymentPayload<PaymentRequirements, ExactSolanaPayload>;
+pub type PaymentPayload<TPaymentRequirements = PaymentRequirements> =
+    v2::PaymentPayload<TPaymentRequirements, ExactSolanaPayload>;
 pub type PaymentRequirements =
     v2::PaymentRequirements<ExactScheme, U64String, Address, SupportedPaymentKindExtra>;

@@ -1,5 +1,3 @@
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
-
 //! EIP-155 (EVM) chain support for the x402 payment protocol.
 //!
 //! This crate provides implementations of the x402 payment protocol for EVM-compatible
@@ -80,14 +78,20 @@
 pub mod chain;
 pub mod v1_eip155_exact;
 pub mod v2_eip155_exact;
+pub mod v2_eip155_upto;
 
 mod networks;
 pub use networks::*;
 
 pub use v1_eip155_exact::V1Eip155Exact;
 pub use v2_eip155_exact::V2Eip155Exact;
+pub use v2_eip155_upto::V2Eip155Upto;
 
 #[cfg(feature = "client")]
 pub use v1_eip155_exact::client::V1Eip155ExactClient;
 #[cfg(feature = "client")]
 pub use v2_eip155_exact::client::V2Eip155ExactClient;
+#[cfg(feature = "client")]
+pub use v2_eip155_upto::client::V2Eip155UptoClient;
+
+pub use chain::types::decimal_u256;

@@ -14,6 +14,8 @@ ID standard. It supports both V1 and V2 protocol versions with the "exact" payme
 - **V1 and V2 Protocol Support**: Implements both protocol versions with network name (V1) and CAIP-2 chain ID (V2)
   addressing
 - **ERC-3009 Payments**: Gasless token transfers using `transferWithAuthorization`
+- **Permit2 Payments (V2 only)**: Universal gasless token transfers using Uniswap's Permit2 contract
+- **Dual Transfer Methods (V2)**: Support for both EIP-3009 and Permit2 asset transfer methods
 - **Smart Wallet Support**:
   - EIP-1271 for deployed smart wallets
   - EIP-6492 for counterfactual (not-yet-deployed) smart wallets
@@ -113,6 +115,36 @@ signature format:
 For EIP-6492 counterfactual signatures, the facilitator can deploy the smart wallet on-chain if needed before settling
 the payment.
 
+## Permit2 Support (V2 Protocol Only)
+
+The V2 protocol adds support for Permit2, a universal token approval system from Uniswap that enables gasless transfers for any ERC-20 token. This provides a fallback payment method for tokens that don't natively support EIP-3009.
+
+### Asset Transfer Methods
+
+V2 payment requirements can specify an `assetTransferMethod`:
+- `eip3009`: Direct `transferWithAuthorization` for tokens with native support (e.g., USDC)
+- `permit2`: Universal proxy using Uniswap's canonical Permit2 contract
+
+### Permit2 Flow
+
+1. Client checks if user has Permit2 allowance for the token
+2. If insufficient allowance, returns 412 Precondition Failed
+3. Client generates EIP-712 signature with witness data
+4. Facilitator verifies signature (supports EIP-6492 and EIP-1271)
+5. Facilitator validates allowance, balance, and constraints
+6. Facilitator settles via X402ExactPermit2Proxy contract
+
+### Contract Addresses
+
+- **Permit2 (Canonical)**: `0x000000000022D473030F116dDEE9F6B43aC78BA3`
+- **X402ExactPermit2Proxy**: `0x4020615294c913F045dc10f0a5cdEbd86c280001`
+
+### Future Extensions
+
+The Permit2 implementation is designed to support gasless approval extensions:
+- **EIP-2612 Gas Sponsoring**: Facilitator accepts permit signatures for approval
+- **ERC-20 Approval Gas Sponsoring**: Facilitator sponsors approval transactions
+
 ## Configuration
 
 ### Facilitator Configuration Example
@@ -123,6 +155,8 @@ the payment.
     "eip1559": true,
     "flashblocks": false,
     "receipt_timeout_secs": 30,
+    "poll_interval_ms": 500,
+    "sync_send": false,
     "signers": [
       "$FACILITATOR_PRIVATE_KEY"
     ],
@@ -135,6 +169,18 @@ the payment.
   }
 }
 ```
+
+### Configuration Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `eip1559` | `bool` | `true` | Whether the chain supports EIP-1559 gas pricing |
+| `flashblocks` | `bool` | `false` | Whether the chain supports flashblocks |
+| `receipt_timeout_secs` | `u64` | `30` | Timeout for receipt polling |
+| `poll_interval_ms` | `u64?` | `None` | Poll interval override (default: 7000ms). Lower values improve latency on fast-finality chains |
+| `sync_send` | `bool` | `false` | Use `eth_sendRawTransactionSync` (EIP-7966) to get receipts in a single RPC call. Only for chains that support it (e.g., Monad). When `true`, `poll_interval_ms` and `receipt_timeout_secs` have no effect on settlement |
+| `signers` | `string[]` | required | Private keys (hex) or env var references (`$KEY`) |
+| `rpc` | `object[]` | required | RPC endpoints with `http` URL and optional `rate_limit` |
 
 ## Dependencies
 
