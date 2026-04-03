@@ -3,12 +3,11 @@
 //! This module re-exports types from V1 and defines V2-specific wire format
 //! types for ERC-3009 based payments on EVM chains.
 
-use alloy_primitives::U256;
 use serde::{Deserialize, Serialize};
 use x402_types::proto::v2;
 
 use crate::chain::permit2::ExactPermit2Payload;
-use crate::chain::{AssetTransferMethod, ChecksummedAddress};
+use crate::chain::{AssetTransferMethod, ChecksummedAddress, DecimalU256};
 
 /// Re-export the "exact" scheme identifier from V1 (same for both versions).
 pub use crate::v1_eip155_exact::types::{ExactEvmPayload as Eip3009Payload, ExactScheme};
@@ -95,7 +94,7 @@ pub type PaymentPayload<TPaymentRequirements = PaymentRequirements> =
 /// V2 uses CAIP-2 chain IDs and embeds requirements directly in the payload,
 /// unlike V1 which uses network names and separate requirement objects.
 pub type PaymentRequirements =
-    v2::PaymentRequirements<ExactScheme, U256, ChecksummedAddress, AssetTransferMethod>;
+    v2::PaymentRequirements<ExactScheme, DecimalU256, ChecksummedAddress, AssetTransferMethod>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]

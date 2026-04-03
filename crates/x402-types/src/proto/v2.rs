@@ -183,6 +183,7 @@ pub struct PaymentPayload<TPaymentRequirements, TPayload> {
     /// The scheme-specific signed payload.
     pub payload: TPayload,
     /// Information about the resource being paid for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resource: Option<ResourceInfo>,
     /// Protocol version (always 2).
     pub x402_version: X402Version2,
