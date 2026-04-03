@@ -18,6 +18,10 @@ use x402_types::scheme::{
     X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError,
 };
 
+#[cfg(test)]
+#[path = "facilitator_tests.rs"]
+mod tests;
+
 use crate::V2Eip155Exact;
 use crate::chain::Eip155MetaTransactionProvider;
 use crate::v1_eip155_exact::ExactScheme;
