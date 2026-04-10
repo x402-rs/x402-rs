@@ -62,7 +62,7 @@ impl SolanaChainConfig {
 
     /// Returns the optional WebSocket pubsub endpoint URL.
     pub fn pubsub(&self) -> Option<&Url> {
-        self.inner.pubsub.as_ref().map(|u| u.deref())
+        self.inner.pubsub.as_deref()
     }
 }
 
