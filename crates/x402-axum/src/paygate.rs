@@ -347,6 +347,7 @@ impl PaygateProtocol for v2::PriceTag {
                 let payment_required_response = v2::PaymentRequired {
                     error: Some(err.to_string()),
                     accepts: accepts.iter().map(|pt| pt.requirements.clone()).collect(),
+                    extensions: Default::default(),
                     x402_version: v2::X402Version2,
                     resource: resource.clone(),
                 };

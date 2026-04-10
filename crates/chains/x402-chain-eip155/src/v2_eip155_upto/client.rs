@@ -246,6 +246,7 @@ where
         let payload = v2::PaymentPayload {
             x402_version: v2::X402Version2,
             accepted: self.requirements_json.clone(),
+            extensions: Default::default(),
             resource: self.resource_info.clone(),
             payload: permit2_payload,
         };

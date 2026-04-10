@@ -8,6 +8,7 @@ pub mod eip3009;
 pub mod permit2;
 
 use alloy_provider::Provider;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto;
@@ -22,6 +23,29 @@ use crate::v1_eip155_exact::ExactScheme;
 use crate::v1_eip155_exact::facilitator::Eip155ExactError;
 use crate::v2_eip155_exact::types;
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct V2Eip155ExactFacilitatorConfig {
+    #[serde(default)]
+    pub supported_extensions: Vec<String>,
+}
+
+impl V2Eip155ExactFacilitatorConfig {
+    pub fn supports_extension(&self, extension: &str) -> bool {
+        self.supported_extensions
+            .iter()
+            .any(|candidate| candidate == extension)
+    }
+
+    pub fn supported_extensions_json(&self) -> Option<serde_json::Value> {
+        if self.supported_extensions.is_empty() {
+            None
+        } else {
+            Some(serde_json::json!({ "extensions": self.supported_extensions }))
+        }
+    }
+}
+
 impl<P> X402SchemeFacilitatorBuilder<P> for V2Eip155Exact
 where
     P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync + 'static,
@@ -30,9 +54,13 @@ where
     fn build(
         &self,
         provider: P,
-        _config: Option<serde_json::Value>,
+        config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        Ok(Box::new(V2Eip155ExactFacilitator::new(provider)))
+        let config = config
+            .map(serde_json::from_value::<V2Eip155ExactFacilitatorConfig>)
+            .transpose()?
+            .unwrap_or_default();
+        Ok(Box::new(V2Eip155ExactFacilitator::new(provider, config)))
     }
 }
 
@@ -48,12 +76,13 @@ where
 ///   and [`ChainProviderOps`]
 pub struct V2Eip155ExactFacilitator<P> {
     provider: P,
+    config: V2Eip155ExactFacilitatorConfig,
 }
 
 impl<P> V2Eip155ExactFacilitator<P> {
     /// Creates a new V2 EIP-155 exact scheme facilitator with the given provider.
-    pub fn new(provider: P) -> Self {
-        Self { provider }
+    pub fn new(provider: P, config: V2Eip155ExactFacilitatorConfig) -> Self {
+        Self { provider, config }
     }
 }
 
@@ -91,6 +120,7 @@ where
                     &self.provider,
                     &payment_payload,
                     &payment_requirements,
+                    &self.config,
                 )
                 .await?
             }
@@ -125,6 +155,7 @@ where
                     &self.provider,
                     &payment_payload,
                     &payment_requirements,
+                    &self.config,
                 )
                 .await?
             }
@@ -138,7 +169,7 @@ where
             x402_version: v2::X402Version2.into(),
             scheme: ExactScheme.to_string(),
             network: chain_id.clone().into(),
-            extra: None,
+            extra: self.config.supported_extensions_json(),
         }];
         let signers = {
             let mut signers = HashMap::with_capacity(1);
@@ -147,8 +178,28 @@ where
         };
         Ok(proto::SupportedResponse {
             kinds,
-            extensions: Vec::new(),
+            extensions: self.config.supported_extensions.clone(),
             signers,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::V2Eip155ExactFacilitatorConfig;
+
+    #[test]
+    fn config_reports_supported_extensions() {
+        let config = V2Eip155ExactFacilitatorConfig {
+            supported_extensions: vec!["eip2612GasSponsoring".to_string()],
+        };
+
+        assert!(config.supports_extension("eip2612GasSponsoring"));
+        assert_eq!(
+            config.supported_extensions_json(),
+            Some(serde_json::json!({
+                "extensions": ["eip2612GasSponsoring"]
+            }))
+        );
     }
 }

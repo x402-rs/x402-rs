@@ -250,6 +250,7 @@ where
                 v2::PaymentPayload {
                     x402_version: v2::X402Version2,
                     accepted: self.requirements_json.clone(),
+                    extensions: Default::default(),
                     resource: self.resource_info.clone(),
                     payload: ExactEvmPayload::Eip3009(evm_payload),
                 }
@@ -268,6 +269,7 @@ where
                 v2::PaymentPayload {
                     x402_version: v2::X402Version2,
                     accepted: self.requirements_json.clone(),
+                    extensions: Default::default(),
                     resource: self.resource_info.clone(),
                     payload: ExactEvmPayload::Permit2(permit2_payload),
                 }

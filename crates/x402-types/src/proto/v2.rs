@@ -22,6 +22,7 @@
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
@@ -182,6 +183,9 @@ pub struct PaymentPayload<TPaymentRequirements, TPayload> {
     pub accepted: TPaymentRequirements,
     /// The scheme-specific signed payload.
     pub payload: TPayload,
+    /// Optional protocol extensions echoed and enriched by the client.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub extensions: HashMap<String, serde_json::Value>,
     /// Information about the resource being paid for.
     pub resource: Option<ResourceInfo>,
     /// Protocol version (always 2).
@@ -256,6 +260,9 @@ pub struct PaymentRequired<TAccepts = PaymentRequirements> {
     /// List of acceptable payment methods.
     #[serde(default = "Vec::default")]
     pub accepts: Vec<TAccepts>,
+    /// Optional protocol extensions supported by the server/facilitator.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub extensions: HashMap<String, serde_json::Value>,
 }
 
 /// Builder for creating V2 payment requirements.

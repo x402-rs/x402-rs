@@ -124,11 +124,17 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
 
     async fn supported(&self) -> Result<proto::SupportedResponse, Self::Error> {
         let mut kinds = vec![];
+        let mut extensions = vec![];
         let mut signers = HashMap::new();
         for provider in self.handlers.values() {
             let supported = provider.supported().await.ok();
             if let Some(mut supported) = supported {
                 kinds.append(&mut supported.kinds);
+                for extension in supported.extensions {
+                    if !extensions.contains(&extension) {
+                        extensions.push(extension);
+                    }
+                }
                 for (chain_id, signer_addresses) in supported.signers {
                     signers.entry(chain_id).or_insert(signer_addresses);
                 }
@@ -136,7 +142,7 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
         }
         Ok(proto::SupportedResponse {
             kinds,
-            extensions: Vec::new(),
+            extensions,
             signers,
         })
     }
