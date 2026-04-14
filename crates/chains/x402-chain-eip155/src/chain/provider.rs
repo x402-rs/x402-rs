@@ -15,8 +15,8 @@ use alloy_transport::layers::{FallbackLayer, ThrottleLayer};
 use alloy_transport_http::Http;
 use std::num::NonZeroUsize;
 use std::ops::Deref;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, LazyLock};
 use tower::ServiceBuilder;
 use x402_types::chain::{ChainId, ChainProviderOps, FromConfig};
 
@@ -25,13 +25,23 @@ use tracing::Instrument;
 
 use crate::chain::config::{Eip155ChainConfig, RpcConfig};
 use crate::chain::pending_nonce_manager::PendingNonceManager;
+use crate::chain::permit2::{EXACT_PERMIT2_PROXY_ADDRESS, PERMIT2_ADDRESS};
 use crate::chain::types::Eip155ChainReference;
+use crate::v1_eip155_exact::VALIDATOR_ADDRESS;
 
 /// Combined filler type for gas, blob gas, nonce, and chain ID.
 pub type InnerFiller = JoinFill<
     GasFiller,
     JoinFill<BlobGasFiller, JoinFill<NonceFiller<PendingNonceManager>, ChainIdFiller>>,
 >;
+
+const REQUIRED_CONTRACT_ADDRESSES: LazyLock<Vec<Address>> = LazyLock::new(|| {
+    vec![
+        VALIDATOR_ADDRESS,
+        PERMIT2_ADDRESS,
+        EXACT_PERMIT2_PROXY_ADDRESS,
+    ]
+});
 
 /// The fully composed Ethereum provider type used in this project.
 ///
@@ -185,6 +195,8 @@ impl FromConfig<Eip155ChainConfig> for Eip155ChainProvider {
             .filler(filler)
             .wallet(wallet)
             .connect_client(client);
+
+        assert_contracts_exists(&inner).await?;
 
         #[cfg(feature = "telemetry")]
         tracing::info!(chain=%config.chain_id(), signers=?signer_addresses, "Using EVM provider");
@@ -394,4 +406,19 @@ impl<T: Eip155MetaTransactionProvider> Eip155MetaTransactionProvider for Arc<T> 
     ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send {
         (**self).send_transaction(tx)
     }
+}
+
+pub async fn assert_contracts_exists<P: Provider>(
+    provider: &P,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for address in REQUIRED_CONTRACT_ADDRESSES.deref() {
+        let code = provider.get_code_at(*address).await?;
+        if code.is_empty() {
+            return Err(
+                format!("Contract at address {address} does not exist (empty code)").into(),
+            );
+        }
+    }
+
+    Ok(())
 }
