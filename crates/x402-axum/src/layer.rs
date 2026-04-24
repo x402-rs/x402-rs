@@ -84,6 +84,25 @@ pub struct X402Middleware<F> {
 }
 
 impl<F> X402Middleware<F> {
+    /// Creates middleware from a pre-configured facilitator instance.
+    ///
+    /// Use this when you need to configure the facilitator before constructing
+    /// the middleware — for example, to set custom auth headers on a
+    /// [`FacilitatorClient`] for the Coinbase CDP facilitator:
+    ///
+    /// ```rust,ignore
+    /// let client = FacilitatorClient::try_new(url)?
+    ///     .with_headers(cdp_headers);
+    /// let x402 = X402Middleware::from_facilitator(Arc::new(client));
+    /// ```
+    pub fn from_facilitator(facilitator: F) -> Self {
+        Self {
+            facilitator,
+            base_url: None,
+            settle_before_execution: false,
+        }
+    }
+
     pub fn facilitator(&self) -> &F {
         &self.facilitator
     }
