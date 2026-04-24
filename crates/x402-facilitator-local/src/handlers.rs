@@ -228,7 +228,7 @@ impl IntoResponse for FacilitatorLocalError {
             network: &'a str,
             transaction: &'a str,
             error_reason: ErrorReason,
-            error_reason_details: &'a str,
+            error_message: &'a str,
             payer: &'a str,
         }
 
@@ -251,7 +251,7 @@ impl IntoResponse for FacilitatorLocalError {
                     network: "",
                     transaction: "",
                     error_reason: problem.reason(),
-                    error_reason_details: problem.details(),
+                    error_message: problem.details(),
                     payer: "",
                 };
                 let status_code = scheme_error_to_status_code(&scheme_handler_error);
