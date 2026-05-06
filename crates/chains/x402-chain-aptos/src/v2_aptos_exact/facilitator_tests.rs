@@ -90,7 +90,11 @@ fn b64_encode(data: &[u8]) -> String {
 }
 
 /// Generate a random Ed25519 keypair and derive the account address.
-fn generate_test_keypair() -> (Ed25519PrivateKey, aptos_crypto::ed25519::Ed25519PublicKey, AccountAddress) {
+fn generate_test_keypair() -> (
+    Ed25519PrivateKey,
+    aptos_crypto::ed25519::Ed25519PublicKey,
+    AccountAddress,
+) {
     let private_key = Ed25519PrivateKey::generate_for_testing();
     let public_key: aptos_crypto::ed25519::Ed25519PublicKey = (&private_key).into();
     use aptos_types::transaction::authenticator::AuthenticationKey;
@@ -117,11 +121,8 @@ fn sign_fee_payer_transaction(
     fee_payer_address: AccountAddress,
 ) -> AccountAuthenticator {
     use aptos_types::transaction::RawTransactionWithData;
-    let fee_payer_msg = RawTransactionWithData::new_fee_payer(
-        raw_tx.clone(),
-        vec![],
-        fee_payer_address,
-    );
+    let fee_payer_msg =
+        RawTransactionWithData::new_fee_payer(raw_tx.clone(), vec![], fee_payer_address);
     let signature = private_key.sign(&fee_payer_msg).unwrap();
     AccountAuthenticator::ed25519(public_key.clone(), signature)
 }
@@ -149,11 +150,7 @@ fn test_raw_transaction_fields_roundtrip() {
 
 #[test]
 fn test_raw_transaction_fields_mainnet_chain_id() {
-    let ef = create_transfer_entry_function(
-        AccountAddress::ONE,
-        AccountAddress::TWO,
-        100,
-    );
+    let ef = create_transfer_entry_function(AccountAddress::ONE, AccountAddress::TWO, 100);
     let raw_tx = create_test_raw_transaction(AccountAddress::random(), ef, 100_000, 1000, 1);
 
     let bytes = bcs::to_bytes(&raw_tx).unwrap();
@@ -189,13 +186,17 @@ fn test_deserialize_simple_transaction_no_fee_payer() {
         *result.entry_function.module().address(),
         AccountAddress::ONE
     );
-    assert_eq!(result.entry_function.module().name().to_string(), "primary_fungible_store");
+    assert_eq!(
+        result.entry_function.module().name().to_string(),
+        "primary_fungible_store"
+    );
     assert_eq!(result.entry_function.function().to_string(), "transfer");
     assert_eq!(result.entry_function.args().len(), 3);
 
     // Verify args
     let parsed_asset: AccountAddress = bcs::from_bytes(&result.entry_function.args()[0]).unwrap();
-    let parsed_recipient: AccountAddress = bcs::from_bytes(&result.entry_function.args()[1]).unwrap();
+    let parsed_recipient: AccountAddress =
+        bcs::from_bytes(&result.entry_function.args()[1]).unwrap();
     let parsed_amount: u64 = bcs::from_bytes(&result.entry_function.args()[2]).unwrap();
     assert_eq!(parsed_asset, asset);
     assert_eq!(parsed_recipient, recipient);
@@ -228,8 +229,11 @@ fn test_deserialize_invalid_base64() {
     assert!(result.is_err());
     match result.unwrap_err() {
         PaymentVerificationError::InvalidFormat(msg) => {
-            assert!(msg.contains("Base64 decode failed") || msg.contains("JSON parse failed"),
-                "unexpected error: {}", msg);
+            assert!(
+                msg.contains("Base64 decode failed") || msg.contains("JSON parse failed"),
+                "unexpected error: {}",
+                msg
+            );
         }
         e => panic!("Expected InvalidFormat, got: {:?}", e),
     }
@@ -242,7 +246,11 @@ fn test_deserialize_invalid_json() {
     assert!(result.is_err());
     match result.unwrap_err() {
         PaymentVerificationError::InvalidFormat(msg) => {
-            assert!(msg.contains("JSON parse failed"), "unexpected error: {}", msg);
+            assert!(
+                msg.contains("JSON parse failed"),
+                "unexpected error: {}",
+                msg
+            );
         }
         e => panic!("Expected InvalidFormat, got: {:?}", e),
     }
@@ -256,7 +264,11 @@ fn test_deserialize_missing_transaction_field() {
     assert!(result.is_err());
     match result.unwrap_err() {
         PaymentVerificationError::InvalidFormat(msg) => {
-            assert!(msg.contains("Missing transaction field"), "unexpected: {}", msg);
+            assert!(
+                msg.contains("Missing transaction field"),
+                "unexpected: {}",
+                msg
+            );
         }
         e => panic!("Expected InvalidFormat, got: {:?}", e),
     }
@@ -270,7 +282,11 @@ fn test_deserialize_missing_authenticator_field() {
     assert!(result.is_err());
     match result.unwrap_err() {
         PaymentVerificationError::InvalidFormat(msg) => {
-            assert!(msg.contains("Missing senderAuthenticator"), "unexpected: {}", msg);
+            assert!(
+                msg.contains("Missing senderAuthenticator"),
+                "unexpected: {}",
+                msg
+            );
         }
         e => panic!("Expected InvalidFormat, got: {:?}", e),
     }
@@ -305,10 +321,7 @@ fn test_aptos_payment_requirements_extra_serde_with_fee_payer() {
         fee_payer: Some(addr),
     };
     let json = serde_json::to_value(&extra).unwrap();
-    assert_eq!(
-        json,
-        serde_json::json!({ "feePayer": "0x1" })
-    );
+    assert_eq!(json, serde_json::json!({ "feePayer": "0x1" }));
 
     // Roundtrip
     let deserialized: AptosPaymentRequirementsExtra = serde_json::from_value(json).unwrap();
@@ -362,11 +375,7 @@ fn test_option_extra_none_deserialization() {
 
 #[test]
 fn test_primary_fungible_store_transfer_function_detection() {
-    let ef = create_transfer_entry_function(
-        AccountAddress::ONE,
-        AccountAddress::TWO,
-        100,
-    );
+    let ef = create_transfer_entry_function(AccountAddress::ONE, AccountAddress::TWO, 100);
 
     let module_address = *ef.module().address();
     let module_name = ef.module().name().to_string();
@@ -420,10 +429,7 @@ fn test_fungible_asset_transfer_function_detection() {
 
 #[test]
 fn test_wrong_module_rejected() {
-    let module = ModuleId::new(
-        AccountAddress::ONE,
-        Identifier::new("coin").unwrap(),
-    );
+    let module = ModuleId::new(AccountAddress::ONE, Identifier::new("coin").unwrap());
     let function = Identifier::new("transfer").unwrap();
     let ef = EntryFunction::new(module, function, vec![], vec![]);
 
@@ -469,11 +475,7 @@ fn test_bcs_address_roundtrip() {
 fn test_simple_transaction_fee_payer_extraction() {
     let sender = AccountAddress::random();
     let fee_payer = AccountAddress::random();
-    let ef = create_transfer_entry_function(
-        AccountAddress::ONE,
-        AccountAddress::TWO,
-        500,
-    );
+    let ef = create_transfer_entry_function(AccountAddress::ONE, AccountAddress::TWO, 500);
     let raw_tx = create_test_raw_transaction(sender, ef, 200_000, 9999999999, 2);
 
     // Serialize RawTransaction + Some(fee_payer) to mimic SimpleTransaction
@@ -493,11 +495,7 @@ fn test_simple_transaction_fee_payer_extraction() {
 #[test]
 fn test_simple_transaction_no_fee_payer_extraction() {
     let sender = AccountAddress::random();
-    let ef = create_transfer_entry_function(
-        AccountAddress::ONE,
-        AccountAddress::TWO,
-        500,
-    );
+    let ef = create_transfer_entry_function(AccountAddress::ONE, AccountAddress::TWO, 500);
     let raw_tx = create_test_raw_transaction(sender, ef, 200_000, 9999999999, 2);
 
     // Serialize RawTransaction + None to mimic SimpleTransaction
@@ -611,10 +609,7 @@ fn test_full_deserialization_and_field_validation() {
     // Verify authenticator can be deserialized back
     let sender_auth: AccountAuthenticator =
         bcs::from_bytes(&deserialized.authenticator_bytes).unwrap();
-    if let AccountAuthenticator::Ed25519 {
-        public_key: pk, ..
-    } = &sender_auth
-    {
+    if let AccountAuthenticator::Ed25519 { public_key: pk, .. } = &sender_auth {
         use aptos_types::transaction::authenticator::AuthenticationKey;
         let derived = AuthenticationKey::ed25519(pk).account_address();
         assert_eq!(derived, sender);

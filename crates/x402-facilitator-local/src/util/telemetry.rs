@@ -60,7 +60,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::time::Duration;
 use tower_http::trace::{MakeSpan, OnResponse, TraceLayer};
-use tracing::{Span, Level};
+use tracing::{Level, Span};
 use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer, OpenTelemetrySpanExt};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -366,7 +366,10 @@ impl Telemetry {
                 let default_level = self.default_level;
                 // Fallback: just use local logging
                 tracing_subscriber::registry()
-                    .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| default_level.to_string().into()))
+                    .with(
+                        EnvFilter::try_from_default_env()
+                            .unwrap_or_else(|_| default_level.to_string().into()),
+                    )
                     .with(tracing_subscriber::fmt::layer())
                     .init();
 

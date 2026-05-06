@@ -70,9 +70,9 @@ impl X402SchemeFacilitator for V2AptosExactFacilitator {
 
         // Include extra.feePayer if the facilitator is configured to sponsor gas
         let extra = if self.provider.sponsor_gas() {
-            self.provider.account_address().map(|addr| {
-                serde_json::json!({ "feePayer": Address::new(addr).to_string() })
-            })
+            self.provider
+                .account_address()
+                .map(|addr| serde_json::json!({ "feePayer": Address::new(addr).to_string() }))
         } else {
             None
         };
@@ -208,10 +208,7 @@ pub async fn verify_transfer(
                 e
             ))
         })?;
-    if let AccountAuthenticator::Ed25519 {
-        ref public_key, ..
-    } = sender_authenticator
-    {
+    if let AccountAuthenticator::Ed25519 { ref public_key, .. } = sender_authenticator {
         use aptos_types::transaction::authenticator::AuthenticationKey;
         let auth_key = AuthenticationKey::ed25519(public_key);
         let derived_address = auth_key.account_address();
@@ -267,9 +264,7 @@ pub async fn verify_transfer(
     // 10. Expiration check with buffer
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| {
-            PaymentVerificationError::InvalidFormat(format!("System time error: {}", e))
-        })?
+        .map_err(|e| PaymentVerificationError::InvalidFormat(format!("System time error: {}", e)))?
         .as_secs();
     if raw_fields.expiration_timestamp_secs < now + EXPIRATION_BUFFER_SECONDS {
         return Err(PaymentVerificationError::Expired);
@@ -326,10 +321,7 @@ pub async fn verify_transfer(
 
     // 15. Recipient address
     let recipient_address: AccountAddress = bcs::from_bytes(&args[1]).map_err(|e| {
-        PaymentVerificationError::InvalidFormat(format!(
-            "Failed to parse recipient address: {}",
-            e
-        ))
+        PaymentVerificationError::InvalidFormat(format!("Failed to parse recipient address: {}", e))
     })?;
     let expected_recipient = requirements.pay_to.inner();
     if &recipient_address != expected_recipient {
@@ -348,12 +340,8 @@ pub async fn verify_transfer(
     }
 
     // 17. Balance check via REST API view function
-    let balance = query_fungible_asset_balance(
-        provider,
-        &raw_fields.sender,
-        expected_asset,
-    )
-    .await?;
+    let balance =
+        query_fungible_asset_balance(provider, &raw_fields.sender, expected_asset).await?;
     if balance < expected_amount {
         return Err(PaymentVerificationError::InsufficientFunds);
     }
@@ -412,14 +400,9 @@ async fn query_fungible_asset_balance(
         })?;
 
     let values = response.into_inner();
-    let balance_str = values
-        .first()
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            PaymentVerificationError::InvalidFormat(
-                "Unexpected balance response format".to_string(),
-            )
-        })?;
+    let balance_str = values.first().and_then(|v| v.as_str()).ok_or_else(|| {
+        PaymentVerificationError::InvalidFormat("Unexpected balance response format".to_string())
+    })?;
 
     balance_str.parse::<u64>().map_err(|e| {
         PaymentVerificationError::InvalidFormat(format!("Failed to parse balance: {}", e))
@@ -472,9 +455,7 @@ async fn simulate_transaction(
 
     let simulated = result.into_inner();
     let first = simulated.first().ok_or_else(|| {
-        PaymentVerificationError::TransactionSimulation(
-            "Empty simulation result".to_string(),
-        )
+        PaymentVerificationError::TransactionSimulation("Empty simulation result".to_string())
     })?;
 
     if !first.info.success {
@@ -593,12 +574,7 @@ pub async fn settle_transaction(
 
     provider
         .rest_client()
-        .wait_for_transaction_by_hash(
-            tx_hash,
-            raw_fields.expiration_timestamp_secs,
-            None,
-            None,
-        )
+        .wait_for_transaction_by_hash(tx_hash, raw_fields.expiration_timestamp_secs, None, None)
         .await
         .map_err(|e| {
             PaymentVerificationError::TransactionSimulation(format!(
@@ -619,8 +595,7 @@ fn try_none_suffix_or_bare(
     if transaction_bytes.len() > 1 {
         let split_none = transaction_bytes.len() - 1;
         if transaction_bytes[split_none] == 0x00 {
-            if let Ok(raw_tx) =
-                bcs::from_bytes::<RawTransaction>(&transaction_bytes[..split_none])
+            if let Ok(raw_tx) = bcs::from_bytes::<RawTransaction>(&transaction_bytes[..split_none])
             {
                 return Ok((raw_tx, None));
             }
@@ -717,13 +692,12 @@ fn deserialize_aptos_transaction(
     } else if transaction_bytes.len() > 1 {
         try_none_suffix_or_bare(&transaction_bytes)?
     } else {
-        let raw_tx: RawTransaction =
-            bcs::from_bytes(&transaction_bytes).map_err(|e| {
-                PaymentVerificationError::InvalidFormat(format!(
-                    "Failed to deserialize RawTransaction: {}",
-                    e
-                ))
-            })?;
+        let raw_tx: RawTransaction = bcs::from_bytes(&transaction_bytes).map_err(|e| {
+            PaymentVerificationError::InvalidFormat(format!(
+                "Failed to deserialize RawTransaction: {}",
+                e
+            ))
+        })?;
         (raw_tx, None)
     };
 
