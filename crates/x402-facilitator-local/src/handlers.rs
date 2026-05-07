@@ -25,6 +25,7 @@ use x402_types::scheme::X402SchemeFacilitatorError;
 use tracing::instrument;
 
 use crate::facilitator_local::FacilitatorLocalError;
+use crate::util::AsJsonValue;
 
 /// `GET /verify`: Returns a machine-readable description of the `/verify` endpoint.
 ///
@@ -210,28 +211,57 @@ where
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VerificationErrorResponse<'a> {
+    is_valid: bool,
+    invalid_reason: ErrorReason,
+    invalid_reason_details: &'a str,
+    payer: &'a str,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SettlementErrorResponse<'a> {
+    success: bool,
+    network: &'a str,
+    transaction: &'a str,
+    error_reason: ErrorReason,
+    error_message: &'a str,
+    payer: &'a str,
+}
+
+impl AsJsonValue for FacilitatorLocalError {
+    fn as_json_value(&self) -> Result<serde_json::Value, serde_json::Error> {
+        match self {
+            FacilitatorLocalError::Verification(scheme_handler_error) => {
+                let problem = scheme_handler_error.as_payment_problem();
+                let verification_error_response = VerificationErrorResponse {
+                    is_valid: false,
+                    invalid_reason: problem.reason(),
+                    invalid_reason_details: problem.details(),
+                    payer: "",
+                };
+                serde_json::to_value(verification_error_response)
+            }
+            FacilitatorLocalError::Settlement(scheme_handler_error) => {
+                let problem = scheme_handler_error.as_payment_problem();
+                let settlement_error_response = SettlementErrorResponse {
+                    success: false,
+                    network: "",
+                    transaction: "",
+                    error_reason: problem.reason(),
+                    error_message: problem.details(),
+                    payer: "",
+                };
+                serde_json::to_value(settlement_error_response)
+            }
+        }
+    }
+}
+
 impl IntoResponse for FacilitatorLocalError {
     fn into_response(self) -> Response {
-        #[derive(Serialize, Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct VerificationErrorResponse<'a> {
-            is_valid: bool,
-            invalid_reason: ErrorReason,
-            invalid_reason_details: &'a str,
-            payer: &'a str,
-        }
-
-        #[derive(Serialize, Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct SettlementErrorResponse<'a> {
-            success: bool,
-            network: &'a str,
-            transaction: &'a str,
-            error_reason: ErrorReason,
-            error_message: &'a str,
-            payer: &'a str,
-        }
-
         match self {
             FacilitatorLocalError::Verification(scheme_handler_error) => {
                 let problem = scheme_handler_error.as_payment_problem();

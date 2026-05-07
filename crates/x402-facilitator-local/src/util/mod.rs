@@ -23,3 +23,7 @@ pub mod telemetry;
 pub use sig_down::*;
 #[cfg(feature = "telemetry")]
 pub use telemetry::*;
+
+pub trait AsJsonValue {
+    fn as_json_value(&self) -> Result<serde_json::Value, serde_json::Error>;
+}
