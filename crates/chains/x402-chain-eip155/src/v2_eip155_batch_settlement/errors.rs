@@ -37,6 +37,8 @@ pub const ERR_ERC3009_AUTHORIZATION_REQUIRED: &str =
 pub const ERR_REFUND_TRANSACTION_FAILED: &str =
     "invalid_batch_settlement_evm_refund_transaction_failed";
 pub const ERR_INVALID_PAYLOAD_TYPE: &str = "invalid_batch_settlement_evm_payload_type";
+pub const ERR_DEPOSIT_PAYLOAD: &str = "invalid_batch_settlement_evm_deposit_payload";
+pub const ERR_CLAIM_PAYLOAD: &str = "invalid_batch_settlement_evm_claim_payload";
 pub const ERR_WITHDRAW_DELAY_OUT_OF_RANGE: &str =
     "invalid_batch_settlement_evm_withdraw_delay_out_of_range";
 pub const ERR_CHANNEL_ID_MISMATCH: &str = "invalid_batch_settlement_evm_channel_id_mismatch";
@@ -120,6 +122,8 @@ mod tests {
             ERR_ERC3009_AUTHORIZATION_REQUIRED,
             ERR_REFUND_TRANSACTION_FAILED,
             ERR_INVALID_PAYLOAD_TYPE,
+            ERR_DEPOSIT_PAYLOAD,
+            ERR_CLAIM_PAYLOAD,
             ERR_WITHDRAW_DELAY_OUT_OF_RANGE,
             ERR_CHANNEL_ID_MISMATCH,
             ERR_RECEIVER_MISMATCH,

@@ -24,6 +24,7 @@ use crate::v2_eip155_batch_settlement::types::{
 pub struct OnchainChannelState {
     pub balance: U128,
     pub total_claimed: U128,
+    pub withdraw_requested_amount: U128,
     pub withdraw_requested_at: u64,
     pub refund_nonce: U256,
 }
@@ -201,6 +202,7 @@ where
     Ok(OnchainChannelState {
         balance: U128::from(channels.balance),
         total_claimed: U128::from(channels.totalClaimed),
+        withdraw_requested_amount: U128::from(pending.amount),
         // `initiatedAt` is `uint40` → `Uint<40, 1>`; truncating to `u64` is
         // lossless because `2^40 - 1 < u64::MAX`.
         withdraw_requested_at: pending.initiatedAt.to::<u64>(),
