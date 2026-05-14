@@ -103,6 +103,34 @@ pub mod decimal_u256 {
     }
 }
 
+/// Serde helper that marshals a `U128` as a decimal string.
+///
+/// `alloy_primitives::U128`'s default `Serialize` impl emits an `0x`-prefixed hex
+/// string. The x402 wire format expects decimal strings — required for parity
+/// with the TypeScript and Go reference implementations that drive the `batch-settlement`
+/// channel snapshots.
+pub mod decimal_u128 {
+    use alloy_primitives::U128;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    /// Serialize a `U128` as a decimal string.
+    pub fn serialize<S>(value: &U128, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&value.to_string())
+    }
+
+    /// Deserialize a decimal string into a `U128`.
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<U128, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        U128::from_str_radix(&s, 10).map_err(serde::de::Error::custom)
+    }
+}
+
 /// The CAIP-2 namespace for EVM-compatible chains.
 pub const EIP155_NAMESPACE: &str = "eip155";
 
