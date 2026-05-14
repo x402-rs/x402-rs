@@ -5,25 +5,35 @@
 //! a [`BatchSettlementVerifyResponse`] carrying the onchain channel snapshot
 //! on success or a canonical error code on failure.
 
-use alloy_primitives::{Address, U128, U256};
+use alloy_primitives::{Address, Bytes, U128, U256};
 use alloy_provider::Provider;
-use alloy_sol_types::{SolStruct, eip712_domain};
+use alloy_rpc_types_eth::TransactionRequest;
+use alloy_sol_types::{SolCall, SolStruct, eip712_domain};
 
-use super::abi::{IERC20View, ReceiveWithAuthorization};
+use super::abi::{
+    DepositWitness, IERC20View, PermitWitnessTransferFrom, ReceiveWithAuthorization,
+    TokenPermissions, X402BatchSettlement::depositCall,
+};
 use super::response::{BatchSettlementVerifyExtra, BatchSettlementVerifyResponse};
 use super::utils::{
-    erc3009_authorization_time_invalid_reason, read_channel_state, validate_channel_config,
+    erc3009_authorization_time_invalid_reason, read_channel_state, to_abi_channel_config,
+    validate_channel_config,
 };
-use super::voucher::{verify_signature_against_signer, verify_voucher_signature};
+use super::voucher::{
+    VoucherVerifyError, verify_signature_against_signer, verify_voucher_signature,
+};
+use crate::chain::permit2::PERMIT2_ADDRESS;
 use crate::v2_eip155_batch_settlement::constants::{
-    ERC3009_DEPOSIT_COLLECTOR_ADDRESS, PERMIT2_DEPOSIT_COLLECTOR_ADDRESS,
+    BATCH_SETTLEMENT_ADDRESS, ERC3009_DEPOSIT_COLLECTOR_ADDRESS, PERMIT2_DEPOSIT_COLLECTOR_ADDRESS,
 };
-use crate::v2_eip155_batch_settlement::encoding::build_erc3009_deposit_nonce;
+use crate::v2_eip155_batch_settlement::encoding::{
+    build_erc3009_collector_data, build_erc3009_deposit_nonce, build_permit2_collector_data,
+};
 use crate::v2_eip155_batch_settlement::errors as err;
 use crate::v2_eip155_batch_settlement::types::{
-    BatchSettlementPayload, BatchSettlementRefundPayload, ChannelConfig, DepositAuthorization,
-    DepositPayload, Erc3009Authorization, PaymentPayload, PaymentRequirements,
-    Permit2Authorization, VoucherFields, VoucherPayload,
+    AssetTransferMethod, BatchSettlementPayload, BatchSettlementRefundPayload, ChannelConfig,
+    DepositAuthorization, DepositPayload, Erc3009Authorization, PaymentPayload,
+    PaymentRequirements, Permit2Authorization, RefundPayload, VoucherFields, VoucherPayload,
 };
 
 /// Top-level dispatcher.
@@ -47,8 +57,11 @@ where
         BatchSettlementPayload::Voucher(voucher_payload) => {
             verify_voucher_payload(provider, chain_id, voucher_payload, requirements).await
         }
-        BatchSettlementPayload::Refund(refund) => {
+        BatchSettlementPayload::Refund(BatchSettlementRefundPayload::Client(refund)) => {
             verify_refund(provider, chain_id, refund, requirements).await
+        }
+        BatchSettlementPayload::Refund(BatchSettlementRefundPayload::Enriched(_)) => {
+            BatchSettlementVerifyResponse::invalid(None, err::ERR_INVALID_PAYLOAD_TYPE)
         }
         BatchSettlementPayload::Claim(_) | BatchSettlementPayload::Settle(_) => {
             BatchSettlementVerifyResponse::invalid(None, err::ERR_INVALID_PAYLOAD_TYPE)
@@ -79,7 +92,7 @@ where
 async fn verify_refund<P>(
     provider: &P,
     chain_id: u64,
-    refund: &BatchSettlementRefundPayload,
+    refund: &RefundPayload,
     requirements: &PaymentRequirements,
 ) -> BatchSettlementVerifyResponse
 where
@@ -88,8 +101,8 @@ where
     verify_voucher_or_refund(
         provider,
         chain_id,
-        refund.channel_config(),
-        refund.voucher(),
+        &refund.channel_config,
+        &refund.voucher,
         requirements,
         /* is_refund = */ true,
     )
@@ -145,8 +158,10 @@ where
         );
     }
 
-    // Spec rule 10: refund vouchers may equal `totalClaimed` (zero-charge);
-    // all other payloads must strictly exceed it.
+    // Spec rule 10 for voucher verification: refund vouchers may equal
+    // `totalClaimed` (zero-charge); ordinary voucher payments must strictly
+    // exceed it. Deposit verification is handled separately below and follows
+    // the Go reference by allowing equality for balance-only top-ups.
     let below_claimed = if is_refund {
         max_claimable < state.total_claimed
     } else {
@@ -186,6 +201,11 @@ where
         return BatchSettlementVerifyResponse::invalid(Some(payer), reason);
     }
 
+    let deposit_amount_u128 = match deposit_amount_to_u128(payload.deposit.amount.0) {
+        Ok(amount) => amount,
+        Err(reason) => return BatchSettlementVerifyResponse::invalid(Some(payer), reason),
+    };
+
     if let Err(reason) =
         verify_deposit_authorization(provider, payload, requirements, chain_id).await
     {
@@ -221,12 +241,6 @@ where
         return BatchSettlementVerifyResponse::invalid(Some(payer), err::ERR_INSUFFICIENT_BALANCE);
     }
 
-    let Some(deposit_amount_u128) = u256_to_u128(payload.deposit.amount.0) else {
-        return BatchSettlementVerifyResponse::invalid(
-            Some(payer),
-            err::ERR_CUMULATIVE_EXCEEDS_BALANCE,
-        );
-    };
     let effective_balance = state.balance.saturating_add(deposit_amount_u128);
 
     let max_claimable = payload.voucher.max_claimable_amount.0;
@@ -236,16 +250,34 @@ where
             err::ERR_CUMULATIVE_EXCEEDS_BALANCE,
         );
     }
-    if max_claimable <= state.total_claimed {
+    // Deposit top-ups may carry the current cumulative voucher without
+    // charging a new request. Match the Go reference: reject only values below
+    // the already-claimed total, not equality.
+    if max_claimable < state.total_claimed {
         return BatchSettlementVerifyResponse::invalid(
             Some(payer),
             err::ERR_CUMULATIVE_AMOUNT_BELOW_CLAIMED,
         );
     }
 
+    let calldata = build_deposit_calldata(payload, deposit_amount_u128);
+    if let Err(message) = simulate_batch_settlement_call(provider, calldata).await {
+        return BatchSettlementVerifyResponse::invalid_with_message(
+            Some(payer),
+            err::ERR_DEPOSIT_SIMULATION_FAILED,
+            message,
+        );
+    }
+
     BatchSettlementVerifyResponse::valid(
         payer,
-        BatchSettlementVerifyExtra::from_state(payload.voucher.channel_id, &state),
+        BatchSettlementVerifyExtra {
+            channel_id: payload.voucher.channel_id,
+            balance: effective_balance.into(),
+            total_claimed: state.total_claimed.into(),
+            withdraw_requested_at: state.withdraw_requested_at,
+            refund_nonce: state.refund_nonce.into(),
+        },
     )
 }
 
@@ -260,10 +292,16 @@ where
 {
     match &payload.deposit.authorization {
         DepositAuthorization::Erc3009(auth) => {
+            if requirements.extra.asset_transfer_method == Some(AssetTransferMethod::Permit2) {
+                return Err(err::ERR_PERMIT2_AUTHORIZATION_REQUIRED);
+            }
             verify_erc3009_authorization(provider, payload, auth, requirements, chain_id).await
         }
         DepositAuthorization::Permit2(auth) => {
-            verify_permit2_authorization(payload, auth, requirements)
+            if requirements.extra.asset_transfer_method == Some(AssetTransferMethod::Eip3009) {
+                return Err(err::ERR_ERC3009_AUTHORIZATION_REQUIRED);
+            }
+            verify_permit2_authorization(provider, payload, auth, requirements, chain_id).await
         }
     }
 }
@@ -311,30 +349,32 @@ where
     };
     let digest = receive_auth.eip712_signing_hash(&domain);
 
-    match verify_signature_against_signer(
+    match verify_token_authorization_signature(
         provider,
         &auth.signature,
         &digest,
-        payer_addr,
-        // ERC-3009 signers are the payer EOA itself; smart-wallet payers
-        // fall through to EIP-1271 against `payer`.
-        payer_addr,
+        &payload.channel_config,
     )
     .await
     {
         Ok(()) => Ok(()),
-        Err(_) => Err(err::ERR_INVALID_RECEIVE_AUTHORIZATION_SIGNATURE),
+        Err(e) => Err(erc3009_authorization_signature_error_reason(e)),
     }
 }
 
-fn verify_permit2_authorization(
+async fn verify_permit2_authorization<P>(
+    provider: &P,
     payload: &DepositPayload,
     auth: &Permit2Authorization,
     requirements: &PaymentRequirements,
-) -> Result<(), &'static str> {
+    chain_id: u64,
+) -> Result<(), &'static str>
+where
+    P: Provider,
+{
     let payer: Address = payload.channel_config.payer.into();
     if Address::from(auth.from) != payer {
-        return Err(err::ERR_PERMIT2_INVALID_SIGNATURE);
+        return Err(err::ERR_DEPOSIT_PAYLOAD);
     }
     if Address::from(auth.spender) != PERMIT2_DEPOSIT_COLLECTOR_ADDRESS {
         return Err(err::ERR_PERMIT2_INVALID_SPENDER);
@@ -343,6 +383,8 @@ fn verify_permit2_authorization(
     if Address::from(auth.permitted.token) != asset {
         return Err(err::ERR_TOKEN_MISMATCH);
     }
+    // The Permit2 collector pulls exactly `deposit.amount`; require the
+    // signed permission to bind that same amount rather than a wider cap.
     if auth.permitted.amount.0 != payload.deposit.amount.0 {
         return Err(err::ERR_PERMIT2_AMOUNT_MISMATCH);
     }
@@ -354,11 +396,151 @@ fn verify_permit2_authorization(
     if auth.deadline.0 < now_u256 + U256::from(6u64) {
         return Err(err::ERR_PERMIT2_DEADLINE_EXPIRED);
     }
-    // Note: the EIP-712 typed-data signature over the Permit2
-    // `PermitWitnessTransferFrom` is verified onchain by `Permit2` itself
-    // when the deposit collector relays it. We surface only the structural
-    // checks here; signature verification happens during deposit simulation.
+
+    let permit = PermitWitnessTransferFrom {
+        permitted: TokenPermissions {
+            token: asset,
+            amount: payload.deposit.amount.0,
+        },
+        spender: auth.spender.into(),
+        nonce: auth.nonce.0,
+        deadline: auth.deadline.0,
+        witness: DepositWitness {
+            channelId: payload.voucher.channel_id,
+        },
+    };
+    let domain = eip712_domain! {
+        name: "Permit2",
+        chain_id: chain_id,
+        verifying_contract: PERMIT2_ADDRESS,
+    };
+    let digest = permit.eip712_signing_hash(&domain);
+    verify_token_authorization_signature(
+        provider,
+        &auth.signature,
+        &digest,
+        &payload.channel_config,
+    )
+    .await
+    .map_err(permit2_authorization_signature_error_reason)?;
+
+    let token_contract = IERC20View::new(asset, provider);
+    let allowance = token_contract
+        .allowance(payer, PERMIT2_ADDRESS)
+        .call()
+        .await
+        .map_err(|_| err::ERR_RPC_READ_FAILED)?;
+    if allowance < payload.deposit.amount.0 {
+        return Err(err::ERR_PERMIT2_ALLOWANCE_REQUIRED);
+    }
+
     Ok(())
+}
+
+async fn verify_token_authorization_signature<P>(
+    provider: &P,
+    signature: &[u8],
+    digest: &alloy_primitives::B256,
+    channel_config: &ChannelConfig,
+) -> Result<(), VoucherVerifyError>
+where
+    P: Provider,
+{
+    let payer: Address = channel_config.payer.into();
+    let payer_authorizer: Address = channel_config.payer_authorizer.into();
+    if payer_authorizer == Address::ZERO {
+        // `payerAuthorizer == address(0)` is the scheme's smart-wallet mode:
+        // vouchers and token-transfer authorizations are validated through
+        // EIP-1271 against the payer contract.
+        return verify_signature_against_signer(provider, signature, digest, payer, Address::ZERO)
+            .await;
+    }
+
+    // Permit2 and ERC-3009 token-transfer authorizations are signed by the
+    // token owner (`payer`), not the channel's voucher authorizer.
+    let ecdsa_result =
+        verify_signature_against_signer(provider, signature, digest, payer, payer).await;
+    if ecdsa_result.is_ok() {
+        return ecdsa_result;
+    }
+
+    // Hybrid mode: the payer can still be a smart-wallet contract while a
+    // separate non-zero payerAuthorizer signs vouchers. In that case the token
+    // authorization itself is validated by the payer contract via EIP-1271.
+    let code = provider
+        .get_code_at(payer)
+        .into_future()
+        .await
+        .map_err(|_| VoucherVerifyError::RpcReadFailed)?;
+    if code.is_empty() {
+        return ecdsa_result;
+    }
+
+    verify_signature_against_signer(provider, signature, digest, payer, Address::ZERO).await
+}
+
+fn erc3009_authorization_signature_error_reason(error: VoucherVerifyError) -> &'static str {
+    match error {
+        VoucherVerifyError::RpcReadFailed => err::ERR_RPC_READ_FAILED,
+        VoucherVerifyError::InvalidFormat | VoucherVerifyError::InvalidSignature => {
+            err::ERR_INVALID_RECEIVE_AUTHORIZATION_SIGNATURE
+        }
+    }
+}
+
+fn permit2_authorization_signature_error_reason(error: VoucherVerifyError) -> &'static str {
+    match error {
+        VoucherVerifyError::RpcReadFailed => err::ERR_RPC_READ_FAILED,
+        VoucherVerifyError::InvalidFormat | VoucherVerifyError::InvalidSignature => {
+            err::ERR_PERMIT2_INVALID_SIGNATURE
+        }
+    }
+}
+
+fn build_deposit_calldata(payload: &DepositPayload, deposit_amount: U128) -> Bytes {
+    let (collector, collector_data) = match &payload.deposit.authorization {
+        DepositAuthorization::Erc3009(auth) => (
+            ERC3009_DEPOSIT_COLLECTOR_ADDRESS,
+            build_erc3009_collector_data(
+                auth.valid_after.0,
+                auth.valid_before.0,
+                auth.salt,
+                &auth.signature,
+            ),
+        ),
+        DepositAuthorization::Permit2(auth) => (
+            PERMIT2_DEPOSIT_COLLECTOR_ADDRESS,
+            build_permit2_collector_data(
+                auth.nonce.0,
+                auth.deadline.0,
+                &auth.signature,
+                &Bytes::new(),
+            ),
+        ),
+    };
+
+    depositCall {
+        config: to_abi_channel_config(&payload.channel_config),
+        amount: deposit_amount.to::<u128>(),
+        collector,
+        collectorData: collector_data,
+    }
+    .abi_encode()
+    .into()
+}
+
+async fn simulate_batch_settlement_call<P>(provider: &P, calldata: Bytes) -> Result<(), String>
+where
+    P: Provider,
+{
+    let request = TransactionRequest::default()
+        .input(calldata.into())
+        .to(BATCH_SETTLEMENT_ADDRESS);
+    provider
+        .call(request)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// Converts a `U256` to `U128`, returning `None` when the value overflows.
@@ -370,6 +552,13 @@ fn u256_to_u128(value: U256) -> Option<U128> {
     let mut narrow = [0u8; 16];
     narrow.copy_from_slice(&bytes[16..]);
     Some(U128::from_be_bytes(narrow))
+}
+
+fn deposit_amount_to_u128(value: U256) -> Result<U128, &'static str> {
+    if value == U256::ZERO {
+        return Err(err::ERR_DEPOSIT_PAYLOAD);
+    }
+    u256_to_u128(value).ok_or(err::ERR_CUMULATIVE_EXCEEDS_BALANCE)
 }
 
 #[cfg(test)]
@@ -393,5 +582,46 @@ mod tests {
     fn u256_to_u128_returns_none_on_overflow() {
         let overflowed = U256::from(u128::MAX) + U256::from(1u64);
         assert_eq!(u256_to_u128(overflowed), None);
+    }
+
+    #[test]
+    fn deposit_amount_to_u128_rejects_zero() {
+        assert_eq!(
+            deposit_amount_to_u128(U256::ZERO),
+            Err(err::ERR_DEPOSIT_PAYLOAD)
+        );
+    }
+
+    #[test]
+    fn deposit_amount_to_u128_rejects_overflow() {
+        let overflowed = U256::from(u128::MAX) + U256::from(1u64);
+        assert_eq!(
+            deposit_amount_to_u128(overflowed),
+            Err(err::ERR_CUMULATIVE_EXCEEDS_BALANCE)
+        );
+    }
+
+    #[test]
+    fn token_authorization_error_mapping_preserves_rpc_errors() {
+        assert_eq!(
+            erc3009_authorization_signature_error_reason(VoucherVerifyError::RpcReadFailed),
+            err::ERR_RPC_READ_FAILED
+        );
+        assert_eq!(
+            permit2_authorization_signature_error_reason(VoucherVerifyError::RpcReadFailed),
+            err::ERR_RPC_READ_FAILED
+        );
+    }
+
+    #[test]
+    fn token_authorization_error_mapping_preserves_signature_errors() {
+        assert_eq!(
+            erc3009_authorization_signature_error_reason(VoucherVerifyError::InvalidSignature),
+            err::ERR_INVALID_RECEIVE_AUTHORIZATION_SIGNATURE
+        );
+        assert_eq!(
+            permit2_authorization_signature_error_reason(VoucherVerifyError::InvalidFormat),
+            err::ERR_PERMIT2_INVALID_SIGNATURE
+        );
     }
 }
