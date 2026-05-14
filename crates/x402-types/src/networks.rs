@@ -33,8 +33,9 @@
 //! - **Chain-Specific Traits**: Chain-specific crates (e.g., `x402-chain-eip155`, `x402-chain-solana`)
 //!   implement namespace-specific traits like [`KnownNetworkEip155`] and [`KnownNetworkSolana`]
 //!   for type-safe network access
-//! - **Token Deployments**: The [`USDC`] marker struct is used by chain-specific crates to provide
-//!   per-network token deployment information (e.g., USDC addresses on different chains)
+//! - **Token Deployments**: The [`USDC`] and [`SBC`] marker structs are used by chain-specific
+//!   crates to provide per-network token deployment information (e.g., token addresses on
+//!   different chains)
 //!
 //! # CAIP-2 Standard
 //!
@@ -53,11 +54,11 @@
 //! - [`KNOWN_NETWORKS`]: A static array of all well-known networks
 //! - [`chain_id_by_network_name`]: Lookup function to get ChainId by network name
 //! - [`network_name_by_chain_id`]: Reverse lookup function to get network name by ChainId
-//! - [`USDC`]: Marker struct used for token deployment implementations
+//! - [`USDC`] and [`SBC`]: Marker structs used for token deployment implementations
 //!
 //! # Namespace-Specific Traits
 //!
-//! The module provides two namespace-specific traits for better organization and flexibility:
+//! The module provides namespace-specific traits for better organization and flexibility:
 //!
 //! ## KnownNetworkEip155
 //! Provides convenient static methods for all EVM networks (eip155 namespace):
@@ -67,6 +68,7 @@
 //! - Sei, Sei Testnet
 //! - XDC, XRPL EVM, Peaq, IoTeX
 //! - Celo, Celo Sepolia
+//! - Radius, Radius Testnet
 //!
 //! ## KnownNetworkSolana
 //! Provides convenient static methods for Solana networks:
@@ -75,8 +77,8 @@
 //!
 //! # Supported Networks
 //!
-//! The module supports 16 blockchain networks across two namespaces:
-//! - **EVM Networks (14)**: All networks in the eip155 namespace
+//! The module supports 18 blockchain networks across two namespaces:
+//! - **EVM Networks (16)**: All networks in the eip155 namespace
 //! - **Solana Networks (2)**: Solana mainnet and devnet
 //!
 //! # Examples
@@ -226,6 +228,17 @@ pub static KNOWN_NETWORKS: &[NetworkInfo] = &[
         name: "celo-sepolia",
         namespace: "eip155",
         reference: "11142220",
+    },
+    // Radius Networks
+    NetworkInfo {
+        name: "radius",
+        namespace: "eip155",
+        reference: "723487",
+    },
+    NetworkInfo {
+        name: "radius-testnet",
+        namespace: "eip155",
+        reference: "72344",
     },
     // Solana Networks
     NetworkInfo {
@@ -418,6 +431,13 @@ pub fn network_name_by_chain_id(chain_id: &ChainId) -> Option<&'static str> {
 #[allow(dead_code, clippy::upper_case_acronyms)] // Public for consumption by downstream crates.
 pub struct USDC;
 
+/// Marker struct for SBC token deployment implementations.
+///
+/// Chain-specific crates implement traits for this marker struct to provide
+/// per-network SBC token deployment information.
+#[allow(dead_code, clippy::upper_case_acronyms)] // Public for consumption by downstream crates.
+pub struct SBC;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -440,6 +460,14 @@ mod tests {
         assert_eq!(celo.namespace, "eip155");
         assert_eq!(celo.reference, "42220");
 
+        let radius = chain_id_by_network_name("radius").unwrap();
+        assert_eq!(radius.namespace, "eip155");
+        assert_eq!(radius.reference, "723487");
+
+        let radius_testnet = chain_id_by_network_name("radius-testnet").unwrap();
+        assert_eq!(radius_testnet.namespace, "eip155");
+        assert_eq!(radius_testnet.reference, "72344");
+
         let solana = chain_id_by_network_name("solana").unwrap();
         assert_eq!(solana.namespace, "solana");
         assert_eq!(solana.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
@@ -461,6 +489,14 @@ mod tests {
         let network_name = network_name_by_chain_id(&celo_sepolia_chain_id).unwrap();
         assert_eq!(network_name, "celo-sepolia");
 
+        let radius_chain_id = ChainId::new("eip155", "723487");
+        let network_name = network_name_by_chain_id(&radius_chain_id).unwrap();
+        assert_eq!(network_name, "radius");
+
+        let radius_testnet_chain_id = ChainId::new("eip155", "72344");
+        let network_name = network_name_by_chain_id(&radius_testnet_chain_id).unwrap();
+        assert_eq!(network_name, "radius-testnet");
+
         let solana_chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
         let network_name = network_name_by_chain_id(&solana_chain_id).unwrap();
         assert_eq!(network_name, "solana");
@@ -476,6 +512,9 @@ mod tests {
 
         let celo_chain_id = ChainId::new("eip155", "42220");
         assert_eq!(celo_chain_id.as_network_name(), Some("celo"));
+
+        let radius_chain_id = ChainId::new("eip155", "723487");
+        assert_eq!(radius_chain_id.as_network_name(), Some("radius"));
 
         let solana_chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
         assert_eq!(solana_chain_id.as_network_name(), Some("solana"));

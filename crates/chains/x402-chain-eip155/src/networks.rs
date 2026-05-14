@@ -1,5 +1,5 @@
 use x402_types::chain::ChainId;
-use x402_types::networks::USDC;
+use x402_types::networks::{SBC, USDC};
 
 use crate::chain::{AssetTransferMethod, Eip155ChainReference, Eip155TokenDeployment};
 
@@ -75,6 +75,16 @@ pub trait KnownNetworkEip155<A> {
 
     /// Returns the instance for Celo testnet (eip155:11142220)
     fn celo_sepolia() -> A;
+}
+
+/// Trait providing SBC deployments on EIP-155 networks where SBC is a known payment asset.
+#[allow(dead_code)]
+pub trait KnownSbcEip155 {
+    /// Returns the SBC deployment for Radius Network (eip155:723487).
+    fn radius() -> Eip155TokenDeployment;
+
+    /// Returns the SBC deployment for Radius Testnet (eip155:72344).
+    fn radius_testnet() -> Eip155TokenDeployment;
 }
 
 /// Implementation of KnownNetworkEip155 for ChainId.
@@ -308,5 +318,51 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
                 version: "2".into(),
             },
         }
+    }
+}
+
+impl KnownSbcEip155 for SBC {
+    fn radius() -> Eip155TokenDeployment {
+        Eip155TokenDeployment {
+            chain_reference: Eip155ChainReference::new(723487),
+            address: alloy_primitives::address!("0x33ad9e4BD16B69B5BFdED37D8B5D9fF9aba014Fb"),
+            decimals: 6,
+            transfer_method: AssetTransferMethod::Permit2,
+        }
+    }
+
+    fn radius_testnet() -> Eip155TokenDeployment {
+        Eip155TokenDeployment {
+            chain_reference: Eip155ChainReference::new(72344),
+            address: alloy_primitives::address!("0x33ad9e4BD16B69B5BFdED37D8B5D9fF9aba014Fb"),
+            decimals: 6,
+            transfer_method: AssetTransferMethod::Permit2,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sbc_radius_deployments_use_permit2() {
+        let radius = SBC::radius();
+        assert_eq!(radius.chain_reference.inner(), 723487);
+        assert_eq!(
+            radius.address,
+            alloy_primitives::address!("0x33ad9e4BD16B69B5BFdED37D8B5D9fF9aba014Fb")
+        );
+        assert_eq!(radius.decimals, 6);
+        assert_eq!(radius.transfer_method, AssetTransferMethod::Permit2);
+
+        let radius_testnet = SBC::radius_testnet();
+        assert_eq!(radius_testnet.chain_reference.inner(), 72344);
+        assert_eq!(
+            radius_testnet.address,
+            alloy_primitives::address!("0x33ad9e4BD16B69B5BFdED37D8B5D9fF9aba014Fb")
+        );
+        assert_eq!(radius_testnet.decimals, 6);
+        assert_eq!(radius_testnet.transfer_method, AssetTransferMethod::Permit2);
     }
 }
