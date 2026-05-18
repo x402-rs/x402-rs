@@ -6,8 +6,6 @@
       "_comment": "Base Sepolia"
       "eip1559": true,
       "flashblocks": true,
-      "poll_interval_ms": 500,
-      "sync_send": true,
       "signers": [
           "0xWALLET"
       ],

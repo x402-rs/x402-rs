@@ -2,6 +2,8 @@
 
 This directory contains a comprehensive protocol compliance test harness for the x402-rs project. It tests various combinations of client, server, and facilitator implementations across multiple chains and protocol versions.
 
+> **Monad fork note (`monad-developers/x402-rs`)** — this fork ships an EVM-only facilitator (Monad). Solana (`@x402/svm`) and Aptos paths are not exercised by our deployment. The `@x402/*` SDK family is tracked at `^2.12.x` (current upstream-published versions, vuln-patched); the custom `upto-evm-scheme.ts` was removed in favor of the SDK's native `@x402/evm/upto/{client,server}` classes.
+
 ## Overview
 
 The test harness validates that different implementations (Rust and TypeScript) can interoperate correctly when using the x402 payment protocol. It spins up real services (facilitator, server) and makes actual payment-enabled HTTP requests to verify end-to-end functionality.

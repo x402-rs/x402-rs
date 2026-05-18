@@ -78,6 +78,7 @@ impl Display for X402Version1 {
 /// Response from a payment settlement request.
 ///
 /// Indicates whether the payment was successfully settled on-chain.
+#[derive(Debug, Clone)]
 pub enum SettleResponse {
     /// Settlement succeeded.
     Success {

@@ -11,7 +11,7 @@ import { base58 } from "@scure/base";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { baseSepoliaPreconf } from "viem/chains";
 import { ERC20_ABI, ERC20_APPROVE_ABI } from "./erc-abi";
-import { UptoEvmSchemeClient } from "./upto-evm-scheme";
+import { UptoEvmScheme as UptoEvmSchemeClient } from "@x402/evm/upto/client";
 
 export async function invokeRustClient(
   endpoint: URL,

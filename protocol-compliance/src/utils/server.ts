@@ -12,7 +12,7 @@ import { ProcessHandle } from "./process-handle";
 import { waitForUrl } from "./waitFor";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
 import getPort from "get-port";
-import { UptoEvmSchemeServer } from "./upto-evm-scheme";
+import { UptoEvmScheme as UptoEvmSchemeServer } from "@x402/evm/upto/server";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { paymentRequired } from "./payment-required";
 import { PaymentOption } from "@x402/core/http";

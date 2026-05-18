@@ -112,7 +112,7 @@ impl Facilitator for FacilitatorLocal<SchemeRegistry> {
         let handler = request
             .scheme_handler_slug()
             .and_then(|slug| self.handlers.by_slug(&slug))
-            .ok_or(FacilitatorLocalError::Verification(
+            .ok_or(FacilitatorLocalError::Settlement(
                 PaymentVerificationError::UnsupportedScheme.into(),
             ))?;
         let response = handler
