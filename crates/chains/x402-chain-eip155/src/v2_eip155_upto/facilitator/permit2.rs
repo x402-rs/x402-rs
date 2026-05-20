@@ -22,12 +22,12 @@ use crate::v2_eip155_exact::facilitator::permit2::{
 use crate::v2_eip155_upto::types;
 use crate::v2_eip155_upto::types::{
     ISignatureTransfer, Permit2PaymentPayload, Permit2PaymentRequirements,
-    PermitWitnessTransferFrom, UptoSettleResponse, X402UptoPermit2Proxy, x402BasePermit2Proxy,
+    PermitWitnessTransferFrom, UptoSettleResponse, X402UptoPermit2Proxy, x402UptoPermit2Proxy,
 };
 
 /// Type alias for the upto-scheme prepared data.
 pub type PreparedUptoPermit2 =
-    PreparedPermit2<ISignatureTransfer::PermitTransferFrom, x402BasePermit2Proxy::Witness>;
+    PreparedPermit2<ISignatureTransfer::PermitTransferFrom, x402UptoPermit2Proxy::Witness>;
 
 impl PreparedUptoPermit2 {
     /// Build the shared Permit2 data needed for both verify and settle operations (upto scheme).
@@ -54,10 +54,10 @@ impl PreparedUptoPermit2 {
             spender: UPTO_PERMIT2_PROXY_ADDRESS,
             nonce: authorization.nonce,
             deadline: U256::from(authorization.deadline.as_secs()),
-            witness: x402BasePermit2Proxy::Witness {
+            witness: x402UptoPermit2Proxy::Witness {
                 to: authorization.witness.to.into(),
+                facilitator: authorization.witness.facilitator.into(),
                 validAfter: U256::from(authorization.witness.valid_after.as_secs()),
-                extra: Default::default(),
             },
         };
         let eip712_hash = permit_witness_transfer_from.eip712_signing_hash(&domain);

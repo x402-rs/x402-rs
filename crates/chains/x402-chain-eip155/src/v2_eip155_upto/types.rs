@@ -3,7 +3,7 @@
 //! This module defines types for the "upto" scheme which authorizes a transfer
 //! of up to a maximum amount, where the actual amount is determined at settlement.
 
-use alloy_primitives::U256;
+use alloy_primitives::{Address, U256};
 use serde::{Deserialize, Serialize};
 use x402_types::proto::v2;
 use x402_types::{lit_str, proto};
@@ -12,6 +12,18 @@ use crate::chain::ChecksummedAddress;
 use crate::chain::permit2::UptoPermit2Payload;
 
 lit_str!(UptoScheme, "upto");
+
+/// `PaymentRequirements.extra` shape for the upto scheme.
+///
+/// Servers MUST advertise the facilitator EOA that will execute on-chain settlement;
+/// clients sign this address into the witness so the proxy can enforce that
+/// `msg.sender == witness.facilitator` at settle time.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UptoExtra {
+    /// The facilitator EOA authorized to invoke `settle` on the proxy.
+    pub facilitator_address: Address,
+}
 
 /// Type alias for V2 verify requests using the upto EVM payment scheme.
 pub type VerifyRequest = v2::VerifyRequest<PaymentPayload, PaymentRequirements>;
@@ -110,7 +122,7 @@ pub mod facilitator_client_only {
             address spender;
             uint256 nonce;
             uint256 deadline;
-            x402BasePermit2Proxy.Witness witness;
+            x402UptoPermit2Proxy.Witness witness;
         }
     );
 }

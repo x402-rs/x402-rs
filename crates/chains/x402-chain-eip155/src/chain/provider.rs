@@ -25,7 +25,9 @@ use tracing::Instrument;
 
 use crate::chain::config::{Eip155ChainConfig, RpcConfig};
 use crate::chain::pending_nonce_manager::PendingNonceManager;
-use crate::chain::permit2::{EXACT_PERMIT2_PROXY_ADDRESS, PERMIT2_ADDRESS};
+use crate::chain::permit2::{
+    EXACT_PERMIT2_PROXY_ADDRESS, PERMIT2_ADDRESS, UPTO_PERMIT2_PROXY_ADDRESS,
+};
 use crate::chain::types::Eip155ChainReference;
 use crate::v1_eip155_exact::VALIDATOR_ADDRESS;
 
@@ -40,6 +42,7 @@ const REQUIRED_CONTRACT_ADDRESSES: LazyLock<Vec<Address>> = LazyLock::new(|| {
         VALIDATOR_ADDRESS,
         PERMIT2_ADDRESS,
         EXACT_PERMIT2_PROXY_ADDRESS,
+        UPTO_PERMIT2_PROXY_ADDRESS,
     ]
 });
 

@@ -16,8 +16,12 @@ pub const EXACT_PERMIT2_PROXY_ADDRESS: Address =
 // TODO configurable address per chain
 /// The X402 UptoPermit2Proxy contract address for settling Permit2 payments with variable amounts.
 /// This contract allows settling for any amount up to the permitted maximum.
+///
+/// Canonical address per x402-foundation/x402 commit ad2658a (PR #1880), matches the
+/// `@x402/evm` SDK constant `x402UptoPermit2ProxyAddress`. Deployed at this CREATE2
+/// address on Base mainnet + Base Sepolia + other EVM mainnets that ship UPTO.
 pub const UPTO_PERMIT2_PROXY_ADDRESS: Address =
-    address!("0x4020633461b2895a48930ff97ee8fcde8e520002");
+    address!("0x4020A4f3b7b90ccA423B9fabCc0CE57C6C240002");
 
 /// Authorization details for a Permit2 call.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,15 +57,17 @@ pub struct Permit2AuthorizationPermitted {
 
 /// Witness data for Permit2 upto payments.
 ///
-/// Binds the recipient address to prevent the facilitator from redirecting funds.
-// TODO This is invalid with regards to the latst deployed contracts.
+/// Binds the recipient address AND the authorized facilitator EOA, so only the
+/// caller whose address matches `facilitator` can invoke `settle` on the proxy.
+/// Matches `Witness(address to, address facilitator, uint256 validAfter)` on
+/// `x402UptoPermit2Proxy` per x402-foundation commit ad2658a.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UptoPermit2Witness {
-    /// Extra data (can be empty for basic transfers).
-    pub extra: Bytes,
     /// The recipient address that will receive the funds.
     pub to: ChecksummedAddress,
+    /// The facilitator EOA authorized to invoke settle (`msg.sender` at settle time).
+    pub facilitator: ChecksummedAddress,
     /// Time after which the authorization becomes valid.
     pub valid_after: UnixTimestamp,
 }

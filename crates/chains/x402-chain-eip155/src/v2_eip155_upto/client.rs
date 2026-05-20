@@ -35,7 +35,7 @@ use crate::v1_eip155_exact::client::SignerLike;
 use crate::v2_eip155_upto::V2Eip155Upto;
 use crate::v2_eip155_upto::types;
 use crate::v2_eip155_upto::types::{
-    ISignatureTransfer, PermitWitnessTransferFrom, x402BasePermit2Proxy,
+    ISignatureTransfer, PermitWitnessTransferFrom, UptoExtra, x402UptoPermit2Proxy,
 };
 
 /// Parameters for signing a Permit2 upto authorization.
@@ -52,8 +52,9 @@ pub struct Permit2UptoSigningParams {
     pub max_amount: U256,
     /// Maximum timeout in seconds for the authorization validity window
     pub max_timeout_seconds: u64,
-    /// Optional extra data to include in the witness
-    pub extra: Option<Vec<u8>>,
+    /// The facilitator EOA authorized to invoke `settle` on the proxy
+    /// (must equal `msg.sender` at settle time, advertised via `PaymentRequirements.extra.facilitatorAddress`).
+    pub facilitator: Address,
 }
 
 /// Signs a Permit2 PermitWitnessTransferFrom for the upto scheme using EIP-712.
@@ -94,10 +95,10 @@ pub async fn sign_permit2_upto_authorization<S: SignerLike + Sync>(
         spender: UPTO_PERMIT2_PROXY_ADDRESS,
         nonce,
         deadline: U256::from(deadline.as_secs()),
-        witness: x402BasePermit2Proxy::Witness {
+        witness: x402UptoPermit2Proxy::Witness {
             to: params.pay_to,
+            facilitator: params.facilitator,
             validAfter: U256::from(valid_after.as_secs()),
-            extra: params.extra.clone().unwrap_or_default().into(),
         },
     };
 
@@ -118,8 +119,8 @@ pub async fn sign_permit2_upto_authorization<S: SignerLike + Sync>(
         },
         spender: UPTO_PERMIT2_PROXY_ADDRESS.into(),
         witness: UptoPermit2Witness {
-            extra: permit_witness_transfer_from.witness.extra.clone(),
             to: params.pay_to.into(),
+            facilitator: params.facilitator.into(),
             valid_after,
         },
     };
@@ -231,6 +232,15 @@ where
     S: Sync + SignerLike,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
+        // Extract the authorized facilitator EOA from PaymentRequirements.extra.
+        // The contract enforces msg.sender == witness.facilitator at settle time,
+        // so the client must sign against the address the server advertised.
+        let extra = self.requirements.extra.as_ref().ok_or_else(|| {
+            X402Error::ParseError("upto scheme requires extra.facilitatorAddress".into())
+        })?;
+        let upto_extra: UptoExtra = serde_json::from_value(extra.clone())
+            .map_err(|e| X402Error::ParseError(format!("invalid upto extra: {e}")))?;
+
         // Build the payment payload for Permit2 upto
         let params = Permit2UptoSigningParams {
             chain_id: self.chain_reference.inner(),
@@ -238,7 +248,7 @@ where
             pay_to: self.requirements.pay_to.into(),
             max_amount: self.requirements.amount,
             max_timeout_seconds: self.requirements.max_timeout_seconds,
-            extra: None,
+            facilitator: upto_extra.facilitator_address,
         };
 
         let permit2_payload = sign_permit2_upto_authorization(&self.signer, &params).await?;

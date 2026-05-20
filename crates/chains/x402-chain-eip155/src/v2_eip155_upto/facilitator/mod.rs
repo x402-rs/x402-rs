@@ -99,15 +99,24 @@ where
 
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
+        let signer_addresses = self.provider.signer_addresses();
+        // Advertise the primary facilitator EOA so clients can bind it into the witness.
+        // The on-chain proxy enforces msg.sender == witness.facilitator at settle time.
+        let extra = signer_addresses
+            .first()
+            .and_then(|s| s.parse::<alloy_primitives::Address>().ok())
+            .and_then(|facilitator_address| {
+                serde_json::to_value(types::UptoExtra { facilitator_address }).ok()
+            });
         let kinds = vec![proto::SupportedPaymentKind {
             x402_version: v2::X402Version2.into(),
             scheme: types::UptoScheme.to_string(),
             network: chain_id.clone().into(),
-            extra: None,
+            extra,
         }];
         let signers = {
             let mut signers = HashMap::with_capacity(1);
-            signers.insert(chain_id, self.provider.signer_addresses());
+            signers.insert(chain_id, signer_addresses);
             signers
         };
         Ok(proto::SupportedResponse {
