@@ -99,8 +99,9 @@ The crate includes built-in support for many EVM networks through the `KnownNetw
 - **Peaq**
 - **IoTeX**
 - **Celo** (mainnet and Sepolia testnet)
+- **Radius** (mainnet and testnet)
 
-Each network includes USDC token deployment information with proper EIP-712 domain parameters.
+Known token deployment helpers include USDC on supported USDC networks and SBC on Radius networks.
 
 ## ERC-3009 and Signature Handling
 
