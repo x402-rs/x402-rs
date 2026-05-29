@@ -20,7 +20,7 @@ edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/x402-rs/x402-rs"
 homepage = "https://x402.rs"
-rust-version = "1.88.0"
+rust-version = "1.93.0"
 keywords = ["blockchain", "payments", "x402", "stablecoin", "http-402"]
 categories = ["cryptography::cryptocurrencies", "finance", "network-programming", "web-programming::http-server"]
 
