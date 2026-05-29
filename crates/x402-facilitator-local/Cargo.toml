@@ -44,9 +44,9 @@ tower-http = { workspace = true }
 # Tracing and OpenTelemetry (optional, enabled via `telemetry` feature)
 tracing = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
-opentelemetry = { version = "0.31", optional = true }
-opentelemetry_sdk = { version = "0.31", optional = true }
-opentelemetry-semantic-conventions = { version = "0.31", features = ["semconv_experimental"], optional = true }
-tracing-opentelemetry = { version = "0.32", optional = true }
-opentelemetry-otlp = { version = "0.31", features = ["metrics", "grpc-tonic"], optional = true }
-opentelemetry-stdout = { version = "0.31", features = ["trace", "metrics"], optional = true }
+opentelemetry = { version = "0.32", optional = true }
+opentelemetry_sdk = { version = "0.32", optional = true }
+opentelemetry-semantic-conventions = { version = "0.32", features = ["semconv_experimental"], optional = true }
+tracing-opentelemetry = { version = "0.33", optional = true }
+opentelemetry-otlp = { version = "0.32", features = ["metrics", "grpc-tonic"], optional = true }
+opentelemetry-stdout = { version = "0.32", features = ["trace", "metrics"], optional = true }
