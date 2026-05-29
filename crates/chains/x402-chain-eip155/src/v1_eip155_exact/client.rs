@@ -17,7 +17,7 @@ use alloy_primitives::{Address, FixedBytes, Signature, U256};
 use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 use std::sync::Arc;
 use x402_types::chain::ChainId;
 use x402_types::proto::PaymentRequired;
