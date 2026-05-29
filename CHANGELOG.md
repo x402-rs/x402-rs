@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-05-29
+
+### Changed
+
+- `x402-chain-eip155`: Bumped Alloy dependencies to 2.0.
+- `x402-chain-eip155`: Bumped `rand` dependency to 0.10 and updated imports to use the new `RngExt` module across EIP-155 clients.
+- `x402-chain-eip155`: Changed `REQUIRED_CONTRACT_ADDRESSES` from `const` to `static` in `provider.rs`.
+- `x402-facilitator-local`: Bumped OpenTelemetry dependencies to 0.32.
+- `x402-chain-solana`: Upgraded `spl-token-2022` to v11.0.0.
+- Raised minimum supported Rust version to 1.93.0.
+- Various transitive dependency version bumps across the workspace.
+
 ## [1.4.5] - 2026-03-14
 
 ### Fixed
