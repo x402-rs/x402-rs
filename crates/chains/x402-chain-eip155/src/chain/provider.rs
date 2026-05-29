@@ -35,7 +35,7 @@ pub type InnerFiller = JoinFill<
     JoinFill<BlobGasFiller, JoinFill<NonceFiller<PendingNonceManager>, ChainIdFiller>>,
 >;
 
-const REQUIRED_CONTRACT_ADDRESSES: LazyLock<Vec<Address>> = LazyLock::new(|| {
+static REQUIRED_CONTRACT_ADDRESSES: LazyLock<Vec<Address>> = LazyLock::new(|| {
     vec![
         VALIDATOR_ADDRESS,
         PERMIT2_ADDRESS,
