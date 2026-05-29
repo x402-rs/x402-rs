@@ -16,7 +16,7 @@ tokio = { workspace = true }
 dotenvy = { workspace = true }
 
 # EVM: Alloy
-alloy-signer-local = { version = "1.4" }
+alloy-signer-local = { version = "2.0" }
 
 # Solana
 solana-client = { version = "3.1.4" }

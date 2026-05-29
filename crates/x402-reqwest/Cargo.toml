@@ -29,7 +29,7 @@ reqwest-middleware = { version = "0.5" }
 tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
-alloy-signer-local = { version = "1.4" }
+alloy-signer-local = { version = "2.0" }
 x402-chain-eip155 = { workspace = true, features = ["client"] }
 
 [features]

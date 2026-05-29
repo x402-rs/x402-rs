@@ -182,7 +182,7 @@ impl FromConfig<Eip155ChainConfig> for Eip155ChainProvider {
         // Build the filler stack: Gas -> BlobGas -> Nonce -> ChainId
         // This mirrors the InnerFiller type but with our custom nonce manager
         let filler = JoinFill::new(
-            GasFiller,
+            GasFiller::default(),
             JoinFill::new(
                 BlobGasFiller::default(),
                 JoinFill::new(
