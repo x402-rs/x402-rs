@@ -267,7 +267,7 @@ impl Eip155MetaTransactionProvider for Eip155ChainProvider {
         &self,
         tx: MetaTransaction,
     ) -> Result<TransactionReceipt, Self::Error> {
-        let from_address = self.next_signer_address();
+        let from_address = tx.from.unwrap_or_else(|| self.next_signer_address());
         let mut txr = TransactionRequest::default()
             .with_to(tx.to)
             .with_from(from_address)
@@ -357,6 +357,8 @@ pub struct MetaTransaction {
     pub calldata: Bytes,
     /// Number of block confirmations to wait for.
     pub confirmations: u64,
+    /// Optional sender address.
+    pub from: Option<Address>,
 }
 
 impl MetaTransaction {
@@ -365,7 +367,13 @@ impl MetaTransaction {
             to,
             calldata,
             confirmations: 1,
+            from: None,
         }
+    }
+
+    pub fn with_from(mut self, from: Address) -> Self {
+        self.from = Some(from);
+        self
     }
 }
 

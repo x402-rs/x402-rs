@@ -843,14 +843,11 @@ where
             let transfer_call = transfer_call.0;
             if is_contract_deployed {
                 // transferWithAuthorization with inner signature
-                let tx_fut = Eip155MetaTransactionProvider::send_transaction(
-                    provider,
-                    MetaTransaction {
-                        to: transfer_call.tx.target(),
-                        calldata: transfer_call.tx.calldata().clone(),
-                        confirmations: 1,
-                    },
+                let meta_tx = MetaTransaction::new(
+                    transfer_call.tx.target(),
+                    transfer_call.tx.calldata().clone(),
                 );
+                let tx_fut = Eip155MetaTransactionProvider::send_transaction(provider, meta_tx);
                 #[cfg(feature = "telemetry")]
                 let receipt = tx_fut
                     .instrument(tracing::info_span!("call_transferWithAuthorization_0",
@@ -884,14 +881,9 @@ where
                 let aggregate_call = IMulticall3::aggregate3Call {
                     calls: vec![deployment_call, transfer_with_authorization_call],
                 };
-                let tx_fut = Eip155MetaTransactionProvider::send_transaction(
-                    provider,
-                    MetaTransaction {
-                        to: MULTICALL3_ADDRESS,
-                        calldata: aggregate_call.abi_encode().into(),
-                        confirmations: 1,
-                    },
-                );
+                let meta_tx =
+                    MetaTransaction::new(MULTICALL3_ADDRESS, aggregate_call.abi_encode().into());
+                let tx_fut = Eip155MetaTransactionProvider::send_transaction(provider, meta_tx);
                 #[cfg(feature = "telemetry")]
                 let receipt = tx_fut
                     .instrument(tracing::info_span!("call_transferWithAuthorization_0",
@@ -917,14 +909,11 @@ where
                 TransferWithAuthorization0Call::new(contract, payment, eip1271_signature);
             let transfer_call = transfer_call.0;
             // transferWithAuthorization with eip1271 signature
-            let tx_fut = Eip155MetaTransactionProvider::send_transaction(
-                provider,
-                MetaTransaction {
-                    to: transfer_call.tx.target(),
-                    calldata: transfer_call.tx.calldata().clone(),
-                    confirmations: 1,
-                },
+            let meta_tx = MetaTransaction::new(
+                transfer_call.tx.target(),
+                transfer_call.tx.calldata().clone(),
             );
+            let tx_fut = Eip155MetaTransactionProvider::send_transaction(provider, meta_tx);
             #[cfg(feature = "telemetry")]
             let receipt = tx_fut
                 .instrument(tracing::info_span!("call_transferWithAuthorization_0",
@@ -948,14 +937,11 @@ where
             let transfer_call = TransferWithAuthorization1Call::new(contract, payment, signature);
             let transfer_call = transfer_call.0;
             // transferWithAuthorization with EOA signature
-            let tx_fut = Eip155MetaTransactionProvider::send_transaction(
-                provider,
-                MetaTransaction {
-                    to: transfer_call.tx.target(),
-                    calldata: transfer_call.tx.calldata().clone(),
-                    confirmations: 1,
-                },
+            let meta_tx = MetaTransaction::new(
+                transfer_call.tx.target(),
+                transfer_call.tx.calldata().clone(),
             );
+            let tx_fut = Eip155MetaTransactionProvider::send_transaction(provider, meta_tx);
             #[cfg(feature = "telemetry")]
             let receipt = tx_fut
                 .instrument(tracing::info_span!("call_transferWithAuthorization_1",

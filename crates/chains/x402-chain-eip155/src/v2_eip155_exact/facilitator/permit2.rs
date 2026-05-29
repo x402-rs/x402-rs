@@ -285,14 +285,9 @@ where
                 let aggregate_call = IMulticall3::aggregate3Call {
                     calls: vec![deployment_call, transfer_with_authorization_call],
                 };
-                let tx_fut = Eip155MetaTransactionProvider::send_transaction(
-                    provider,
-                    MetaTransaction {
-                        to: MULTICALL3_ADDRESS,
-                        calldata: aggregate_call.abi_encode().into(),
-                        confirmations: 1,
-                    },
-                );
+                let meta_tx =
+                    MetaTransaction::new(MULTICALL3_ADDRESS, aggregate_call.abi_encode().into());
+                let tx_fut = Eip155MetaTransactionProvider::send_transaction(provider, meta_tx);
                 #[cfg(feature = "telemetry")]
                 let receipt = tx_fut
                     .instrument(tracing::info_span!(
