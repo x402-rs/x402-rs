@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-05-29
+
+### Changed
+
+- `x402-chain-eip155`: Added optional `from` field to `MetaTransaction` and a `with_from()` builder method, allowing callers to override the sender address. `Eip155MetaTransactionProvider::send_transaction` now uses `tx.from` when set, falling back to `next_signer_address()`.
+- `x402-chain-eip155`: Refactored internal transaction construction in `v1_eip155_exact` and `v2_eip155_exact` facilitators to use the `MetaTransaction::new()` constructor instead of struct-literal syntax, eliminating boilerplate and aligning with the new `from` field default.
+
 ## [1.5.0] - 2026-05-29
 
 ### Changed
