@@ -13860,7 +13860,7 @@ dependencies = [
  "alloy-transport-http",
  "async-trait",
  "dashmap 6.2.1",
- "rand 0.9.4",
+ "rand 0.10.1",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
