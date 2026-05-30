@@ -1,4 +1,5 @@
 use alloy_primitives::address;
+use axum::Extension;
 use axum::Router;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -12,6 +13,7 @@ use x402_chain_eip155::chain::{AssetTransferMethod, Eip155TokenDeployment};
 use x402_chain_eip155::{KnownNetworkEip155, V1Eip155Exact, V2Eip155Exact, V2Eip155Upto};
 use x402_chain_solana::{KnownNetworkSolana, V1SolanaExact, V2SolanaExact};
 use x402_types::networks::USDC;
+use x402_types::proto::SettleResponse;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -150,7 +152,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[instrument(skip_all)]
-async fn my_handler() -> impl IntoResponse {
+async fn my_handler(Extension(settlement): Extension<Option<SettleResponse>>) -> impl IntoResponse {
+    if let Some(settlement) = settlement {
+        tracing::info!(
+            settlement = ?settlement,
+            "Payment settled before execution"
+        );
+    } else {
+        tracing::info!("Payment will be settled after execution");
+    }
     (StatusCode::OK, "This is a VIP content!")
 }
 

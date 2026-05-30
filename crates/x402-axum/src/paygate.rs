@@ -534,9 +534,13 @@ where
             let settlement = self.settle_payment(&verify_request).await?;
             validate_settlement(&settlement)?;
 
-            let header_value = settlement_to_header(settlement)?;
+            let header_value = settlement_to_header(settlement.clone())?;
 
-            // Settlement succeeded, now execute the request
+            // Settlement succeeded, add it as an extension and execute the request
+            let (mut parts, body) = req.into_parts();
+            parts.extensions.insert(Some(settlement));
+            let req = Request::from_parts(parts, body);
+
             let response = match Self::call_inner(inner, req).await {
                 Ok(response) => response,
                 Err(err) => return Ok(err.into_response()),
@@ -554,6 +558,11 @@ where
             let verify_response = self.verify_payment(&verify_request).await?;
 
             TPriceTag::validate_verify_response(verify_response)?;
+
+            // Add None to extensions since we haven't settled yet
+            let (mut parts, body) = req.into_parts();
+            parts.extensions.insert(None::<proto::SettleResponse>);
+            let req = Request::from_parts(parts, body);
 
             let response = match Self::call_inner(inner, req).await {
                 Ok(response) => response,
