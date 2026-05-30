@@ -82,6 +82,38 @@ let x402 = X402Middleware::new("https://facilitator.x402.rs")
     .settle_after_execution();  // Settle after successful request execution
 ```
 
+## Accessing Settlement Result in Handlers
+
+The middleware injects the settlement result into the request extensions, allowing handlers to
+inspect whether (and how) payment was settled. The extension type is
+`Option<x402_types::proto::SettleResponse>`:
+
+- **`Some(settlement)`** — when `settle_before_execution` is enabled, the settlement has already
+  completed before the handler runs. The `SettleResponse` contains the transaction hash, payer
+  address, and success status.
+- **`None`** — when using the default `settle_after_execution` mode, the handler runs before
+  settlement occurs, so no settlement data is available yet.
+
+```rust,no_run
+use axum::Extension;
+use axum::response::IntoResponse;
+use http::StatusCode;
+use x402_types::proto::SettleResponse;
+
+async fn my_handler(
+    Extension(settlement): Extension<Option<SettleResponse>>,
+) -> impl IntoResponse {
+    if let Some(s) = settlement {
+        // settle_before_execution mode: payment already settled
+        tracing::info!(settlement = ?s, "Payment settled before execution");
+    } else {
+        // settle_after_execution mode (default): settlement happens after this returns
+        tracing::info!("Payment will be settled after execution");
+    }
+    (StatusCode::OK, "VIP content")
+}
+```
+
 ## Dynamic Pricing
 
 The middleware supports dynamic pricing through the `with_dynamic_price` method, which allows you to compute prices per-request based on headers, URI, or other runtime factors:

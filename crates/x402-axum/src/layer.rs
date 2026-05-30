@@ -41,6 +41,14 @@
 //! - **[`X402Middleware::settle_after_execution`]** - Settle payment **after** request execution (default).
 //!   This allows processing the request before committing the payment on-chain.
 //!
+//! ## Accessing Settlement Result
+//!
+//! The middleware injects an `Option<x402_types::proto::SettleResponse>` into the request
+//! extensions, which handlers can extract via `axum::Extension`:
+//!
+//! - `Some(settlement)` — settlement completed before the handler ran (`settle_before_execution`)
+//! - `None` — settlement will occur after the handler returns (default `settle_after_execution`)
+//!
 //! ## Configuration Notes
 //!
 //! - **[`X402Middleware::with_price_tag`]** sets the assets and amounts accepted for payment (static pricing).
