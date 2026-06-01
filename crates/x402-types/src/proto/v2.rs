@@ -142,26 +142,12 @@ where
 impl<TPayload, TRequirements> TryFrom<&proto::VerifyRequest>
     for VerifyRequest<TPayload, TRequirements>
 where
-    TPayload: DeserializeOwned,
-    TRequirements: DeserializeOwned,
+    Self: DeserializeOwned,
 {
     type Error = proto::PaymentVerificationError;
 
     fn try_from(value: &proto::VerifyRequest) -> Result<Self, Self::Error> {
-        let deserialized = serde_json::from_str(value.as_str())?;
-        Ok(deserialized)
-    }
-}
-
-impl<TPayload, TRequirements> VerifyRequest<TPayload, TRequirements>
-where
-    Self: DeserializeOwned,
-{
-    pub fn from_proto(
-        // FIXME REMOVE THIS
-        request: proto::VerifyRequest,
-    ) -> Result<Self, proto::PaymentVerificationError> {
-        let value = serde_json::from_str(request.as_str())?;
+        let value = serde_json::from_str(value.as_str())?;
         Ok(value)
     }
 }
