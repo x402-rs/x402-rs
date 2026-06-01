@@ -100,11 +100,16 @@ where
 
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
+
         let signer_addresses = self.provider.signer_addresses();
         let mut rng = rand::rng();
         let facilitator_address = signer_addresses.choose(&mut rng);
-        // FIXME This should be the same struct as in client side
-        let extra = facilitator_address.map(|addr| serde_json::json!({"facilitatorAddress": addr}));
+        let extra = facilitator_address
+            .map(|addr| types::UptoSupportedExtra {
+                facilitator_address: addr.clone(),
+            })
+            .and_then(|extra| serde_json::to_value(extra).ok());
+
         let kinds = vec![proto::SupportedPaymentKind {
             x402_version: v2::X402Version2.into(),
             scheme: types::UptoScheme.to_string(),
