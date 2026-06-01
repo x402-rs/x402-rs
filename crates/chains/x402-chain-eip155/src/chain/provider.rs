@@ -358,21 +358,21 @@ impl ChainProviderOps for Eip155ChainProvider {
 /// authorized payment.
 pub trait Eip155SignerAddresses {
     /// Returns an iterator over the signer addresses available on this provider.
-    fn signer_addresses(&self) -> impl Iterator<Item = &Address>;
+    fn signer_addresses(&self) -> Vec<Address>;
 }
 
 impl<T> Eip155SignerAddresses for Arc<T>
 where
     T: Eip155SignerAddresses,
 {
-    fn signer_addresses(&self) -> impl Iterator<Item = &Address> {
+    fn signer_addresses(&self) -> Vec<Address> {
         (**self).signer_addresses()
     }
 }
 
 impl Eip155SignerAddresses for Eip155ChainProvider {
-    fn signer_addresses(&self) -> impl Iterator<Item = &Address> {
-        self.signer_addresses.iter()
+    fn signer_addresses(&self) -> Vec<Address> {
+        (*self.signer_addresses).clone()
     }
 }
 

@@ -7,7 +7,7 @@
 pub mod permit2;
 
 use alloy_provider::Provider;
-use rand::seq::IteratorRandom;
+use rand::seq::IndexedRandom;
 use std::collections::HashMap;
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto;

@@ -125,8 +125,10 @@ pub fn assert_own_signer<P>(
 where
     P: Eip155SignerAddresses,
 {
-    let mut signer_addresses = provider.signer_addresses();
-    let is_ours = signer_addresses.any(|addr| addr == witness_facilitator);
+    let signer_addresses = provider.signer_addresses();
+    let is_ours = signer_addresses
+        .iter()
+        .any(|addr| addr == witness_facilitator);
     if is_ours {
         Ok(())
     } else {
