@@ -34,7 +34,8 @@ facilitator = [
   "tokio",
   "tower",
   "async-trait",
-  "url"
+  "url",
+  "rand"
 ]
 full = ["telemetry", "client", "server", "facilitator"]
 

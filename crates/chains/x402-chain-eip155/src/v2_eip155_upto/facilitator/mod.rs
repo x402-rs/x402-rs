@@ -7,6 +7,7 @@
 pub mod permit2;
 
 use alloy_provider::Provider;
+use rand::seq::IndexedRandom;
 use std::collections::HashMap;
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto;
@@ -100,8 +101,8 @@ where
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
         let signer_addresses = self.provider.signer_addresses();
-        // FIXME This should be random or what? why just one??
-        let facilitator_address = signer_addresses.into_iter().next();
+        let mut rng = rand::rng();
+        let facilitator_address = signer_addresses.choose(&mut rng);
         // FIXME This should be the same struct as in client side
         let extra = facilitator_address.map(|addr| serde_json::json!({"facilitatorAddress": addr}));
         let kinds = vec![proto::SupportedPaymentKind {
