@@ -13,7 +13,6 @@ use x402_types::proto::v2;
 
 use crate::V2Eip155Upto;
 use crate::chain::{ChecksummedAddress, Eip155TokenDeployment};
-use crate::v2_eip155_upto::UptoSupportedExtra;
 use crate::v2_eip155_upto::types::UptoScheme;
 
 impl V2Eip155Upto {
@@ -62,10 +61,7 @@ pub fn upto_facilitator_address_enricher(
                 && kind.scheme == UptoScheme.to_string()
                 && kind.network == price_tag.requirements.network.to_string()
         })
-        .and_then(|kind| kind.extra.as_ref())
-        .and_then(|v| serde_json::from_value::<UptoSupportedExtra>(v.clone()).ok());
+        .and_then(|kind| kind.extra.clone());
 
-    if let Some(extra) = supported_extra {
-        price_tag.requirements.extra = serde_json::to_value(extra).ok();
-    }
+    price_tag.requirements.extra = supported_extra;
 }
