@@ -106,7 +106,7 @@ where
         let facilitator_address = signer_addresses.choose(&mut rng);
         let extra = facilitator_address
             .map(|addr| types::UptoSupportedExtra {
-                facilitator_address: addr.clone(),
+                facilitator_address: addr,
             })
             .and_then(|extra| serde_json::to_value(extra).ok());
 

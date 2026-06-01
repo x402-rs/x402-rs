@@ -18,9 +18,9 @@ lit_str!(UptoScheme, "upto");
 /// in the Permit2 witness.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct UptoSupportedExtra {
+pub struct UptoSupportedExtra<TAddress = String> {
     /// The facilitator address the client must place in `witness.facilitator`.
-    pub facilitator_address: String,
+    pub facilitator_address: TAddress,
 }
 
 /// Type alias for V2 verify requests using the upto EVM payment scheme.
