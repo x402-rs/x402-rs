@@ -13,8 +13,7 @@ use tracing::instrument;
 use crate::chain::erc20::IERC20;
 use crate::chain::permit2::{PERMIT2_ADDRESS, UPTO_PERMIT2_PROXY_ADDRESS};
 use crate::chain::{
-    Eip155ChainReference, Eip155MetaTransactionProvider, HavingEip155SignerAddresses,
-    MetaTransaction,
+    Eip155ChainReference, Eip155MetaTransactionProvider, Eip155SignerAddresses, MetaTransaction,
 };
 use crate::v1_eip155_exact::{
     Eip155ExactError, StructuredSignature, VALIDATOR_ADDRESS, Validator6492, assert_time,
@@ -87,9 +86,7 @@ impl PreparedUptoPermit2 {
 }
 
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
-pub async fn verify_permit2_payment<
-    P: Eip155MetaTransactionProvider + HavingEip155SignerAddresses,
->(
+pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + Eip155SignerAddresses>(
     provider: &P,
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,

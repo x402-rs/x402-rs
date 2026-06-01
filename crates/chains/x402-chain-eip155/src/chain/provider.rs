@@ -356,21 +356,21 @@ impl ChainProviderOps for Eip155ChainProvider {
 /// one of these addresses to clients via the `supported()` endpoint so they can
 /// embed it in the Permit2 witness, ensuring only this facilitator can settle the
 /// authorized payment.
-pub trait HavingEip155SignerAddresses {
+pub trait Eip155SignerAddresses {
     /// Returns an iterator over the signer addresses available on this provider.
     fn signer_addresses(&self) -> impl Iterator<Item = &Address>;
 }
 
-impl<T> HavingEip155SignerAddresses for Arc<T>
+impl<T> Eip155SignerAddresses for Arc<T>
 where
-    T: HavingEip155SignerAddresses,
+    T: Eip155SignerAddresses,
 {
     fn signer_addresses(&self) -> impl Iterator<Item = &Address> {
         (**self).signer_addresses()
     }
 }
 
-impl HavingEip155SignerAddresses for Eip155ChainProvider {
+impl Eip155SignerAddresses for Eip155ChainProvider {
     fn signer_addresses(&self) -> impl Iterator<Item = &Address> {
         self.signer_addresses.iter()
     }

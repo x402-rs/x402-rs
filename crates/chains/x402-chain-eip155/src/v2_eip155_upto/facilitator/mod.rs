@@ -17,7 +17,7 @@ use x402_types::scheme::{
 };
 
 use crate::V2Eip155Upto;
-use crate::chain::{Eip155MetaTransactionProvider, HavingEip155SignerAddresses};
+use crate::chain::{Eip155MetaTransactionProvider, Eip155SignerAddresses};
 use crate::v1_eip155_exact::facilitator::Eip155ExactError;
 use crate::v2_eip155_upto::types;
 
@@ -25,7 +25,7 @@ impl<P> X402SchemeFacilitatorBuilder<P> for V2Eip155Upto
 where
     P: Eip155MetaTransactionProvider
         + ChainProviderOps
-        + HavingEip155SignerAddresses
+        + Eip155SignerAddresses
         + Send
         + Sync
         + 'static,
@@ -71,7 +71,7 @@ impl<P> V2Eip155UptoFacilitator<P> {
 #[async_trait::async_trait]
 impl<P> X402SchemeFacilitator for V2Eip155UptoFacilitator<P>
 where
-    P: Eip155MetaTransactionProvider + ChainProviderOps + HavingEip155SignerAddresses + Send + Sync,
+    P: Eip155MetaTransactionProvider + ChainProviderOps + Eip155SignerAddresses + Send + Sync,
     P::Inner: Provider,
     Eip155ExactError: From<P::Error>,
 {
@@ -106,7 +106,7 @@ where
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
 
-        let signer_addresses = HavingEip155SignerAddresses::signer_addresses(&self.provider);
+        let signer_addresses = Eip155SignerAddresses::signer_addresses(&self.provider);
         let mut rng = rand::rng();
         let facilitator_address = signer_addresses.choose(&mut rng);
         let extra = facilitator_address
