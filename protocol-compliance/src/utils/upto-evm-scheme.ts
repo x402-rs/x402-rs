@@ -8,8 +8,15 @@ import {
   SchemeNetworkServer,
 } from "@x402/core/types";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
-import { ClientEvmSigner, Permit2Authorization } from "@x402/evm";
+import { ClientEvmSigner } from "@x402/evm";
 import { getAddress, toHex } from "viem";
+import {
+  PERMIT2_ADDRESS,
+  uptoPermit2WitnessTypes,
+  x402UptoPermit2ProxyAddress,
+} from "@x402/evm";
+
+// FIXME This should be an upto from the upstream x402 packages
 
 export class UptoEvmSchemeServer implements SchemeNetworkServer {
   readonly scheme: string = "upto";
@@ -22,9 +29,10 @@ export class UptoEvmSchemeServer implements SchemeNetworkServer {
   parsePrice(price: Price, network: Network): Promise<AssetAmount> {
     return this.exact.parsePrice(price, network);
   }
+
   async enhancePaymentRequirements(
     paymentRequirements: PaymentRequirements,
-    _supportedKind: {
+    supportedKind: {
       x402Version: number;
       scheme: string;
       network: Network;
@@ -32,7 +40,19 @@ export class UptoEvmSchemeServer implements SchemeNetworkServer {
     },
     _facilitatorExtensions: string[],
   ): Promise<PaymentRequirements> {
-    return paymentRequirements;
+    const facilitatorAddress = supportedKind.extra?.facilitatorAddress as
+      | string
+      | undefined;
+    return {
+      ...paymentRequirements,
+      extra: {
+        ...paymentRequirements.extra,
+        assetTransferMethod: "permit2",
+        ...(facilitatorAddress
+          ? { facilitatorAddress: getAddress(facilitatorAddress) }
+          : {}),
+      },
+    };
   }
 }
 
@@ -49,128 +69,73 @@ export class UptoEvmSchemeClient implements SchemeNetworkClient {
     x402Version: number,
     paymentRequirements: PaymentRequirements,
   ): Promise<PaymentPayloadResult> {
-    // Extract chain ID from network (format: "eip155:chainId")
+    const facilitatorAddress = (
+      paymentRequirements.extra as Record<string, unknown> | undefined
+    )?.facilitatorAddress as `0x${string}` | undefined;
+    if (!facilitatorAddress) {
+      throw new Error(
+        "upto scheme requires facilitatorAddress in paymentRequirements.extra",
+      );
+    }
+
     const caipChainId = paymentRequirements.network;
-    const caipChainIdReference = caipChainId.split(":")[1];
-    const chainId = parseInt(caipChainIdReference, 10);
-
-    // Random nonce: U256 as decimal
+    const chainId = parseInt(caipChainId.split(":")[1], 10);
     const nonce = createPermit2Nonce();
-
-    // Calculate timing parameters
     const now = Math.floor(Date.now() / 1000);
-    // Lower time bound - allow some clock skew
     const validAfter = (now - 600).toString();
-    // Upper time bound is enforced by Permit2's deadline field
     const deadline = (now + paymentRequirements.maxTimeoutSeconds).toString();
 
-    // Build the Permit2 authorization
-    const permit2Authorization: Permit2Payload["permit2Authorization"] = {
+    const permit2Authorization = {
       from: this.signer.address,
       permitted: {
         token: getAddress(paymentRequirements.asset),
         amount: paymentRequirements.amount,
       },
-      spender: "0x4020633461b2895a48930Ff97eE8fCdE8E520002", // x402UptoPermit2ProxyAddress
+      spender: x402UptoPermit2ProxyAddress,
       nonce,
       deadline,
       witness: {
-        to: paymentRequirements.payTo as `0x${string}`,
+        to: getAddress(paymentRequirements.payTo),
+        facilitator: getAddress(facilitatorAddress),
         validAfter,
-        extra: "0x" as `0x${string}`,
       },
     };
 
-    // Sign the Permit2 authorization using EIP-712
-    const signature = await this.signPermit2Authorization(
-      permit2Authorization,
-      chainId,
-    );
-
-    // Build the payload
-    const payload: Permit2Payload = {
-      signature,
-      permit2Authorization,
-    };
+    const signature = await this.signer.signTypedData({
+      domain: {
+        name: "Permit2",
+        chainId,
+        verifyingContract: PERMIT2_ADDRESS,
+      },
+      types: uptoPermit2WitnessTypes,
+      primaryType: "PermitWitnessTransferFrom",
+      message: {
+        permitted: {
+          token: getAddress(permit2Authorization.permitted.token),
+          amount: BigInt(permit2Authorization.permitted.amount),
+        },
+        spender: getAddress(permit2Authorization.spender),
+        nonce: BigInt(permit2Authorization.nonce),
+        deadline: BigInt(permit2Authorization.deadline),
+        witness: {
+          to: getAddress(permit2Authorization.witness.to),
+          facilitator: getAddress(permit2Authorization.witness.facilitator),
+          validAfter: BigInt(permit2Authorization.witness.validAfter),
+        },
+      },
+    });
 
     return {
       x402Version,
-      payload,
+      payload: { signature, permit2Authorization },
     };
-  }
-
-  private async signPermit2Authorization(
-    permit2Authorization: any,
-    chainId: number,
-  ): Promise<`0x${string}`> {
-    // EIP-712 domain for Permit2
-    const domain = {
-      name: "Permit2",
-      chainId,
-      verifyingContract:
-        "0x000000000022D473030F116dDEE9F6B43aC78BA3" as `0x${string}`, // PERMIT2_ADDRESS
-    };
-
-    // EIP-712 types for PermitWitnessTransferFrom
-    const types = {
-      PermitWitnessTransferFrom: [
-        { name: "permitted", type: "TokenPermissions" },
-        { name: "spender", type: "address" },
-        { name: "nonce", type: "uint256" },
-        { name: "deadline", type: "uint256" },
-        { name: "witness", type: "Witness" },
-      ],
-      TokenPermissions: [
-        { name: "token", type: "address" },
-        { name: "amount", type: "uint256" },
-      ],
-      Witness: [
-        { name: "to", type: "address" },
-        { name: "validAfter", type: "uint256" },
-        { name: "extra", type: "bytes" },
-      ],
-    };
-
-    // Build the message with proper types
-    const message = {
-      permitted: {
-        token: permit2Authorization.permitted.token,
-        amount: BigInt(permit2Authorization.permitted.amount),
-      },
-      spender: permit2Authorization.spender,
-      nonce: BigInt(permit2Authorization.nonce),
-      deadline: BigInt(permit2Authorization.deadline),
-      witness: {
-        to: permit2Authorization.witness.to,
-        validAfter: BigInt(permit2Authorization.witness.validAfter),
-        extra: permit2Authorization.witness.extra,
-      },
-    };
-
-    // Sign using EIP-712
-    return this.signer.signTypedData({
-      domain,
-      types,
-      primaryType: "PermitWitnessTransferFrom",
-      message,
-    });
   }
 }
 
 /**
  * Creates a random 256-bit nonce for Permit2.
- * Permit2 uses uint256 nonces (not bytes32 like EIP-3009).
- *
- * @returns A string representation of the random nonce
  */
 export function createPermit2Nonce(): string {
   const randomBytes = crypto.getRandomValues(new Uint8Array(32));
   return BigInt(toHex(randomBytes)).toString();
 }
-
-export type Permit2Payload = {
-  signature: `0x${string}`;
-  permit2Authorization: Permit2Authorization & {
-    from: `0x${string}`;
-  };
-};

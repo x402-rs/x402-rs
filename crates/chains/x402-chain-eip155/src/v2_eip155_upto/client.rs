@@ -52,8 +52,8 @@ pub struct Permit2UptoSigningParams {
     pub max_amount: U256,
     /// Maximum timeout in seconds for the authorization validity window
     pub max_timeout_seconds: u64,
-    /// Optional extra data to include in the witness
-    pub extra: Option<Vec<u8>>,
+    /// The facilitator address authorized to settle this payment
+    pub facilitator: Address,
 }
 
 /// Signs a Permit2 PermitWitnessTransferFrom for the upto scheme using EIP-712.
@@ -96,8 +96,8 @@ pub async fn sign_permit2_upto_authorization<S: SignerLike + Sync>(
         deadline: U256::from(deadline.as_secs()),
         witness: x402BasePermit2Proxy::Witness {
             to: params.pay_to,
+            facilitator: params.facilitator,
             validAfter: U256::from(valid_after.as_secs()),
-            extra: params.extra.clone().unwrap_or_default().into(),
         },
     };
 
@@ -118,8 +118,8 @@ pub async fn sign_permit2_upto_authorization<S: SignerLike + Sync>(
         },
         spender: UPTO_PERMIT2_PROXY_ADDRESS.into(),
         witness: UptoPermit2Witness {
-            extra: permit_witness_transfer_from.witness.extra.clone(),
             to: params.pay_to.into(),
+            facilitator: params.facilitator.into(),
             valid_after,
         },
     };
@@ -231,14 +231,30 @@ where
     S: Sync + SignerLike,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
-        // Build the payment payload for Permit2 upto
+        // FIXME This should be a struct parsing
+        // The server must provide the facilitator address via requirements.extra.facilitatorAddress
+        let facilitator = self
+            .requirements
+            .extra
+            .as_ref()
+            .and_then(|e| e.get("facilitatorAddress"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                X402Error::SigningError(
+                    "upto scheme requires facilitatorAddress in payment requirements extra"
+                        .to_string(),
+                )
+            })?
+            .parse::<Address>()
+            .map_err(|e| X402Error::SigningError(format!("invalid facilitatorAddress: {e}")))?;
+
         let params = Permit2UptoSigningParams {
             chain_id: self.chain_reference.inner(),
             asset_address: self.requirements.asset.0,
             pay_to: self.requirements.pay_to.into(),
             max_amount: self.requirements.amount,
             max_timeout_seconds: self.requirements.max_timeout_seconds,
-            extra: None,
+            facilitator,
         };
 
         let permit2_payload = sign_permit2_upto_authorization(&self.signer, &params).await?;

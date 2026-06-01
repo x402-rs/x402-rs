@@ -1,20 +1,14 @@
 //! Server-side price tag generation for V2 EIP-155 upto scheme.
 //!
-//! This module provides functionality for servers to create V2 price tags
-//! for the "upto" payment scheme. Unlike the exact scheme, upto allows clients
-//! to authorize a maximum amount, with the actual settled amount determined
-//! at settlement time based on resource consumption.
-//!
-//! # Note on Extra Field
-//!
-//! The upto scheme is Permit2-only and does not require token name/version in the
-//! extra field. Permit2's EIP-712 domain always uses `name: "Permit2"` regardless
-//! of the token. The `UptoExtra` type exists for type compatibility but its fields
-//! are not consumed by the client or facilitator.
+//! The upto price tag includes an enricher that injects the facilitator's address
+//! into the payment requirements `extra` field. The client reads this address and
+//! embeds it in the Permit2 witness so only the authorized facilitator can settle.
+
+use std::sync::Arc;
 
 use alloy_primitives::U256;
 use x402_types::chain::{ChainId, DeployedTokenAmount};
-use x402_types::proto::v2;
+use x402_types::proto::{self, v2}; // FIXME No self
 
 use crate::V2Eip155Upto;
 use crate::chain::{ChecksummedAddress, Eip155TokenDeployment};
@@ -23,42 +17,15 @@ use crate::v2_eip155_upto::types::UptoScheme;
 impl V2Eip155Upto {
     /// Creates a V2 price tag for an upto payment on an EVM chain.
     ///
-    /// This function generates a V2 price tag that specifies the maximum payment
-    /// amount for a resource. The client will authorize up to this amount, and the
-    /// server can settle for any amount less than or equal to the maximum based on
-    /// actual resource consumption.
-    ///
-    /// # Parameters
-    ///
-    /// - `pay_to`: The recipient address (can be any type convertible to [`ChecksummedAddress`])
-    /// - `asset`: The token deployment and maximum amount authorized
-    ///
-    /// # Returns
-    ///
-    /// A [`v2::PriceTag`] that can be included in a `PaymentRequired` response.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use x402_chain_eip155::{V2Eip155Upto, KnownNetworkEip155};
-    /// use x402_types::networks::USDC;
-    ///
-    /// let usdc = USDC::base();
-    /// let price_tag = V2Eip155Upto::price_tag(
-    ///     "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-    ///     usdc.amount(5_000_000u64), // Up to 5 USDC
-    /// );
-    /// ```
-    // TODO Server support for upto variable scheme is missing
+    /// The returned price tag includes an enricher that populates
+    /// `extra.facilitatorAddress` from the facilitator's `supported()` response,
+    /// which is required by the client when signing the Permit2 witness.
     #[allow(dead_code)] // Public for consumption by downstream crates.
     pub fn price_tag<A: Into<ChecksummedAddress>>(
         pay_to: A,
         asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,
     ) -> v2::PriceTag {
         let chain_id: ChainId = asset.token.chain_reference.into();
-
-        // Upto scheme is Permit2-only and doesn't need extra data
-        // The EIP-712 domain for Permit2 is always "Permit2", not the token's name/version
         let requirements = v2::PaymentRequirements {
             scheme: UptoScheme.to_string(),
             pay_to: pay_to.into().to_string(),
@@ -70,7 +37,54 @@ impl V2Eip155Upto {
         };
         v2::PriceTag {
             requirements,
-            enricher: None,
+            enricher: Some(Arc::new(upto_facilitator_address_enricher)),
+        }
+    }
+}
+
+/// Enricher that copies `facilitatorAddress` from the facilitator's `supported()` extra
+/// into the price tag's payment requirements extra field.
+pub fn upto_facilitator_address_enricher(
+    price_tag: &mut v2::PriceTag,
+    capabilities: &proto::SupportedResponse,
+) {
+    // FIXME The struct for upto extra, same as elsewhere
+    if price_tag
+        .requirements
+        .extra
+        .as_ref()
+        .and_then(|e| e.get("facilitatorAddress"))
+        .is_some()
+    {
+        return;
+    }
+
+    let facilitator_address = capabilities
+        .kinds
+        .iter()
+        .find(|kind| {
+            v2::X402Version2 == kind.x402_version
+                && kind.scheme == UptoScheme.to_string()
+                && kind.network == price_tag.requirements.network.to_string()
+        })
+        .and_then(|kind| kind.extra.as_ref())
+        .and_then(|extra| extra.get("facilitatorAddress"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    if let Some(addr) = facilitator_address {
+        let extra = price_tag
+            .requirements
+            .extra
+            .get_or_insert_with(serde_json::Value::default);
+        if let serde_json::Value::Null = extra {
+            *extra = serde_json::json!({});
+        }
+        if let serde_json::Value::Object(map) = extra {
+            map.insert(
+                "facilitatorAddress".to_string(),
+                serde_json::Value::String(addr),
+            );
         }
     }
 }

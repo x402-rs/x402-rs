@@ -56,8 +56,8 @@ impl PreparedUptoPermit2 {
             deadline: U256::from(authorization.deadline.as_secs()),
             witness: x402BasePermit2Proxy::Witness {
                 to: authorization.witness.to.into(),
+                facilitator: authorization.witness.facilitator.into(),
                 validAfter: U256::from(authorization.witness.valid_after.as_secs()),
-                extra: Default::default(),
             },
         };
         let eip712_hash = permit_witness_transfer_from.eip712_signing_hash(&domain);
@@ -92,8 +92,24 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     // 1. Verify offchain constraints
     let required_amount = assert_offchain_valid_verify(payment_payload, payment_requirements)?;
 
-    // 2. Verify onchain constraints
+    // 2. Verify the witness.facilitator is one of this facilitator's signer addresses
     let authorization = &payment_payload.payload.permit_2_authorization;
+    let witness_facilitator = authorization.witness.facilitator.0;
+    // FIXME This is ugly, should be more idiomatic
+    let is_our_facilitator = provider
+        .signer_addresses()
+        .iter()
+        .filter_map(|s| s.parse::<alloy_primitives::Address>().ok())
+        .any(|addr| addr == witness_facilitator);
+    if !is_our_facilitator {
+        return Err(PaymentVerificationError::InvalidSignature(
+            "witness.facilitator does not match any of this facilitator's signer addresses"
+                .to_string(),
+        )
+        .into());
+    }
+
+    // 3. Verify onchain constraints
     let payer = authorization.from;
     assert_onchain_upto_permit2(
         provider.inner(),

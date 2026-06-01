@@ -58,14 +58,14 @@
             "internalType": "address"
           },
           {
+            "name": "facilitator",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
             "name": "validAfter",
             "type": "uint256",
             "internalType": "uint256"
-          },
-          {
-            "name": "extra",
-            "type": "bytes",
-            "internalType": "bytes"
           }
         ]
       },
@@ -169,14 +169,14 @@
             "internalType": "address"
           },
           {
+            "name": "facilitator",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
             "name": "validAfter",
             "type": "uint256",
             "internalType": "uint256"
-          },
-          {
-            "name": "extra",
-            "type": "bytes",
-            "internalType": "bytes"
           }
         ]
       },
@@ -208,12 +208,37 @@
   },
   {
     "type": "error",
+    "name": "InvalidDestination",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPermit2Address",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PaymentTooEarly",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Permit2612AmountMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ReentrancyGuardReentrantCall",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "TooEarly",
+    "name": "UnauthorizedFacilitator",
     "inputs": []
   }
 ]

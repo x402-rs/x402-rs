@@ -99,11 +99,16 @@ where
 
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
+        let signer_addresses = self.provider.signer_addresses();
+        // FIXME This should be random or what? why just one??
+        let facilitator_address = signer_addresses.into_iter().next();
+        // FIXME This should be the same struct as in client side
+        let extra = facilitator_address.map(|addr| serde_json::json!({"facilitatorAddress": addr}));
         let kinds = vec![proto::SupportedPaymentKind {
             x402_version: v2::X402Version2.into(),
             scheme: types::UptoScheme.to_string(),
             network: chain_id.clone().into(),
-            extra: None,
+            extra,
         }];
         let signers = {
             let mut signers = HashMap::with_capacity(1);
