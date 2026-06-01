@@ -966,7 +966,14 @@ where
     tx_hash_from_receipt(&receipt)
 }
 
-// FIXME Docs
+/// Extracts the transaction hash from a confirmed receipt, or returns an error if the
+/// transaction reverted.
+///
+/// Alloy's [`TransactionReceipt`] always contains a hash, but a receipt with
+/// `status = false` means the EVM execution reverted (e.g. the token transfer was
+/// rejected). This helper centralises that check so callers can treat a reverted
+/// receipt as an [`Eip155ExactError::TransactionReverted`] rather than silently
+/// returning the hash of a failed transaction.
 pub fn tx_hash_from_receipt(receipt: &TransactionReceipt) -> Result<TxHash, Eip155ExactError> {
     let success = receipt.status();
     if success {
