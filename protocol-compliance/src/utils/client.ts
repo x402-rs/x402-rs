@@ -11,7 +11,7 @@ import { base58 } from "@scure/base";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { baseSepoliaPreconf } from "viem/chains";
 import { ERC20_ABI, ERC20_APPROVE_ABI } from "./erc-abi";
-import { UptoEvmSchemeClient } from "./upto-evm-scheme";
+import { UptoEvmScheme } from "@x402/evm/upto/client";
 
 export async function invokeRustClient(
   endpoint: URL,
@@ -81,7 +81,7 @@ export async function makeFetch(
   switch (chain) {
     case "eip155": {
       client.register("eip155:*", new ExactEvmScheme(EIP155_ACCOUNT));
-      client.register("eip155:*", new UptoEvmSchemeClient(EIP155_ACCOUNT));
+      client.register("eip155:*", new UptoEvmScheme(EIP155_ACCOUNT));
       break;
     }
     case "solana": {

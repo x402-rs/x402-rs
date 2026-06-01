@@ -12,10 +12,8 @@ import { ProcessHandle } from "./process-handle";
 import { waitForUrl } from "./waitFor";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
 import getPort from "get-port";
-import { UptoEvmSchemeServer } from "./upto-evm-scheme";
-import { AsyncLocalStorage } from "node:async_hooks";
+import { UptoEvmScheme } from "@x402/evm/upto/server";
 import { paymentRequired } from "./payment-required";
-import { PaymentOption } from "@x402/core/http";
 
 export const ROUTES = {
   "/static-price-v2": {
@@ -160,7 +158,7 @@ export class TSServerHandle {
     });
     const resourceServer = new x402ResourceServer(facilitatorClient)
       .register("eip155:84532", new ExactEvmScheme())
-      .register("eip155:84532", new UptoEvmSchemeServer())
+      .register("eip155:84532", new UptoEvmScheme())
       .register(
         "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
         new ExactSvmScheme(),
