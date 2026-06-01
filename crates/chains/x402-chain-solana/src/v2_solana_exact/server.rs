@@ -5,7 +5,6 @@ use x402_types::proto::v2;
 
 use crate::V2SolanaExact;
 use crate::chain::{Address, SolanaTokenDeployment};
-use crate::v1_solana_exact::SupportedPaymentKindExtra;
 use crate::v1_solana_exact::types::ExactScheme;
 
 impl V2SolanaExact {
@@ -49,11 +48,7 @@ pub fn solana_fee_payer_enricher_v2(
                 && kind.scheme == ExactScheme.to_string()
                 && kind.network == price_tag.requirements.network.to_string()
         })
-        .and_then(|kind| kind.extra.as_ref())
-        .and_then(|extra| serde_json::from_value::<SupportedPaymentKindExtra>(extra.clone()).ok());
+        .and_then(|kind| kind.extra.clone());
 
-    // Serialize the whole extra back to Value
-    if let Some(extra) = extra {
-        price_tag.requirements.extra = serde_json::to_value(&extra).ok();
-    }
+    price_tag.requirements.extra = extra;
 }
