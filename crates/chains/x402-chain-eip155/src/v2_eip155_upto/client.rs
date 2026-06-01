@@ -32,11 +32,11 @@ use crate::chain::permit2::{
     UPTO_PERMIT2_PROXY_ADDRESS, UptoPermit2Payload, UptoPermit2Witness,
 };
 use crate::v1_eip155_exact::client::SignerLike;
-use crate::v2_eip155_upto::V2Eip155Upto;
 use crate::v2_eip155_upto::types;
 use crate::v2_eip155_upto::types::{
     ISignatureTransfer, PermitWitnessTransferFrom, x402BasePermit2Proxy,
 };
+use crate::v2_eip155_upto::{UptoSupportedExtra, V2Eip155Upto};
 
 /// Parameters for signing a Permit2 upto authorization.
 #[derive(Debug, Clone)]
@@ -231,22 +231,18 @@ where
     S: Sync + SignerLike,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
-        // FIXME This should be a struct parsing
         // The server must provide the facilitator address via requirements.extra.facilitatorAddress
-        let facilitator = self
-            .requirements
-            .extra
-            .as_ref()
-            .and_then(|e| e.get("facilitatorAddress"))
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                X402Error::SigningError(
+        let extra =
+            self.requirements.extra.as_ref().and_then(|v| {
+                serde_json::from_value::<UptoSupportedExtra<Address>>(v.clone()).ok()
+            });
+        let facilitator_address =
+            extra
+                .map(|extra| extra.facilitator_address)
+                .ok_or(X402Error::SigningError(
                     "upto scheme requires facilitatorAddress in payment requirements extra"
                         .to_string(),
-                )
-            })?
-            .parse::<Address>()
-            .map_err(|e| X402Error::SigningError(format!("invalid facilitatorAddress: {e}")))?;
+                ))?;
 
         let params = Permit2UptoSigningParams {
             chain_id: self.chain_reference.inner(),
@@ -254,7 +250,7 @@ where
             pay_to: self.requirements.pay_to.into(),
             max_amount: self.requirements.amount,
             max_timeout_seconds: self.requirements.max_timeout_seconds,
-            facilitator,
+            facilitator: facilitator_address,
         };
 
         let permit2_payload = sign_permit2_upto_authorization(&self.signer, &params).await?;
