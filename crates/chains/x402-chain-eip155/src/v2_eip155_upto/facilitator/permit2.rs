@@ -158,7 +158,6 @@ where
 
     // 2. Handle zero settlement - no on-chain transaction needed
     // Allowing $0 settlements means unused authorizations naturally expire without on-chain transactions, reducing gas costs and blockchain bloat
-    // TODO Document this
     if required_amount.is_zero() {
         let network = &payment_payload.accepted.network;
         return Ok(UptoSettleResponse::success(
