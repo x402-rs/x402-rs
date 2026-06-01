@@ -93,7 +93,7 @@ where
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
-        let request = types::VerifyRequest::from_proto(request.clone())?;
+        let request = types::VerifyRequest::try_from(request)?;
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
         let (contract, payment, eip712_domain) = assert_valid_payment(
@@ -114,7 +114,7 @@ where
         &self,
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError> {
-        let request = types::SettleRequest::from_proto(request.clone())?;
+        let request = types::SettleRequest::try_from(request)?;
         let payload = &request.payment_payload;
         let requirements = &request.payment_requirements;
         let (contract, payment, eip712_domain) = assert_valid_payment(
