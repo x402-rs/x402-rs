@@ -12,7 +12,10 @@ use tracing::instrument;
 
 use crate::chain::erc20::IERC20;
 use crate::chain::permit2::{PERMIT2_ADDRESS, UPTO_PERMIT2_PROXY_ADDRESS};
-use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction};
+use crate::chain::{
+    Eip155ChainReference, Eip155MetaTransactionProvider, HavingEip155SignerAddresses,
+    MetaTransaction,
+};
 use crate::v1_eip155_exact::{
     Eip155ExactError, StructuredSignature, VALIDATOR_ADDRESS, Validator6492, assert_time,
 };
@@ -84,7 +87,9 @@ impl PreparedUptoPermit2 {
 }
 
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
-pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProviderOps>(
+pub async fn verify_permit2_payment<
+    P: Eip155MetaTransactionProvider + HavingEip155SignerAddresses,
+>(
     provider: &P,
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
@@ -93,13 +98,11 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     let required_amount = assert_offchain_valid_verify(payment_payload, payment_requirements)?;
 
     // 2. Verify the witness.facilitator is one of this facilitator's signer addresses
+    // FIXME This should be moved to own assert function
     let authorization = &payment_payload.payload.permit_2_authorization;
-    let witness_facilitator = authorization.witness.facilitator.0;
-    // FIXME This is ugly, should be more idiomatic
+    let witness_facilitator = &authorization.witness.facilitator;
     let is_our_facilitator = provider
         .signer_addresses()
-        .iter()
-        .filter_map(|s| s.parse::<alloy_primitives::Address>().ok())
         .any(|addr| addr == witness_facilitator);
     if !is_our_facilitator {
         return Err(PaymentVerificationError::InvalidSignature(

@@ -7,7 +7,7 @@
 pub mod permit2;
 
 use alloy_provider::Provider;
-use rand::seq::IndexedRandom;
+use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto;
@@ -17,13 +17,18 @@ use x402_types::scheme::{
 };
 
 use crate::V2Eip155Upto;
-use crate::chain::Eip155MetaTransactionProvider;
+use crate::chain::{Eip155MetaTransactionProvider, HavingEip155SignerAddresses};
 use crate::v1_eip155_exact::facilitator::Eip155ExactError;
 use crate::v2_eip155_upto::types;
 
 impl<P> X402SchemeFacilitatorBuilder<P> for V2Eip155Upto
 where
-    P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync + 'static,
+    P: Eip155MetaTransactionProvider
+        + ChainProviderOps
+        + HavingEip155SignerAddresses
+        + Send
+        + Sync
+        + 'static,
     Eip155ExactError: From<P::Error>,
 {
     fn build(
@@ -66,7 +71,7 @@ impl<P> V2Eip155UptoFacilitator<P> {
 #[async_trait::async_trait]
 impl<P> X402SchemeFacilitator for V2Eip155UptoFacilitator<P>
 where
-    P: Eip155MetaTransactionProvider + ChainProviderOps + Send + Sync,
+    P: Eip155MetaTransactionProvider + ChainProviderOps + HavingEip155SignerAddresses + Send + Sync,
     P::Inner: Provider,
     Eip155ExactError: From<P::Error>,
 {
@@ -101,7 +106,7 @@ where
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
 
-        let signer_addresses = self.provider.signer_addresses();
+        let signer_addresses = HavingEip155SignerAddresses::signer_addresses(&self.provider);
         let mut rng = rand::rng();
         let facilitator_address = signer_addresses.choose(&mut rng);
         let extra = facilitator_address
@@ -118,7 +123,8 @@ where
         }];
         let signers = {
             let mut signers = HashMap::with_capacity(1);
-            signers.insert(chain_id, self.provider.signer_addresses());
+            let signer_addresses = ChainProviderOps::signer_addresses(&self.provider);
+            signers.insert(chain_id, signer_addresses);
             signers
         };
         Ok(proto::SupportedResponse {
