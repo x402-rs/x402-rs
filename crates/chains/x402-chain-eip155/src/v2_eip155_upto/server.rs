@@ -8,7 +8,8 @@ use std::sync::Arc;
 
 use alloy_primitives::U256;
 use x402_types::chain::{ChainId, DeployedTokenAmount};
-use x402_types::proto::{self, v2}; // FIXME No self
+use x402_types::proto;
+use x402_types::proto::v2;
 
 use crate::V2Eip155Upto;
 use crate::chain::{ChecksummedAddress, Eip155TokenDeployment};
