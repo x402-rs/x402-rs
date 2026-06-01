@@ -162,7 +162,7 @@ pub async fn assert_onchain_exact_permit2_with_eip2612<P: Provider>(
 
     let sig_bytes: Bytes = match &structured_signature {
         StructuredSignature::EIP6492 { inner, .. } => inner.clone(),
-        StructuredSignature::EOA(sig) => sig.as_bytes().into(),
+        StructuredSignature::EOA(sig) => sig.as_ref().as_bytes().into(),
         StructuredSignature::EIP1271(sig) => sig.clone(),
     };
 

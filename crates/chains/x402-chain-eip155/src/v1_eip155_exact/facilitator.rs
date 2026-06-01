@@ -35,8 +35,8 @@ use tracing_core::Level;
 
 use crate::V1Eip155Exact;
 use crate::chain::{
-    EOASignatureExt, Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction,
-    MetaTransactionSendError,
+    EOASignature, EOASignatureExt, Eip155ChainReference, Eip155MetaTransactionProvider,
+    MetaTransaction, MetaTransactionSendError,
 };
 use crate::v1_eip155_exact::{
     ExactScheme, PaymentRequirementsExtra, TransferWithAuthorization, types,
@@ -463,7 +463,7 @@ pub enum StructuredSignature {
     },
     /// Normalized EOA signature.
     #[allow(clippy::upper_case_acronyms)]
-    EOA(Signature),
+    EOA(EOASignature),
     /// A plain EIP-1271 or EOA signature (no 6492 wrappers).
     EIP1271(Bytes),
 }
@@ -528,7 +528,7 @@ impl StructuredSignature {
                         .map(|r| r == expected_signer)
                         .unwrap_or(false);
                     if is_expected_signer {
-                        StructuredSignature::EOA(s)
+                        StructuredSignature::EOA(EOASignature::new(s))
                     } else {
                         StructuredSignature::EIP1271(bytes)
                     }
@@ -794,7 +794,8 @@ pub async fn verify_payment<P: Provider>(
         }
         StructuredSignature::EOA(signature) => {
             // It is EOA signature, which we can pass to the transfer simulation of (r,s,v)-based transferWithAuthorization function
-            let transfer_call = TransferWithAuthorization1Call::new(contract, payment, signature);
+            let transfer_call =
+                TransferWithAuthorization1Call::new(contract, payment, signature.into());
             let transfer_call = transfer_call.0;
             let transfer_call_fut = transfer_call.tx.call().into_future();
             #[cfg(feature = "telemetry")]
@@ -934,7 +935,8 @@ where
             receipt
         }
         StructuredSignature::EOA(signature) => {
-            let transfer_call = TransferWithAuthorization1Call::new(contract, payment, signature);
+            let transfer_call =
+                TransferWithAuthorization1Call::new(contract, payment, signature.into());
             let transfer_call = transfer_call.0;
             // transferWithAuthorization with EOA signature
             let meta_tx = MetaTransaction::new(

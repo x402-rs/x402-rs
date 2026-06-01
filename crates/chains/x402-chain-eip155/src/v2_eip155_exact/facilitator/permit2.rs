@@ -300,7 +300,7 @@ where
             }
         }
         StructuredSignature::EOA(signature) => {
-            let settle_call = build_call(signature.as_bytes().into());
+            let settle_call = build_call(signature.as_ref().as_bytes().into());
             let tx_fut = Eip155MetaTransactionProvider::send_transaction(provider, settle_call);
             #[cfg(feature = "telemetry")]
             let receipt = tx_fut
@@ -454,7 +454,7 @@ pub async fn assert_onchain_exact_permit2<P: Provider>(
                 permit_transfer_from,
                 payer,
                 witness,
-                signature.as_bytes().into(),
+                signature.as_ref().as_bytes().into(),
             );
             let settle_call_fut = settle_call.call().into_future();
             #[cfg(feature = "telemetry")]

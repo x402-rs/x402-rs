@@ -427,12 +427,38 @@ impl Eip155TokenDeployment {
     }
 }
 
+/// A newtype wrapper around an alloy [`Signature`] that serializes/deserializes as a
+/// `0x`-prefixed 65-byte hex string (the canonical Ethereum externally-owned-account
+/// signature encoding: `r || s || v`).
+///
+/// Use this type wherever a payment payload or authorization struct needs to carry an
+/// EOA signature over the wire as JSON. The inner [`Signature`] is accessible via
+/// [`AsRef`], and the individual `r`, `s`, `v` components are available through the
+/// [`EOASignatureExt`] trait.
 #[derive(Debug, Clone, Copy)]
-pub struct EOASignature(Signature); // FIXME Add to EOA variant
+pub struct EOASignature(Signature);
+
+impl EOASignature {
+    pub fn new(sig: Signature) -> Self {
+        Self(sig)
+    }
+}
 
 impl AsRef<Signature> for EOASignature {
     fn as_ref(&self) -> &Signature {
         &self.0
+    }
+}
+
+impl From<EOASignature> for Signature {
+    fn from(sig: EOASignature) -> Self {
+        sig.0
+    }
+}
+
+impl From<Signature> for EOASignature {
+    fn from(sig: Signature) -> Self {
+        Self(sig)
     }
 }
 
@@ -487,9 +513,17 @@ impl<'de> Deserialize<'de> for EOASignature {
     }
 }
 
+/// Extension trait for extracting the raw `r`, `s`, and `v` components from an Ethereum
+/// signature in the legacy encoding expected by EIP-2612 `permit()` and similar contracts.
+///
+/// Implemented for both [`EOASignature`] and the underlying alloy [`Signature`].
 pub trait EOASignatureExt {
+    /// Returns the `r` component as a 32-byte big-endian value.
     fn r_bytes(&self) -> B256;
+    /// Returns the `s` component as a 32-byte big-endian value.
     fn s_bytes(&self) -> B256;
+    /// Returns the recovery identifier in legacy form (`27` or `28`), as expected by
+    /// Solidity's `ecrecover` and EIP-2612 `permit()`.
     fn v_legacy(&self) -> u8;
 }
 

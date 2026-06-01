@@ -340,7 +340,7 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
                 authorization.permitted.amount,
                 payer,
                 witness,
-                signature.as_bytes().into(),
+                signature.as_ref().as_bytes().into(),
             );
             let settle_call_fut = settle_call.call().into_future();
             #[cfg(feature = "telemetry")]
