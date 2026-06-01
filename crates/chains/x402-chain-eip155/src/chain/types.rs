@@ -81,6 +81,12 @@ impl PartialEq<ChecksummedAddress> for Address {
     }
 }
 
+impl AsRef<Address> for ChecksummedAddress {
+    fn as_ref(&self) -> &Address {
+        &self.0
+    }
+}
+
 /// A `U256` amount that serializes/deserializes as a decimal string.
 ///
 /// The x402 V2 wire format encodes payment amounts as decimal strings

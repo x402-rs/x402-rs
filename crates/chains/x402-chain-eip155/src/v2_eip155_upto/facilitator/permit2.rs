@@ -1,4 +1,4 @@
-use alloy_primitives::{Bytes, TxHash, U256};
+use alloy_primitives::{Address, Bytes, TxHash, U256};
 use alloy_provider::{MulticallItem, Provider};
 use alloy_sol_types::{SolStruct, eip712_domain};
 use x402_types::chain::ChainProviderOps;
@@ -95,19 +95,9 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + Eip155Sig
     let required_amount = assert_offchain_valid_verify(payment_payload, payment_requirements)?;
 
     // 2. Verify the witness.facilitator is one of this facilitator's signer addresses
-    // FIXME This should be moved to own assert function
     let authorization = &payment_payload.payload.permit_2_authorization;
     let witness_facilitator = &authorization.witness.facilitator;
-    let is_our_facilitator = provider
-        .signer_addresses()
-        .any(|addr| addr == witness_facilitator);
-    if !is_our_facilitator {
-        return Err(PaymentVerificationError::InvalidSignature(
-            "witness.facilitator does not match any of this facilitator's signer addresses"
-                .to_string(),
-        )
-        .into());
-    }
+    assert_own_signer(provider, witness_facilitator.as_ref())?;
 
     // 3. Verify onchain constraints
     let payer = authorization.from;
@@ -120,6 +110,30 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + Eip155Sig
     .await?;
 
     Ok(v2::VerifyResponse::valid(payer.to_string()))
+}
+
+/// Returns `Ok(())` if `witness_facilitator` matches one of the provider's own signer addresses,
+/// or an [`PaymentVerificationError::InvalidSignature`] error otherwise.
+///
+/// Called during verification to reject payments whose Permit2 witness names a different
+/// facilitator — preventing this facilitator from accidentally settling a payment that was
+/// authorized for a different one.
+pub fn assert_own_signer<P>(
+    provider: &P,
+    witness_facilitator: &Address,
+) -> Result<(), PaymentVerificationError>
+where
+    P: Eip155SignerAddresses,
+{
+    let mut signer_addresses = provider.signer_addresses();
+    let is_ours = signer_addresses.any(|addr| addr == witness_facilitator);
+    if is_ours {
+        Ok(())
+    } else {
+        Err(PaymentVerificationError::InvalidSignature(format!(
+            "witness facilitator address {witness_facilitator} does not match any of this facilitator's signer addresses"
+        )))
+    }
 }
 
 /// Settle a upto permit2 payment with a specific amount.
