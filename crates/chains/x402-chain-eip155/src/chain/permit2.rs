@@ -4,16 +4,13 @@ use x402_types::timestamp::UnixTimestamp;
 
 use crate::chain::ChecksummedAddress;
 
-// TODO configurable address per chain
-/// The canonical Permit2 contract address deployed on most chains.
+/// The canonical Permit2 contract address.
 pub const PERMIT2_ADDRESS: Address = address!("0x000000000022D473030F116dDEE9F6B43aC78BA3");
 
-// TODO configurable address per chain
 /// The X402 ExactPermit2Proxy contract address for settling Permit2 payments.
 pub const EXACT_PERMIT2_PROXY_ADDRESS: Address =
     address!("0x402085c248EeA27D92E8b30b2C58ed07f9E20001");
 
-// TODO configurable address per chain
 /// The X402 UptoPermit2Proxy contract address for settling Permit2 payments with variable amounts.
 /// This contract allows settling for any amount up to the permitted maximum.
 pub const UPTO_PERMIT2_PROXY_ADDRESS: Address =
