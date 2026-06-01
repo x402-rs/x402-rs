@@ -13,6 +13,7 @@ use x402_types::proto::v2;
 
 use crate::V2Eip155Upto;
 use crate::chain::{ChecksummedAddress, Eip155TokenDeployment};
+use crate::v2_eip155_upto::UptoSupportedExtra;
 use crate::v2_eip155_upto::types::UptoScheme;
 
 impl V2Eip155Upto {
@@ -49,18 +50,11 @@ pub fn upto_facilitator_address_enricher(
     price_tag: &mut v2::PriceTag,
     capabilities: &proto::SupportedResponse,
 ) {
-    // FIXME The struct for upto extra, same as elsewhere
-    if price_tag
-        .requirements
-        .extra
-        .as_ref()
-        .and_then(|e| e.get("facilitatorAddress"))
-        .is_some()
-    {
+    if price_tag.requirements.extra.is_some() {
         return;
     }
 
-    let facilitator_address = capabilities
+    let supported_extra = capabilities
         .kinds
         .iter()
         .find(|kind| {
@@ -69,23 +63,9 @@ pub fn upto_facilitator_address_enricher(
                 && kind.network == price_tag.requirements.network.to_string()
         })
         .and_then(|kind| kind.extra.as_ref())
-        .and_then(|extra| extra.get("facilitatorAddress"))
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .and_then(|v| serde_json::from_value::<UptoSupportedExtra>(v.clone()).ok());
 
-    if let Some(addr) = facilitator_address {
-        let extra = price_tag
-            .requirements
-            .extra
-            .get_or_insert_with(serde_json::Value::default);
-        if let serde_json::Value::Null = extra {
-            *extra = serde_json::json!({});
-        }
-        if let serde_json::Value::Object(map) = extra {
-            map.insert(
-                "facilitatorAddress".to_string(),
-                serde_json::Value::String(addr),
-            );
-        }
+    if let Some(extra) = supported_extra {
+        price_tag.requirements.extra = serde_json::to_value(extra).ok();
     }
 }
