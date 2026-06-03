@@ -1,6 +1,45 @@
 [
   {
     "type": "function",
+    "name": "PERMIT2",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract ISignatureTransfer"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "WITNESS_TYPEHASH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "WITNESS_TYPE_STRING",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "settle",
     "inputs": [
       {
@@ -50,7 +89,7 @@
       {
         "name": "witness",
         "type": "tuple",
-        "internalType": "struct x402BasePermit2Proxy.Witness",
+        "internalType": "struct x402UptoPermit2Proxy.Witness",
         "components": [
           {
             "name": "to",
@@ -85,7 +124,7 @@
       {
         "name": "permit2612",
         "type": "tuple",
-        "internalType": "struct x402BasePermit2Proxy.EIP2612Permit",
+        "internalType": "struct x402UptoPermit2Proxy.EIP2612Permit",
         "components": [
           {
             "name": "value",
@@ -161,7 +200,7 @@
       {
         "name": "witness",
         "type": "tuple",
-        "internalType": "struct x402BasePermit2Proxy.Witness",
+        "internalType": "struct x402UptoPermit2Proxy.Witness",
         "components": [
           {
             "name": "to",
