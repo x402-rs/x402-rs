@@ -13787,7 +13787,7 @@ dependencies = [
 
 [[package]]
 name = "x402-axum"
-version = "1.5.5"
+version = "1.5.6"
 dependencies = [
  "alloy-primitives",
  "axum 0.8.9",
@@ -13826,7 +13826,7 @@ dependencies = [
 
 [[package]]
 name = "x402-chain-aptos"
-version = "1.5.5"
+version = "1.5.6"
 dependencies = [
  "aptos-crypto",
  "aptos-rest-client",
@@ -13845,7 +13845,7 @@ dependencies = [
 
 [[package]]
 name = "x402-chain-eip155"
-version = "1.5.5"
+version = "1.5.6"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -13874,7 +13874,7 @@ dependencies = [
 
 [[package]]
 name = "x402-chain-solana"
-version = "1.5.5"
+version = "1.5.6"
 dependencies = [
  "alloy-primitives",
  "async-trait",
@@ -13906,7 +13906,7 @@ dependencies = [
 
 [[package]]
 name = "x402-facilitator"
-version = "1.5.5"
+version = "1.5.6"
 dependencies = [
  "async-trait",
  "axum 0.8.9",
@@ -13926,7 +13926,7 @@ dependencies = [
 
 [[package]]
 name = "x402-facilitator-local"
-version = "1.5.5"
+version = "1.5.6"
 dependencies = [
  "axum 0.8.9",
  "opentelemetry 0.32.0",
@@ -13948,7 +13948,7 @@ dependencies = [
 
 [[package]]
 name = "x402-reqwest"
-version = "1.5.5"
+version = "1.5.6"
 dependencies = [
  "alloy-signer-local",
  "async-trait",
@@ -13978,7 +13978,7 @@ dependencies = [
 
 [[package]]
 name = "x402-types"
-version = "1.5.5"
+version = "1.5.6"
 dependencies = [
  "alloy-primitives",
  "async-trait",
