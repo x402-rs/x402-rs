@@ -39,13 +39,13 @@ pub trait Permit2PaymentPayloadExt {
     /// Returns `Err` if the extension is present but malformed.
     fn eip2612_gas_sponsoring(&self) -> Option<Eip2612GasSponsoringInfo>;
 
-    // FIXME Doc comments
+    /// The ERC-20 token address that this payment accepts.
     fn accepted_asset(&self) -> &Address;
 
-    // FIXME Doc comments
+    /// The address that signed the Permit2 authorization (the payer).
     fn authorization_from(&self) -> &Address;
 
-    // FIXME Doc comments
+    /// The deadline after which the Permit2 authorization expires.
     fn authorization_deadline(&self) -> &UnixTimestamp;
 }
 
