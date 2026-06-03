@@ -4,10 +4,12 @@
 //! The upto scheme allows clients to authorize a maximum amount, with the actual settled amount
 //! determined by the server at settlement time based on resource consumption.
 
+pub mod eip2612;
 pub mod permit2;
 
 use alloy_provider::Provider;
 use rand::seq::IndexedRandom;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto;
@@ -20,6 +22,17 @@ use crate::V2Eip155Upto;
 use crate::chain::{Eip155MetaTransactionProvider, Eip155SignerAddresses};
 use crate::v1_eip155_exact::facilitator::Eip155ExactError;
 use crate::v2_eip155_upto::types;
+
+/// Configuration for the V2 EIP-155 upto scheme facilitator.
+///
+/// - `eip2612_gas_sponsoring`: Whether to enable EIP-2612 gas-sponsoring extension.
+///   When enabled, the facilitator supports atomic settlement with EIP-2612 permits,
+///   allowing the payer to have their gas fees covered by the facilitator.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct V2Eip155UptoFacilitatorConfig {
+    #[serde(default)]
+    pub eip2612_gas_sponsoring: bool,
+}
 
 impl<P> X402SchemeFacilitatorBuilder<P> for V2Eip155Upto
 where
@@ -34,9 +47,12 @@ where
     fn build(
         &self,
         provider: P,
-        _config: Option<serde_json::Value>,
+        config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        Ok(Box::new(V2Eip155UptoFacilitator::new(provider)))
+        let config: V2Eip155UptoFacilitatorConfig = config
+            .and_then(|c| serde_json::from_value(c).ok())
+            .unwrap_or_default();
+        Ok(Box::new(V2Eip155UptoFacilitator::new(provider, config)))
     }
 }
 
@@ -59,12 +75,15 @@ where
 ///   and [`ChainProviderOps`]
 pub struct V2Eip155UptoFacilitator<P> {
     provider: P,
+    eip2612_gas_sponsoring: bool,
 }
 
 impl<P> V2Eip155UptoFacilitator<P> {
-    /// Creates a new V2 EIP-155 upto scheme facilitator with the given provider.
-    pub fn new(provider: P) -> Self {
-        Self { provider }
+    pub fn new(provider: P, config: V2Eip155UptoFacilitatorConfig) -> Self {
+        Self {
+            provider,
+            eip2612_gas_sponsoring: config.eip2612_gas_sponsoring,
+        }
     }
 }
 
@@ -82,6 +101,7 @@ where
         let verify_request = types::VerifyRequest::try_from(request)?;
         let verify_response = permit2::verify_permit2_payment(
             &self.provider,
+            self.eip2612_gas_sponsoring,
             &verify_request.payment_payload,
             &verify_request.payment_requirements,
         )
@@ -96,6 +116,7 @@ where
         let settle_request = types::SettleRequest::try_from(request)?;
         let settle_response = permit2::settle_permit2_payment(
             &self.provider,
+            self.eip2612_gas_sponsoring,
             &settle_request.payment_payload,
             &settle_request.payment_requirements,
         )
@@ -106,12 +127,18 @@ where
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
 
+        let mut extensions = vec![];
+        if self.eip2612_gas_sponsoring {
+            extensions.push(eip2612::EXTENSION_KEY.to_string());
+        }
+
         let signer_addresses = Eip155SignerAddresses::signer_addresses(&self.provider);
         let mut rng = rand::rng();
         let facilitator_address = signer_addresses.choose(&mut rng);
         let extra = facilitator_address
             .map(|addr| types::UptoSupportedExtra {
                 facilitator_address: addr,
+                extensions: extensions.clone(),
             })
             .and_then(|extra| serde_json::to_value(extra).ok());
 
@@ -129,7 +156,7 @@ where
         };
         Ok(proto::SupportedResponse {
             kinds,
-            extensions: Vec::new(),
+            extensions,
             signers,
         })
     }
