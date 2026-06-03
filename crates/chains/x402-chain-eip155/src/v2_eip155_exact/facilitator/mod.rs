@@ -69,8 +69,8 @@ pub struct V2Eip155ExactFacilitatorConfig {
 ///   such as EIP-2612 gas sponsoring.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct V2Eip155ExactFacilitatorExtra {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub extensions: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extensions: Vec<String>,
 }
 
 /// Facilitator for V2 EIP-155 exact scheme payments.
@@ -185,7 +185,7 @@ where
             extensions.push(eip2612::EXTENSION_KEY.to_string());
         }
         let extra = V2Eip155ExactFacilitatorExtra {
-            extensions: Some(extensions.clone()),
+            extensions: extensions.clone(),
         };
         let extra = serde_json::to_value(extra).ok();
         let kinds = vec![proto::SupportedPaymentKind {
