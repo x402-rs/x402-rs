@@ -13,7 +13,7 @@ use x402_types::timestamp::UnixTimestamp;
 
 use super::types::{X402UptoPermit2Proxy, x402UptoPermit2Proxy};
 use crate::chain::permit2::UPTO_PERMIT2_PROXY_ADDRESS;
-use crate::chain::{EOASignatureExt, Eip155MetaTransactionProvider, MetaTransaction};
+use crate::chain::{Eip155MetaTransactionProvider, MetaTransaction};
 use crate::v1_eip155_exact::Eip155ExactError;
 use crate::v2_eip155_exact::Eip2612GasSponsoringInfo;
 pub use crate::v2_eip155_exact::eip2612::Permit2PaymentPayloadExt;
