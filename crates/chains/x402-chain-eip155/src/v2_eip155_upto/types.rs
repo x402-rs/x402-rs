@@ -16,11 +16,22 @@ lit_str!(UptoScheme, "upto");
 /// Extra metadata returned by the facilitator's `supported()` endpoint for the upto scheme,
 /// and injected into payment requirements so the client can embed the facilitator address
 /// in the Permit2 witness.
+///
+/// This struct holds additional response data returned by the facilitator's
+/// `supported` method, including supported extensions.
+///
+/// # Fields
+///
+/// - `extensions`: Optional list of supported extension identifiers.
+///   These extensions indicate additional features the facilitator supports,
+///   such as EIP-2612 gas sponsoring.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UptoSupportedExtra<TAddress = String> {
     /// The facilitator address the client must place in `witness.facilitator`.
     pub facilitator_address: TAddress,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extensions: Vec<String>,
 }
 
 /// Type alias for V2 verify requests using the upto EVM payment scheme.
