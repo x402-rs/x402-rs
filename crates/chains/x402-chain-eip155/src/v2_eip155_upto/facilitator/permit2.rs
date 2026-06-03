@@ -18,18 +18,20 @@ use crate::chain::{
 use crate::v1_eip155_exact::{
     Eip155ExactError, StructuredSignature, VALIDATOR_ADDRESS, Validator6492, assert_time,
 };
+use crate::v2_eip155_exact::eip2612::assert_eip2612_offchain_valid;
 use crate::v2_eip155_exact::facilitator::permit2::{
     PreparedPermit2, assert_onchain_allowance, assert_onchain_balance, execute_permit2_settlement,
 };
-use crate::v2_eip155_upto::types;
+use crate::v2_eip155_upto::eip2612::Permit2PaymentPayloadExt;
 use crate::v2_eip155_upto::types::{
     ISignatureTransfer, Permit2PaymentPayload, Permit2PaymentRequirements,
-    PermitWitnessTransferFrom, UptoSettleResponse, X402UptoPermit2Proxy, x402BasePermit2Proxy,
+    PermitWitnessTransferFrom, UptoSettleResponse, X402UptoPermit2Proxy, x402UptoPermit2Proxy,
 };
+use crate::v2_eip155_upto::{eip2612, types};
 
 /// Type alias for the upto-scheme prepared data.
 pub type PreparedUptoPermit2 =
-    PreparedPermit2<ISignatureTransfer::PermitTransferFrom, x402BasePermit2Proxy::Witness>;
+    PreparedPermit2<ISignatureTransfer::PermitTransferFrom, x402UptoPermit2Proxy::Witness>;
 
 impl PreparedUptoPermit2 {
     /// Build the shared Permit2 data needed for both verify and settle operations (upto scheme).
@@ -56,7 +58,7 @@ impl PreparedUptoPermit2 {
             spender: UPTO_PERMIT2_PROXY_ADDRESS,
             nonce: authorization.nonce,
             deadline: U256::from(authorization.deadline.as_secs()),
-            witness: x402BasePermit2Proxy::Witness {
+            witness: x402UptoPermit2Proxy::Witness {
                 to: authorization.witness.to.into(),
                 facilitator: authorization.witness.facilitator.into(),
                 validAfter: U256::from(authorization.witness.valid_after.as_secs()),
@@ -88,6 +90,7 @@ impl PreparedUptoPermit2 {
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + Eip155SignerAddresses>(
     provider: &P,
+    eip2612_gas_sponsoring: bool,
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<v2::VerifyResponse, Eip155ExactError> {
@@ -101,13 +104,28 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + Eip155Sig
 
     // 3. Verify onchain constraints
     let payer = authorization.from;
-    assert_onchain_upto_permit2(
-        provider.inner(),
-        provider.chain(),
-        payment_payload,
-        required_amount,
-    )
-    .await?;
+    let eip2612_payload = payment_payload.eip2612_gas_sponsoring();
+    if let Some(eip2612_gas_sponsoring_payload) = &eip2612_payload {
+        if !eip2612_gas_sponsoring {
+            return Err(PaymentVerificationError::eip2612_gas_sponsoring_not_enabled().into());
+        }
+        assert_eip2612_offchain_valid(eip2612_gas_sponsoring_payload, payment_payload)?;
+        eip2612::assert_onchain_upto_permit2_with_eip2612(
+            provider.inner(),
+            provider.chain(),
+            payment_payload,
+            eip2612_gas_sponsoring_payload,
+        )
+        .await?;
+    } else {
+        assert_onchain_upto_permit2(
+            provider.inner(),
+            provider.chain(),
+            payment_payload,
+            required_amount,
+        )
+        .await?;
+    }
 
     Ok(v2::VerifyResponse::valid(payer.to_string()))
 }
@@ -145,6 +163,7 @@ where
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
 pub async fn settle_permit2_payment<P, E>(
     provider: &P,
+    eip2612_gas_sponsoring: bool,
     payment_payload: &Permit2PaymentPayload,
     payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<UptoSettleResponse, X402SchemeFacilitatorError>
@@ -170,9 +189,19 @@ where
         ));
     }
 
-    // 3. Execute settlement
-    let tx_hash = settle_upto_permit2(provider, payment_payload, required_amount).await?;
-    let payer = authorization.from;
+    // 3. Execute settlement (with or without EIP-2612 permit)
+    let eip2612_payload = payment_payload.eip2612_gas_sponsoring();
+    let tx_hash = if let Some(ref info) = eip2612_payload {
+        if !eip2612_gas_sponsoring {
+            return Err(PaymentVerificationError::eip2612_gas_sponsoring_not_enabled().into());
+        }
+        assert_eip2612_offchain_valid(info, payment_payload)?;
+        eip2612::settle_upto_permit2_with_eip2612(provider, payment_payload, info, required_amount)
+            .await?
+    } else {
+        settle_upto_permit2(provider, payment_payload, required_amount).await?
+    };
+
     let network = &payment_payload.accepted.network;
 
     Ok(UptoSettleResponse::success(

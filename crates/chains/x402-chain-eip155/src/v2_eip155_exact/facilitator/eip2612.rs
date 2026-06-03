@@ -6,7 +6,7 @@
 //! 2. Simulates (verify) or executes (settle) `x402Permit2Proxy.settleWithPermit`
 //!    which atomically calls `IERC20Permit.permit` then Permit2 `permitTransferFrom`.
 
-use alloy_primitives::{Bytes, TxHash, U256};
+use alloy_primitives::{Address, Bytes, TxHash};
 use alloy_provider::{MulticallItem, Provider};
 use serde::{Deserialize, Serialize};
 use x402_types::chain::ChainProviderOps;
@@ -20,14 +20,13 @@ use tracing::instrument;
 
 use crate::chain::permit2::EXACT_PERMIT2_PROXY_ADDRESS;
 use crate::chain::permit2::PERMIT2_ADDRESS;
-use crate::chain::{ChecksummedAddress, EOASignature, EOASignatureExt};
 use crate::chain::{Eip155MetaTransactionProvider, MetaTransaction};
 use crate::v1_eip155_exact::Eip155ExactError;
-use crate::v1_eip155_exact::StructuredSignature;
 use crate::v2_eip155_exact::facilitator::permit2::execute_permit2_settlement;
 use crate::v2_eip155_exact::permit2::PreparedExactPermit2;
 use crate::v2_eip155_exact::types::Permit2PaymentPayload;
-use crate::v2_eip155_exact::types::{X402ExactPermit2Proxy, x402ExactPermit2Proxy};
+use crate::v2_eip155_exact::types::X402ExactPermit2Proxy;
+use crate::v2_eip155_exact::{Eip2612GasSponsoringInfo, x402ExactPermit2Proxy};
 
 /// Extension trait for extracting EIP-2612 gas sponsoring info from payment payloads.
 ///
@@ -39,6 +38,15 @@ pub trait Permit2PaymentPayloadExt {
     /// Returns `Ok(None)` if no EIP-2612 extension is present.
     /// Returns `Err` if the extension is present but malformed.
     fn eip2612_gas_sponsoring(&self) -> Option<Eip2612GasSponsoringInfo>;
+
+    // FIXME Doc comments
+    fn accepted_asset(&self) -> &Address;
+
+    // FIXME Doc comments
+    fn authorization_from(&self) -> &Address;
+
+    // FIXME Doc comments
+    fn authorization_deadline(&self) -> &UnixTimestamp;
 }
 
 impl Permit2PaymentPayloadExt for Permit2PaymentPayload {
@@ -49,38 +57,22 @@ impl Permit2PaymentPayloadExt for Permit2PaymentPayload {
         let sponsoring: Eip2612GasSponsoring = serde_json::from_value(raw.clone()).ok()?;
         Some(sponsoring.info)
     }
+
+    fn accepted_asset(&self) -> &Address {
+        self.accepted.asset.as_ref()
+    }
+
+    fn authorization_from(&self) -> &Address {
+        self.payload.permit_2_authorization.from.as_ref()
+    }
+
+    fn authorization_deadline(&self) -> &UnixTimestamp {
+        &self.payload.permit_2_authorization.deadline
+    }
 }
 
 /// The EIP-2612 gas sponsoring extension key as it appears in the `extensions` JSON object.
 pub static EXTENSION_KEY: &str = "eip2612GasSponsoring";
-
-/// Extension info provided by the client inside the `eip2612GasSponsoring` extension.
-///
-/// This is the EIP-2612 permit data the client has signed to approve the canonical
-/// Permit2 contract to spend tokens on its behalf.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Eip2612GasSponsoringInfo {
-    /// The address of the token owner (payer).
-    pub from: ChecksummedAddress,
-    /// ERC-20 token contract address.
-    pub asset: ChecksummedAddress,
-    /// The spender that was approved (MUST be the canonical Permit2 address).
-    pub spender: ChecksummedAddress,
-    /// The amount approved via `permit` (typically `MaxUint256`).
-    #[serde(with = "crate::decimal_u256")]
-    pub amount: U256,
-    /// The EIP-2612 nonce (not used in `settleWithPermit` call but available for
-    /// signature validation purposes).
-    #[serde(with = "crate::decimal_u256")]
-    pub nonce: U256,
-    /// The deadline for the EIP-2612 permit signature.
-    pub deadline: UnixTimestamp,
-    /// The 65-byte concatenated EIP-2612 signature `r ++ s ++ v` as a hex bytes string.
-    pub signature: EOASignature,
-    /// Extension schema version (currently `"1"`).
-    pub version: String,
-}
 
 /// Wrapper that contains the extension info nested under `info`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,10 +88,13 @@ pub struct Eip2612GasSponsoring {
 /// - `from` matches the payer in the Permit2 authorization
 /// - `deadline` is not expired
 #[cfg_attr(feature = "telemetry", instrument(skip_all, err))]
-pub fn assert_eip2612_offchain_valid(
+pub fn assert_eip2612_offchain_valid<T>(
     info: &Eip2612GasSponsoringInfo,
-    payment_payload: &Permit2PaymentPayload,
-) -> Result<(), PaymentVerificationError> {
+    payment_payload: &T,
+) -> Result<(), PaymentVerificationError>
+where
+    T: Permit2PaymentPayloadExt,
+{
     // spender must be the canonical Permit2
     if info.spender.0 != PERMIT2_ADDRESS {
         return Err(PaymentVerificationError::InvalidSignature(
@@ -108,20 +103,19 @@ pub fn assert_eip2612_offchain_valid(
     }
 
     // asset must match
-    if info.asset != payment_payload.accepted.asset {
+    if info.asset.as_ref() != payment_payload.accepted_asset() {
         return Err(PaymentVerificationError::AssetMismatch);
     }
 
     // from must match permit2 authorization from
-    let authorization = &payment_payload.payload.permit_2_authorization;
-    if info.from != authorization.from {
+    if info.from.as_ref() != payment_payload.authorization_from() {
         return Err(PaymentVerificationError::InvalidSignature(
             "eip2612GasSponsoring 'from' does not match permit2 authorization 'from'".to_string(),
         ));
     }
 
     // deadline must be >= the Permit2 deadline (permit must stay valid long enough)
-    if info.deadline < authorization.deadline {
+    if &info.deadline < payment_payload.authorization_deadline() {
         return Err(PaymentVerificationError::Expired);
     }
 
@@ -150,21 +144,11 @@ pub async fn assert_onchain_exact_permit2_with_eip2612<P: Provider>(
         witness,
     } = PreparedExactPermit2::try_new(chain_reference, payment_payload)?;
 
-    let permit2612 = x402ExactPermit2Proxy::EIP2612Permit {
-        value: info.amount,
-        deadline: U256::from(info.deadline.as_secs()),
-        r: info.signature.r_bytes(),
-        s: info.signature.s_bytes(),
-        v: info.signature.v_legacy(),
-    };
+    let permit2612 = x402ExactPermit2Proxy::EIP2612Permit::from(info);
 
     let exact_permit2_proxy = X402ExactPermit2Proxy::new(EXACT_PERMIT2_PROXY_ADDRESS, provider);
 
-    let sig_bytes: Bytes = match &structured_signature {
-        StructuredSignature::EIP6492 { inner, .. } => inner.clone(),
-        StructuredSignature::EOA(sig) => sig.as_ref().as_bytes().into(),
-        StructuredSignature::EIP1271(sig) => sig.clone(),
-    };
+    let sig_bytes = Bytes::from(structured_signature);
 
     let settle_call = exact_permit2_proxy.settleWithPermit(
         permit2612,
@@ -216,13 +200,7 @@ where
         witness,
     } = PreparedExactPermit2::try_new(provider.chain(), payment_payload)?;
 
-    let permit2612 = x402ExactPermit2Proxy::EIP2612Permit {
-        value: info.amount,
-        deadline: U256::from(info.deadline.as_secs()),
-        r: info.signature.r_bytes(),
-        s: info.signature.s_bytes(),
-        v: info.signature.v_legacy(),
-    };
+    let permit2612 = x402ExactPermit2Proxy::EIP2612Permit::from(info);
 
     let build_call = move |sig_bytes: Bytes| {
         let inner = provider.inner();

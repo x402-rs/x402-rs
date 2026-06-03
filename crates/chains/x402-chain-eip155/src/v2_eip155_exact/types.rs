@@ -201,6 +201,18 @@ pub mod facilitator_client_only {
         "abi/X402ExactPermit2Proxy.json"
     );
 
+    impl From<&Eip2612GasSponsoringInfo> for x402ExactPermit2Proxy::EIP2612Permit {
+        fn from(value: &Eip2612GasSponsoringInfo) -> Self {
+            Self {
+                value: value.amount,
+                deadline: U256::from(value.deadline.as_secs()),
+                r: value.signature.r_bytes(),
+                s: value.signature.s_bytes(),
+                v: value.signature.v_legacy(),
+            }
+        }
+    }
+
     sol!(
         /// Signature struct to do settle through [`X402ExactPermit2Proxy`]
         /// Depends on availability of [`X402ExactPermit2Proxy`]

@@ -131,7 +131,7 @@ pub mod facilitator_client_only {
             address spender;
             uint256 nonce;
             uint256 deadline;
-            x402BasePermit2Proxy.Witness witness;
+            x402UptoPermit2Proxy.Witness witness;
         }
     );
 }
