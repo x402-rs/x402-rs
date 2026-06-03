@@ -298,6 +298,7 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
         witness,
     } = PreparedUptoPermit2::try_new(chain_reference, payment_payload)?;
 
+    let facilitator_address = witness.facilitator;
     let upto_permit2_proxy = X402UptoPermit2Proxy::new(UPTO_PERMIT2_PROXY_ADDRESS, provider);
     match structured_signature {
         StructuredSignature::EIP6492 {
@@ -310,13 +311,15 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
             let is_valid_signature_call =
                 validator6492.isValidSigWithSideEffects(payer, eip712_hash, original);
             // For verification, simulate with max amount
-            let settle_call = upto_permit2_proxy.settle(
-                permit_transfer_from,
-                authorization.permitted.amount,
-                payer,
-                witness,
-                inner,
-            );
+            let settle_call = upto_permit2_proxy
+                .settle(
+                    permit_transfer_from,
+                    authorization.permitted.amount,
+                    payer,
+                    witness,
+                    inner,
+                )
+                .from(facilitator_address);
             let aggregate3 = provider
                 .multicall()
                 .add(is_valid_signature_call)
@@ -350,13 +353,15 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
             Ok(())
         }
         StructuredSignature::EOA(signature) => {
-            let settle_call = upto_permit2_proxy.settle(
-                permit_transfer_from,
-                authorization.permitted.amount,
-                payer,
-                witness,
-                signature.as_ref().as_bytes().into(),
-            );
+            let settle_call = upto_permit2_proxy
+                .settle(
+                    permit_transfer_from,
+                    authorization.permitted.amount,
+                    payer,
+                    witness,
+                    signature.as_ref().as_bytes().into(),
+                )
+                .from(facilitator_address);
             let settle_call_fut = settle_call.call().into_future();
             #[cfg(feature = "telemetry")]
             settle_call_fut
@@ -376,13 +381,15 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
             Ok(())
         }
         StructuredSignature::EIP1271(signature) => {
-            let settle_call = upto_permit2_proxy.settle(
-                permit_transfer_from,
-                authorization.permitted.amount,
-                payer,
-                witness,
-                signature,
-            );
+            let settle_call = upto_permit2_proxy
+                .settle(
+                    permit_transfer_from,
+                    authorization.permitted.amount,
+                    payer,
+                    witness,
+                    signature,
+                )
+                .from(facilitator_address);
             let settle_call_fut = settle_call.call().into_future();
             #[cfg(feature = "telemetry")]
             settle_call_fut
@@ -424,6 +431,7 @@ where
     let build_call = move |sig_bytes: Bytes| {
         let inner = provider.inner();
         let upto_permit2_proxy = X402UptoPermit2Proxy::new(UPTO_PERMIT2_PROXY_ADDRESS, inner);
+        let facilitator_address = witness.facilitator;
         let call = upto_permit2_proxy.settle(
             permit_transfer_from,
             actual_amount,
@@ -431,7 +439,9 @@ where
             witness,
             sig_bytes,
         );
-        MetaTransaction::new(call.target(), call.calldata().clone())
+        let to = call.target();
+        let calldata = call.calldata().clone();
+        MetaTransaction::new(to, calldata).with_from(facilitator_address)
     };
 
     execute_permit2_settlement(provider, payer, structured_signature, build_call).await
