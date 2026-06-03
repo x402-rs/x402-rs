@@ -111,7 +111,11 @@ pub type PaymentRequirements = v2::PaymentRequirements<UptoScheme, U256, Checksu
 
 #[cfg(any(feature = "facilitator", feature = "client"))]
 pub mod facilitator_client_only {
+    use alloy_primitives::U256;
     use alloy_sol_types::sol;
+
+    use crate::chain::EOASignatureExt;
+    use crate::v2_eip155_exact::Eip2612GasSponsoringInfo;
 
     sol!(
         #[allow(missing_docs)]
@@ -121,6 +125,18 @@ pub mod facilitator_client_only {
         X402UptoPermit2Proxy,
         "abi/X402UptoPermit2Proxy.json"
     );
+
+    impl From<&Eip2612GasSponsoringInfo> for x402UptoPermit2Proxy::EIP2612Permit {
+        fn from(value: &Eip2612GasSponsoringInfo) -> Self {
+            Self {
+                value: value.amount,
+                deadline: U256::from(value.deadline.as_secs()),
+                r: value.signature.r_bytes(),
+                s: value.signature.s_bytes(),
+                v: value.signature.v_legacy(),
+            }
+        }
+    }
 
     sol!(
         /// Signature struct to do settle through [`X402UptoPermit2Proxy`]
