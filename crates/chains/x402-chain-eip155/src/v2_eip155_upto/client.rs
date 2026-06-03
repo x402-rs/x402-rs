@@ -32,11 +32,9 @@ use crate::chain::permit2::{
     UPTO_PERMIT2_PROXY_ADDRESS, UptoPermit2Payload, UptoPermit2Witness,
 };
 use crate::v1_eip155_exact::client::SignerLike;
-use crate::v2_eip155_upto::types;
-use crate::v2_eip155_upto::types::{
-    ISignatureTransfer, PermitWitnessTransferFrom, x402BasePermit2Proxy,
-};
+use crate::v2_eip155_upto::types::{ISignatureTransfer, PermitWitnessTransferFrom};
 use crate::v2_eip155_upto::{UptoSupportedExtra, V2Eip155Upto};
+use crate::v2_eip155_upto::{types, x402UptoPermit2Proxy};
 
 /// Parameters for signing a Permit2 upto authorization.
 #[derive(Debug, Clone)]
@@ -94,7 +92,7 @@ pub async fn sign_permit2_upto_authorization<S: SignerLike + Sync>(
         spender: UPTO_PERMIT2_PROXY_ADDRESS,
         nonce,
         deadline: U256::from(deadline.as_secs()),
-        witness: x402BasePermit2Proxy::Witness {
+        witness: x402UptoPermit2Proxy::Witness {
             to: params.pay_to,
             facilitator: params.facilitator,
             validAfter: U256::from(valid_after.as_secs()),
