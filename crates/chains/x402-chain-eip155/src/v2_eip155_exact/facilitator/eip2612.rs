@@ -52,7 +52,7 @@ impl Permit2PaymentPayloadExt for Permit2PaymentPayload {
 }
 
 /// The EIP-2612 gas sponsoring extension key as it appears in the `extensions` JSON object.
-pub const EXTENSION_KEY: &str = "eip2612GasSponsoring";
+pub static EXTENSION_KEY: &str = "eip2612GasSponsoring";
 
 /// Extension info provided by the client inside the `eip2612GasSponsoring` extension.
 ///
