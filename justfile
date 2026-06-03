@@ -5,6 +5,7 @@ build-all:
   cd crates/x402-types && cargo build
   cd crates/x402-axum && cargo build
   cd crates/x402-reqwest && cargo build
+  cd crates/x402-facilitator-local && cargo build
   cd examples/x402-axum-example && cargo build
   cd examples/x402-reqwest-example && cargo build
 
@@ -15,6 +16,7 @@ format-all:
   cd crates/x402-types && cargo fmt
   cd crates/x402-axum && cargo fmt
   cd crates/x402-reqwest && cargo fmt
+  cd crates/x402-facilitator-local && cargo fmt
   cd examples/x402-axum-example && cargo fmt
   cd examples/x402-reqwest-example && cargo fmt
 
@@ -28,6 +30,7 @@ clippy-all:
   cd crates/x402-types && cargo clippy
   cd crates/x402-axum && cargo clippy
   cd crates/x402-reqwest && cargo clippy
+  cd crates/x402-facilitator-local && cargo clippy
   cd examples/x402-axum-example && cargo clippy
   cd examples/x402-reqwest-example && cargo clippy
 
@@ -39,6 +42,7 @@ check-all:
   cd crates/x402-types && cargo check --features full
   cd crates/x402-axum && cargo check --features full
   cd crates/x402-reqwest && cargo check --features full
+  cd crates/x402-facilitator-local && cargo check --features full
   cd examples/x402-axum-example && cargo check --features full
   cd examples/x402-reqwest-example && cargo check --features full
 
@@ -46,8 +50,10 @@ test-all:
   cd facilitator/ && cargo test
   cd crates/chains/x402-chain-eip155 && cargo test
   cd crates/chains/x402-chain-solana && cargo test
+  cd crates/x402-types && cargo test
   cd crates/x402-axum && cargo test
   cd crates/x402-reqwest && cargo test
+  cd crates/x402-facilitator-local && cargo test
   cd examples/x402-axum-example && cargo test
   cd examples/x402-reqwest-example && cargo test
 
@@ -60,3 +66,11 @@ compliance-typecheck:
 
 compliance-test-all: build-all
   cd protocol-compliance && pnpm test
+
+cargo-publish-all:
+  cd crates/x402-types && cargo publish
+  cd crates/x402-axum && cargo publish
+  cd crates/x402-reqwest && cargo publish
+  cd crates/x402-facilitator-local && cargo publish
+  cd crates/chains/x402-chain-eip155 && cargo publish
+  cd crates/chains/x402-chain-solana && cargo publish
