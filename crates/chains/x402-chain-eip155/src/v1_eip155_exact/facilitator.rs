@@ -538,6 +538,16 @@ impl StructuredSignature {
     }
 }
 
+impl From<StructuredSignature> for Bytes {
+    fn from(value: StructuredSignature) -> Self {
+        match value {
+            StructuredSignature::EIP6492 { inner, .. } => inner,
+            StructuredSignature::EOA(sig) => Bytes::from(sig.as_ref().as_bytes()),
+            StructuredSignature::EIP1271(sig) => sig,
+        }
+    }
+}
+
 impl TryFrom<Bytes> for StructuredSignature {
     type Error = StructuredSignatureFormatError;
 
