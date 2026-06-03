@@ -157,7 +157,40 @@ pub mod asset_transfer_method {
 
 #[cfg(any(feature = "facilitator", feature = "client"))]
 pub mod facilitator_client_only {
+    use alloy_primitives::U256;
     use alloy_sol_types::sol;
+    use serde::{Deserialize, Serialize};
+    use x402_types::timestamp::UnixTimestamp;
+
+    use crate::chain::{ChecksummedAddress, EOASignature, EOASignatureExt};
+
+    /// Extension info provided by the client inside the `eip2612GasSponsoring` extension.
+    ///
+    /// This is the EIP-2612 permit data the client has signed to approve the canonical
+    /// Permit2 contract to spend tokens on its behalf.
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Eip2612GasSponsoringInfo {
+        /// The address of the token owner (payer).
+        pub from: ChecksummedAddress,
+        /// ERC-20 token contract address.
+        pub asset: ChecksummedAddress,
+        /// The spender that was approved (MUST be the canonical Permit2 address).
+        pub spender: ChecksummedAddress,
+        /// The amount approved via `permit` (typically `MaxUint256`).
+        #[serde(with = "crate::decimal_u256")]
+        pub amount: U256,
+        /// The EIP-2612 nonce (not used in `settleWithPermit` call but available for
+        /// signature validation purposes).
+        #[serde(with = "crate::decimal_u256")]
+        pub nonce: U256,
+        /// The deadline for the EIP-2612 permit signature.
+        pub deadline: UnixTimestamp,
+        /// The 65-byte concatenated EIP-2612 signature `r ++ s ++ v` as a hex bytes string.
+        pub signature: EOASignature,
+        /// Extension schema version (currently `"1"`).
+        pub version: String,
+    }
 
     sol!(
         #[allow(missing_docs)]
