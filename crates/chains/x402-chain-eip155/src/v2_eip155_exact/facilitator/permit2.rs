@@ -46,10 +46,7 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
     if let Some(eip2612_gas_sponsoring_payload) = &eip2612_gas_sponsoring_payload {
         // Reject EIP-2612 gas sponsoring if not enabled in config
         if !eip2612_gas_sponsoring {
-            return Err(PaymentVerificationError::InvalidSignature(
-                "EIP-2612 gas sponsoring is not enabled by this facilitator".to_string(),
-            )
-            .into());
+            return Err(PaymentVerificationError::eip2612_gas_sponsoring_not_enabled().into());
         }
         eip2612::assert_eip2612_offchain_valid(eip2612_gas_sponsoring_payload, payment_payload)?;
         eip2612::assert_onchain_exact_permit2_with_eip2612(
@@ -87,10 +84,7 @@ where
     let tx_hash = if let Some(eip2612_gas_sponsoring_payload) = &eip2612_gas_sponsoring_payload {
         // Reject EIP-2612 gas sponsoring if not enabled in config
         if !eip2612_gas_sponsoring {
-            return Err(PaymentVerificationError::InvalidSignature(
-                "EIP-2612 gas sponsoring is not enabled by this facilitator".to_string(),
-            )
-            .into());
+            return Err(PaymentVerificationError::eip2612_gas_sponsoring_not_enabled().into());
         }
         eip2612::assert_eip2612_offchain_valid(eip2612_gas_sponsoring_payload, payment_payload)?;
         eip2612::settle_exact_permit2_with_eip2612(

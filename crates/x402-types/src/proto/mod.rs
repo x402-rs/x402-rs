@@ -280,6 +280,14 @@ pub enum PaymentVerificationError {
     AcceptedRequirementsMismatch,
 }
 
+impl PaymentVerificationError {
+    pub fn eip2612_gas_sponsoring_not_enabled() -> Self {
+        Self::InvalidSignature(
+            "EIP-2612 gas sponsoring is not enabled by this facilitator".to_string(),
+        )
+    }
+}
+
 impl AsPaymentProblem for PaymentVerificationError {
     fn as_payment_problem(&self) -> PaymentProblem {
         let error_reason = match self {
