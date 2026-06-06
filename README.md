@@ -138,6 +138,7 @@ For full facilitator configuration and deployment details, see the [`x402-facili
 * [x402 Protocol Documentation](https://x402.org)
 * [x402 Overview by Coinbase](https://docs.cdp.coinbase.com/x402/docs/overview)
 * [Facilitator Documentation by Coinbase](https://docs.cdp.coinbase.com/x402/docs/facilitator)
+* [TWZRD Agent Intel](https://intel.twzrd.xyz) — Live x402 MCP server on Solana. Trust-score agent wallets before USDC micropayments; returns cryptographically signed Ed25519 trust receipts. Free tools + paid `get_trust_receipt` (HTTP 402). MCP endpoint: `https://intel.twzrd.xyz/mcp`
 
 ## Contributions and Feedback
 
@@ -146,3 +147,4 @@ Feel free to open issues or pull requests to improve x402 support in the Rust ec
 ## License
 
 [Apache-2.0](LICENSE)
+
