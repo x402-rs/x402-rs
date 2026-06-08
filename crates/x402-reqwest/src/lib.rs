@@ -38,6 +38,7 @@
 //!
 //! - **[`V1Eip155ExactClient`]** - EIP-155 chains, x402 V1 protocol, "exact" payment scheme
 //! - **[`V2Eip155ExactClient`]** - EIP-155 chains, x402 V2 protocol, "exact" payment scheme
+//! - **[`V2Eip155UptoClient`]** - EIP-155 chains, x402 V2 protocol, "upto" payment scheme
 //! - **[`V1SolanaExactClient`]** - Solana chains, x402 V1 protocol, "exact" payment scheme
 //! - **[`V2SolanaExactClient`]** - Solana chains, x402 V2 protocol, "exact" payment scheme
 //!
