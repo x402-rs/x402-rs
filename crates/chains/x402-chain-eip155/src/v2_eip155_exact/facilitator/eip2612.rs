@@ -6,16 +6,15 @@
 //! 2. Simulates (verify) or executes (settle) `x402Permit2Proxy.settleWithPermit`
 //!    which atomically calls `IERC20Permit.permit` then Permit2 `permitTransferFrom`.
 
-use alloy_primitives::{Address, Bytes, TxHash};
+use alloy_primitives::{Address, Bytes, TxHash, U256};
 use alloy_provider::{MulticallItem, Provider};
 use x402_types::chain::ChainProviderOps;
-use x402_types::proto::PaymentVerificationError;
-use x402_types::scheme::ExtensionKey;
+use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::timestamp::UnixTimestamp;
 
-use crate::chain::permit2::EXACT_PERMIT2_PROXY_ADDRESS;
 use crate::chain::permit2::PERMIT2_ADDRESS;
-use crate::chain::{Eip155MetaTransactionProvider, MetaTransaction};
+use crate::chain::permit2::{EXACT_PERMIT2_PROXY_ADDRESS, Permit2Payload};
+use crate::chain::{ChecksummedAddress, Eip155MetaTransactionProvider, MetaTransaction};
 use crate::eip2612_gas_sponsoring::{Eip2612GasSponsoring, Eip2612GasSponsoringInfo};
 use crate::v1_eip155_exact::Eip155ExactError;
 use crate::v2_eip155_exact::facilitator::permit2::execute_permit2_settlement;
@@ -53,10 +52,8 @@ pub trait Permit2PaymentPayloadExt {
 impl Permit2PaymentPayloadExt for Permit2PaymentPayload {
     fn eip2612_gas_sponsoring(&self) -> Option<Eip2612GasSponsoringInfo> {
         let extensions = self.extensions.as_ref()?;
-        let ext_obj = extensions.0.as_object()?; // FIXME
-        let raw = ext_obj.get(Eip2612GasSponsoring::EXTENSION_KEY)?;
-        let sponsoring: Eip2612GasSponsoring = serde_json::from_value(raw.clone()).ok()?;
-        Some(sponsoring.info)
+        let eip2612_gas_sponsoring = extensions.get::<Eip2612GasSponsoring>()?;
+        Some(eip2612_gas_sponsoring.info)
     }
 
     fn accepted_asset(&self) -> &Address {

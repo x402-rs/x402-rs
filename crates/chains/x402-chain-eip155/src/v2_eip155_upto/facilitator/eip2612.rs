@@ -9,7 +9,6 @@
 use alloy_primitives::{Address, Bytes, TxHash, U256};
 use alloy_provider::{MulticallItem, Provider};
 use x402_types::chain::ChainProviderOps;
-use x402_types::scheme::ExtensionKey;
 use x402_types::timestamp::UnixTimestamp;
 
 use super::types::{X402UptoPermit2Proxy, x402UptoPermit2Proxy};
@@ -30,10 +29,8 @@ use tracing::instrument;
 impl Permit2PaymentPayloadExt for Permit2PaymentPayload {
     fn eip2612_gas_sponsoring(&self) -> Option<Eip2612GasSponsoringInfo> {
         let extensions = self.extensions.as_ref()?;
-        let ext_obj = extensions.0.as_object()?; // FIXME
-        let raw = ext_obj.get(Eip2612GasSponsoring::EXTENSION_KEY)?;
-        let sponsoring: Eip2612GasSponsoring = serde_json::from_value(raw.clone()).ok()?;
-        Some(sponsoring.info)
+        let eip2612_gas_sponsoring = extensions.get::<Eip2612GasSponsoring>()?;
+        Some(eip2612_gas_sponsoring.info)
     }
 
     fn accepted_asset(&self) -> &Address {

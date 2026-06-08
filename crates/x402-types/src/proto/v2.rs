@@ -30,6 +30,7 @@ use crate::chain::ChainId;
 use crate::proto;
 use crate::proto::v1;
 use crate::proto::{OriginalJson, SupportedResponse};
+use crate::scheme::ExtensionKey;
 
 /// Version marker for x402 protocol version 2.
 ///
@@ -179,17 +180,17 @@ pub struct PaymentPayload<TPaymentRequirements, TPayload> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-// FIXME Docs
+// FIXME Docs, fixme serdejson::Map
 pub struct ExtensionsJson(pub serde_json::Value);
 
 impl ExtensionsJson {
     // FIXME Docs
-    pub fn get<T>(&self, key: &str) -> Option<T>
+    pub fn get<T: ExtensionKey>(&self) -> Option<T>
     where
         T: DeserializeOwned,
     {
         self.0
-            .get(key)
+            .get(T::EXTENSION_KEY)
             .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 }
