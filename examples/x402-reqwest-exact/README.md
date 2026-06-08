@@ -1,27 +1,29 @@
 # x402-reqwest-exact
 
-An example client that uses [`x402-reqwest`](https://crates.io/crates/x402-reqwest) to pay for HTTP requests using the x402 protocol.
+An example client that uses [`x402-reqwest`](https://crates.io/crates/x402-reqwest) to pay for HTTP requests using the **exact** x402 payment scheme.
+
+The "exact" scheme transfers the precise token amount required by the server — no permit signatures, no approval flows. This example registers `exact` scheme clients for both EVM and Solana chains across both V1 and V2 protocol versions.
 
 This small demo shows how to configure a reqwest client to:
-- Interact with x402-protected endpoints
-- Apply token preferences and per-token payment caps
-- Support multiple chains (EVM and Solana) and multiple schemes (v1 and v2 protocols)
+- Interact with x402-protected endpoints using the `exact` scheme
+- Support multiple chains (EVM and Solana)
+- Work with both V1 and V2 protocol versions
 
 ## What it does
 
 On startup, this example:
 - Reads your private keys from env variables `EVM_PRIVATE_KEY` and `SOLANA_PRIVATE_KEY`
-- Builds a `reqwest` client using [`reqwest-middleware`](https://crates.io/crates/reqwest-middleware) and  [`x402-reqwest`](https://crates.io/crates/x402-reqwest)
-- Registers both V1 and V2 scheme clients for both EVM and Solana chains
+- Builds a `reqwest` client using [`reqwest-middleware`](https://crates.io/crates/reqwest-middleware) and [`x402-reqwest`](https://crates.io/crates/x402-reqwest)
+- Registers `exact` scheme clients (`V1Eip155ExactClient`, `V2Eip155ExactClient`, `V1SolanaExactClient`, `V2SolanaExactClient`)
 - Sends a request to a protected endpoint
 
 If the server responds with a 402 Payment Required, the client:
-- Parses the server’s requirements (supports both V1 and V2 protocols)
+- Parses the server's requirements (supports both V1 and V2 protocols)
 - Selects a supported token (e.g. USDC on Base Sepolia or Solana)
-- Signs a `TransferWithAuthorization` (EVM) or SPL token transfer (Solana)
+- Signs a `TransferWithAuthorization` (EVM) or SPL token transfer (Solana) for the **exact** amount requested
 - Retries with the signed payment attached
 
-The best part? **You don’t have to worry about any of this.**
+The best part? **You don't have to worry about any of this.**
 Just set your token preferences and treat it like any other `reqwest` HTTP client.
 
 # Prerequisites
@@ -38,13 +40,13 @@ cp .env.example .env
 # 4. Run
 cargo run
 ```
-You should see the request succeed and print the server’s response.
+You should see the request succeed and print the server's response.
 
 ## Behind the scenes
 
 This example uses:
 -	[`x402-reqwest`](https://crates.io/crates/x402-reqwest) to intercept 402s and attach signed payments
--	[`alloy`](https://alloy.rs) for signing
+-	[`alloy`](https://alloy.rs) for EVM signing
 -	[`dotenvy`](https://crates.io/crates/dotenvy) to load the `.env` file
 -	[`x402-rs`](https://crates.io/crates/x402-rs) for token/network definitions and amount conversion
 
