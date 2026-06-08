@@ -149,19 +149,23 @@ pub async fn sign_permit2_upto_authorization<S: SignerLike + Sync>(
 /// ```
 #[derive(Debug)]
 #[allow(dead_code)] // Public for consumption by downstream crates.
-pub struct V2Eip155UptoClient<S> {
+pub struct V2Eip155UptoClient<S, P> {
     signer: S,
+    provider: P,
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
-impl<S> V2Eip155UptoClient<S> {
+impl<S> V2Eip155UptoClient<S, ()> {
     /// Creates a new V2 EIP-155 upto scheme client with the given signer.
     pub fn new(signer: S) -> Self {
-        Self { signer }
+        Self {
+            signer,
+            provider: (),
+        }
     }
 }
 
-impl<S> X402SchemeId for V2Eip155UptoClient<S> {
+impl<S, P> X402SchemeId for V2Eip155UptoClient<S, P> {
     fn namespace(&self) -> &str {
         V2Eip155Upto.namespace()
     }
@@ -171,9 +175,10 @@ impl<S> X402SchemeId for V2Eip155UptoClient<S> {
     }
 }
 
-impl<S> X402SchemeClient for V2Eip155UptoClient<S>
+impl<S, P> X402SchemeClient for V2Eip155UptoClient<S, P>
 where
     S: SignerLike + Clone + Send + Sync + 'static,
+    P: Send + Sync,
 {
     fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
