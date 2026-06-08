@@ -115,7 +115,7 @@ pub mod facilitator_client_only {
     use alloy_sol_types::sol;
 
     use crate::chain::EOASignatureExt;
-    use crate::v2_eip155_exact::Eip2612GasSponsoringInfo;
+    use crate::eip2612_gas_sponsoring::Eip2612GasSponsoringInfo;
 
     sol!(
         #[allow(missing_docs)]

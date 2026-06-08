@@ -15,11 +15,12 @@ use x402_types::chain::ChainProviderOps;
 use x402_types::proto;
 use x402_types::proto::v2;
 use x402_types::scheme::{
-    X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError,
+    ExtensionKey, X402SchemeFacilitator, X402SchemeFacilitatorBuilder, X402SchemeFacilitatorError,
 };
 
 use crate::V2Eip155Upto;
 use crate::chain::{Eip155MetaTransactionProvider, Eip155SignerAddresses};
+use crate::eip2612_gas_sponsoring::Eip2612GasSponsoring;
 use crate::v1_eip155_exact::facilitator::Eip155ExactError;
 use crate::v2_eip155_upto::types;
 
@@ -129,7 +130,7 @@ where
 
         let mut extensions = vec![];
         if self.eip2612_gas_sponsoring {
-            extensions.push(eip2612::EXTENSION_KEY.to_string());
+            extensions.push(Eip2612GasSponsoring::EXTENSION_KEY.to_string());
         }
 
         let signer_addresses = Eip155SignerAddresses::signer_addresses(&self.provider);

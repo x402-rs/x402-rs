@@ -182,6 +182,18 @@ pub struct PaymentPayload<TPaymentRequirements, TPayload> {
 // FIXME Docs
 pub struct ExtensionsJson(pub serde_json::Value);
 
+impl ExtensionsJson {
+    // FIXME Docs
+    pub fn get<T>(&self, key: &str) -> Option<T>
+    where
+        T: DeserializeOwned,
+    {
+        self.0
+            .get(key)
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+    }
+}
+
 impl From<ExtensionsJson> for serde_json::Value {
     fn from(value: ExtensionsJson) -> Self {
         value.0

@@ -337,3 +337,9 @@ mod scheme_config_defaults {
         true
     }
 }
+
+// FIXME Doc comments
+// This is a trait to get the key of the extension struct.
+pub trait ExtensionKey {
+    const EXTENSION_KEY: &'static str;
+}

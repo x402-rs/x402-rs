@@ -8,25 +8,26 @@
 
 use alloy_primitives::{Address, Bytes, TxHash};
 use alloy_provider::{MulticallItem, Provider};
-use serde::{Deserialize, Serialize};
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto::PaymentVerificationError;
+use x402_types::scheme::ExtensionKey;
 use x402_types::timestamp::UnixTimestamp;
-
-#[cfg(feature = "telemetry")]
-use tracing::Instrument;
-#[cfg(feature = "telemetry")]
-use tracing::instrument;
 
 use crate::chain::permit2::EXACT_PERMIT2_PROXY_ADDRESS;
 use crate::chain::permit2::PERMIT2_ADDRESS;
 use crate::chain::{Eip155MetaTransactionProvider, MetaTransaction};
+use crate::eip2612_gas_sponsoring::{Eip2612GasSponsoring, Eip2612GasSponsoringInfo};
 use crate::v1_eip155_exact::Eip155ExactError;
 use crate::v2_eip155_exact::facilitator::permit2::execute_permit2_settlement;
 use crate::v2_eip155_exact::permit2::PreparedExactPermit2;
 use crate::v2_eip155_exact::types::Permit2PaymentPayload;
 use crate::v2_eip155_exact::types::X402ExactPermit2Proxy;
-use crate::v2_eip155_exact::{Eip2612GasSponsoringInfo, x402ExactPermit2Proxy};
+use crate::v2_eip155_exact::x402ExactPermit2Proxy;
+
+#[cfg(feature = "telemetry")]
+use tracing::Instrument;
+#[cfg(feature = "telemetry")]
+use tracing::instrument;
 
 /// Extension trait for extracting EIP-2612 gas sponsoring info from payment payloads.
 ///
@@ -53,7 +54,7 @@ impl Permit2PaymentPayloadExt for Permit2PaymentPayload {
     fn eip2612_gas_sponsoring(&self) -> Option<Eip2612GasSponsoringInfo> {
         let extensions = self.extensions.as_ref()?;
         let ext_obj = extensions.0.as_object()?; // FIXME
-        let raw = ext_obj.get(EXTENSION_KEY)?;
+        let raw = ext_obj.get(Eip2612GasSponsoring::EXTENSION_KEY)?;
         let sponsoring: Eip2612GasSponsoring = serde_json::from_value(raw.clone()).ok()?;
         Some(sponsoring.info)
     }
@@ -69,15 +70,6 @@ impl Permit2PaymentPayloadExt for Permit2PaymentPayload {
     fn authorization_deadline(&self) -> &UnixTimestamp {
         &self.payload.permit_2_authorization.deadline
     }
-}
-
-/// The EIP-2612 gas sponsoring extension key as it appears in the `extensions` JSON object.
-pub static EXTENSION_KEY: &str = "eip2612GasSponsoring";
-
-/// Wrapper that contains the extension info nested under `info`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Eip2612GasSponsoring {
-    pub info: Eip2612GasSponsoringInfo,
 }
 
 /// Verify the offchain constraints of the EIP-2612 gas-sponsoring extension.

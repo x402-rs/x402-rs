@@ -80,7 +80,9 @@ pub mod v1_eip155_exact;
 pub mod v2_eip155_exact;
 pub mod v2_eip155_upto;
 
+pub mod eip2612_gas_sponsoring;
 mod networks;
+
 pub use networks::*;
 
 pub use v1_eip155_exact::V1Eip155Exact;

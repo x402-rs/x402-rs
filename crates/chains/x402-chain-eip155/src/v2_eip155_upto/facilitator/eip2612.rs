@@ -9,16 +9,15 @@
 use alloy_primitives::{Address, Bytes, TxHash, U256};
 use alloy_provider::{MulticallItem, Provider};
 use x402_types::chain::ChainProviderOps;
+use x402_types::scheme::ExtensionKey;
 use x402_types::timestamp::UnixTimestamp;
 
 use super::types::{X402UptoPermit2Proxy, x402UptoPermit2Proxy};
 use crate::chain::permit2::UPTO_PERMIT2_PROXY_ADDRESS;
 use crate::chain::{Eip155MetaTransactionProvider, MetaTransaction};
+use crate::eip2612_gas_sponsoring::{Eip2612GasSponsoring, Eip2612GasSponsoringInfo};
 use crate::v1_eip155_exact::Eip155ExactError;
-use crate::v2_eip155_exact::Eip2612GasSponsoringInfo;
 pub use crate::v2_eip155_exact::eip2612::Permit2PaymentPayloadExt;
-pub use crate::v2_eip155_exact::facilitator::eip2612::EXTENSION_KEY;
-use crate::v2_eip155_exact::facilitator::eip2612::Eip2612GasSponsoring;
 use crate::v2_eip155_exact::facilitator::permit2::execute_permit2_settlement;
 use crate::v2_eip155_upto::Permit2PaymentPayload;
 use crate::v2_eip155_upto::facilitator::permit2::PreparedUptoPermit2;
@@ -32,7 +31,7 @@ impl Permit2PaymentPayloadExt for Permit2PaymentPayload {
     fn eip2612_gas_sponsoring(&self) -> Option<Eip2612GasSponsoringInfo> {
         let extensions = self.extensions.as_ref()?;
         let ext_obj = extensions.0.as_object()?; // FIXME
-        let raw = ext_obj.get(EXTENSION_KEY)?;
+        let raw = ext_obj.get(Eip2612GasSponsoring::EXTENSION_KEY)?;
         let sponsoring: Eip2612GasSponsoring = serde_json::from_value(raw.clone()).ok()?;
         Some(sponsoring.info)
     }
