@@ -3,3 +3,9 @@ target/
 *.rs.bk
 *.log
 .env
+facilitator/.env
+facilitator/config.json
+facilitator/*/target/
+examples/*/.env
+protocol-compliance/node_modules/
+protocol-compliance/.env

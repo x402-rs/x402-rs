@@ -1,6 +1,9 @@
-/target/
+target/
 .idea/
 .env
 crates/*/target/
+facilitator/target/
+facilitator/config.json
 examples/*/.env
-config.json
+protocol-compliance/node_modules/
+protocol-compliance/.env
