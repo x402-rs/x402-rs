@@ -198,6 +198,7 @@ where
                     pay_to: requirements.pay_to.to_string(),
                     signer: Box::new(PayloadSigner {
                         resource_info: payment_required.resource.clone(),
+                        extensions: payment_required.extensions.clone(),
                         signer: self.signer.clone(),
                         chain_reference,
                         requirements,
@@ -214,6 +215,7 @@ where
 struct PayloadSigner<S> {
     signer: S,
     resource_info: Option<ResourceInfo>,
+    extensions: Option<serde_json::Value>,
     chain_reference: Eip155ChainReference,
     requirements: types::PaymentRequirements,
     requirements_json: OriginalJson,
@@ -248,7 +250,7 @@ where
                     accepted: self.requirements_json.clone(),
                     resource: self.resource_info.clone(),
                     payload: ExactEvmPayload::Eip3009(evm_payload),
-                    extensions: None,
+                    extensions: self.extensions.clone(),
                 }
             }
             AssetTransferMethod::Permit2 => {
@@ -266,7 +268,7 @@ where
                     accepted: self.requirements_json.clone(),
                     resource: self.resource_info.clone(),
                     payload: ExactEvmPayload::Permit2(permit2_payload),
-                    extensions: None,
+                    extensions: self.extensions.clone(),
                 }
             }
         };
