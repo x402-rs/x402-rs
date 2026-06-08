@@ -220,6 +220,7 @@ where
                         signer: self.signer.clone(),
                         chain_reference,
                         requirements,
+                        extensions: payment_required.extensions.clone(),
                         requirements_json: original_requirements_json.clone(),
                     }),
                 };
@@ -233,6 +234,7 @@ where
 struct PayloadSigner<S> {
     signer: S,
     resource_info: Option<ResourceInfo>,
+    extensions: Option<serde_json::Value>,
     chain_reference: Eip155ChainReference,
     requirements: types::PaymentRequirements,
     requirements_json: OriginalJson,
