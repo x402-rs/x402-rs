@@ -1,4 +1,5 @@
 use alloy_primitives::U256;
+use alloy_sol_types::sol;
 use serde::{Deserialize, Serialize};
 use x402_types::lit_str;
 use x402_types::scheme::ExtensionKey;
@@ -60,6 +61,19 @@ pub struct Eip2612GasSponsoringInfo {
     pub deadline: UnixTimestamp,
     /// The 65-byte concatenated EIP-2612 signature `r ++ s ++ v` as a hex bytes string.
     pub signature: EOASignature,
-    /// Extension schema version (currently `"1"`).
-    pub version: String,
+    /// Extension schema version.
+    pub version: Eip2612GasSponsoringV1,
+}
+
+// FIXME Should be feature gated for client
+sol! {
+    #[allow(missing_docs)]
+    #[derive(Debug)]
+    struct Permit {
+        address owner;
+        address spender;
+        uint256 value;
+        uint256 nonce;
+        uint256 deadline;
+    }
 }

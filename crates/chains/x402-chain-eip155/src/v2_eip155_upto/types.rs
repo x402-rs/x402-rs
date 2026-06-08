@@ -126,6 +126,15 @@ pub mod facilitator_client_only {
         "abi/X402UptoPermit2Proxy.json"
     );
 
+    sol!(
+        #[allow(missing_docs)]
+        #[allow(clippy::too_many_arguments)]
+        #[derive(Debug)]
+        #[sol(rpc)]
+        IERC20Permit,
+        "abi/IERC20Permit.json"
+    );
+
     impl From<&Eip2612GasSponsoringInfo> for x402UptoPermit2Proxy::EIP2612Permit {
         fn from(value: &Eip2612GasSponsoringInfo) -> Self {
             Self {

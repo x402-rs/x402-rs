@@ -14,28 +14,32 @@
 //! ```
 
 use alloy_primitives::{Address, U256};
+use alloy_provider::ProviderBuilder;
 use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
 use rand::{RngExt, rng};
 use serde::{Deserialize, Serialize};
+use url::Url;
 use x402_types::proto::v2::{ExtensionsJson, ResourceInfo};
 use x402_types::proto::{OriginalJson, PaymentRequired, v2};
-use x402_types::scheme::X402SchemeId;
 use x402_types::scheme::client::{
     PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
 };
+use x402_types::scheme::{ExtensionKey, X402SchemeId};
 use x402_types::timestamp::UnixTimestamp;
 use x402_types::util::Base64Bytes;
 
-use crate::chain::Eip155ChainReference;
 use crate::chain::permit2::{
     PERMIT2_ADDRESS, Permit2Authorization, Permit2AuthorizationPermitted,
     UPTO_PERMIT2_PROXY_ADDRESS, UptoPermit2Payload, UptoPermit2Witness,
 };
-use crate::eip2612_gas_sponsoring::{Eip2612GasSponsoring, Eip2612GasSponsoringServer};
+use crate::chain::{ChecksummedAddress, EOASignature, Eip155ChainReference};
+use crate::eip2612_gas_sponsoring::{
+    Eip2612GasSponsoring, Eip2612GasSponsoringInfo, Eip2612GasSponsoringServer, Permit,
+};
 use crate::v1_eip155_exact::client::SignerLike;
 use crate::v2_eip155_upto::types::{ISignatureTransfer, PermitWitnessTransferFrom};
-use crate::v2_eip155_upto::{UptoSupportedExtra, V2Eip155Upto};
+use crate::v2_eip155_upto::{IERC20Permit, UptoSupportedExtra, V2Eip155Upto};
 use crate::v2_eip155_upto::{types, x402UptoPermit2Proxy};
 
 /// Parameters for signing a Permit2 upto authorization.
@@ -190,7 +194,7 @@ impl<S, P> X402SchemeId for V2Eip155UptoClient<S, P> {
 impl<S, P> X402SchemeClient for V2Eip155UptoClient<S, P>
 where
     S: SignerLike + Clone + Send + Sync + 'static,
-    P: Clone + Send + Sync + 'static,
+    P: Clone + DoRead2612Nonce + Send + Sync + 'static,
 {
     fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
@@ -248,7 +252,7 @@ struct PayloadSigner<S, P> {
 impl<S, P> PaymentCandidateSigner for PayloadSigner<S, P>
 where
     S: Sync + SignerLike,
-    P: Send + Sync + 'static,
+    P: DoRead2612Nonce + Send + Sync + 'static,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
         println!("sign_payment.0");
@@ -280,6 +284,7 @@ where
             .extensions
             .as_ref()
             .and_then(|extensions| extensions.get::<Eip2612GasSponsoringServer>());
+        let mut extension_map = serde_json::Map::new(); // FIXME this is a bit ugly
         if let Some(eip2612_gas_sponsoring) = eip2612_gas_sponsoring {
             /// Token name and version for permit signature
             #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -298,21 +303,90 @@ where
                     "extra should contain token name and version for eip2612GasSponsoring"
                         .to_string(),
                 ))?;
-            println!("extra {:?}", token_domain);
+            let owner = self.signer.address();
+            let deadline = permit2_payload.permit_2_authorization.deadline;
+            let token_contract = self.requirements.asset;
+            let nonce = self
+                .provider
+                .read_2612_nonce(self.requirements.asset.into(), owner)
+                .await?;
+            let value = self.requirements.amount;
+
+            let domain = eip712_domain! {
+                name: token_domain.name,
+                version: token_domain.version,
+                chain_id: self.chain_reference.inner(),
+                verifying_contract: token_contract.into(),
+            };
+            let permit = Permit {
+                owner,
+                spender: PERMIT2_ADDRESS,
+                value,
+                nonce,
+                deadline: U256::from(deadline.as_secs()),
+            };
+            let signature = self
+                .signer
+                .sign_hash(&permit.eip712_signing_hash(&domain))
+                .await
+                .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
+
+            let info = Eip2612GasSponsoringInfo {
+                from: ChecksummedAddress::from(owner),
+                asset: self.requirements.asset,
+                spender: ChecksummedAddress::from(PERMIT2_ADDRESS),
+                amount: value,
+                nonce,
+                deadline,
+                signature: EOASignature::from(signature),
+                version: eip2612_gas_sponsoring.info.version,
+            };
+            let eip2612_gas_sponsoring = Eip2612GasSponsoring { info };
+
+            extension_map.insert(
+                Eip2612GasSponsoring::EXTENSION_KEY.to_string(),
+                serde_json::to_value(eip2612_gas_sponsoring)?,
+            );
+            // TODO Check against json schema??
+            // TODO THink if it makes sense to have extension/key/whatever separation differently
+
             // FIXME CONTINUE HERE sign the payment
         }
+
+        let extensions = ExtensionsJson(extension_map.into_iter().collect()); // FIXME This is ugly
 
         let payload = v2::PaymentPayload {
             x402_version: v2::X402Version2,
             accepted: self.requirements_json.clone(),
             resource: self.resource_info.clone(),
             payload: permit2_payload,
-            extensions: None,
+            extensions: Some(extensions),
         };
 
         let json = serde_json::to_vec(&payload)?;
         let b64 = Base64Bytes::encode(&json);
 
         Ok(b64.to_string())
+    }
+}
+
+// FIXME Docs
+pub trait DoRead2612Nonce {
+    fn read_2612_nonce(
+        &self,
+        asset: Address,
+        owner: Address,
+    ) -> impl Future<Output = Result<U256, X402Error>> + Send;
+}
+
+impl DoRead2612Nonce for Url {
+    async fn read_2612_nonce(&self, asset: Address, owner: Address) -> Result<U256, X402Error> {
+        let provider = ProviderBuilder::new().connect_http(self.clone());
+        let token = IERC20Permit::new(asset, provider);
+        let nonce =
+            token.nonces(owner).call().await.map_err(|e| {
+                X402Error::SigningError(format!("failed to get permit nonce {e:?}"))
+            })?;
+        Ok(nonce)
     }
 }
