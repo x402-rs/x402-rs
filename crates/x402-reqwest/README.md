@@ -73,7 +73,7 @@ Register scheme clients for each chain/network you want to support:
 
 ```rust,no_run
 use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
-use x402_chain_eip155::{V1Eip155ExactClient, V2Eip155ExactClient};
+use x402_chain_eip155::{V1Eip155ExactClient, V2Eip155ExactClient, V2Eip155UptoClient};
 use x402_chain_solana::{V1SolanaExactClient, V2SolanaExactClient};
 use alloy_signer_local::PrivateKeySigner;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -86,9 +86,11 @@ let solana_keypair = Arc::new(Keypair::from_base58_string("..."));
 let solana_rpc_client = Arc::new(RpcClient::new("https://api.devnet.solana.com"));
 
 let x402_client = X402Client::new()
-    // Register EVM schemes (V1 and V2)
+    // Register EVM exact schemes (V1 and V2)
     .register(V1Eip155ExactClient::new(evm_signer.clone()))
-    .register(V2Eip155ExactClient::new(evm_signer))
+    .register(V2Eip155ExactClient::new(evm_signer.clone()))
+    // Register EVM upto scheme (V2)
+    .register(V2Eip155UptoClient::new(evm_signer))
     // Register Solana schemes (V1 and V2)
     .register(V1SolanaExactClient::new(
         solana_keypair.clone(),
@@ -100,6 +102,8 @@ let http_client = Client::new()
     .with_payments(x402_client)
     .build();
 ```
+
+For an EIP-155 `upto`-only client, see [`examples/x402-reqwest-upto-eip155`](../../examples/x402-reqwest-upto-eip155).
 
 ## How It Works
 
