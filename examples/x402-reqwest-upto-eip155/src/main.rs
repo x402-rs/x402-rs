@@ -1,6 +1,6 @@
 use alloy_signer_local::PrivateKeySigner;
 use dotenvy::dotenv;
-use reqwest::Client;
+use reqwest::{Client, Url};
 use std::env;
 use x402_chain_eip155::V2Eip155UptoClient;
 use x402_reqwest::{ReqwestWithPayments, ReqwestWithPaymentsBuild, X402Client};
@@ -15,7 +15,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .parse()?;
     println!("Using EVM signer address: {:?}", signer.address());
 
-    let rpc_url = env::var("EVM_RPC_URL").unwrap_or_else(|_| "https://mainnet.base.org".into());
+    let rpc_url =
+        env::var("EVM_RPC_URL").unwrap_or_else(|_| "https://mainnet.base.org".to_string());
+    let rpc_url = Url::parse(&rpc_url)?;
     let x402_client =
         X402Client::new().register(V2Eip155UptoClient::new(signer).with_provider(rpc_url));
     let http_client = Client::new().with_payments(x402_client).build();
