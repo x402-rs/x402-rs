@@ -1,7 +1,7 @@
 {
-  "name": "x402-rs-protocol-compliance",
+  "name": "x402-rs-protocol-conformance",
   "version": "0.1.0",
-  "description": "Protocol compliance tests for x402-rs implementation",
+  "description": "Protocol conformance tests for x402-rs implementation",
   "type": "module",
   "scripts": {
     "test": "vitest run",
@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "@types/tmp": "^0.2.6",
     "prettier": "^3.8.3",
     "tsx": "^4.22.4",
@@ -29,6 +29,6 @@
     "get-port": "^7.2.0",
     "hono": "^4.12.23",
     "tmp": "^0.2.7",
-    "viem": "^2.52.0"
+    "viem": "^2.52.2"
   }
 }

@@ -1,6 +1,6 @@
-# x402 Protocol Compliance Test Harness
+# x402 Protocol Conformance Test Harness
 
-This directory contains a comprehensive protocol compliance test harness for the x402-rs project. It tests various combinations of client, server, and facilitator implementations across multiple chains and protocol versions.
+This directory contains a comprehensive protocol conformance test harness for the x402-rs project. It tests various combinations of client, server, and facilitator implementations across multiple chains and protocol versions.
 
 ## Overview
 
@@ -24,9 +24,9 @@ All commands below should be run from the **repository root** (where the main [`
 
 1. **Install Node.js dependencies:**
    ```bash
-   just compliance-install
+   just conformance-install
    ```
-   This runs `pnpm install` in the `protocol-compliance/` directory.
+   This runs `pnpm install` in the `protocol-conformance/` directory.
 
 2. **Build Rust binaries:**
    ```bash
@@ -39,11 +39,11 @@ All commands below should be run from the **repository root** (where the main [`
 
 3. **Configure environment:**
    ```bash
-   cp protocol-compliance/.env.example protocol-compliance/.env
-   # Edit protocol-compliance/.env with your RPC URLs and private keys
+   cp protocol-conformance/.env.example protocol-conformance/.env
+   # Edit protocol-conformance/.env with your RPC URLs and private keys
    ```
 
-   Required environment variables (in `protocol-compliance/.env`):
+   Required environment variables (in `protocol-conformance/.env`):
    - `BASE_SEPOLIA_RPC_URL` - Base Sepolia RPC endpoint
    - `BASE_SEPOLIA_BUYER_PRIVATE_KEY` - Private key for test buyer (with `0x` prefix)
    - `BASE_SEPOLIA_FACILITATOR_PRIVATE_KEY` - Private key for facilitator
@@ -56,23 +56,23 @@ All commands below should be run from the **repository root** (where the main [`
 All commands are run from the **repository root** using the main [`justfile`](justfile):
 
 ```bash
-# Run all protocol compliance tests (builds + runs tests)
-just compliance-test-all
+# Run all protocol conformance tests (builds + runs tests)
+just conformance-test-all
 
 # Run all tests without rebuilding
-just compliance-test
+just conformance-test
 
 # Type check the TypeScript code
-just compliance-typecheck
+just conformance-typecheck
 
 # Install dependencies
-just compliance-install
+just conformance-install
 ```
 
-For more granular control, you can run commands directly from the `protocol-compliance/` directory:
+For more granular control, you can run commands directly from the `protocol-conformance/` directory:
 
 ```bash
-cd protocol-compliance
+cd protocol-conformance
 
 # Run all tests
 pnpm test
@@ -233,7 +233,7 @@ All Rust binaries are managed through `ProcessHandle` ([`src/utils/process-handl
 ## Project Structure
 
 ```
-protocol-compliance/
+protocol-conformance/
 ├── src/
 │   ├── tests/                    # Test files
 │   │   ├── v2-eip155-exact-*.ts  # EIP155 tests
@@ -322,7 +322,7 @@ v2-eip155-exact-rs-rs-rs.bazaar.test.ts
 
 **Facilitator fails to start:**
 - Check that `target/debug/x402-facilitator` exists (run `just build-all` from repo root)
-- Verify environment variables are set in `protocol-compliance/.env`
+- Verify environment variables are set in `protocol-conformance/.env`
 - Check RPC URLs are accessible
 
 **Port conflicts:**
@@ -343,7 +343,7 @@ v2-eip155-exact-rs-rs-rs.bazaar.test.ts
 
 Run tests with verbose output:
 ```bash
-cd protocol-compliance && pnpm test -- --verbose
+cd protocol-conformance && pnpm test -- --verbose
 ```
 
 ## Contributing

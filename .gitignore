@@ -5,5 +5,5 @@ crates/*/target/
 facilitator/target/
 facilitator/config.json
 examples/*/.env
-protocol-compliance/node_modules/
-protocol-compliance/.env
+protocol-conformance/node_modules/
+protocol-conformance/.env
