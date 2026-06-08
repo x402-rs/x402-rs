@@ -57,7 +57,7 @@ All commands are run from the **repository root** using the main [`justfile`](ju
 
 ```bash
 # Run all protocol conformance tests (builds + runs tests)
-just conformance-test-all
+just conformance
 
 # Run all tests without rebuilding
 just conformance-test
