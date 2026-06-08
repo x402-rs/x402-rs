@@ -19,8 +19,8 @@ use alloy_primitives::U256;
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use solana_signer::Signer;
-use x402_types::proto::v2::ResourceInfo;
 use x402_types::proto::v2::X402Version2;
+use x402_types::proto::v2::{ExtensionsJson, ResourceInfo};
 use x402_types::proto::{OriginalJson, PaymentRequired};
 use x402_types::scheme::X402SchemeId;
 use x402_types::scheme::client::{
@@ -113,7 +113,7 @@ struct PayloadSigner<S, R> {
     signer: S,
     rpc_client: R,
     resource: Option<ResourceInfo>,
-    extensions: Option<serde_json::Value>,
+    extensions: Option<ExtensionsJson>,
     requirements: PaymentRequirements,
     requirements_json: OriginalJson,
 }

@@ -18,7 +18,7 @@ use alloy_primitives::{Address, U256};
 use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
 use rand::{RngExt, rng};
-use x402_types::proto::v2::ResourceInfo;
+use x402_types::proto::v2::{ExtensionsJson, ResourceInfo};
 use x402_types::proto::{OriginalJson, PaymentRequired, v2};
 use x402_types::scheme::X402SchemeId;
 use x402_types::scheme::client::{
@@ -215,7 +215,7 @@ where
 struct PayloadSigner<S> {
     signer: S,
     resource_info: Option<ResourceInfo>,
-    extensions: Option<serde_json::Value>,
+    extensions: Option<ExtensionsJson>,
     chain_reference: Eip155ChainReference,
     requirements: types::PaymentRequirements,
     requirements_json: OriginalJson,

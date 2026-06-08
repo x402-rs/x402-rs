@@ -31,7 +31,7 @@ use tracing::instrument;
 impl Permit2PaymentPayloadExt for Permit2PaymentPayload {
     fn eip2612_gas_sponsoring(&self) -> Option<Eip2612GasSponsoringInfo> {
         let extensions = self.extensions.as_ref()?;
-        let ext_obj = extensions.as_object()?;
+        let ext_obj = extensions.0.as_object()?; // FIXME
         let raw = ext_obj.get(EXTENSION_KEY)?;
         let sponsoring: Eip2612GasSponsoring = serde_json::from_value(raw.clone()).ok()?;
         Some(sponsoring.info)

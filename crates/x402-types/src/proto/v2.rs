@@ -175,7 +175,23 @@ pub struct PaymentPayload<TPaymentRequirements, TPayload> {
     pub x402_version: X402Version2,
     /// Optional extension data provided by the client.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub extensions: Option<serde_json::Value>,
+    pub extensions: Option<ExtensionsJson>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+// FIXME Docs
+pub struct ExtensionsJson(pub serde_json::Value);
+
+impl From<ExtensionsJson> for serde_json::Value {
+    fn from(value: ExtensionsJson) -> Self {
+        value.0
+    }
+}
+
+impl From<serde_json::Value> for ExtensionsJson {
+    fn from(value: serde_json::Value) -> Self {
+        ExtensionsJson(value)
+    }
 }
 
 /// Payment requirements set by the seller (V2 format).
@@ -248,7 +264,7 @@ pub struct PaymentRequired<TAccepts = PaymentRequirements> {
     pub accepts: Vec<TAccepts>,
     /// Optional protocol extension declarations provided by the server.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub extensions: Option<serde_json::Value>,
+    pub extensions: Option<ExtensionsJson>,
 }
 
 /// Builder for creating V2 payment requirements.
