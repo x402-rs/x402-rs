@@ -1,4 +1,4 @@
-# x402-reqwest-example
+# x402-reqwest-exact
 
 An example client that uses [`x402-reqwest`](https://crates.io/crates/x402-reqwest) to pay for HTTP requests using the x402 protocol.
 

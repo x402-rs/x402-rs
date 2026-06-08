@@ -13962,7 +13962,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "x402-reqwest-example"
+name = "x402-reqwest-exact"
 version = "0.1.0"
 dependencies = [
  "alloy-signer-local",

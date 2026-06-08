@@ -7,7 +7,7 @@ build-all:
   cd crates/x402-reqwest && cargo build
   cd crates/x402-facilitator-local && cargo build
   cd examples/x402-axum-example && cargo build
-  cd examples/x402-reqwest-example && cargo build
+  cd examples/x402-reqwest-exact && cargo build
 
 format-all:
   cd facilitator/ && cargo fmt
@@ -18,7 +18,7 @@ format-all:
   cd crates/x402-reqwest && cargo fmt
   cd crates/x402-facilitator-local && cargo fmt
   cd examples/x402-axum-example && cargo fmt
-  cd examples/x402-reqwest-example && cargo fmt
+  cd examples/x402-reqwest-exact && cargo fmt
 
 fmt-all: format-all
 
@@ -32,7 +32,7 @@ clippy-all:
   cd crates/x402-reqwest && cargo clippy
   cd crates/x402-facilitator-local && cargo clippy
   cd examples/x402-axum-example && cargo clippy
-  cd examples/x402-reqwest-example && cargo clippy
+  cd examples/x402-reqwest-exact && cargo clippy
 
 check-all:
   cd facilitator/ && cargo check --features full
@@ -44,7 +44,7 @@ check-all:
   cd crates/x402-reqwest && cargo check --features full
   cd crates/x402-facilitator-local && cargo check --features full
   cd examples/x402-axum-example && cargo check --features full
-  cd examples/x402-reqwest-example && cargo check --features full
+  cd examples/x402-reqwest-exact && cargo check --features full
 
 test-all:
   cd facilitator/ && cargo test
@@ -55,7 +55,7 @@ test-all:
   cd crates/x402-reqwest && cargo test
   cd crates/x402-facilitator-local && cargo test
   cd examples/x402-axum-example && cargo test
-  cd examples/x402-reqwest-example && cargo test
+  cd examples/x402-reqwest-exact && cargo test
 
 # Protocol Conformance Tests
 conformance-install:

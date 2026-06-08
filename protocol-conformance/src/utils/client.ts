@@ -22,7 +22,7 @@ export async function invokeRustClient(
     | { solana: string },
 ) {
   const binaryPath = new URL(
-    "target/debug/x402-reqwest-example",
+    "target/debug/x402-reqwest-exact",
     WORKSPACE_ROOT,
   ).pathname;
   let env: any = {

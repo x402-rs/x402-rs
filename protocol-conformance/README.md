@@ -35,7 +35,7 @@ All commands below should be run from the **repository root** (where the main [`
    This builds all crates including:
    - `x402-facilitator` (facilitator binary)
    - `x402-axum-example` (Rust server example)
-   - `x402-reqwest-example` (Rust client example)
+   - `x402-reqwest-exact` (Rust client example)
 
 3. **Configure environment:**
    ```bash
@@ -214,7 +214,7 @@ export class RSFacilitatorHandle {
 #### 3. Client Utilities ([`src/utils/client.ts`](src/utils/client.ts))
 
 **Rust Client (`invokeRustClient`):**
-- Spawns `target/debug/x402-reqwest-example` as one-shot process
+- Spawns `target/debug/x402-reqwest-exact` as one-shot process
 - Returns stdout for verification
 - Supports EIP155 and Solana private keys
 

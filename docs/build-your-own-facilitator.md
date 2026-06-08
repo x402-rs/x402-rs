@@ -418,7 +418,7 @@ let app = Router::new()
 
 - [x402-facilitator](../facilitator) - Production-ready facilitator binary
 - [x402-axum-example](../examples/x402-axum-example) - Server example
-- [x402-reqwest-example](../examples/x402-reqwest-example) - Client example
+- [x402-reqwest-exact](../examples/x402-reqwest-exact) - Client example
 
 ## Support
 

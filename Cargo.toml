@@ -10,7 +10,7 @@ members = [
   "crates/chains/x402-chain-aptos",
   "facilitator",
   "examples/x402-axum-example",
-  "examples/x402-reqwest-example",
+  "examples/x402-reqwest-exact",
 ]
 
 [workspace.package]
