@@ -246,6 +246,9 @@ pub struct PaymentRequired<TAccepts = PaymentRequirements> {
     /// List of acceptable payment methods.
     #[serde(default = "Vec::default")]
     pub accepts: Vec<TAccepts>,
+    /// Optional protocol extension declarations provided by the server.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extensions: Option<serde_json::Value>,
 }
 
 /// Builder for creating V2 payment requirements.
