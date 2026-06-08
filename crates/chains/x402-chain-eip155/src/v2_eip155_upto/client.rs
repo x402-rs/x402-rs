@@ -17,6 +17,7 @@ use alloy_primitives::{Address, U256};
 use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
 use rand::{RngExt, rng};
+use serde::{Deserialize, Serialize};
 use x402_types::proto::v2::{ExtensionsJson, ResourceInfo};
 use x402_types::proto::{OriginalJson, PaymentRequired, v2};
 use x402_types::scheme::X402SchemeId;
@@ -31,6 +32,7 @@ use crate::chain::permit2::{
     PERMIT2_ADDRESS, Permit2Authorization, Permit2AuthorizationPermitted,
     UPTO_PERMIT2_PROXY_ADDRESS, UptoPermit2Payload, UptoPermit2Witness,
 };
+use crate::eip2612_gas_sponsoring::{Eip2612GasSponsoring, Eip2612GasSponsoringServer};
 use crate::v1_eip155_exact::client::SignerLike;
 use crate::v2_eip155_upto::types::{ISignatureTransfer, PermitWitnessTransferFrom};
 use crate::v2_eip155_upto::{UptoSupportedExtra, V2Eip155Upto};
@@ -249,18 +251,17 @@ where
     P: Send + Sync + 'static,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
+        println!("sign_payment.0");
         // The server must provide the facilitator address via requirements.extra.facilitatorAddress
-        let extra =
-            self.requirements.extra.as_ref().and_then(|v| {
-                serde_json::from_value::<UptoSupportedExtra<Address>>(v.clone()).ok()
-            });
-        let facilitator_address =
-            extra
-                .map(|extra| extra.facilitator_address)
-                .ok_or(X402Error::SigningError(
-                    "upto scheme requires facilitatorAddress in payment requirements extra"
-                        .to_string(),
-                ))?;
+        let facilitator_address = self
+            .requirements
+            .extra
+            .as_ref()
+            .and_then(|v| serde_json::from_value::<UptoSupportedExtra<Address>>(v.clone()).ok())
+            .map(|extra| extra.facilitator_address)
+            .ok_or(X402Error::SigningError(
+                "upto scheme requires facilitatorAddress in payment requirements extra".to_string(),
+            ))?;
 
         let params = Permit2UptoSigningParams {
             chain_id: self.chain_reference.inner(),
@@ -271,7 +272,35 @@ where
             facilitator: facilitator_address,
         };
 
+        println!("sign_payment.1");
         let permit2_payload = sign_permit2_upto_authorization(&self.signer, &params).await?;
+        println!("sign_payment.2");
+        println!("extensions {:?}", self.extensions);
+        let eip2612_gas_sponsoring = self
+            .extensions
+            .as_ref()
+            .and_then(|extensions| extensions.get::<Eip2612GasSponsoringServer>());
+        if let Some(eip2612_gas_sponsoring) = eip2612_gas_sponsoring {
+            /// Token name and version for permit signature
+            #[derive(Debug, Clone, Serialize, Deserialize)]
+            struct TokenDomain {
+                pub name: String,
+                pub version: String,
+            }
+
+            println!("eip2612_gas_sponsoring {:?}", eip2612_gas_sponsoring);
+            let token_domain = self
+                .requirements
+                .extra
+                .as_ref()
+                .and_then(|v| serde_json::from_value::<TokenDomain>(v.clone()).ok())
+                .ok_or(X402Error::SigningError(
+                    "extra should contain token name and version for eip2612GasSponsoring"
+                        .to_string(),
+                ))?;
+            println!("extra {:?}", token_domain);
+            // FIXME CONTINUE HERE sign the payment
+        }
 
         let payload = v2::PaymentPayload {
             x402_version: v2::X402Version2,

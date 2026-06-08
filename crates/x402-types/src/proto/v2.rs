@@ -224,7 +224,7 @@ pub struct PaymentRequirements<
     TScheme = String,
     TAmount = String,
     TAddress = String,
-    TExtra = Option<serde_json::Value>,
+    TExtra = Option<serde_json::Value>, // FIXME Probably should be raw value
 > {
     /// The payment scheme (e.g., "exact").
     pub scheme: TScheme,
