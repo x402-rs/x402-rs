@@ -13,7 +13,7 @@ import { TEST_CONFIG } from "../utils/config";
 
 const PATH = "/eip155-upto";
 
-describe("v2-eip155-upto-ts-ts-rs: x402 v2, eip155, upto, TS Client + TS Server + Rust Facilitator", () => {
+describe("v2-eip155-upto-ts-ts-rs: x402 v2, eip155, upto, TS Client + RS Server + RS Facilitator", () => {
   let facilitator: RSFacilitatorHandle;
   let server: RSServerHandle;
 

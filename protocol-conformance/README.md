@@ -97,23 +97,30 @@ The test harness supports these axes of configuration (not all combinations are 
 | x402 Version | Client | Server | Facilitator | Namespace | Scheme | Extension                                   |
 |--------------|--------|--------|-------------|-----------|--------|---------------------------------------------|
 | v1           | Rust   | Rust   | Local       | eip155    | exact  | (none)                                      |
-| v2           | TS     | TS     | TS          | solana    |        | eip2612GasSponsoring (eip155 + exact)       |
+| v2           | TS     | TS     | TS          | solana    | upto   | eip2612GasSponsoring (eip155 + exact)       |
 |              |        |        | Remote      | aptos     |        | erc20ApprovalGasSponsoring (eip155 + exact) |
 |              |        |        |             |           |        | sign-in-with-x                              |
 |              |        |        |             |           |        | bazaar (v2 only)                            |
 
 ### Current Test Coverage
 
-| # | Combination              | Client     | Server     | Facilitator | Chain  | Status |
-|---|--------------------------|------------|------------|-------------|--------|--------|
-| 1 | v2-eip155-exact-rs-rs-rs | Rust       | Rust       | Rust        | eip155 | ✅      |
-| 2 | v2-eip155-exact-ts-rs-rs | TypeScript | Rust       | Rust        | eip155 | ✅      |
-| 3 | v2-eip155-exact-ts-ts-rs | TypeScript | TypeScript | Rust        | eip155 | ✅      |
-| 4 | v2-eip155-exact-rs-ts-rs | Rust       | TypeScript | Rust        | eip155 | ✅      |
-| 5 | v2-solana-exact-rs-rs-rs | Rust       | Rust       | Rust        | Solana | ✅      |
-| 6 | v2-solana-exact-ts-rs-rs | TypeScript | Rust       | Rust        | Solana | ✅      |
-| 7 | v2-solana-exact-rs-ts-rs | Rust       | TypeScript | Rust        | Solana | ✅      |
-| 8 | v2-solana-exact-ts-ts-rs | TypeScript | TypeScript | Rust        | Solana | ✅      |
+| Combination                      | Client     | Server     | Facilitator | Chain  | Modification  | Status |
+|----------------------------------|------------|------------|-------------|--------|---------------|--------|
+| v2-eip155-exact-rs-rs-rs         | Rust       | Rust       | Rust        | eip155 |               | ✅      |
+| v2-eip155-exact-rs-rs-rs.permit2 | Rust       | Rust       | Rust        | eip155 | exact permit2 | ✅      |
+| v2-eip155-exact-ts-rs-rs         | TypeScript | Rust       | Rust        | eip155 |               | ✅      |
+| v2-eip155-exact-ts-rs-rs.permit2 | TypeScript | Rust       | Rust        | eip155 | exact permit2 | ✅      |
+| v2-eip155-exact-ts-ts-rs         | TypeScript | TypeScript | Rust        | eip155 |               | ✅      |
+| v2-eip155-exact-ts-ts-rs.permit2 | TypeScript | TypeScript | Rust        | eip155 | exact permit2 | ✅      |
+| v2-eip155-exact-rs-ts-rs         | Rust       | TypeScript | Rust        | eip155 |               | ✅      |
+| v2-eip155-exact-rs-ts-rs.permit2 | Rust       | TypeScript | Rust        | eip155 | exact permit2 | ✅      |
+| v2-eip155-upto-ts-rs-rs          | TypeScript | Rust       | Rust        | eip155 |               | ✅      |
+| v2-eip155-upto-ts-ts-rs          | TypeScript | TypeScript | Rust        | eip155 |               | ✅      |
+| v2-solana-exact-rs-rs-rs         | Rust       | Rust       | Rust        | Solana |               | ✅      |
+| v2-solana-exact-ts-rs-rs         | TypeScript | Rust       | Rust        | Solana |               | ✅      |
+| v2-solana-exact-rs-ts-rs         | Rust       | TypeScript | Rust        | Solana |               | ✅      |
+| v2-solana-exact-ts-ts-rs         | TypeScript | TypeScript | Rust        | Solana |               | ✅      |
+| v2-solana-exact-ts-ts-rs         | TypeScript | TypeScript | Rust        | Solana |               | ✅      |
 
 > **Note:** Combination 3 (TS Client + TS Server + Rust Facilitator) is critical for testing the Rust facilitator's compatibility with the canonical TypeScript implementation, isolating any quirks in the Rust facilitator.
 
