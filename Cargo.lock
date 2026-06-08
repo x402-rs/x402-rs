@@ -13977,6 +13977,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "x402-reqwest-upto-eip155"
+version = "0.1.0"
+dependencies = [
+ "alloy-signer-local",
+ "dotenvy",
+ "reqwest 0.13.4",
+ "tokio",
+ "x402-chain-eip155",
+ "x402-reqwest",
+]
+
+[[package]]
 name = "x402-types"
 version = "1.5.6"
 dependencies = [

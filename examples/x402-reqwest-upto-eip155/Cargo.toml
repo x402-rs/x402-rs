@@ -1,0 +1,18 @@
+[package]
+name = "x402-reqwest-upto-eip155"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+full = []
+
+[dependencies]
+x402-chain-eip155 = { workspace = true, features = ["client", "telemetry"] }
+x402-reqwest = { workspace = true, features = ["telemetry"] }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+dotenvy = { workspace = true }
+
+# EVM: Alloy
+alloy-signer-local = { version = "2.0" }

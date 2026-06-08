@@ -11,6 +11,7 @@ members = [
   "facilitator",
   "examples/x402-axum-example",
   "examples/x402-reqwest-exact",
+  "examples/x402-reqwest-upto-eip155"
 ]
 
 [workspace.package]

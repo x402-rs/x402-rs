@@ -165,6 +165,16 @@ impl<S> V2Eip155UptoClient<S, ()> {
     }
 }
 
+impl<S, P> V2Eip155UptoClient<S, P> {
+    // FIXME Doc comments
+    pub fn with_provider<P2>(self, provider: P2) -> V2Eip155UptoClient<S, P2> {
+        V2Eip155UptoClient {
+            signer: self.signer,
+            provider,
+        }
+    }
+}
+
 impl<S, P> X402SchemeId for V2Eip155UptoClient<S, P> {
     fn namespace(&self) -> &str {
         V2Eip155Upto.namespace()
