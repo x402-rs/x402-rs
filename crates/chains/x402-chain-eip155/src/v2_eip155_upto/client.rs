@@ -188,7 +188,7 @@ impl<S, P> X402SchemeId for V2Eip155UptoClient<S, P> {
 impl<S, P> X402SchemeClient for V2Eip155UptoClient<S, P>
 where
     S: SignerLike + Clone + Send + Sync + 'static,
-    P: Send + Sync,
+    P: Clone + Send + Sync + 'static,
 {
     fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
@@ -218,6 +218,7 @@ where
                     signer: Box::new(PayloadSigner {
                         resource_info: payment_required.resource.clone(),
                         signer: self.signer.clone(),
+                        provider: self.provider.clone(),
                         chain_reference,
                         requirements,
                         extensions: payment_required.extensions.clone(),
@@ -231,8 +232,9 @@ where
 }
 
 #[allow(dead_code)] // Public for consumption by downstream crates.
-struct PayloadSigner<S> {
+struct PayloadSigner<S, P> {
     signer: S,
+    provider: P,
     resource_info: Option<ResourceInfo>,
     extensions: Option<serde_json::Value>,
     chain_reference: Eip155ChainReference,
@@ -241,9 +243,10 @@ struct PayloadSigner<S> {
 }
 
 #[async_trait]
-impl<S> PaymentCandidateSigner for PayloadSigner<S>
+impl<S, P> PaymentCandidateSigner for PayloadSigner<S, P>
 where
     S: Sync + SignerLike,
+    P: Send + Sync + 'static,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
         // The server must provide the facilitator address via requirements.extra.facilitatorAddress
