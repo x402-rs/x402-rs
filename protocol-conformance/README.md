@@ -94,13 +94,13 @@ pnpm typecheck
 
 The test harness supports these axes of configuration (not all combinations are valid or interesting):
 
-| x402 Version | Client    | Server    | Facilitator | Namespace | Scheme | Extension                                   |
-|--------------|-----------|-----------|-------------|-----------|--------|---------------------------------------------|
-| v1           | Rust (rs) | Rust (rs) | Local (rs)  | eip155    | exact  | (none)                                      |
-| v2           | TS (ts)   | TS (ts)   | TS (@x402)  | solana    |        | eip2612GasSponsoring (eip155 + exact)       |
-|              |           |           | Remote      | aptos     |        | erc20ApprovalGasSponsoring (eip155 + exact) |
-|              |           |           |             |           |        | sign-in-with-x                              |
-|              |           |           |             |           |        | bazaar (v2 only)                            |
+| x402 Version | Client | Server | Facilitator | Namespace | Scheme | Extension                                   |
+|--------------|--------|--------|-------------|-----------|--------|---------------------------------------------|
+| v1           | Rust   | Rust   | Local       | eip155    | exact  | (none)                                      |
+| v2           | TS     | TS     | TS          | solana    |        | eip2612GasSponsoring (eip155 + exact)       |
+|              |        |        | Remote      | aptos     |        | erc20ApprovalGasSponsoring (eip155 + exact) |
+|              |        |        |             |           |        | sign-in-with-x                              |
+|              |        |        |             |           |        | bazaar (v2 only)                            |
 
 ### Current Test Coverage
 
