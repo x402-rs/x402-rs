@@ -63,6 +63,7 @@
 use axum_core::extract::Request;
 use axum_core::response::Response;
 use http::{HeaderMap, Uri};
+use serde::Serialize;
 use std::convert::Infallible;
 use std::future::Future;
 use std::pin::Pin;
@@ -73,6 +74,8 @@ use tower::util::BoxCloneSyncService;
 use tower::{Layer, Service};
 use url::Url;
 use x402_types::facilitator::Facilitator;
+use x402_types::proto::v2::ExtensionsJson;
+use x402_types::scheme::ExtensionKey;
 
 use crate::facilitator_client::FacilitatorClient;
 use crate::paygate::{
@@ -89,6 +92,7 @@ pub struct X402Middleware<F> {
     facilitator: F,
     base_url: Option<Url>,
     settle_before_execution: bool,
+    extensions: ExtensionsJson,
 }
 
 impl<F> X402Middleware<F> {
@@ -108,6 +112,7 @@ impl<F> X402Middleware<F> {
             facilitator,
             base_url: None,
             settle_before_execution: false,
+            extensions: ExtensionsJson::default(),
         }
     }
 
@@ -128,6 +133,7 @@ impl X402Middleware<Arc<FacilitatorClient>> {
             facilitator: Arc::new(facilitator),
             base_url: None,
             settle_before_execution: false,
+            extensions: ExtensionsJson::default(),
         }
     }
 
@@ -138,6 +144,7 @@ impl X402Middleware<Arc<FacilitatorClient>> {
             facilitator: Arc::new(facilitator),
             base_url: None,
             settle_before_execution: false,
+            extensions: ExtensionsJson::default(),
         })
     }
 
@@ -156,7 +163,22 @@ impl X402Middleware<Arc<FacilitatorClient>> {
             facilitator,
             base_url: self.base_url.clone(),
             settle_before_execution: self.settle_before_execution,
+            extensions: self.extensions.clone(),
         }
+    }
+}
+
+impl<F> X402Middleware<F> {
+    pub fn with_extension<TExtension>(mut self, extension: TExtension) -> Self
+    where
+        TExtension: ExtensionKey + Serialize,
+    {
+        let mut extensions = self.extensions;
+        extensions
+            .insert(extension)
+            .expect("extension should serialize into json just fine"); // FIXME fix expect message
+        self.extensions = extensions;
+        self
     }
 }
 
@@ -229,6 +251,7 @@ where
             price_source: StaticPriceTags::new(vec![price_tag]),
             base_url: self.base_url.clone().map(Arc::new),
             resource: Arc::new(ResourceInfoBuilder::default()),
+            extensions: Arc::new(ExtensionsJson::default()),
             settle_before_execution: self.settle_before_execution,
         }
     }
@@ -272,6 +295,7 @@ where
             price_source: DynamicPriceTags::new(callback),
             base_url: self.base_url.clone().map(Arc::new),
             resource: Arc::new(ResourceInfoBuilder::default()),
+            extensions: Arc::new(ExtensionsJson::default()),
             settle_before_execution: self.settle_before_execution,
         }
     }
@@ -288,6 +312,7 @@ pub struct X402LayerBuilder<TSource, TFacilitator> {
     base_url: Option<Arc<Url>>,
     price_source: TSource,
     resource: Arc<ResourceInfoBuilder>,
+    extensions: Arc<ExtensionsJson>,
 }
 
 impl<TPriceTag, TFacilitator> X402LayerBuilder<StaticPriceTags<TPriceTag>, TFacilitator>
@@ -336,6 +361,18 @@ impl<TSource, TFacilitator> X402LayerBuilder<TSource, TFacilitator> {
         self.resource = Arc::new(new_resource);
         self
     }
+
+    pub fn with_extension<TExtension>(mut self, extension: TExtension) -> Self
+    where
+        TExtension: ExtensionKey + Serialize,
+    {
+        let mut extensions = (*self.extensions).clone();
+        extensions
+            .insert(extension)
+            .expect("extension should serialize into json just fine"); // FIXME fix expect message
+        self.extensions = Arc::new(extensions);
+        self
+    }
 }
 
 impl<S, TSource, TFacilitator> Layer<S> for X402LayerBuilder<TSource, TFacilitator>
@@ -354,6 +391,7 @@ where
             base_url: self.base_url.clone(),
             price_source: self.price_source.clone(),
             resource: self.resource.clone(),
+            extensions: self.extensions.clone(),
             inner: BoxCloneSyncService::new(inner),
         }
     }
@@ -375,6 +413,8 @@ pub struct X402MiddlewareService<TSource, TFacilitator> {
     price_source: TSource,
     /// Resource information
     resource: Arc<ResourceInfoBuilder>,
+    /// Protocol extensions declared by the protected endpoint
+    extensions: Arc<ExtensionsJson>,
     /// The inner Axum service being wrapped
     inner: BoxCloneSyncService<Request, Response, Infallible>,
 }
@@ -400,6 +440,7 @@ where
         let facilitator = self.facilitator.clone();
         let base_url = self.base_url.clone();
         let resource_builder = self.resource.clone();
+        let extensions = self.extensions.clone();
         let settle_before_execution = self.settle_before_execution;
         let mut inner = self.inner.clone();
 
@@ -422,6 +463,7 @@ where
                     settle_before_execution,
                     accepts: Arc::new(accepts),
                     resource,
+                    extensions,
                 };
                 gate.enrich_accepts().await;
                 gate

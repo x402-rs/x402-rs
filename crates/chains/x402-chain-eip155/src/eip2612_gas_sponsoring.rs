@@ -14,6 +14,7 @@
 
 use alloy_primitives::U256;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 use x402_types::lit_str;
 use x402_types::scheme::ExtensionKey;
 use x402_types::timestamp::UnixTimestamp;
@@ -36,6 +37,13 @@ pub struct Eip2612GasSponsoring {
     pub info: Eip2612GasSponsoringInfo,
 }
 
+impl Eip2612GasSponsoring {
+    // FIXME Doc comments
+    pub fn server() -> Eip2612GasSponsoringServer {
+        Eip2612GasSponsoringServer::default()
+    }
+}
+
 impl ExtensionKey for Eip2612GasSponsoring {
     const EXTENSION_KEY: &'static str = "eip2612GasSponsoring";
 }
@@ -54,11 +62,20 @@ pub struct Eip2612GasSponsoringServer {
     /// Human-readable extension metadata advertised by the facilitator.
     pub info: Eip2612GasSponsoringServerInfo,
     /// JSON Schema describing the expected client payload structure.
-    pub schema: Box<serde_json::value::RawValue>,
+    pub schema: serde_json::Value,
 }
 
 impl ExtensionKey for Eip2612GasSponsoringServer {
     const EXTENSION_KEY: &'static str = Eip2612GasSponsoring::EXTENSION_KEY;
+}
+
+impl Default for Eip2612GasSponsoringServer {
+    fn default() -> Self {
+        Self {
+            info: Eip2612GasSponsoringServerInfo::default(),
+            schema: SCHEMA.clone(),
+        }
+    }
 }
 
 lit_str!(Eip2612GasSponsoringV1, "1");
@@ -72,6 +89,17 @@ pub struct Eip2612GasSponsoringServerInfo {
     pub description: String,
     /// Extension schema version; currently always `"1"`.
     pub version: Eip2612GasSponsoringV1,
+}
+
+impl Default for Eip2612GasSponsoringServerInfo {
+    fn default() -> Self {
+        Self {
+            description:
+                "The facilitator accepts EIP-2612 gasless Permit to `Permit2` canonical contract."
+                    .to_string(),
+            version: Eip2612GasSponsoringV1,
+        }
+    }
 }
 
 /// Extension info provided by the client inside the `eip2612GasSponsoring` extension.
@@ -119,3 +147,63 @@ sol! {
         uint256 deadline;
     }
 }
+
+// FIXME Doc comments
+static SCHEMA: LazyLock<serde_json::Value> = LazyLock::new(|| {
+    serde_json::json!({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            "from": {
+                "type": "string",
+                "pattern": "^0x[a-fA-F0-9]{40}$",
+                "description": "The address of the sender.",
+            },
+            "asset": {
+                "type": "string",
+                "pattern": "^0x[a-fA-F0-9]{40}$",
+                "description": "The address of the ERC-20 token contract.",
+            },
+            "spender": {
+                "type": "string",
+                "pattern": "^0x[a-fA-F0-9]{40}$",
+                "description": "The address of the spender (Canonical Permit2).",
+            },
+            "amount": {
+                "type": "string",
+                "pattern": "^[0-9]+$",
+                "description": "The amount to approve (uint256). Typically MaxUint.",
+            },
+            "nonce": {
+                "type": "string",
+                "pattern": "^[0-9]+$",
+                "description": "The current nonce of the sender.",
+            },
+            "deadline": {
+                "type": "string",
+                "pattern": "^[0-9]+$",
+                "description": "The timestamp at which the signature expires.",
+            },
+            "signature": {
+                "type": "string",
+                "pattern": "^0x[a-fA-F0-9]+$",
+                "description": "The 65-byte concatenated signature (r, s, v) as a hex string.",
+            },
+            "version": {
+                "type": "string",
+                "pattern": "^[0-9]+(\\.[0-9]+)*$",
+                "description": "Schema version identifier.",
+            },
+        },
+        "required": [
+            "from",
+            "asset",
+            "spender",
+            "amount",
+            "nonce",
+            "deadline",
+            "signature",
+            "version",
+        ],
+    })
+});

@@ -155,6 +155,7 @@ pub trait PaygateProtocol: Clone + Send + Sync + 'static {
         err: PaygateError,
         accepts: &[Self],
         resource: &v2::ResourceInfo,
+        extensions: &ExtensionsJson,
     ) -> Response;
 
     /// Converts the verify response to the protocol-specific format and validates it.
@@ -206,6 +207,7 @@ impl PaygateProtocol for v1::PriceTag {
         err: PaygateError,
         accepts: &[Self],
         resource: &v2::ResourceInfo,
+        _extensions: &ExtensionsJson,
     ) -> Response {
         match err {
             PaygateError::Verification(err) => {
@@ -327,6 +329,7 @@ impl PaygateProtocol for v2::PriceTag {
         err: PaygateError,
         accepts: &[Self],
         resource: &v2::ResourceInfo,
+        extensions: &ExtensionsJson,
     ) -> Response {
         match err {
             PaygateError::Verification(err) => {
@@ -340,7 +343,7 @@ impl PaygateProtocol for v2::PriceTag {
                     accepts: accepts.iter().map(|pt| pt.requirements.clone()).collect(),
                     x402_version: v2::X402Version2,
                     resource: Some(resource.clone()),
-                    extensions: ExtensionsJson::default(),
+                    extensions: extensions.clone(),
                 };
                 // V2 sends payment required in the "Payment-Required" header (base64 encoded)
                 let payment_required_bytes =
@@ -414,6 +417,8 @@ pub struct Paygate<TPriceTag, TFacilitator> {
     pub accepts: Arc<Vec<TPriceTag>>,
     /// Resource information for the protected endpoint
     pub resource: v2::ResourceInfo,
+    /// Protocol extensions declared by the protected endpoint
+    pub extensions: Arc<ExtensionsJson>,
 }
 
 impl<TPriceTag, TFacilitator> Paygate<TPriceTag, TFacilitator> {
@@ -478,6 +483,7 @@ where
                     err,
                     &self.accepts,
                     &self.resource,
+                    &self.extensions,
                 ))
             }
         }

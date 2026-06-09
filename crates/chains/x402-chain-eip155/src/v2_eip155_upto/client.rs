@@ -382,6 +382,7 @@ where
         let mut client_extensions = ExtensionsJson::new();
 
         if let Some(eip2612_gas_sponsoring) = self.extensions.get::<Eip2612GasSponsoringServer>() {
+            // FIXME Check against server schema
             let eip2612_gas_sponsoring_result = self
                 .try_eip2612_gas_sponsoring(
                     permit2_payload.permit_2_authorization.deadline,

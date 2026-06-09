@@ -10,6 +10,7 @@ use std::env;
 use tracing::instrument;
 use x402_axum::X402Middleware;
 use x402_chain_eip155::chain::{AssetTransferMethod, Eip155TokenDeployment};
+use x402_chain_eip155::eip2612_gas_sponsoring::Eip2612GasSponsoring;
 use x402_chain_eip155::{KnownNetworkEip155, V1Eip155Exact, V2Eip155Exact, V2Eip155Upto};
 use x402_chain_solana::{KnownNetworkSolana, V1SolanaExact, V2SolanaExact};
 use x402_types::networks::USDC;
@@ -20,13 +21,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
     init_tracing();
 
-    let usdc_base_sepolia = USDC::base_sepolia();
+    let usdc_base_sepolia = USDC::base();
     let usdc_base_sepolia_permit2 = Eip155TokenDeployment {
         chain_reference: usdc_base_sepolia.chain_reference,
         address: usdc_base_sepolia.address,
         decimals: usdc_base_sepolia.decimals,
         transfer_method: AssetTransferMethod::Permit2 {
-            name: "USDC".into(),
+            name: "USD Coin".into(),
             version: "2".into(),
         },
     };
@@ -35,7 +36,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         env::var("FACILITATOR_URL").unwrap_or("https://facilitator.x402.rs".to_string());
     let port = env::var("PORT").unwrap_or("3000".to_string());
 
-    let x402 = X402Middleware::try_from(facilitator_url)?;
+    let x402 =
+        X402Middleware::try_from(facilitator_url)?.with_extension(Eip2612GasSponsoring::server());
 
     let app = Router::new()
         .route(
@@ -138,7 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/eip155-upto",
             get(eip155_upto_handler).layer(x402.with_price_tag(V2Eip155Upto::price_tag(
                 address!("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07"),
-                usdc_base_sepolia_permit2.amount(10u64),
+                usdc_base_sepolia_permit2.amount(130u64),
             ))),
         );
 
