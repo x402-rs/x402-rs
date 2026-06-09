@@ -14,7 +14,8 @@
 //! ```
 
 use alloy_primitives::{Address, U256};
-use alloy_provider::ProviderBuilder;
+use alloy_provider::fillers::{FillProvider, TxFiller};
+use alloy_provider::{Network, Provider, ProviderBuilder, RootProvider};
 use alloy_sol_types::{SolStruct, eip712_domain};
 use async_trait::async_trait;
 use rand::{RngExt, rng};
@@ -248,6 +249,80 @@ struct PayloadSigner<S, P> {
     requirements_json: OriginalJson,
 }
 
+impl<S, P> PayloadSigner<S, P>
+where
+    S: SignerLike,
+    P: DoRead2612Nonce,
+{
+    pub async fn try_eip2612_gas_sponsoring(
+        &self,
+        deadline: UnixTimestamp,
+        eip2612_gas_sponsoring: Eip2612GasSponsoringServer,
+    ) -> Result<Option<Eip2612GasSponsoring>, X402Error> {
+        /// Token name and version for permit signature
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        struct TokenDomain {
+            pub name: String,
+            pub version: String,
+        }
+        // FIXME CHECK ALLOWANCE FIRST
+
+        let token_domain = self
+            .requirements
+            .extra
+            .as_ref()
+            .and_then(|v| TokenDomain::deserialize(v).ok())
+            .ok_or(X402Error::SigningError(
+                "extra should contain token name and version for eip2612GasSponsoring".to_string(),
+            ))?;
+        let owner = self.signer.address();
+        let token_contract = self.requirements.asset;
+        let nonce = self
+            .provider
+            .read_2612_nonce(self.requirements.asset.into(), owner)
+            .await?;
+        let nonce = match nonce {
+            Some(nonce) => nonce,
+            None => {
+                return Ok(None);
+            }
+        };
+        let value = self.requirements.amount;
+
+        let domain = eip712_domain! {
+            name: token_domain.name,
+            version: token_domain.version,
+            chain_id: self.chain_reference.inner(),
+            verifying_contract: token_contract.into(),
+        };
+        let permit = Permit {
+            owner,
+            spender: PERMIT2_ADDRESS,
+            value,
+            nonce,
+            deadline: U256::from(deadline.as_secs()),
+        };
+        let signature = self
+            .signer
+            .sign_hash(&permit.eip712_signing_hash(&domain))
+            .await
+            .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
+
+        let info = Eip2612GasSponsoringInfo {
+            from: ChecksummedAddress::from(owner),
+            asset: self.requirements.asset,
+            spender: ChecksummedAddress::from(PERMIT2_ADDRESS),
+            amount: value,
+            nonce,
+            deadline,
+            signature: EOASignature::from(signature),
+            version: eip2612_gas_sponsoring.info.version,
+        };
+        let eip2612_gas_sponsoring = Eip2612GasSponsoring { info };
+        Ok(Some(eip2612_gas_sponsoring))
+    }
+}
+
 #[async_trait]
 impl<S, P> PaymentCandidateSigner for PayloadSigner<S, P>
 where
@@ -280,19 +355,17 @@ where
         let mut client_extensions = ExtensionsJson::new();
 
         if let Some(eip2612_gas_sponsoring) = self.extensions.get::<Eip2612GasSponsoringServer>() {
-            let eip2612_gas_sponsoring_result = try_eip2612_gas_sponsoring(
-                &self.signer,
-                &self.provider,
-                &self.chain_reference,
-                permit2_payload.permit_2_authorization.deadline,
-                &self.requirements,
-                eip2612_gas_sponsoring,
-            )
-            .await
-            .inspect_err(
-                |e| tracing::error!(error=%e, "failed to sign eip2612GasSponsoring extension"),
-            )
-            .ok();
+            let eip2612_gas_sponsoring_result = self
+                .try_eip2612_gas_sponsoring(
+                    permit2_payload.permit_2_authorization.deadline,
+                    eip2612_gas_sponsoring,
+                )
+                .await
+                .inspect_err(
+                    |e| tracing::error!(error=%e, "failed to sign eip2612GasSponsoring extension"),
+                )
+                .ok()
+                .flatten();
             if let Some(result) = eip2612_gas_sponsoring_result {
                 client_extensions.insert(result)?;
             }
@@ -316,87 +389,65 @@ where
 // FIXME Docs
 // FIXME For root provider and for FillProvider
 pub trait DoRead2612Nonce {
+    // FIXME docs return None if we have a `provider` that can not query the nonce
     fn read_2612_nonce(
         &self,
         asset: Address,
         owner: Address,
-    ) -> impl Future<Output = Result<U256, X402Error>> + Send;
+    ) -> impl Future<Output = Result<Option<U256>, X402Error>> + Send;
 }
 
 impl DoRead2612Nonce for Url {
-    async fn read_2612_nonce(&self, asset: Address, owner: Address) -> Result<U256, X402Error> {
+    async fn read_2612_nonce(
+        &self,
+        asset: Address,
+        owner: Address,
+    ) -> Result<Option<U256>, X402Error> {
         let provider = ProviderBuilder::new().connect_http(self.clone());
-        let token = IERC20Permit::new(asset, provider);
+        provider.read_2612_nonce(asset, owner).await
+    }
+}
+
+impl DoRead2612Nonce for () {
+    async fn read_2612_nonce(
+        &self,
+        _asset: Address,
+        _owner: Address,
+    ) -> Result<Option<U256>, X402Error> {
+        Ok(None)
+    }
+}
+
+impl<N> DoRead2612Nonce for RootProvider<N>
+where
+    N: Network,
+{
+    async fn read_2612_nonce(
+        &self,
+        asset: Address,
+        owner: Address,
+    ) -> Result<Option<U256>, X402Error> {
+        let token = IERC20Permit::new(asset, self);
         let nonce =
             token.nonces(owner).call().await.map_err(|e| {
                 X402Error::SigningError(format!("failed to get permit nonce {e:?}"))
             })?;
-        Ok(nonce)
+        Ok(Some(nonce))
     }
 }
 
-pub async fn try_eip2612_gas_sponsoring<S, P>(
-    signer: &S,
-    provider: &P,
-    chain_reference: &Eip155ChainReference,
-    deadline: UnixTimestamp,
-    payment_requirements: &types::PaymentRequirements,
-    eip2612_gas_sponsoring: Eip2612GasSponsoringServer,
-) -> Result<Eip2612GasSponsoring, X402Error>
+impl<F, P, N> DoRead2612Nonce for FillProvider<F, P, N>
 where
-    S: SignerLike,
-    P: DoRead2612Nonce,
+    F: TxFiller<N>,
+    P: Provider<N>,
+    N: Network,
 {
-    /// Token name and version for permit signature
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    struct TokenDomain {
-        pub name: String,
-        pub version: String,
+    async fn read_2612_nonce(
+        &self,
+        asset: Address,
+        owner: Address,
+    ) -> Result<Option<U256>, X402Error> {
+        let root_provider = self.root();
+        root_provider.read_2612_nonce(asset, owner).await
     }
-    // FIXME CHECK ALLOWANCE FIRST
-
-    let token_domain = payment_requirements
-        .extra
-        .as_ref()
-        .and_then(|v| TokenDomain::deserialize(v).ok())
-        .ok_or(X402Error::SigningError(
-            "extra should contain token name and version for eip2612GasSponsoring".to_string(),
-        ))?;
-    let owner = signer.address();
-    let token_contract = payment_requirements.asset;
-    let nonce = provider
-        .read_2612_nonce(payment_requirements.asset.into(), owner)
-        .await?;
-    let value = payment_requirements.amount;
-
-    let domain = eip712_domain! {
-        name: token_domain.name,
-        version: token_domain.version,
-        chain_id: chain_reference.inner(),
-        verifying_contract: token_contract.into(),
-    };
-    let permit = Permit {
-        owner,
-        spender: PERMIT2_ADDRESS,
-        value,
-        nonce,
-        deadline: U256::from(deadline.as_secs()),
-    };
-    let signature = signer
-        .sign_hash(&permit.eip712_signing_hash(&domain))
-        .await
-        .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
-
-    let info = Eip2612GasSponsoringInfo {
-        from: ChecksummedAddress::from(owner),
-        asset: payment_requirements.asset,
-        spender: ChecksummedAddress::from(PERMIT2_ADDRESS),
-        amount: value,
-        nonce,
-        deadline,
-        signature: EOASignature::from(signature),
-        version: eip2612_gas_sponsoring.info.version,
-    };
-    let eip2612_gas_sponsoring = Eip2612GasSponsoring { info };
-    Ok(eip2612_gas_sponsoring)
 }
