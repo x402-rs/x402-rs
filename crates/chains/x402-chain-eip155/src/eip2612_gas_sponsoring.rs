@@ -1,15 +1,38 @@
+//! EIP-2612 gas-sponsoring extension types for the x402 protocol.
+//!
+//! The `eip2612GasSponsoring` extension allows a facilitator to accept an
+//! off-chain EIP-2612 `permit` signature from the buyer and submit it to the
+//! canonical Permit2 contract on-chain, paying the gas fees on the buyer's behalf.
+//!
+//! ## Wire format
+//!
+//! A facilitator advertises support by including the `eip2612GasSponsoring` key in
+//! the `extensions` object of the `402 Payment Required` response
+//! ([`Eip2612GasSponsoringServer`]).  The buyer then populates that same key in the
+//! `extensions` field of the payment payload ([`Eip2612GasSponsoring`]) with the
+//! signed permit data.
+
 use alloy_primitives::U256;
-use alloy_sol_types::sol;
 use serde::{Deserialize, Serialize};
 use x402_types::lit_str;
 use x402_types::scheme::ExtensionKey;
 use x402_types::timestamp::UnixTimestamp;
 
+#[cfg(feature = "client")]
+use alloy_sol_types::sol;
+
 use crate::chain::{ChecksummedAddress, EOASignature};
 
-/// Wrapper that contains the extension info nested under `info`.
+/// Client-side `eip2612GasSponsoring` extension payload sent inside a payment.
+///
+/// The buyer includes this in the `extensions` map of a
+/// [`PaymentPayload`](x402_types::proto::v2::PaymentPayload) to supply the
+/// EIP-2612 permit data that the facilitator will submit on-chain.
+///
+/// The [`ExtensionKey::EXTENSION_KEY`] for this type is `"eip2612GasSponsoring"`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Eip2612GasSponsoring {
+    /// The signed EIP-2612 permit data provided by the client.
     pub info: Eip2612GasSponsoringInfo,
 }
 
@@ -17,10 +40,20 @@ impl ExtensionKey for Eip2612GasSponsoring {
     const EXTENSION_KEY: &'static str = "eip2612GasSponsoring";
 }
 
-/// EIP2612-gas-sponsoring extension provided by the server
+/// Server-side `eip2612GasSponsoring` extension advertisement sent in a 402 response.
+///
+/// A facilitator includes this in the `extensions` map of a
+/// [`PaymentRequired`](x402_types::proto::v2::PaymentRequired) response to
+/// signal support for the EIP-2612 gasless approval flow.  The `schema` field
+/// carries a JSON Schema object that describes the shape of the client payload
+/// the facilitator expects to receive.
+///
+/// The [`ExtensionKey::EXTENSION_KEY`] for this type is `"eip2612GasSponsoring"`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Eip2612GasSponsoringServer {
+    /// Human-readable extension metadata advertised by the facilitator.
     pub info: Eip2612GasSponsoringServerInfo,
+    /// JSON Schema describing the expected client payload structure.
     pub schema: Box<serde_json::value::RawValue>,
 }
 
@@ -30,10 +63,14 @@ impl ExtensionKey for Eip2612GasSponsoringServer {
 
 lit_str!(Eip2612GasSponsoringV1, "1");
 
+/// Metadata the facilitator advertises for the `eip2612GasSponsoring` extension.
+///
+/// Included inside [`Eip2612GasSponsoringServer`] under the `info` key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-// FIXME DOc comments
 pub struct Eip2612GasSponsoringServerInfo {
+    /// Human-readable description of what the facilitator does with the permit.
     pub description: String,
+    /// Extension schema version; currently always `"1"`.
     pub version: Eip2612GasSponsoringV1,
 }
 
@@ -65,10 +102,15 @@ pub struct Eip2612GasSponsoringInfo {
     pub version: Eip2612GasSponsoringV1,
 }
 
-// FIXME Should be feature gated for client
+#[cfg(feature = "client")]
 sol! {
     #[allow(missing_docs)]
     #[derive(Debug)]
+    /// ABI-encoded EIP-2612 `Permit` struct used to construct the typed-data hash
+    /// for signature verification.
+    ///
+    /// This mirrors the on-chain `Permit` struct defined in the EIP-2612 standard
+    /// and is used when encoding the EIP-712 `PERMIT_TYPEHASH` payload.
     struct Permit {
         address owner;
         address spender;
