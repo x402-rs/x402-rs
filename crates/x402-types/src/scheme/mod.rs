@@ -338,8 +338,18 @@ mod scheme_config_defaults {
     }
 }
 
-// FIXME Doc comments
-// This is a trait to get the key of the extension struct.
+/// Associates a Rust type with its wire-format key in the x402 `extensions` map.
+///
+/// Types that represent protocol extension data implement this trait to declare
+/// the JSON object key under which they are stored and retrieved in
+/// [`ExtensionsJson`](crate::proto::v2::ExtensionsJson).
+///
+/// # Required items
+///
+/// - `EXTENSION_KEY` – A `'static` string slice that is the exact key used in
+///   the JSON wire format (e.g., `"eip2612GasSponsoring"`).
 pub trait ExtensionKey {
+    /// The JSON key under which this extension type is stored in the
+    /// `extensions` map of a payment message.
     const EXTENSION_KEY: &'static str;
 }
