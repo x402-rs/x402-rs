@@ -182,28 +182,35 @@ pub struct PaymentPayload<TPaymentRequirements, TPayload> {
 /// A JSON-object map of protocol extension data attached to a payment message.
 ///
 /// `ExtensionsJson` is the wire representation of optional extension fields in
-/// [`PaymentPayload`] and [`PaymentRequired`]. Each extension is keyed by an
-/// arbitrary string and stored as a JSON value, so heterogeneous extension types can
-/// coexist in the same map.
+/// [`PaymentPayload`] and [`PaymentRequired`]. Each extension is keyed by the
+/// string constant exposed by [`ExtensionKey::EXTENSION_KEY`] and stored as a
+/// JSON value, so heterogeneous extension types can coexist in the same map.
+///
+/// # Serialization
+///
+/// Serializes to and from a JSON object (e.g. `{ "eip2612GasSponsoring": { … } }`).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ExtensionsJson(serde_json::value::Map<String, serde_json::Value>);
 
 impl ExtensionsJson {
-    // FIXME Docs
+    /// Creates an empty `ExtensionsJson` map.
+    ///
+    /// Equivalent to [`ExtensionsJson::default()`].
     pub fn new() -> Self {
         Self::default()
     }
 
-    // FIXME Docs
+    /// Returns `true` if the map contains no extension entries.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
     /// Creates an `ExtensionsJson` from an iterator of `(key, value)` pairs.
     ///
-    /// Each value is serialized to JSON via [`serde_json::to_value`]. If any
-    /// serialization fails the method returns that error immediately and the
-    /// partially constructed map is dropped.
+    /// Each value is serialized to a [`serde_json::Value`] via
+    /// [`serde_json::to_value`]. If any serialization fails, the method
+    /// returns that error immediately and the partially-constructed map is
+    /// dropped.
     ///
     /// # Errors
     ///
@@ -221,7 +228,15 @@ impl ExtensionsJson {
         Ok(this)
     }
 
-    // FIXME Doc comments
+    /// Inserts or replaces an extension entry, keyed by `T::EXTENSION_KEY`.
+    ///
+    /// `value` is serialized to a [`serde_json::Value`] before insertion.
+    /// If a value was previously stored under the same key, it is returned
+    /// as `Some(old_value)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`serde_json::Error`] if `value` cannot be serialized to JSON.
     pub fn insert<T>(&mut self, value: T) -> serde_json::Result<Option<serde_json::Value>>
     where
         T: ExtensionKey + Serialize,
