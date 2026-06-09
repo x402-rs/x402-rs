@@ -30,6 +30,7 @@ use x402_types::scheme::client::{
 use x402_types::timestamp::UnixTimestamp;
 use x402_types::util::Base64Bytes;
 
+use crate::chain::erc20::IERC20;
 use crate::chain::permit2::{
     PERMIT2_ADDRESS, Permit2Authorization, Permit2AuthorizationPermitted,
     UPTO_PERMIT2_PROXY_ADDRESS, UptoPermit2Payload, UptoPermit2Witness,
@@ -199,7 +200,7 @@ impl<S, P> X402SchemeId for V2Eip155UptoClient<S, P> {
 impl<S, P> X402SchemeClient for V2Eip155UptoClient<S, P>
 where
     S: SignerLike + Clone + Send + Sync + 'static,
-    P: Clone + DoRead2612Nonce + Send + Sync + 'static,
+    P: Clone + EIP2612ProviderLike + Send + Sync + 'static,
 {
     fn accept(&self, payment_required: &PaymentRequired) -> Vec<PaymentCandidate> {
         let payment_required = match payment_required {
@@ -256,7 +257,7 @@ struct PayloadSigner<S, P> {
 impl<S, P> PayloadSigner<S, P>
 where
     S: SignerLike,
-    P: DoRead2612Nonce,
+    P: EIP2612ProviderLike,
 {
     pub async fn try_eip2612_gas_sponsoring(
         &self,
@@ -269,7 +270,32 @@ where
             pub name: String,
             pub version: String,
         }
-        // FIXME CHECK ALLOWANCE FIRST
+
+        let token_contract = self.requirements.asset;
+        let value = self.requirements.amount;
+        let owner = self.signer.address();
+
+        // If the Permit2 contract already has a sufficient allowance, the buyer does not
+        // need to submit a new EIP-2612 permit – the facilitator can use the existing
+        // approval and no gas-sponsoring is required.
+        // Any error while reading the allowance is treated as zero (i.e. we proceed with
+        // signing) to keep the flow non-blocking.
+        let allowance = self
+            .provider
+            .read_erc20_allowance(token_contract.into(), owner, PERMIT2_ADDRESS)
+            .await
+            .inspect_err(|e| {
+                tracing::warn!(
+                    error=%e,
+                    "failed to read erc20 allowance for eip2612GasSponsoring, assuming zero"
+                )
+            })
+            .ok()
+            .flatten()
+            .unwrap_or(U256::ZERO);
+        if allowance >= value {
+            return Ok(None);
+        }
 
         let token_domain = self
             .requirements
@@ -279,11 +305,9 @@ where
             .ok_or(X402Error::SigningError(
                 "extra should contain token name and version for eip2612GasSponsoring".to_string(),
             ))?;
-        let owner = self.signer.address();
-        let token_contract = self.requirements.asset;
         let nonce = self
             .provider
-            .read_2612_nonce(self.requirements.asset.into(), owner)
+            .read_eip2612_nonce(self.requirements.asset.into(), owner)
             .await?;
         let nonce = match nonce {
             Some(nonce) => nonce,
@@ -291,7 +315,6 @@ where
                 return Ok(None);
             }
         };
-        let value = self.requirements.amount;
 
         let domain = eip712_domain! {
             name: token_domain.name,
@@ -331,7 +354,7 @@ where
 impl<S, P> PaymentCandidateSigner for PayloadSigner<S, P>
 where
     S: Sync + SignerLike,
-    P: DoRead2612Nonce + Send + Sync + 'static,
+    P: EIP2612ProviderLike + Send + Sync + 'static,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
         // The server must provide the facilitator address via requirements.extra.facilitatorAddress
@@ -390,55 +413,86 @@ where
     }
 }
 
-/// Abstraction over the ability to read an EIP-2612 permit nonce for a token owner.
+/// Abstraction over the ability to read EIP-2612 on-chain data for a token.
 ///
-/// Implementors query the on-chain `nonces(owner)` method of an ERC-20 token that
-/// supports EIP-2612. The result is used by the client to construct a valid
-/// `permit` signature when the [`eip2612GasSponsoring`](crate::eip2612_gas_sponsoring)
-/// extension is active.
+/// Implementors query the on-chain `nonces(owner)` and `allowance(owner, spender)`
+/// methods of an ERC-20 token. The results are used by the client to decide
+/// whether a new EIP-2612 `permit` signature is needed and to construct it when
+/// the [`eip2612GasSponsoring`](crate::eip2612_gas_sponsoring) extension is active.
 ///
 /// Implementations that do not have access to an RPC provider (e.g. the unit
-/// type `()`) return `Ok(None)`, which causes the extension to be skipped
-/// silently.
-pub trait DoRead2612Nonce {
+/// type `()`) return `Ok(None)`, which causes the extension to be skipped or the
+/// allowance check to be bypassed (treated as zero).
+pub trait EIP2612ProviderLike {
     /// Reads the EIP-2612 permit nonce for `owner` on the `asset` token contract.
     ///
     /// Returns `Ok(Some(nonce))` when the nonce can be fetched on-chain,
     /// `Ok(None)` when the implementation has no provider available (the
     /// extension will be skipped), or an `Err` if the RPC call fails.
-    fn read_2612_nonce(
+    fn read_eip2612_nonce(
         &self,
         asset: Address,
         owner: Address,
     ) -> impl Future<Output = Result<Option<U256>, X402Error>> + Send;
+
+    /// Reads the ERC-20 `allowance(owner, spender)` for the given `asset` token.
+    ///
+    /// Returns `Ok(Some(allowance))` on success, `Ok(None)` when no provider is
+    /// available (the caller should treat this as zero), or an `Err` if the RPC
+    /// call fails.
+    fn read_erc20_allowance(
+        &self,
+        asset: Address,
+        owner: Address,
+        spender: Address,
+    ) -> impl Future<Output = Result<Option<U256>, X402Error>> + Send;
 }
 
-impl DoRead2612Nonce for Url {
-    async fn read_2612_nonce(
+impl EIP2612ProviderLike for Url {
+    async fn read_eip2612_nonce(
         &self,
         asset: Address,
         owner: Address,
     ) -> Result<Option<U256>, X402Error> {
         let provider = ProviderBuilder::new().connect_http(self.clone());
-        provider.read_2612_nonce(asset, owner).await
+        provider.read_eip2612_nonce(asset, owner).await
+    }
+
+    async fn read_erc20_allowance(
+        &self,
+        asset: Address,
+        owner: Address,
+        spender: Address,
+    ) -> Result<Option<U256>, X402Error> {
+        let provider = ProviderBuilder::new().connect_http(self.clone());
+        provider.read_erc20_allowance(asset, owner, spender).await
     }
 }
 
-impl DoRead2612Nonce for () {
-    async fn read_2612_nonce(
+impl EIP2612ProviderLike for () {
+    async fn read_eip2612_nonce(
         &self,
         _asset: Address,
         _owner: Address,
     ) -> Result<Option<U256>, X402Error> {
         Ok(None)
     }
+
+    async fn read_erc20_allowance(
+        &self,
+        _asset: Address,
+        _owner: Address,
+        _spender: Address,
+    ) -> Result<Option<U256>, X402Error> {
+        Ok(None)
+    }
 }
 
-impl<N> DoRead2612Nonce for RootProvider<N>
+impl<N> EIP2612ProviderLike for RootProvider<N>
 where
     N: Network,
 {
-    async fn read_2612_nonce(
+    async fn read_eip2612_nonce(
         &self,
         asset: Address,
         owner: Address,
@@ -450,20 +504,46 @@ where
             })?;
         Ok(Some(nonce))
     }
+
+    async fn read_erc20_allowance(
+        &self,
+        asset: Address,
+        owner: Address,
+        spender: Address,
+    ) -> Result<Option<U256>, X402Error> {
+        let token = IERC20::new(asset, self);
+        let allowance =
+            token.allowance(owner, spender).call().await.map_err(|e| {
+                X402Error::SigningError(format!("failed to get erc20 allowance {e:?}"))
+            })?;
+        Ok(Some(allowance))
+    }
 }
 
-impl<F, P, N> DoRead2612Nonce for FillProvider<F, P, N>
+impl<F, P, N> EIP2612ProviderLike for FillProvider<F, P, N>
 where
     F: TxFiller<N>,
     P: Provider<N>,
     N: Network,
 {
-    async fn read_2612_nonce(
+    async fn read_eip2612_nonce(
         &self,
         asset: Address,
         owner: Address,
     ) -> Result<Option<U256>, X402Error> {
         let root_provider = self.root();
-        root_provider.read_2612_nonce(asset, owner).await
+        root_provider.read_eip2612_nonce(asset, owner).await
+    }
+
+    async fn read_erc20_allowance(
+        &self,
+        asset: Address,
+        owner: Address,
+        spender: Address,
+    ) -> Result<Option<U256>, X402Error> {
+        let root_provider = self.root();
+        root_provider
+            .read_erc20_allowance(asset, owner, spender)
+            .await
     }
 }
