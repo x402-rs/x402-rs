@@ -69,10 +69,7 @@ pub fn upto_facilitator_address_enricher(
 }
 
 fn merge(a: &mut serde_json::Value, b: serde_json::Value) {
-    match (a, b) {
-        (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
-            a.extend(b);
-        }
-        _ => {}
+    if let (serde_json::Value::Object(a), serde_json::Value::Object(b)) = (a, b) {
+        a.extend(b);
     }
 }
