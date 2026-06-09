@@ -253,7 +253,7 @@ where
                     extensions: self.extensions.clone(),
                 }
             }
-            AssetTransferMethod::Permit2 => {
+            AssetTransferMethod::Permit2 { .. } => {
                 let params = Permit2SigningParams {
                     chain_id: self.chain_reference.inner(),
                     asset_address: self.requirements.asset.0,

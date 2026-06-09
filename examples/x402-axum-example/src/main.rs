@@ -25,7 +25,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         chain_reference: usdc_base_sepolia.chain_reference,
         address: usdc_base_sepolia.address,
         decimals: usdc_base_sepolia.decimals,
-        transfer_method: AssetTransferMethod::Permit2,
+        transfer_method: AssetTransferMethod::Permit2 {
+            name: "USDC".into(),
+            version: "2".into(),
+        },
     };
 
     let facilitator_url =

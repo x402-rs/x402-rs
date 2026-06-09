@@ -134,7 +134,7 @@ pub mod asset_transfer_method {
                 AssetTransferMethod::deserialize(deserializer)?;
             match asset_transfer_method {
                 AssetTransferMethod::Eip3009 { name, version } => Ok(Eip3009 { name, version }),
-                AssetTransferMethod::Permit2 => Err(serde::de::Error::custom(
+                AssetTransferMethod::Permit2 { .. } => Err(serde::de::Error::custom(
                     "expected EIP-3009 asset transfer method, got Permit2".to_string(),
                 )),
             }

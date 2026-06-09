@@ -268,7 +268,10 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
             chain_reference: Eip155ChainReference::new(1440000),
             address: alloy_primitives::address!("0xDaF4556169c4F3f2231d8ab7BC8772Ddb7D4c84C"),
             decimals: 15,
-            transfer_method: AssetTransferMethod::Permit2,
+            transfer_method: AssetTransferMethod::Permit2 {
+                name: "USDC".into(),
+                version: "1".into(),
+            },
         }
     }
 
@@ -327,7 +330,10 @@ impl KnownSbcEip155 for SBC {
             chain_reference: Eip155ChainReference::new(723487),
             address: alloy_primitives::address!("0x33ad9e4BD16B69B5BFdED37D8B5D9fF9aba014Fb"),
             decimals: 6,
-            transfer_method: AssetTransferMethod::Permit2,
+            transfer_method: AssetTransferMethod::Permit2 {
+                name: "Stable Coin".into(),
+                version: "1".into(),
+            },
         }
     }
 
@@ -336,7 +342,10 @@ impl KnownSbcEip155 for SBC {
             chain_reference: Eip155ChainReference::new(72344),
             address: alloy_primitives::address!("0x33ad9e4BD16B69B5BFdED37D8B5D9fF9aba014Fb"),
             decimals: 6,
-            transfer_method: AssetTransferMethod::Permit2,
+            transfer_method: AssetTransferMethod::Permit2 {
+                name: "Stable Coin".into(),
+                version: "1".into(),
+            },
         }
     }
 }
@@ -354,7 +363,13 @@ mod tests {
             alloy_primitives::address!("0x33ad9e4BD16B69B5BFdED37D8B5D9fF9aba014Fb")
         );
         assert_eq!(radius.decimals, 6);
-        assert_eq!(radius.transfer_method, AssetTransferMethod::Permit2);
+        assert_eq!(
+            radius.transfer_method,
+            AssetTransferMethod::Permit2 {
+                name: "Stable Coin".into(),
+                version: "1".into(),
+            }
+        );
 
         let radius_testnet = SBC::radius_testnet();
         assert_eq!(radius_testnet.chain_reference.inner(), 72344);
@@ -363,6 +378,12 @@ mod tests {
             alloy_primitives::address!("0x33ad9e4BD16B69B5BFdED37D8B5D9fF9aba014Fb")
         );
         assert_eq!(radius_testnet.decimals, 6);
-        assert_eq!(radius_testnet.transfer_method, AssetTransferMethod::Permit2);
+        assert_eq!(
+            radius_testnet.transfer_method,
+            AssetTransferMethod::Permit2 {
+                name: "Stable Coin".into(),
+                version: "1".into(),
+            }
+        );
     }
 }

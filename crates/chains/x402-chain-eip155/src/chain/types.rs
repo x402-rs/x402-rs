@@ -312,7 +312,12 @@ pub enum AssetTransferMethod {
     },
     /// Permit2 transfer method.
     #[serde(rename = "permit2")]
-    Permit2,
+    Permit2 {
+        /// The token name as specified in the EIP-712 domain.
+        name: String,
+        /// The token version as specified in the EIP-712 domain.
+        version: String,
+    },
 }
 
 impl<'de> Deserialize<'de> for AssetTransferMethod {
@@ -326,10 +331,12 @@ impl<'de> Deserialize<'de> for AssetTransferMethod {
         #[serde(untagged)]
         #[allow(dead_code)]
         enum AssetTransferMethodWire {
-            // { "assetTransferMethod": "permit2" }
+            // { "assetTransferMethod": "permit2", "name": "...", "version": "..." }
             Permit2Tagged {
                 #[serde(rename = "assetTransferMethod")]
                 asset_transfer_method: Permit2Tag,
+                name: String,
+                version: String,
             },
             // { "assetTransferMethod": "eip3009", "name": "...", "version": "..." }
             Eip3009Tagged {
@@ -361,8 +368,9 @@ impl<'de> Deserialize<'de> for AssetTransferMethod {
             .map_err(|e| serde::de::Error::custom(format!("invalid asset transfer method: {e}")))?;
 
         Ok(match wire {
-            AssetTransferMethodWire::Permit2Tagged { .. } => AssetTransferMethod::Permit2,
-
+            AssetTransferMethodWire::Permit2Tagged { name, version, .. } => {
+                AssetTransferMethod::Permit2 { name, version }
+            }
             AssetTransferMethodWire::Eip3009Tagged { name, version, .. }
             | AssetTransferMethodWire::Eip3009Implicit { name, version } => {
                 AssetTransferMethod::Eip3009 { name, version }

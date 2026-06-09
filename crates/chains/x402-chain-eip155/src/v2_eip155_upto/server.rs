@@ -27,6 +27,7 @@ impl V2Eip155Upto {
         asset: DeployedTokenAmount<U256, Eip155TokenDeployment>,
     ) -> v2::PriceTag {
         let chain_id: ChainId = asset.token.chain_reference.into();
+        let extra = serde_json::to_value(asset.token.transfer_method).ok();
         let requirements = v2::PaymentRequirements {
             scheme: UptoScheme.to_string(),
             pay_to: pay_to.into().to_string(),
@@ -34,7 +35,7 @@ impl V2Eip155Upto {
             network: chain_id,
             amount: asset.amount.to_string(),
             max_timeout_seconds: 300,
-            extra: None,
+            extra,
         };
         v2::PriceTag {
             requirements,
@@ -49,10 +50,6 @@ pub fn upto_facilitator_address_enricher(
     price_tag: &mut v2::PriceTag,
     capabilities: &proto::SupportedResponse,
 ) {
-    if price_tag.requirements.extra.is_some() {
-        return;
-    }
-
     let supported_extra = capabilities
         .kinds
         .iter()
@@ -62,6 +59,20 @@ pub fn upto_facilitator_address_enricher(
                 && kind.network == price_tag.requirements.network.to_string()
         })
         .and_then(|kind| kind.extra.clone());
+    if let Some(supported_extra) = supported_extra {
+        if let Some(existing_extra) = price_tag.requirements.extra.as_mut() {
+            merge(existing_extra, supported_extra);
+        } else {
+            price_tag.requirements.extra = Some(supported_extra.clone());
+        }
+    }
+}
 
-    price_tag.requirements.extra = supported_extra;
+fn merge(a: &mut serde_json::Value, b: serde_json::Value) {
+    match (a, b) {
+        (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
+            a.extend(b);
+        }
+        _ => {}
+    }
 }
