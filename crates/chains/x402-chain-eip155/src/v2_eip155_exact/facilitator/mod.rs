@@ -36,7 +36,7 @@ where
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
         let config: V2Eip155ExactFacilitatorConfig = config
-            .and_then(|config| serde_json::from_value(config).ok())
+            .and_then(|config| V2Eip155ExactFacilitatorConfig::deserialize(config).ok())
             .unwrap_or_default();
         Ok(Box::new(V2Eip155ExactFacilitator::new(provider, config)))
     }

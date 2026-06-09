@@ -364,7 +364,7 @@ fn test_aptos_payment_requirements_extra_deserialize_from_ts_format() {
 fn test_option_extra_none_deserialization() {
     // PaymentRequirements.extra is Option<AptosPaymentRequirementsExtra>
     // When absent from JSON, it should be None
-    let val: Option<crate::v2_aptos_exact::types::AptosPaymentRequirementsExtra> =
+    let val: Option<types::AptosPaymentRequirementsExtra> =
         serde_json::from_value(serde_json::Value::Null).unwrap();
     assert!(val.is_none());
 }

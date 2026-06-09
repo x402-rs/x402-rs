@@ -37,7 +37,7 @@ where
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
         let config = config
-            .map(serde_json::from_value::<V1SolanaExactFacilitatorConfig>)
+            .map(V1SolanaExactFacilitatorConfig::deserialize)
             .transpose()?
             .unwrap_or_default();
 

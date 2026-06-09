@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use std::sync::Arc;
 use x402_types::chain::{ChainId, DeployedTokenAmount};
 use x402_types::proto;
@@ -50,7 +51,7 @@ pub fn solana_fee_payer_enricher(
                 && kind.network == price_tag.network
         })
         .and_then(|kind| kind.extra.as_ref())
-        .and_then(|extra| serde_json::from_value::<SupportedPaymentKindExtra>(extra.clone()).ok());
+        .and_then(|extra| SupportedPaymentKindExtra::deserialize(extra).ok());
 
     // Serialize the whole extra back to Value
     if let Some(extra) = extra {

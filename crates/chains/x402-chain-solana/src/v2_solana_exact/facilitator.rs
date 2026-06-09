@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use std::collections::HashMap;
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto;
@@ -28,7 +29,7 @@ where
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
         let config = config
-            .map(serde_json::from_value::<V2SolanaExactFacilitatorConfig>)
+            .map(V2SolanaExactFacilitatorConfig::deserialize)
             .transpose()?
             .unwrap_or_default();
 

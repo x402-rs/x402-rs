@@ -358,10 +358,7 @@ where
     let token_domain = payment_requirements
         .extra
         .as_ref()
-        .and_then(|v| {
-            // TokenDomain::deserialize(v); FIXME ??
-            serde_json::from_value::<TokenDomain>(v.clone()).ok()
-        })
+        .and_then(|v| TokenDomain::deserialize(v).ok())
         .ok_or(X402Error::SigningError(
             "extra should contain token name and version for eip2612GasSponsoring".to_string(),
         ))?;
