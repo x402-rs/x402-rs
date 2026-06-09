@@ -51,8 +51,7 @@ pub trait Permit2PaymentPayloadExt {
 
 impl Permit2PaymentPayloadExt for Permit2PaymentPayload {
     fn eip2612_gas_sponsoring(&self) -> Option<Eip2612GasSponsoringInfo> {
-        let extensions = self.extensions.as_ref()?;
-        let eip2612_gas_sponsoring = extensions.get::<Eip2612GasSponsoring>()?;
+        let eip2612_gas_sponsoring = self.extensions.get::<Eip2612GasSponsoring>()?;
         Some(eip2612_gas_sponsoring.info)
     }
 

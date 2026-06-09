@@ -113,7 +113,7 @@ struct PayloadSigner<S, R> {
     signer: S,
     rpc_client: R,
     resource: Option<ResourceInfo>,
-    extensions: Option<ExtensionsJson>,
+    extensions: ExtensionsJson,
     requirements: PaymentRequirements,
     requirements_json: OriginalJson,
 }

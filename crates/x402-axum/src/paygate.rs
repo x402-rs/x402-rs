@@ -48,6 +48,7 @@ use x402_types::proto::{SupportedResponse, v1, v2};
 use tracing::Instrument;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
+use x402_types::proto::v2::ExtensionsJson;
 use x402_types::util::Base64Bytes;
 
 // ============================================================================
@@ -339,7 +340,7 @@ impl PaygateProtocol for v2::PriceTag {
                     accepts: accepts.iter().map(|pt| pt.requirements.clone()).collect(),
                     x402_version: v2::X402Version2,
                     resource: Some(resource.clone()),
-                    extensions: None,
+                    extensions: ExtensionsJson::default(),
                 };
                 // V2 sends payment required in the "Payment-Required" header (base64 encoded)
                 let payment_required_bytes =

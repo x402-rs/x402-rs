@@ -175,8 +175,8 @@ pub struct PaymentPayload<TPaymentRequirements, TPayload> {
     /// Protocol version (always 2).
     pub x402_version: X402Version2,
     /// Optional extension data provided by the client.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub extensions: Option<ExtensionsJson>,
+    #[serde(default, skip_serializing_if = "ExtensionsJson::is_empty")]
+    pub extensions: ExtensionsJson,
 }
 
 /// A JSON-object map of protocol extension data attached to a payment message.
@@ -189,6 +189,16 @@ pub struct PaymentPayload<TPaymentRequirements, TPayload> {
 pub struct ExtensionsJson(serde_json::value::Map<String, serde_json::Value>);
 
 impl ExtensionsJson {
+    // FIXME Docs
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    // FIXME Docs
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Creates an `ExtensionsJson` from an iterator of `(key, value)` pairs.
     ///
     /// Each value is serialized to JSON via [`serde_json::to_value`]. If any
@@ -205,28 +215,20 @@ impl ExtensionsJson {
     {
         let mut this = Self::default();
         for (key, value) in iter {
-            this.insert(key, value)?;
+            let value = serde_json::to_value(value)?;
+            this.0.insert(key, value);
         }
         Ok(this)
     }
 
-    /// Inserts or replaces an extension entry in the map.
-    ///
-    /// `value` is serialized to a [`serde_json::Value`] before insertion.
-    /// If a value was previously stored under `key`, it is returned.
-    ///
-    /// # Errors
-    ///
-    /// Returns a [`serde_json::Error`] if `value` cannot be serialized to JSON.
-    pub fn insert<T>(
-        &mut self,
-        key: impl Into<String>,
-        value: T,
-    ) -> serde_json::Result<Option<serde_json::Value>>
+    // FIXME Doc comments
+    pub fn insert<T>(&mut self, value: T) -> serde_json::Result<Option<serde_json::Value>>
     where
-        T: Serialize,
+        T: ExtensionKey + Serialize,
     {
-        Ok(self.0.insert(key.into(), serde_json::to_value(value)?))
+        let key = T::EXTENSION_KEY.to_string();
+        let value = serde_json::to_value(value)?;
+        Ok(self.0.insert(key, value))
     }
 
     /// Retrieves and deserializes an extension value by its type.
@@ -238,13 +240,13 @@ impl ExtensionsJson {
     ///
     /// - `T` – Must implement both [`ExtensionKey`] (to provide the key) and
     ///   [`serde::de::DeserializeOwned`] (to decode the stored JSON value).
-    pub fn get<T: ExtensionKey>(&self) -> Option<T>
+    pub fn get<T>(&self) -> Option<T>
     where
-        T: DeserializeOwned,
+        T: ExtensionKey + DeserializeOwned,
     {
         self.0
             .get(T::EXTENSION_KEY)
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .and_then(|v| T::deserialize(v).ok())
     }
 }
 
@@ -341,8 +343,8 @@ pub struct PaymentRequired<TAccepts = PaymentRequirements> {
     #[serde(default = "Vec::default")]
     pub accepts: Vec<TAccepts>,
     /// Optional protocol extension declarations provided by the server.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub extensions: Option<ExtensionsJson>,
+    #[serde(default, skip_serializing_if = "ExtensionsJson::is_empty")]
+    pub extensions: ExtensionsJson,
 }
 
 /// Builder for creating V2 payment requirements.

@@ -22,10 +22,10 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 use x402_types::proto::v2::{ExtensionsJson, ResourceInfo};
 use x402_types::proto::{OriginalJson, PaymentRequired, v2};
+use x402_types::scheme::X402SchemeId;
 use x402_types::scheme::client::{
     PaymentCandidate, PaymentCandidateSigner, X402Error, X402SchemeClient,
 };
-use x402_types::scheme::{ExtensionKey, X402SchemeId};
 use x402_types::timestamp::UnixTimestamp;
 use x402_types::util::Base64Bytes;
 
@@ -242,7 +242,7 @@ struct PayloadSigner<S, P> {
     signer: S,
     provider: P,
     resource_info: Option<ResourceInfo>,
-    extensions: Option<ExtensionsJson>,
+    extensions: ExtensionsJson,
     chain_reference: Eip155ChainReference,
     requirements: types::PaymentRequirements,
     requirements_json: OriginalJson,
@@ -255,13 +255,12 @@ where
     P: DoRead2612Nonce + Send + Sync + 'static,
 {
     async fn sign_payment(&self) -> Result<String, X402Error> {
-        println!("sign_payment.0");
         // The server must provide the facilitator address via requirements.extra.facilitatorAddress
         let facilitator_address = self
             .requirements
             .extra
             .as_ref()
-            .and_then(|v| serde_json::from_value::<UptoSupportedExtra<Address>>(v.clone()).ok())
+            .and_then(|v| UptoSupportedExtra::deserialize(v).ok())
             .map(|extra| extra.facilitator_address)
             .ok_or(X402Error::SigningError(
                 "upto scheme requires facilitatorAddress in payment requirements extra".to_string(),
@@ -276,91 +275,35 @@ where
             facilitator: facilitator_address,
         };
 
-        println!("sign_payment.1");
         let permit2_payload = sign_permit2_upto_authorization(&self.signer, &params).await?;
-        println!("sign_payment.2");
-        println!("extensions {:?}", self.extensions);
-        let eip2612_gas_sponsoring = self
-            .extensions
-            .as_ref()
-            .and_then(|extensions| extensions.get::<Eip2612GasSponsoringServer>());
-        let mut extension_map = serde_json::Map::new(); // FIXME this is a bit ugly
-        if let Some(eip2612_gas_sponsoring) = eip2612_gas_sponsoring {
-            /// Token name and version for permit signature
-            #[derive(Debug, Clone, Serialize, Deserialize)]
-            struct TokenDomain {
-                pub name: String,
-                pub version: String,
+
+        let mut client_extensions = ExtensionsJson::new();
+
+        if let Some(eip2612_gas_sponsoring) = self.extensions.get::<Eip2612GasSponsoringServer>() {
+            let eip2612_gas_sponsoring_result = try_eip2612_gas_sponsoring(
+                &self.signer,
+                &self.provider,
+                &self.chain_reference,
+                permit2_payload.permit_2_authorization.deadline,
+                &self.requirements,
+                eip2612_gas_sponsoring,
+            )
+            .await
+            .inspect_err(
+                |e| tracing::error!(error=%e, "failed to sign eip2612GasSponsoring extension"),
+            )
+            .ok();
+            if let Some(result) = eip2612_gas_sponsoring_result {
+                client_extensions.insert(result)?;
             }
-
-            println!("eip2612_gas_sponsoring {:?}", eip2612_gas_sponsoring);
-            let token_domain = self
-                .requirements
-                .extra
-                .as_ref()
-                .and_then(|v| serde_json::from_value::<TokenDomain>(v.clone()).ok())
-                .ok_or(X402Error::SigningError(
-                    "extra should contain token name and version for eip2612GasSponsoring"
-                        .to_string(),
-                ))?;
-            let owner = self.signer.address();
-            let deadline = permit2_payload.permit_2_authorization.deadline;
-            let token_contract = self.requirements.asset;
-            let nonce = self
-                .provider
-                .read_2612_nonce(self.requirements.asset.into(), owner)
-                .await?;
-            let value = self.requirements.amount;
-
-            let domain = eip712_domain! {
-                name: token_domain.name,
-                version: token_domain.version,
-                chain_id: self.chain_reference.inner(),
-                verifying_contract: token_contract.into(),
-            };
-            let permit = Permit {
-                owner,
-                spender: PERMIT2_ADDRESS,
-                value,
-                nonce,
-                deadline: U256::from(deadline.as_secs()),
-            };
-            let signature = self
-                .signer
-                .sign_hash(&permit.eip712_signing_hash(&domain))
-                .await
-                .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
-
-            let info = Eip2612GasSponsoringInfo {
-                from: ChecksummedAddress::from(owner),
-                asset: self.requirements.asset,
-                spender: ChecksummedAddress::from(PERMIT2_ADDRESS),
-                amount: value,
-                nonce,
-                deadline,
-                signature: EOASignature::from(signature),
-                version: eip2612_gas_sponsoring.info.version,
-            };
-            let eip2612_gas_sponsoring = Eip2612GasSponsoring { info };
-
-            extension_map.insert(
-                Eip2612GasSponsoring::EXTENSION_KEY.to_string(),
-                serde_json::to_value(eip2612_gas_sponsoring)?,
-            );
-            // TODO Check against json schema??
-            // TODO THink if it makes sense to have extension/key/whatever separation differently
-
-            // FIXME CONTINUE HERE sign the payment
         }
-
-        let extensions = ExtensionsJson::from_iter(extension_map)?;
 
         let payload = v2::PaymentPayload {
             x402_version: v2::X402Version2,
             accepted: self.requirements_json.clone(),
             resource: self.resource_info.clone(),
             payload: permit2_payload,
-            extensions: Some(extensions),
+            extensions: client_extensions,
         };
 
         let json = serde_json::to_vec(&payload)?;
@@ -371,6 +314,7 @@ where
 }
 
 // FIXME Docs
+// FIXME For root provider and for FillProvider
 pub trait DoRead2612Nonce {
     fn read_2612_nonce(
         &self,
@@ -389,4 +333,73 @@ impl DoRead2612Nonce for Url {
             })?;
         Ok(nonce)
     }
+}
+
+pub async fn try_eip2612_gas_sponsoring<S, P>(
+    signer: &S,
+    provider: &P,
+    chain_reference: &Eip155ChainReference,
+    deadline: UnixTimestamp,
+    payment_requirements: &types::PaymentRequirements,
+    eip2612_gas_sponsoring: Eip2612GasSponsoringServer,
+) -> Result<Eip2612GasSponsoring, X402Error>
+where
+    S: SignerLike,
+    P: DoRead2612Nonce,
+{
+    /// Token name and version for permit signature
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct TokenDomain {
+        pub name: String,
+        pub version: String,
+    }
+    // FIXME CHECK ALLOWANCE FIRST
+
+    let token_domain = payment_requirements
+        .extra
+        .as_ref()
+        .and_then(|v| {
+            // TokenDomain::deserialize(v); FIXME ??
+            serde_json::from_value::<TokenDomain>(v.clone()).ok()
+        })
+        .ok_or(X402Error::SigningError(
+            "extra should contain token name and version for eip2612GasSponsoring".to_string(),
+        ))?;
+    let owner = signer.address();
+    let token_contract = payment_requirements.asset;
+    let nonce = provider
+        .read_2612_nonce(payment_requirements.asset.into(), owner)
+        .await?;
+    let value = payment_requirements.amount;
+
+    let domain = eip712_domain! {
+        name: token_domain.name,
+        version: token_domain.version,
+        chain_id: chain_reference.inner(),
+        verifying_contract: token_contract.into(),
+    };
+    let permit = Permit {
+        owner,
+        spender: PERMIT2_ADDRESS,
+        value,
+        nonce,
+        deadline: U256::from(deadline.as_secs()),
+    };
+    let signature = signer
+        .sign_hash(&permit.eip712_signing_hash(&domain))
+        .await
+        .map_err(|e| X402Error::SigningError(format!("{e:?}")))?;
+
+    let info = Eip2612GasSponsoringInfo {
+        from: ChecksummedAddress::from(owner),
+        asset: payment_requirements.asset,
+        spender: ChecksummedAddress::from(PERMIT2_ADDRESS),
+        amount: value,
+        nonce,
+        deadline,
+        signature: EOASignature::from(signature),
+        version: eip2612_gas_sponsoring.info.version,
+    };
+    let eip2612_gas_sponsoring = Eip2612GasSponsoring { info };
+    Ok(eip2612_gas_sponsoring)
 }

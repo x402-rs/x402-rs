@@ -215,7 +215,7 @@ where
 struct PayloadSigner<S> {
     signer: S,
     resource_info: Option<ResourceInfo>,
-    extensions: Option<ExtensionsJson>,
+    extensions: ExtensionsJson,
     chain_reference: Eip155ChainReference,
     requirements: types::PaymentRequirements,
     requirements_json: OriginalJson,
