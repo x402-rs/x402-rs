@@ -173,7 +173,11 @@ impl<S> V2Eip155UptoClient<S, ()> {
 }
 
 impl<S, P> V2Eip155UptoClient<S, P> {
-    // FIXME Doc comments
+    /// Replaces the provider with a new one, returning a client with the updated provider type.
+    ///
+    /// This is useful when you first construct a client without a provider (`P = ()`) and
+    /// later want to attach an on-chain provider so the client can read EIP-2612 permit
+    /// nonces (enabling the [`eip2612GasSponsoring`](crate::eip2612_gas_sponsoring) extension).
     pub fn with_provider<P2>(self, provider: P2) -> V2Eip155UptoClient<S, P2> {
         V2Eip155UptoClient {
             signer: self.signer,
@@ -386,10 +390,22 @@ where
     }
 }
 
-// FIXME Docs
-// FIXME For root provider and for FillProvider
+/// Abstraction over the ability to read an EIP-2612 permit nonce for a token owner.
+///
+/// Implementors query the on-chain `nonces(owner)` method of an ERC-20 token that
+/// supports EIP-2612. The result is used by the client to construct a valid
+/// `permit` signature when the [`eip2612GasSponsoring`](crate::eip2612_gas_sponsoring)
+/// extension is active.
+///
+/// Implementations that do not have access to an RPC provider (e.g. the unit
+/// type `()`) return `Ok(None)`, which causes the extension to be skipped
+/// silently.
 pub trait DoRead2612Nonce {
-    // FIXME docs return None if we have a `provider` that can not query the nonce
+    /// Reads the EIP-2612 permit nonce for `owner` on the `asset` token contract.
+    ///
+    /// Returns `Ok(Some(nonce))` when the nonce can be fetched on-chain,
+    /// `Ok(None)` when the implementation has no provider available (the
+    /// extension will be skipped), or an `Err` if the RPC call fails.
     fn read_2612_nonce(
         &self,
         asset: Address,
