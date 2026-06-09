@@ -20,10 +20,10 @@
 //! - [`ResourceInfo`] - Metadata about the paid resource
 //! - [`PriceTag`] - Builder for creating payment requirements
 
-use serde::de::DeserializeOwned;
+use serde::de::{DeserializeOwned, Error};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
 
 use crate::chain::ChainId;
@@ -179,12 +179,65 @@ pub struct PaymentPayload<TPaymentRequirements, TPayload> {
     pub extensions: Option<ExtensionsJson>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-// FIXME Docs, fixme serdejson::Map
-pub struct ExtensionsJson(pub serde_json::Value);
+/// A JSON-object map of protocol extension data attached to a payment message.
+///
+/// `ExtensionsJson` is the wire representation of optional extension fields in
+/// [`PaymentPayload`] and [`PaymentRequired`]. Each extension is keyed by an
+/// arbitrary string and stored as a JSON value, so heterogeneous extension types can
+/// coexist in the same map.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ExtensionsJson(serde_json::value::Map<String, serde_json::Value>);
 
 impl ExtensionsJson {
-    // FIXME Docs
+    /// Creates an `ExtensionsJson` from an iterator of `(key, value)` pairs.
+    ///
+    /// Each value is serialized to JSON via [`serde_json::to_value`]. If any
+    /// serialization fails the method returns that error immediately and the
+    /// partially constructed map is dropped.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`serde_json::Error`] if any value cannot be serialized.
+    pub fn from_iter<I, T>(iter: I) -> serde_json::Result<Self>
+    where
+        I: IntoIterator<Item = (String, T)>,
+        T: Serialize,
+    {
+        let mut this = Self::default();
+        for (key, value) in iter {
+            this.insert(key, value)?;
+        }
+        Ok(this)
+    }
+
+    /// Inserts or replaces an extension entry in the map.
+    ///
+    /// `value` is serialized to a [`serde_json::Value`] before insertion.
+    /// If a value was previously stored under `key`, it is returned.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`serde_json::Error`] if `value` cannot be serialized to JSON.
+    pub fn insert<T>(
+        &mut self,
+        key: impl Into<String>,
+        value: T,
+    ) -> serde_json::Result<Option<serde_json::Value>>
+    where
+        T: Serialize,
+    {
+        Ok(self.0.insert(key.into(), serde_json::to_value(value)?))
+    }
+
+    /// Retrieves and deserializes an extension value by its type.
+    ///
+    /// The lookup key is taken from `T::EXTENSION_KEY` (see [`ExtensionKey`]).
+    /// Returns `None` if the key is absent or if deserialization fails.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `T` – Must implement both [`ExtensionKey`] (to provide the key) and
+    ///   [`serde::de::DeserializeOwned`] (to decode the stored JSON value).
     pub fn get<T: ExtensionKey>(&self) -> Option<T>
     where
         T: DeserializeOwned,
@@ -197,13 +250,25 @@ impl ExtensionsJson {
 
 impl From<ExtensionsJson> for serde_json::Value {
     fn from(value: ExtensionsJson) -> Self {
-        value.0
+        serde_json::Value::Object(value.0)
     }
 }
 
-impl From<serde_json::Value> for ExtensionsJson {
-    fn from(value: serde_json::Value) -> Self {
-        ExtensionsJson(value)
+impl AsRef<serde_json::Map<String, serde_json::Value>> for ExtensionsJson {
+    fn as_ref(&self) -> &serde_json::Map<String, serde_json::Value> {
+        &self.0
+    }
+}
+
+impl TryFrom<serde_json::Value> for ExtensionsJson {
+    type Error = serde_json::Error;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+        if let serde_json::Value::Object(map) = value {
+            Ok(ExtensionsJson(map))
+        } else {
+            Err(serde_json::Error::custom("expected object"))
+        }
     }
 }
 

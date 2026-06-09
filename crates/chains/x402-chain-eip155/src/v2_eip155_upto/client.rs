@@ -353,7 +353,7 @@ where
             // FIXME CONTINUE HERE sign the payment
         }
 
-        let extensions = ExtensionsJson(extension_map.into_iter().collect()); // FIXME This is ugly
+        let extensions = ExtensionsJson::from_iter(extension_map)?;
 
         let payload = v2::PaymentPayload {
             x402_version: v2::X402Version2,
