@@ -135,7 +135,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             })),
         )
-        // TODO CONTINUE Set price (and feature-based docs.rs)
         .route(
             "/eip155-upto",
             get(eip155_upto_handler).layer(x402.with_price_tag(V2Eip155Upto::price_tag(
