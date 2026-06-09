@@ -58,6 +58,8 @@
 //! - **[`X402LayerBuilder::with_description`]** is optional but helps the payer understand what is being paid for.
 //! - **[`X402LayerBuilder::with_mime_type`]** sets the MIME type of the protected resource (default: `application/json`).
 //! - **[`X402LayerBuilder::with_resource`]** explicitly sets the full URI of the protected resource.
+//! - **[`X402Middleware::with_extension`]** and **[`X402LayerBuilder::with_extension`]**
+//!   declare V2 protocol extensions in `PaymentRequired.extensions`.
 //!
 
 use axum_core::extract::Request;
@@ -169,6 +171,14 @@ impl X402Middleware<Arc<FacilitatorClient>> {
 }
 
 impl<F> X402Middleware<F> {
+    /// Declares a V2 protocol extension on this middleware instance.
+    ///
+    /// Extensions added here are copied into every layer builder created from
+    /// this middleware. Use [`X402LayerBuilder::with_extension`] when an
+    /// extension should apply only to a single protected route.
+    ///
+    /// The extension is inserted into the `PaymentRequired.extensions` object
+    /// under `TExtension::EXTENSION_KEY`.
     pub fn with_extension<TExtension>(mut self, extension: TExtension) -> Self
     where
         TExtension: ExtensionKey + Serialize,
@@ -176,7 +186,7 @@ impl<F> X402Middleware<F> {
         let mut extensions = self.extensions;
         extensions
             .insert(extension)
-            .expect("extension should serialize into json just fine"); // FIXME fix expect message
+            .expect("failed to serialize x402 extension declaration");
         self.extensions = extensions;
         self
     }
@@ -251,7 +261,7 @@ where
             price_source: StaticPriceTags::new(vec![price_tag]),
             base_url: self.base_url.clone().map(Arc::new),
             resource: Arc::new(ResourceInfoBuilder::default()),
-            extensions: Arc::new(ExtensionsJson::default()),
+            extensions: Arc::new(self.extensions.clone()),
             settle_before_execution: self.settle_before_execution,
         }
     }
@@ -295,7 +305,7 @@ where
             price_source: DynamicPriceTags::new(callback),
             base_url: self.base_url.clone().map(Arc::new),
             resource: Arc::new(ResourceInfoBuilder::default()),
-            extensions: Arc::new(ExtensionsJson::default()),
+            extensions: Arc::new(self.extensions.clone()),
             settle_before_execution: self.settle_before_execution,
         }
     }
@@ -362,6 +372,12 @@ impl<TSource, TFacilitator> X402LayerBuilder<TSource, TFacilitator> {
         self
     }
 
+    /// Declares a V2 protocol extension for this protected route.
+    ///
+    /// The extension is serialized and inserted into the
+    /// `PaymentRequired.extensions` object under `TExtension::EXTENSION_KEY`.
+    /// Route-level declarations are included only in responses produced by this
+    /// layer builder.
     pub fn with_extension<TExtension>(mut self, extension: TExtension) -> Self
     where
         TExtension: ExtensionKey + Serialize,
@@ -369,7 +385,7 @@ impl<TSource, TFacilitator> X402LayerBuilder<TSource, TFacilitator> {
         let mut extensions = (*self.extensions).clone();
         extensions
             .insert(extension)
-            .expect("extension should serialize into json just fine"); // FIXME fix expect message
+            .expect("failed to serialize x402 extension declaration");
         self.extensions = Arc::new(extensions);
         self
     }

@@ -38,7 +38,11 @@ pub struct Eip2612GasSponsoring {
 }
 
 impl Eip2612GasSponsoring {
-    // FIXME Doc comments
+    /// Returns the default server-side declaration for this extension.
+    ///
+    /// Resource servers include this value in `PaymentRequired.extensions` to
+    /// advertise that compatible clients may attach an EIP-2612 permit payload
+    /// under the `eip2612GasSponsoring` extension key.
     pub fn server() -> Eip2612GasSponsoringServer {
         Eip2612GasSponsoringServer::default()
     }
@@ -148,7 +152,11 @@ sol! {
     }
 }
 
-// FIXME Doc comments
+/// JSON Schema for the client-provided `eip2612GasSponsoring.info` payload.
+///
+/// This schema is advertised by [`Eip2612GasSponsoringServer::default`] so
+/// clients know the exact permit fields expected when they enrich a payment
+/// payload with the extension.
 static SCHEMA: LazyLock<serde_json::Value> = LazyLock::new(|| {
     serde_json::json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
