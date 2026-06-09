@@ -205,29 +205,6 @@ impl ExtensionsJson {
         self.0.is_empty()
     }
 
-    /// Creates an `ExtensionsJson` from an iterator of `(key, value)` pairs.
-    ///
-    /// Each value is serialized to a [`serde_json::Value`] via
-    /// [`serde_json::to_value`]. If any serialization fails, the method
-    /// returns that error immediately and the partially-constructed map is
-    /// dropped.
-    ///
-    /// # Errors
-    ///
-    /// Returns a [`serde_json::Error`] if any value cannot be serialized.
-    pub fn from_iter<I, T>(iter: I) -> serde_json::Result<Self>
-    where
-        I: IntoIterator<Item = (String, T)>,
-        T: Serialize,
-    {
-        let mut this = Self::default();
-        for (key, value) in iter {
-            let value = serde_json::to_value(value)?;
-            this.0.insert(key, value);
-        }
-        Ok(this)
-    }
-
     /// Inserts or replaces an extension entry, keyed by `T::EXTENSION_KEY`.
     ///
     /// `value` is serialized to a [`serde_json::Value`] before insertion.
@@ -262,6 +239,17 @@ impl ExtensionsJson {
         self.0
             .get(T::EXTENSION_KEY)
             .and_then(|v| T::deserialize(v).ok())
+    }
+}
+
+impl FromIterator<(String, serde_json::Value)> for ExtensionsJson {
+    /// Collects an iterator of `(key, value)` pairs into an [`ExtensionsJson`].
+    ///
+    /// Values must already be [`serde_json::Value`]s. To build from
+    /// serializable types, serialize each value with [`serde_json::to_value`]
+    /// before collecting, handling any errors at the call site.
+    fn from_iter<I: IntoIterator<Item = (String, serde_json::Value)>>(iter: I) -> Self {
+        ExtensionsJson(iter.into_iter().collect())
     }
 }
 
