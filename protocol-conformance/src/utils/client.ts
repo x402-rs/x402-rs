@@ -70,6 +70,51 @@ export async function invokeRustClient(
   return new TextDecoder().decode(stdout);
 }
 
+export async function invokeRustClientUptoEip155(
+  endpoint: URL,
+  privateKey: string,
+) {
+  const binaryPath = new URL(
+    "target/debug/x402-reqwest-upto-eip155",
+    WORKSPACE_ROOT,
+  ).pathname;
+  const env: any = {
+    ...process.env,
+    ENDPOINT: endpoint.href,
+    EVM_PRIVATE_KEY: privateKey,
+    EVM_RPC_URL:
+      process.env.BASE_SEPOLIA_RPC_URL ??
+      "https://sepolia.base.org",
+  };
+  const childProcess = spawn(binaryPath, {
+    cwd: WORKSPACE_ROOT.pathname,
+    stdio: ["ignore", "pipe", "pipe"],
+    env,
+  });
+  const prefix = `[rs-upto-client]`;
+  let stdout = Uint8Array.from([]);
+  childProcess.stdout.on("data", (data: Uint8Array) => {
+    stdout = new Uint8Array([...stdout, ...data]);
+    printLines(process.stdout, prefix, data);
+  });
+  childProcess.stderr.on("data", (data: Uint8Array) => {
+    printLines(process.stderr, prefix, data);
+  });
+  const exitP = Promise.withResolvers<void>();
+  const onError = (err: Error) => {
+    childProcess.off("exit", onExit);
+    exitP.reject(err);
+  };
+  const onExit = () => {
+    childProcess.off("error", onError);
+    exitP.resolve();
+  };
+  childProcess.on("error", onError);
+  childProcess.on("exit", onExit);
+  await exitP.promise;
+  return new TextDecoder().decode(stdout);
+}
+
 export const EIP155_ACCOUNT = privateKeyToAccount(
   config.baseSepolia.buyerPrivateKey,
 );
