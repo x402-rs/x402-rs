@@ -21,10 +21,7 @@ telemetry = ["tracing", "tracing-core", "x402-types/telemetry"]
 facilitator = [
   "async-trait",
   "reqwest",
-  "alloy-primitives",
   "alloy-sol-types",
-  "bs58",
-  "sha2",
   "k256",
   "tokio",
   "url",
@@ -41,11 +38,11 @@ tokio = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 
-alloy-primitives = { version = "1.6", features = ["serde"], optional = true }
+alloy-primitives = { version = "1.6", features = ["serde"] }
 alloy-sol-types = { version = "1.6", optional = true }
 
-bs58 = { version = "0.5.1", optional = true }
-sha2 = { version = "0.10", optional = true }
+bs58 = { version = "0.5.1" }
+sha2 = { version = "0.10" }
 k256 = { version = "0.13", features = ["ecdsa", "ecdsa-core"], optional = true }
 
 tracing = { workspace = true, optional = true }
