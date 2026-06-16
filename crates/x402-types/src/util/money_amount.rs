@@ -20,7 +20,6 @@
 //! assert_eq!(amount.mantissa(), 1050);  // 10.50 as integer
 //! ```
 
-use regex::Regex;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use std::fmt;
@@ -115,14 +114,14 @@ impl MoneyAmount {
     /// - The value is negative
     /// - The value is outside the allowed range
     pub fn parse(input: &str) -> Result<Self, MoneyAmountParseError> {
-        // Remove anything that isn't digit, dot, minus
-        let cleaned = Regex::new(r"[^\d\.\-]+")
-            .unwrap()
-            .replace_all(input, "")
-            .to_string();
+        let cleaned = input.trim().replace(',', "");
+        let cleaned = cleaned
+            .strip_prefix('$')
+            .or_else(|| cleaned.strip_prefix('€'))
+            .unwrap_or(&cleaned);
 
         let parsed =
-            Decimal::from_str(&cleaned).map_err(|_| MoneyAmountParseError::InvalidFormat)?;
+            Decimal::from_str(cleaned).map_err(|_| MoneyAmountParseError::InvalidFormat)?;
 
         if parsed.is_sign_negative() {
             return Err(MoneyAmountParseError::Negative);
@@ -176,5 +175,28 @@ impl TryFrom<f64> for MoneyAmount {
 impl Display for MoneyAmount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0.normalize())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_supported_currency_formats() {
+        assert_eq!(MoneyAmount::parse("$1,234.50").unwrap().mantissa(), 123450);
+        assert_eq!(MoneyAmount::parse(" €20 ").unwrap().mantissa(), 20);
+    }
+
+    #[test]
+    fn rejects_trailing_or_embedded_text() {
+        assert!(matches!(
+            MoneyAmount::parse("1abc"),
+            Err(MoneyAmountParseError::InvalidFormat)
+        ));
+        assert!(matches!(
+            MoneyAmount::parse("USD 10"),
+            Err(MoneyAmountParseError::InvalidFormat)
+        ));
     }
 }
