@@ -1,10 +1,9 @@
 ---
 Document Type: Specification
 Description: X402 Protocol Specification version 1 - Core protocol fundamentals, payment schemes, and facilitator interface
-Source: https://github.com/coinbase/x402/blob/main/specs/x402-specification-v1.md
-Downloaded At: 2026-03-05
+Source: https://github.com/x402-foundation/x402/blob/main/specs/x402-specification-v1.md
+Downloaded At: 2026-06-16
 ---
-
 # X402 Protocol Specification
 
 **Protocol Version**: 1
@@ -38,7 +37,7 @@ x402 is made up of three core components:
 
 x402 is an open payment standard that enables clients to pay for external resources. The protocol defines standardized message formats and payment flows that can be implemented over various transport layers, providing a standardized mechanism for payments across different payment schemes, networks and transport layers.
 
-This specification is based on the x402 protocol implementation and documentation available in the [Coinbase x402 repository](https://github.com/coinbase/x402). It aims to provide a comprehensive and implementation-agnostic specification for the x402 protocol.
+This specification is based on the x402 protocol implementation and documentation available in the [Coinbase x402 repository](https://github.com/x402-foundation/x402). It aims to provide a comprehensive and implementation-agnostic specification for the x402 protocol.
 
 **2. Core Payment Flow**
 
@@ -212,9 +211,9 @@ The `SettlementResponse` schema contains the following fields:
 | Field Name    | Type      | Required | Description                                                     |
 | ------------- | --------- | -------- | --------------------------------------------------------------- |
 | `success`     | `boolean` | Required | Indicates whether the payment settlement was successful         |
-| `errorReason` | `string`  | Optional | Error reason if settlement failed (omitted if successful)      |
+| `errorReason` | `string`  | Optional | Error reason if settlement failed (omitted if successful)       |
 | `transaction` | `string`  | Required | Blockchain transaction hash (empty string if settlement failed) |
-| `network`     | `string`  | Required | Blockchain network identifier                                  |
+| `network`     | `string`  | Required | Blockchain network identifier                                   |
 | `payer`       | `string`  | Required | Address of the payer's wallet                                   |
 
 **6. Payment Schemes (The Logic)**
@@ -604,7 +603,7 @@ x402 integrates across multiple transport layers:
 - **A2A (Agent-to-Agent Protocol)**: Direct agent-to-agent payments
 - **Custom Protocols**: Any request-response based system can implement x402 payment flows
 
-### 12.4 Server Frameworks
+### 12.3 Server Frameworks
 
 x402 integrates with popular frameworks:
 
@@ -614,7 +613,7 @@ x402 integrates with popular frameworks:
 - **Next.js**: Fullstack integration
 - **ai/agents**: AI agent and MCP frameworks
 
-### 12.5 Client Libraries
+### 12.4 Client Libraries
 
 Clients across different transports can be enhanced with x402 payment capabilities:
 
@@ -623,7 +622,7 @@ Clients across different transports can be enhanced with x402 payment capabiliti
 - **A2A**: x402_a2a (python)
 - **Custom integrations**: Application-specific payment handling
 
-### 12.6 Advanced Patterns
+### 12.5 Advanced Patterns
 
 The protocol enables sophisticated monetization strategies:
 

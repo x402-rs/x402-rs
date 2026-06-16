@@ -1,15 +1,15 @@
 ---
 Document Type: Scheme Specification
 Description: Overview of the 'exact' payment scheme that transfers a specific amount of funds
-Source: https://github.com/coinbase/x402/blob/main/specs/schemes/exact/scheme_exact.md
-Downloaded At: 2026-03-05
+Source: https://github.com/x402-foundation/x402/blob/main/specs/schemes/exact/scheme_exact.md
+Downloaded At: 2026-06-16
 ---
-
 # Scheme: `exact`
 
 ## Summary
 
-`exact` is a scheme that transfers a specific amount of funds from a client to a resource server. The resource server must know in advance the exact amount of funds they need to be transferred.
+`exact` is a scheme that transfers a specific amount of funds from a client to a resource server. The resource server must know in advance the exact
+amount of funds they need to be transferred.
 
 ## Example Use Cases
 
@@ -36,4 +36,12 @@ While implementation details vary by network, facilitators MUST enforce security
 - Transfer correctness: `to` MUST equal `payTo` and `amount` MUST equal `requirements.amount` exactly.
 - Simulation verification: MUST emit events showing only the expected balance changes (recipient increase, payer decrease) for `requirements.amount`—no other balance changes allowed.
 
-Network-specific rules are in per-network documents: `scheme_exact_svm.md` (Solana), `scheme_exact_stellar.md` (Stellar), `scheme_exact_evm.md` (EVM), `scheme_exact_sui.md` (SUI).
+### TON
+
+- Transfer correctness: exactly 1 `jetton_transfer` with destination equal to `payTo` and amount equal to `requirements.amount` exactly.
+- Signature validity: Ed25519 signature MUST verify against a public key derived from the BoC's `stateInit` (seqno == 0) or from the on-chain `get_public_key` getter (seqno > 0). Only `internal_signed` (0x73696e74) opcode is supported in the current gasless flow.
+- Wallet code validity: contract code MUST match a known W5 wallet contract, using `stateInit` for `nonexist`/`uninit` wallets and on-chain code for `active` wallets.
+- Replay protection: seqno MUST be strictly equal to on-chain value; duplicate `settlementBoc` submissions rejected via BoC hash dedup.
+- Simulation verification: SHOULD simulate via emulation during `/verify` to confirm expected balance changes.
+
+Network-specific rules are in per-network documents: `scheme_exact_svm.md` (Solana), `scheme_exact_stellar.md` (Stellar), `scheme_exact_evm.md` (EVM), `scheme_exact_sui.md` (SUI), `scheme_exact_ton.md` (TON).

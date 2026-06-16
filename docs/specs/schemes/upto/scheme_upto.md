@@ -1,10 +1,9 @@
 ---
 Document Type: Scheme Specification
 Description: Overview of the 'upto' payment scheme that authorizes transfer up to a maximum amount
-Source: https://github.com/coinbase/x402/blob/main/specs/schemes/upto/scheme_upto.md
-Downloaded At: 2026-03-05
+Source: https://github.com/x402-foundation/x402/blob/main/specs/schemes/upto/scheme_upto.md
+Downloaded At: 2026-06-16
 ---
-
 # Scheme: `upto`
 
 ## Summary
@@ -64,7 +63,7 @@ In the x402 protocol, the verify and settle requests share the same `PaymentPayl
 The actual settled amount is communicated by the resource server to the facilitator via the `amount` field in the settlement-time `PaymentRequirements`. This allows the resource server to determine the final charge based on actual resource consumption (e.g., tokens generated, bytes transferred) and communicate it to the facilitator without requiring additional fields or a separate settlement type.
 
 - Rationale: Reusing the existing `PaymentRequirements` type for both phases keeps the protocol simple and avoids introducing settlement-specific message types. The `amount` field naturally maps to "how much" in both contexts — "how much is authorized" at verification time and "how much to charge" at settlement time.
-- Implementation: The resource server MUST set the `amount` field in the `PaymentRequirements` passed to the facilitator's settle endpoint to the desired settlement amount. The facilitator MUST verify that this amount does not exceed the authorized maximum from the client's signed authorization.
+- Implementation: The resource server MUST set the `amount` field in the `PaymentRequirements` passed to the facilitator's settle endpoint to the desired settlement amount. The facilitator MUST verify that this amount does not exceed the authorized maximum from the client's signed authorization. **Critically, the facilitator MUST re-verify the client's signature using the authorized maximum (`permitted.amount`), not the settlement-time `requirements.amount`.** See network-specific specs (e.g., [EVM — Settle-Time Verification](./scheme_upto_evm.md#settle-time-verification)) for the exact procedure.
 
 ## Out of Scope
 
