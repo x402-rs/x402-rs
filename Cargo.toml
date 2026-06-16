@@ -15,7 +15,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.5.6"
+version = "2.0.0"
 authors = ["Sergey Ukustov <sergey@ukstv.me>"]
 edition = "2024"
 license = "Apache-2.0"
@@ -26,13 +26,13 @@ keywords = ["blockchain", "payments", "x402", "stablecoin", "http-402"]
 categories = ["cryptography::cryptocurrencies", "finance", "network-programming", "web-programming::http-server"]
 
 [workspace.dependencies]
-x402-axum = { version = "1.0", path = "crates/x402-axum" }
-x402-chain-aptos = { version = "1.0", path = "crates/chains/x402-chain-aptos" }
-x402-chain-eip155 = { version = "1.0", path = "crates/chains/x402-chain-eip155" }
-x402-chain-solana = { version = "1.0", path = "crates/chains/x402-chain-solana" }
-x402-facilitator-local = { version = "1.0", path = "crates/x402-facilitator-local" }
-x402-reqwest = { version = "1.0", path = "crates/x402-reqwest" }
-x402-types = { version = "1.0", path = "crates/x402-types" }
+x402-axum = { version = "2.0", path = "crates/x402-axum" }
+x402-chain-aptos = { version = "2.0", path = "crates/chains/x402-chain-aptos" }
+x402-chain-eip155 = { version = "2.0", path = "crates/chains/x402-chain-eip155" }
+x402-chain-solana = { version = "2.0", path = "crates/chains/x402-chain-solana" }
+x402-facilitator-local = { version = "2.0", path = "crates/x402-facilitator-local" }
+x402-reqwest = { version = "2.0", path = "crates/x402-reqwest" }
+x402-types = { version = "2.0", path = "crates/x402-types" }
 
 alloy-primitives = { version = "1.4.1" } # To represent token amounts
 async-trait = { version = "0.1" }
