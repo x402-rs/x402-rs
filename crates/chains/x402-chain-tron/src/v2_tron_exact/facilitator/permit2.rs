@@ -88,7 +88,7 @@ pub async fn verify_permit2_payment(
             amount: auth.permitted.amount.into(),
         },
         spender: auth.spender,
-        nonce: auth.nonce,
+        nonce: auth.nonce.into(),
         deadline: U256::from(auth.deadline.as_secs()),
         witness: TronWitnessTyped {
             to: auth.witness.to,
@@ -145,7 +145,7 @@ pub async fn settle_permit2_payment(
             x402_exact_permit2_proxy,
             auth.permitted.token,
             auth.permitted.amount.into(),
-            auth.nonce,
+            auth.nonce.into(),
             auth.deadline,
             auth.from,
             auth.witness.to,

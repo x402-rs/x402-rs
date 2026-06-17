@@ -134,7 +134,8 @@ mod facilitator_types {
         pub from: Address,
         pub permitted: Permit2TokenPermissions,
         pub spender: Address,
-        pub nonce: U256,
+        /// Permit2 bitmap nonce — sent as a decimal string on the wire.
+        pub nonce: DecimalU256,
         pub deadline: UnixTimestamp,
         pub witness: Permit2Witness,
     }

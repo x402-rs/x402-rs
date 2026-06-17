@@ -8,6 +8,7 @@ use x402_types::chain::ChainId;
 use x402_types::networks::USDC;
 
 use crate::chain::{TronChainReference, TronTokenDeployment, TronTransferMethod};
+use crate::chain::types::{TRON_MAINNET, TRON_NILE, TRON_SHASTA};
 
 /// Marker struct for USDT (Tether) token deployment implementations on TRON.
 #[allow(dead_code, clippy::upper_case_acronyms)]
@@ -37,15 +38,15 @@ pub trait KnownNetworkTron<A> {
 
 impl KnownNetworkTron<TronChainReference> for TronChainReference {
     fn mainnet() -> TronChainReference {
-        TronChainReference::new(0x2b6653dc)
+        TRON_MAINNET
     }
 
     fn shasta() -> TronChainReference {
-        TronChainReference::new(0xcd8690dc)
+        TRON_SHASTA
     }
 
     fn nile() -> TronChainReference {
-        TronChainReference::new(0x94a9059e)
+        TRON_NILE
     }
 }
 

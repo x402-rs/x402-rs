@@ -25,6 +25,10 @@ pub const TRON_NAMESPACE: &str = "tron";
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TronChainReference(u32);
 
+pub const TRON_MAINNET: TronChainReference = TronChainReference(0x2b6653dc);
+pub const TRON_SHASTA: TronChainReference = TronChainReference(0xcd8690dc);
+pub const TRON_NILE: TronChainReference = TronChainReference(0x94a9059e);
+
 impl TronChainReference {
     /// Creates a new chain reference from a raw u32 chain ID.
     pub const fn new(chain_id: u32) -> Self {
@@ -43,11 +47,9 @@ impl TronChainReference {
 
     /// Returns the Permit2 proxy contract address (Base58Check) for this network, if known.
     pub fn x402_exact_permit2_proxy(self) -> Option<TronAddress> {
-        match self.0 {
-            // Mainnet
-            0x2b6653dc => None, // TODO: deploy contract
+        match self {
             // Nile testnet
-            0x94a9059e => "TTjbkCh8sC4gNTWG48iWNssrLBqZq2tiTy".parse().ok(),
+            TRON_NILE => "TTjbkCh8sC4gNTWG48iWNssrLBqZq2tiTy".parse().ok(),
             _ => None,
         }
     }
