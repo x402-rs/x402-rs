@@ -147,18 +147,21 @@ mod facilitator_types {
         pub signature: Bytes,
     }
 
+    pub type Eip3009PaymentPayload = v2::PaymentPayload<Eip3009PaymentRequirements, Eip3009Payload>;
+    pub type Permit2PaymentPayload = v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>;
+
     /// The typed verify/settle request (discriminated by extra field).
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(untagged)]
     pub enum FacilitatorVerifyRequest {
         Eip3009 {
             x402_version: v2::X402Version2,
-            payment_payload: v2::PaymentPayload<Eip3009PaymentRequirements, Eip3009Payload>,
+            payment_payload: Eip3009PaymentPayload,
             payment_requirements: Eip3009PaymentRequirements,
         },
         Permit2 {
             x402_version: v2::X402Version2,
-            payment_payload: v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>,
+            payment_payload: Permit2PaymentPayload,
             payment_requirements: Permit2PaymentRequirements,
         },
     }
