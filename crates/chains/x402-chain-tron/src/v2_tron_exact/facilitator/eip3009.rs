@@ -39,7 +39,8 @@ pub async fn verify_eip3009_payment(
         &provider.chain_reference,
         accepted,
         payment_payload,
-    ).await?;
+    )
+    .await?;
 
     let auth = &payment_payload.payload.authorization;
     let required_amount = accepted.amount;

@@ -8,6 +8,7 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 use alloy_sol_types::{SolCall, sol};
 use k256::ecdsa::{RecoveryId, SigningKey, VerifyingKey};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -59,6 +60,70 @@ sol! {
         bytes signature
     ) external;
 }
+
+// ── TronGrid response types ───────────────────────────────────────────────────
+
+/// The nested `result` object inside `trigger*` responses.
+/// Distinct from `broadcasttransaction` which has a flat `bool` at `result`.
+#[derive(Debug, Deserialize)]
+struct TriggerStatus {
+    result: bool,
+    #[serde(default)]
+    message: Option<String>,
+}
+
+impl TriggerStatus {
+    fn into_result(self) -> Result<(), String> {
+        if self.result {
+            Ok(())
+        } else {
+            Err(self.message.unwrap_or_else(|| "unknown error".into()))
+        }
+    }
+}
+
+/// Response from `triggerconstantcontract`.
+#[derive(Debug, Deserialize)]
+struct ConstantContractResponse {
+    result: TriggerStatus,
+    #[serde(default)]
+    constant_result: Vec<String>,
+}
+
+/// Response from `triggersmartcontract`.
+/// The `transaction` field is kept as raw JSON because we add `signature` to it
+/// before broadcasting.
+#[derive(Debug, Deserialize)]
+struct SmartContractResponse {
+    result: TriggerStatus,
+    transaction: Option<Value>,
+}
+
+/// Response from `broadcasttransaction`.
+/// Note: `result` here is a flat `bool`, not a nested object.
+#[derive(Debug, Deserialize)]
+struct BroadcastResponse {
+    result: bool,
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    txid: Option<String>,
+}
+
+/// Response from `gettransactioninfobyid`.
+/// All fields are optional — an empty object `{}` means the tx is still pending.
+#[derive(Debug, Deserialize)]
+struct TransactionInfoResponse {
+    #[serde(default)]
+    receipt: Option<TxReceipt>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TxReceipt {
+    result: Option<String>,
+}
+
+// ── Errors ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, thiserror::Error)]
 pub enum TronChainProviderError {
@@ -200,7 +265,7 @@ impl TronChainProvider {
             "call_value": 0,
             "visible": true
         });
-        let resp: Value = self
+        let resp: ConstantContractResponse = self
             .client
             .post(url)
             .json(&body)
@@ -209,22 +274,13 @@ impl TronChainProvider {
             .json()
             .await?;
 
-        if let Some(result) = resp.get("result") {
-            if result.get("result") == Some(&Value::Bool(false)) {
-                let msg = result
-                    .get("message")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown error")
-                    .to_string();
-                return Err(TronChainProviderError::Api(msg));
-            }
-        }
+        resp.result
+            .into_result()
+            .map_err(TronChainProviderError::Api)?;
 
         let hex_result = resp
-            .get("constant_result")
-            .and_then(|v| v.as_array())
-            .and_then(|arr| arr.first())
-            .and_then(|v| v.as_str())
+            .constant_result
+            .first()
             .ok_or_else(|| TronChainProviderError::Api("missing constant_result".to_string()))?;
 
         alloy_primitives::hex::decode(hex_result)
@@ -251,7 +307,7 @@ impl TronChainProvider {
             "call_value": 0,
             "visible": true
         });
-        let resp: Value = self
+        let resp: SmartContractResponse = self
             .client
             .post(url)
             .json(&body)
@@ -260,18 +316,11 @@ impl TronChainProvider {
             .json()
             .await?;
 
-        if let Some(result) = resp.get("result") {
-            if result.get("result") == Some(&Value::Bool(false)) {
-                let msg = result
-                    .get("message")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("triggersmartcontract failed")
-                    .to_string();
-                return Err(TronChainProviderError::Api(msg));
-            }
-        }
+        resp.result
+            .into_result()
+            .map_err(TronChainProviderError::Api)?;
 
-        resp.get("transaction").cloned().ok_or_else(|| {
+        resp.transaction.ok_or_else(|| {
             TronChainProviderError::Api("missing transaction in response".to_string())
         })
     }
@@ -298,21 +347,14 @@ impl TronChainProvider {
             .rpc_url
             .join("wallet/broadcasttransaction")
             .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
-        let resp: Value = self.client.post(url).json(&tx).send().await?.json().await?;
-        if resp.get("result") != Some(&Value::Bool(true)) {
-            let msg = resp
-                .get("message")
-                .and_then(|v| v.as_str())
-                .unwrap_or("broadcast failed")
-                .to_string();
+        let resp: BroadcastResponse = self.client.post(url).json(&tx).send().await?.json().await?;
+        if !resp.result {
+            let msg = resp.message.unwrap_or_else(|| "broadcast failed".into());
             return Err(TronChainProviderError::Api(msg));
         }
-        resp.get("txid")
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-            .ok_or_else(|| {
-                TronChainProviderError::Api("missing txid in broadcast response".to_string())
-            })
+        resp.txid.ok_or_else(|| {
+            TronChainProviderError::Api("missing txid in broadcast response".to_string())
+        })
     }
 
     /// Sign and broadcast, returning the txid.
@@ -340,7 +382,7 @@ impl TronChainProvider {
             if start.elapsed() > timeout {
                 return Err(TronChainProviderError::TxTimeout);
             }
-            let resp: Value = self
+            let resp: TransactionInfoResponse = self
                 .client
                 .post(url.clone())
                 .json(&body)
@@ -348,18 +390,10 @@ impl TronChainProvider {
                 .await?
                 .json()
                 .await?;
-            if resp.as_object().map(|o| o.is_empty()).unwrap_or(false) {
-                tokio::time::sleep(interval).await;
-                continue;
-            }
-            match resp
-                .get("receipt")
-                .and_then(|r| r.get("result"))
-                .and_then(|r| r.as_str())
-            {
+            match resp.receipt.as_ref().and_then(|r| r.result.as_deref()) {
+                None => tokio::time::sleep(interval).await, // pending: no receipt yet
                 Some("SUCCESS") => return Ok(()),
                 Some(status) => return Err(TronChainProviderError::TxFailed(status.to_string())),
-                None => tokio::time::sleep(interval).await,
             }
         }
     }
@@ -571,6 +605,14 @@ pub trait TronChainProviderLike {
     /// Returns true if the given EVM address belongs to any configured signer.
     fn is_signer(&self, addr: &TronAddress) -> bool;
     fn chain(&self) -> &TronChainReference;
+    fn call_constant_a<TCalldata>(
+        &self,
+        contract: TronAddress,
+        calldata: TCalldata,
+        from: Option<TronAddress>,
+    ) -> impl Future<Output = Result<Vec<u8>, TronChainProviderError>> + Send
+    where
+        TCalldata: SolCall + Send;
 }
 
 impl TronChainProviderLike for TronChainProvider {
@@ -581,4 +623,64 @@ impl TronChainProviderLike for TronChainProvider {
     fn chain(&self) -> &TronChainReference {
         &self.chain_reference
     }
+
+    async fn call_constant_a<TCalldata>(
+        &self,
+        contract_address: TronAddress,
+        calldata: TCalldata,
+        from: Option<TronAddress>,
+    ) -> Result<Vec<u8>, TronChainProviderError>
+    where
+        TCalldata: SolCall + Send,
+    {
+        let url = self
+            .rpc_url
+            .join("wallet/triggerconstantcontract")
+            .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
+        let body = CallConstantRequest {
+            owner_address: from,
+            contract_address,
+            data: calldata.abi_encode(),
+            call_value: 0,
+            visible: true,
+        };
+        let resp: CallConstantResponse = self
+            .client
+            .post(url)
+            .json(&body)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        resp.result
+            .into_result()
+            .map_err(TronChainProviderError::Api)?;
+
+        let hex_result = resp
+            .constant_result
+            .first()
+            .ok_or_else(|| TronChainProviderError::Api("missing constant_result".to_string()))?;
+
+        alloy_primitives::hex::decode(hex_result)
+            .map_err(|e| TronChainProviderError::AbiDecode(e.to_string()))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallConstantRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_address: Option<TronAddress>,
+    pub contract_address: TronAddress,
+    #[serde(with = "alloy_primitives::hex::serde")]
+    pub data: Vec<u8>,
+    pub call_value: u64,
+    pub visible: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CallConstantResponse {
+    pub result: TriggerStatus,
+    #[serde(default)]
+    pub constant_result: Vec<String>,
 }

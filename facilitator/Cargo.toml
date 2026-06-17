@@ -21,7 +21,7 @@ name = "x402-facilitator"
 path = "src/main.rs"
 
 [features]
-default = ["telemetry", "chain-eip155", "chain-solana"]
+default = ["telemetry", "chain-eip155", "chain-solana", "chain-tron"]
 telemetry = ["dep:tracing", "x402-types/telemetry", "x402-facilitator-local/telemetry", "x402-chain-eip155?/telemetry", "x402-chain-solana?/telemetry", "x402-chain-aptos?/telemetry", "x402-chain-tron?/telemetry"]
 chain-aptos = ["dep:x402-chain-aptos"]
 chain-eip155 = ["dep:x402-chain-eip155"]

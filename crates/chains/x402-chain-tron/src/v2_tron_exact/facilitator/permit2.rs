@@ -83,7 +83,7 @@ pub async fn verify_permit2_payment(
     let permit2_evm = Address::from(*permit2_proxy);
     let domain = eip712_domain! {
         name: "Permit2",
-        chain_id: provider.eip712_chain_id(),
+        chain_id: provider.chain_reference.inner() as u64,
         verifying_contract: permit2_evm,
     };
     let hash = TronPermitWitnessTransferFrom {
