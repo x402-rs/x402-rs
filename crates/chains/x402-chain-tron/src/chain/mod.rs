@@ -1,7 +1,10 @@
 //! TRON chain support types and providers.
 
 pub mod types;
-pub use types::{TronNetwork, TronTokenDeployment, TronTransferMethod};
+pub use types::{
+    TRON_NAMESPACE, TronChainReference, TronChainReferenceFormatError, TronTokenDeployment,
+    TronTransferMethod,
+};
 
 pub mod address;
 pub use address::TronAddress;
