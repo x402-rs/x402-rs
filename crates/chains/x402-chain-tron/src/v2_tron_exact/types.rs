@@ -154,11 +154,13 @@ mod facilitator_types {
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(untagged)]
     pub enum FacilitatorVerifyRequest {
+        #[serde(rename_all = "camelCase")]
         Eip3009 {
             x402_version: v2::X402Version2,
             payment_payload: Eip3009PaymentPayload,
             payment_requirements: Eip3009PaymentRequirements,
         },
+        #[serde(rename_all = "camelCase")]
         Permit2 {
             x402_version: v2::X402Version2,
             payment_payload: Permit2PaymentPayload,
