@@ -146,8 +146,7 @@ pub async fn settle_permit2_payment(
 
     let accepted = &payment_payload.accepted;
     let auth = &payment_payload.payload.permit2_authorization;
-    let x402_exact_permit2_proxy = &provider
-        .x402_exact_permit2_proxy;
+    let x402_exact_permit2_proxy = &provider.x402_exact_permit2_proxy;
 
     let txid = provider
         .build_and_submit_permit2_settle_tx(

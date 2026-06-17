@@ -52,7 +52,7 @@ impl TronChainReference {
     pub fn sun_permit2(self) -> Option<TronAddress> {
         match self {
             TRON_MAINNET => "TTJxU3P8rHycAyFY4kVtGNfmnMH4ezcuM9".parse().ok(),
-            TRON_NILE    => "TCJjTtzwRJYPapGTdyJdKcr7MqkngRRWQx".parse().ok(),
+            TRON_NILE => "TCJjTtzwRJYPapGTdyJdKcr7MqkngRRWQx".parse().ok(),
             _ => None,
         }
     }

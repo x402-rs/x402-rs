@@ -12,7 +12,7 @@ use std::str::FromStr;
 /// Serializes as Base58Check for the x402 wire format and for TronGrid API calls.
 /// Use `Into<Address>` / `From<TronAddress>` to get the `alloy` `Address` needed for
 /// EIP-712 / TIP-712 signing.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
 pub struct TronAddress(pub [u8; 20]);
 
 impl TronAddress {

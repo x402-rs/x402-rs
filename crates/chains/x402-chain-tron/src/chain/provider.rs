@@ -8,7 +8,7 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 use alloy_sol_types::{SolCall, sol};
 use k256::ecdsa::{RecoveryId, SigningKey, VerifyingKey};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -407,15 +407,8 @@ impl TronChainProvider {
         token: &TronAddress,
         owner_evm: Address,
     ) -> Result<U256, TronChainProviderError> {
-        let result = self
-            .call_constant(token, &balanceOfCall { account: owner_evm }.abi_encode())
-            .await?;
-        if result.len() < 32 {
-            return Err(TronChainProviderError::AbiDecode(
-                "balanceOf result too short".into(),
-            ));
-        }
-        Ok(U256::from_be_slice(&result[result.len() - 32..]))
+        self.call_constant_a(token.clone(), balanceOfCall { account: owner_evm }, None)
+            .await
     }
 
     pub async fn read_allowance(
@@ -424,7 +417,7 @@ impl TronChainProvider {
         owner_evm: Address,
         spender_evm: Address,
     ) -> Result<U256, TronChainProviderError> {
-        let result = self
+        let raw = self
             .call_constant(
                 token,
                 &allowanceCall {
@@ -434,12 +427,8 @@ impl TronChainProvider {
                 .abi_encode(),
             )
             .await?;
-        if result.len() < 32 {
-            return Err(TronChainProviderError::AbiDecode(
-                "allowance result too short".into(),
-            ));
-        }
-        Ok(U256::from_be_slice(&result[result.len() - 32..]))
+        allowanceCall::abi_decode_returns(&raw)
+            .map_err(|e| TronChainProviderError::AbiDecode(e.to_string()))
     }
 
     pub async fn read_authorization_state(
@@ -448,7 +437,7 @@ impl TronChainProvider {
         authorizer_evm: Address,
         nonce: B256,
     ) -> Result<bool, TronChainProviderError> {
-        let result = self
+        let raw = self
             .call_constant(
                 token,
                 &authorizationStateCall {
@@ -458,12 +447,8 @@ impl TronChainProvider {
                 .abi_encode(),
             )
             .await?;
-        if result.len() < 32 {
-            return Err(TronChainProviderError::AbiDecode(
-                "authorizationState result too short".into(),
-            ));
-        }
-        Ok(result[result.len() - 1] != 0)
+        authorizationStateCall::abi_decode_returns(&raw)
+            .map_err(|e| TronChainProviderError::AbiDecode(e.to_string()))
     }
 
     pub async fn simulate_transfer_with_authorization(
@@ -568,10 +553,18 @@ impl FromConfig<TronChainConfig> for TronChainProvider {
         // Explicit config overrides the well-known default
         let chain_reference = config.chain_reference;
         let contracts = config.inner.contracts.as_ref();
-        let x402_exact_permit2_proxy = contracts.and_then(|c| c.x402_exact_permit2_proxy).or_else(|| chain_reference.x402_exact_permit2_proxy()).ok_or(
-            TronChainProviderError::Api(format!("can not get x402ExactPermit2Proxy contract address for tron:{chain_reference}"))
-        )?;
-        let sun_permit2 = contracts.and_then(|c| c.sun_permit2).or_else(|| chain_reference.sun_permit2()).ok_or(TronChainProviderError::Api(format!("can not get Permit2 contract address for tron:{chain_reference}")))?;
+        let x402_exact_permit2_proxy = contracts
+            .and_then(|c| c.x402_exact_permit2_proxy)
+            .or_else(|| chain_reference.x402_exact_permit2_proxy())
+            .ok_or(TronChainProviderError::Api(format!(
+                "can not get x402ExactPermit2Proxy contract address for tron:{chain_reference}"
+            )))?;
+        let sun_permit2 = contracts
+            .and_then(|c| c.sun_permit2)
+            .or_else(|| chain_reference.sun_permit2())
+            .ok_or(TronChainProviderError::Api(format!(
+                "can not get Permit2 contract address for tron:{chain_reference}"
+            )))?;
 
         let rpc_url = config.inner.rpc_url.inner().clone();
 
@@ -608,7 +601,7 @@ pub trait TronChainProviderLike {
         contract: TronAddress,
         calldata: TCalldata,
         from: Option<TronAddress>,
-    ) -> impl Future<Output = Result<Vec<u8>, TronChainProviderError>> + Send
+    ) -> impl Future<Output = Result<TCalldata::Return, TronChainProviderError>> + Send
     where
         TCalldata: SolCall + Send;
 }
@@ -627,7 +620,7 @@ impl TronChainProviderLike for TronChainProvider {
         contract_address: TronAddress,
         calldata: TCalldata,
         from: Option<TronAddress>,
-    ) -> Result<Vec<u8>, TronChainProviderError>
+    ) -> Result<TCalldata::Return, TronChainProviderError>
     where
         TCalldata: SolCall + Send,
     {
@@ -636,7 +629,7 @@ impl TronChainProviderLike for TronChainProvider {
             .join("wallet/triggerconstantcontract")
             .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
         let body = CallConstantRequest {
-            owner_address: from,
+            owner_address: from.unwrap_or_else(|| TronAddress::default()),
             contract_address,
             data: calldata.abi_encode(),
             call_value: 0,
@@ -654,23 +647,23 @@ impl TronChainProviderLike for TronChainProvider {
         resp.result
             .into_result()
             .map_err(TronChainProviderError::Api)?;
+        let constant_result =
+            resp.constant_result.0.first().ok_or_else(|| {
+                TronChainProviderError::Api("missing constant_result".to_string())
+            })?;
 
-        let hex_result = resp
-            .constant_result
-            .first()
-            .ok_or_else(|| TronChainProviderError::Api("missing constant_result".to_string()))?;
+        let decoded = TCalldata::abi_decode_returns(&constant_result)
+            .map_err(|e| TronChainProviderError::AbiDecode(e.to_string()))?;
 
-        alloy_primitives::hex::decode(hex_result)
-            .map_err(|e| TronChainProviderError::AbiDecode(e.to_string()))
+        Ok(decoded)
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CallConstantRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub owner_address: Option<TronAddress>,
+    pub owner_address: TronAddress,
     pub contract_address: TronAddress,
-    #[serde(with = "alloy_primitives::hex::serde")]
+    #[serde(with = "prefixless_hex")]
     pub data: Vec<u8>,
     pub call_value: u64,
     pub visible: bool,
@@ -680,5 +673,99 @@ pub struct CallConstantRequest {
 pub struct CallConstantResponse {
     pub result: TriggerStatus,
     #[serde(default)]
-    pub constant_result: Vec<String>,
+    pub constant_result: ConstantResult,
+}
+
+#[derive(Debug, Default)]
+pub struct ConstantResult(pub Vec<Vec<u8>>);
+
+impl Serialize for ConstantResult {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for value in &self.0 {
+            seq.serialize_element(&prefixless_hex::PrefixlessHex(value))?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for ConstantResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct PrefixlessHexVecVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for PrefixlessHexVecVisitor {
+            type Value = ConstantResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a list of prefixless hex strings")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut values = Vec::new();
+
+                while let Some(value) = seq.next_element::<prefixless_hex::PrefixlessHexOwned>()? {
+                    values.push(value.0);
+                }
+
+                Ok(ConstantResult(values))
+            }
+        }
+
+        deserializer.deserialize_seq(PrefixlessHexVecVisitor)
+    }
+}
+
+pub mod prefixless_hex {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub struct PrefixlessHex<'a>(pub &'a [u8]);
+
+    impl Serialize for PrefixlessHex<'_> {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            serialize(self.0, serializer)
+        }
+    }
+
+    pub struct PrefixlessHexOwned(pub Vec<u8>);
+
+    impl<'de> Deserialize<'de> for PrefixlessHexOwned {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserialize(deserializer).map(Self)
+        }
+    }
+
+    /// Serialize a U256 as a decimal string.
+    pub fn serialize<S>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let value = alloy_primitives::hex::encode(value).replace("0x", "");
+        serializer.serialize_str(&value)
+    }
+
+    /// Deserialize a decimal string into a U256.
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let as_string = String::deserialize(deserializer)?;
+        let vec = alloy_primitives::hex::decode(&as_string).map_err(serde::de::Error::custom)?;
+        Ok(vec)
+    }
 }
