@@ -10,8 +10,8 @@ use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::timestamp::UnixTimestamp;
 
-use crate::v2_tron_exact::Eip3009Authorization;
 use crate::chain::TronChainProvider;
+use crate::v2_tron_exact::Eip3009Authorization;
 use crate::v2_tron_exact::types::{Eip3009Payload, Eip3009PaymentRequirements};
 
 sol! {
@@ -25,7 +25,7 @@ sol! {
     }
 }
 
-pub async fn verify_eip3009(
+pub async fn verify_eip3009_payment(
     provider: &TronChainProvider,
     payment_payload: &v2::PaymentPayload<Eip3009PaymentRequirements, Eip3009Payload>,
     payment_requirements: &Eip3009PaymentRequirements,
@@ -125,12 +125,12 @@ pub async fn verify_eip3009(
     )))
 }
 
-pub async fn settle_eip3009(
+pub async fn settle_eip3009_payment(
     provider: &TronChainProvider,
     payment_payload: &v2::PaymentPayload<Eip3009PaymentRequirements, Eip3009Payload>,
     payment_requirements: &Eip3009PaymentRequirements,
 ) -> Result<v2::SettleResponse, X402SchemeFacilitatorError> {
-    verify_eip3009(provider, payment_payload, payment_requirements).await?;
+    verify_eip3009_payment(provider, payment_payload, payment_requirements).await?;
 
     let accepted = &payment_payload.accepted;
     let auth = &payment_payload.payload.authorization;

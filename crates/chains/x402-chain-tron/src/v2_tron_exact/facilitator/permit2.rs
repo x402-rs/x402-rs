@@ -31,7 +31,7 @@ sol! {
     }
 }
 
-pub async fn verify_permit2(
+pub async fn verify_permit2_payment(
     provider: &TronChainProvider,
     payment_payload: &v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>,
     payment_requirements: &Permit2PaymentRequirements,
@@ -134,12 +134,12 @@ pub async fn verify_permit2(
     )))
 }
 
-pub async fn settle_permit2(
+pub async fn settle_permit2_payment(
     provider: &TronChainProvider,
     payment_payload: &v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>,
     payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<v2::SettleResponse, X402SchemeFacilitatorError> {
-    verify_permit2(provider, payment_payload, payment_requirements).await?;
+    verify_permit2_payment(provider, payment_payload, payment_requirements).await?;
 
     let accepted = &payment_payload.accepted;
     let auth = &payment_payload.payload.permit2_authorization;

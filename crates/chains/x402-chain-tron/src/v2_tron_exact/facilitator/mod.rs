@@ -15,6 +15,7 @@ use x402_types::scheme::{
 
 use crate::V2TronExact;
 use crate::chain::TronChainProvider;
+use crate::v2_tron_exact::ExactScheme;
 use crate::v2_tron_exact::types::{FacilitatorSettleRequest, FacilitatorVerifyRequest};
 
 impl X402SchemeFacilitatorBuilder<Arc<TronChainProvider>> for V2TronExact {
@@ -38,59 +39,75 @@ impl X402SchemeFacilitator for V2TronExactFacilitator {
         &self,
         request: &proto::VerifyRequest,
     ) -> Result<proto::VerifyResponse, X402SchemeFacilitatorError> {
-        let req = FacilitatorVerifyRequest::try_from(request.clone())?;
-        let resp = match req {
+        let verify_request = FacilitatorVerifyRequest::try_from(request.clone())?;
+        let verify_response = match verify_request {
             FacilitatorVerifyRequest::Eip3009 {
                 payment_payload,
                 payment_requirements,
                 x402_version: _,
             } => {
-                eip3009::verify_eip3009(&self.provider, &payment_payload, &payment_requirements)
-                    .await?
+                eip3009::verify_eip3009_payment(
+                    &self.provider,
+                    &payment_payload,
+                    &payment_requirements,
+                )
+                .await?
             }
             FacilitatorVerifyRequest::Permit2 {
                 payment_payload,
                 payment_requirements,
                 x402_version: _,
             } => {
-                permit2::verify_permit2(&self.provider, &payment_payload, &payment_requirements)
-                    .await?
+                permit2::verify_permit2_payment(
+                    &self.provider,
+                    &payment_payload,
+                    &payment_requirements,
+                )
+                .await?
             }
         };
-        Ok(resp.into())
+        Ok(verify_response.into())
     }
 
     async fn settle(
         &self,
         request: &proto::SettleRequest,
     ) -> Result<proto::SettleResponse, X402SchemeFacilitatorError> {
-        let req = FacilitatorSettleRequest::try_from(request.clone())?;
-        let resp = match req {
+        let settle_request = FacilitatorSettleRequest::try_from(request.clone())?;
+        let settle_response = match settle_request {
             FacilitatorSettleRequest::Eip3009 {
                 payment_payload,
                 payment_requirements,
                 x402_version: _,
             } => {
-                eip3009::settle_eip3009(&self.provider, &payment_payload, &payment_requirements)
-                    .await?
+                eip3009::settle_eip3009_payment(
+                    &self.provider,
+                    &payment_payload,
+                    &payment_requirements,
+                )
+                .await?
             }
             FacilitatorSettleRequest::Permit2 {
                 payment_payload,
                 payment_requirements,
                 x402_version: _,
             } => {
-                permit2::settle_permit2(&self.provider, &payment_payload, &payment_requirements)
-                    .await?
+                permit2::settle_permit2_payment(
+                    &self.provider,
+                    &payment_payload,
+                    &payment_requirements,
+                )
+                .await?
             }
         };
-        Ok(resp.into())
+        Ok(settle_response.into())
     }
 
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
         let kinds = vec![proto::SupportedPaymentKind {
             x402_version: v2::X402Version2.into(),
-            scheme: "exact".to_string(),
+            scheme: ExactScheme.to_string(),
             network: chain_id.clone().into(),
             extra: None,
         }];

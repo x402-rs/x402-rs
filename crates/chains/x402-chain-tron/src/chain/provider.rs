@@ -4,13 +4,13 @@
 //! `visible: true`, which means all addresses are passed and returned as
 //! Base58Check strings (the canonical TRON format).
 
-use std::fmt::{Debug, Display, Formatter};
-use std::time::Duration;
 use alloy_primitives::{Address, B256, Bytes, U256};
 use alloy_sol_types::{SolCall, sol};
 use k256::ecdsa::{RecoveryId, SigningKey, VerifyingKey};
 use reqwest::Client;
 use serde_json::Value;
+use std::fmt::{Debug, Display, Formatter};
+use std::time::Duration;
 use url::Url;
 use x402_types::chain::{ChainId, ChainProviderOps, FromConfig};
 use x402_types::timestamp::UnixTimestamp;

@@ -125,8 +125,8 @@ where
                 .await?
             }
             types::FacilitatorVerifyRequest::Permit2 {
-                payment_requirements,
                 payment_payload,
+                payment_requirements,
                 x402_version: _,
             } => {
                 permit2::verify_permit2_payment(
