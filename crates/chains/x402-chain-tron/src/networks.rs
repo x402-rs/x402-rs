@@ -185,9 +185,9 @@ mod tests {
 
     #[test]
     fn permit2_proxies() {
-        assert!(TronChainReference::mainnet().permit2_proxy().is_some());
-        assert!(TronChainReference::shasta().permit2_proxy().is_some());
-        assert!(TronChainReference::nile().permit2_proxy().is_none());
+        assert!(TronChainReference::mainnet().x402_exact_permit2_proxy().is_some());
+        assert!(TronChainReference::shasta().x402_exact_permit2_proxy().is_some());
+        assert!(TronChainReference::nile().x402_exact_permit2_proxy().is_none());
     }
 
     #[test]

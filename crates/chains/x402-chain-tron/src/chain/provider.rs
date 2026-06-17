@@ -66,7 +66,7 @@ sol! {
 /// The nested `result` object inside `trigger*` responses.
 /// Distinct from `broadcasttransaction` which has a flat `bool` at `result`.
 #[derive(Debug, Deserialize)]
-struct TriggerStatus {
+pub struct TriggerStatus {
     result: bool,
     #[serde(default)]
     message: Option<String>,
@@ -205,7 +205,7 @@ pub struct TronChainProvider {
     /// HTTP client.
     pub client: Client,
     /// Permit2 proxy address (Base58Check) for this network.
-    pub permit2_proxy_address: Option<TronAddress>,
+    pub x402_exact_permit2_proxy: TronAddress,
     /// All configured signers (at least one required).
     signers: Vec<TronSigner>,
 }
@@ -519,7 +519,7 @@ impl TronChainProvider {
 
     pub async fn build_and_submit_permit2_settle_tx(
         &self,
-        proxy: &TronAddress,
+        x402_exact_permit2_proxy: &TronAddress,
         token: Address,
         amount: U256,
         nonce: U256,
@@ -543,7 +543,7 @@ impl TronChainProvider {
             signature,
         }
         .abi_encode();
-        let tx = self.build_tx(proxy, &calldata).await?;
+        let tx = self.build_tx(x402_exact_permit2_proxy, &calldata).await?;
         self.sign_and_broadcast(tx).await
     }
 }
@@ -565,16 +565,15 @@ impl FromConfig<TronChainConfig> for TronChainProvider {
 
         // Explicit config overrides the well-known default
         let chain_reference = config.chain_reference;
+        println!("foo.0 {:?}", chain_reference.x402_exact_permit2_proxy());
+
         let permit2_proxy_address = config
             .inner
             .permit2_proxy_address
-            .as_deref()
-            .or_else(|| chain_reference.permit2_proxy())
-            .map(|s| s.parse::<TronAddress>())
-            .transpose()
-            .map_err(|e| {
-                TronChainProviderError::Api(format!("invalid permit2 proxy address: {e}"))
-            })?;
+            .or_else(|| chain_reference.x402_exact_permit2_proxy())
+            .ok_or(
+                TronChainProviderError::Api(format!("can not get permit2 address for tron:{chain_reference}"))
+            )?;
 
         let rpc_url = config.inner.rpc_url.inner().clone();
 
@@ -583,7 +582,7 @@ impl FromConfig<TronChainConfig> for TronChainProvider {
             rpc_url,
             signers,
             client: Client::new(),
-            permit2_proxy_address,
+            x402_exact_permit2_proxy: permit2_proxy_address,
         })
     }
 }

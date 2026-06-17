@@ -5,6 +5,8 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use x402_types::chain::ChainId;
 
+use crate::chain::TronAddress;
+
 /// The CAIP-2 namespace for TRON chains.
 pub const TRON_NAMESPACE: &str = "tron";
 
@@ -40,10 +42,12 @@ impl TronChainReference {
     }
 
     /// Returns the Permit2 proxy contract address (Base58Check) for this network, if known.
-    pub fn permit2_proxy(self) -> Option<&'static str> {
+    pub fn x402_exact_permit2_proxy(self) -> Option<TronAddress> {
         match self.0 {
-            0x2b6653dc => Some("TTJxU3P8rHycAyFY4kVtGNfmnMH4ezcuM9"),
-            0xcd8690dc => Some("TCJjTtzwRJYPapGTdyJdKcr7MqkngRRWQx"),
+            // Mainnet
+            0x2b6653dc => None, // TODO: deploy contract
+            // Nile testnet
+            0x94a9059e => "TTjbkCh8sC4gNTWG48iWNssrLBqZq2tiTy".parse().ok(),
             _ => None,
         }
     }

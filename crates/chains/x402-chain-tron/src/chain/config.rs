@@ -7,7 +7,7 @@ use url::Url;
 use x402_types::chain::ChainId;
 use x402_types::config::LiteralOrEnv;
 
-use crate::chain::TronChainReference;
+use crate::chain::{TronAddress, TronChainReference};
 
 /// Full configuration for a TRON chain provider.
 #[derive(Debug, Clone)]
@@ -45,7 +45,7 @@ pub struct TronChainConfigInner {
     /// Optional Permit2 proxy contract address in Base58Check format.
     /// If not set, the well-known deployment for this network is used (if any).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub permit2_proxy_address: Option<String>,
+    pub permit2_proxy_address: Option<TronAddress>,
 }
 
 // ── TronSignersConfig ────────────────────────────────────────────────────────

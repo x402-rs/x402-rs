@@ -37,11 +37,7 @@ pub async fn verify_permit2_payment(
     payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<v2::VerifyResponse, X402SchemeFacilitatorError> {
     let accepted = &payment_payload.accepted;
-    let permit2_proxy = provider.permit2_proxy_address.as_ref().ok_or_else(|| {
-        X402SchemeFacilitatorError::OnchainFailure(
-            "Permit2 proxy not configured for this TRON network".to_string(),
-        )
-    })?;
+    let x402_exact_permit2_proxy = provider.x402_exact_permit2_proxy;
 
     assert_requirements_match(accepted, payment_requirements)?;
 
@@ -80,7 +76,7 @@ pub async fn verify_permit2_payment(
     }
 
     // TIP-712 signature recovery against the Permit2 domain
-    let permit2_evm = Address::from(*permit2_proxy);
+    let permit2_evm = Address::from(x402_exact_permit2_proxy);
     let domain = eip712_domain! {
         name: "Permit2",
         chain_id: provider.chain_reference.inner() as u64,
@@ -141,14 +137,12 @@ pub async fn settle_permit2_payment(
 
     let accepted = &payment_payload.accepted;
     let auth = &payment_payload.payload.permit2_authorization;
-    let permit2_proxy = provider
-        .permit2_proxy_address
-        .as_ref()
-        .expect("permit2_proxy_address checked in verify");
+    let x402_exact_permit2_proxy = &provider
+        .x402_exact_permit2_proxy;
 
     let txid = provider
         .build_and_submit_permit2_settle_tx(
-            permit2_proxy,
+            x402_exact_permit2_proxy,
             auth.permitted.token,
             auth.permitted.amount.into(),
             auth.nonce,
