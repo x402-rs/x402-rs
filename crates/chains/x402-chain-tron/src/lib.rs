@@ -17,7 +17,6 @@ pub mod chain;
 pub mod networks;
 pub mod v2_tron_exact;
 
+pub use chain::TRON_NAMESPACE;
 pub use networks::{KnownNetworkTron, USDT};
 pub use v2_tron_exact::V2TronExact;
-
-pub const TRON_NAMESPACE: &str = "tron";
