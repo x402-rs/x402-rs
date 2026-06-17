@@ -6,13 +6,15 @@
 
 use alloy_primitives::{Address, Bytes, U256};
 use alloy_sol_types::{Eip712Domain, SolStruct, sol};
+use x402_types::chain::ChainId;
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::timestamp::UnixTimestamp;
 
-use crate::chain::TronChainProvider;
-use crate::v2_tron_exact::{Eip3009Authorization, Eip3009PaymentPayload};
+use crate::chain::provider::TronChainProviderLike;
+use crate::chain::{TronAddress, TronChainProvider, TronChainReference};
 use crate::v2_tron_exact::types::{Eip3009Payload, Eip3009PaymentRequirements};
+use crate::v2_tron_exact::{Eip3009Authorization, Eip3009PaymentPayload};
 
 sol! {
     struct TransferWithAuthorization {
@@ -32,36 +34,15 @@ pub async fn verify_eip3009_payment(
 ) -> Result<v2::VerifyResponse, X402SchemeFacilitatorError> {
     let accepted = &payment_payload.accepted;
     assert_requirements_match(accepted, payment_requirements)?;
+    assert_valid_payment(
+        provider,
+        &provider.chain_reference,
+        accepted,
+        payment_payload,
+    )?;
 
     let auth = &payment_payload.payload.authorization;
-    let now = UnixTimestamp::now();
-
-    if accepted.network != provider.chain_reference.chain_id() {
-        return Err(PaymentVerificationError::ChainIdMismatch.into());
-    }
-
-    if provider.is_signer(&auth.from) {
-        return Err(PaymentVerificationError::InvalidSignature(
-            "Payment from address must not be the facilitator".to_string(),
-        )
-        .into());
-    }
-
-    if auth.to != Address::from(accepted.pay_to) {
-        return Err(PaymentVerificationError::RecipientMismatch.into());
-    }
-
     let required_amount = accepted.amount;
-    if auth.value < required_amount {
-        return Err(PaymentVerificationError::InvalidPaymentAmount.into());
-    }
-
-    if now <= auth.valid_after {
-        return Err(PaymentVerificationError::Early.into());
-    }
-    if now >= auth.valid_before {
-        return Err(PaymentVerificationError::Expired.into());
-    }
 
     // TIP-712 signature recovery
     let domain = build_eip712_domain(
@@ -222,4 +203,51 @@ pub fn assert_requirements_match<T: PartialEq>(
     } else {
         Ok(())
     }
+}
+
+pub fn assert_valid_payment<P>(
+    provider: &P,
+    chain: &TronChainReference,
+    accepted: &Eip3009PaymentRequirements,
+    payload: &Eip3009PaymentPayload,
+) -> Result<(), X402SchemeFacilitatorError>
+where
+    P: TronChainProviderLike,
+{
+    let chain_id: ChainId = ChainId::from(chain);
+    let payload_chain_id = &accepted.network;
+    if payload_chain_id != &chain_id {
+        return Err(PaymentVerificationError::ChainIdMismatch.into());
+    }
+
+    let auth = &payload.payload.authorization;
+    let now = UnixTimestamp::now();
+
+    // From the spec: Facilitator safety: the facilitator's address MUST NOT appear as from (eip3009) or permit2Authorization.from (permit2) in the signed payload.
+    let authorization_from = TronAddress::from(auth.from);
+    if provider.is_signer(&authorization_from) {
+        return Err(PaymentVerificationError::InvalidSignature(
+            "Payment from address must not be the facilitator".to_string(),
+        )
+        .into());
+    }
+
+    let authorization_to = TronAddress::from(auth.to);
+    if authorization_to != accepted.pay_to {
+        return Err(PaymentVerificationError::RecipientMismatch.into());
+    }
+
+    let required_amount = accepted.amount;
+    if auth.value < required_amount {
+        return Err(PaymentVerificationError::InvalidPaymentAmount.into());
+    }
+
+    if now <= auth.valid_after {
+        return Err(PaymentVerificationError::Early.into());
+    }
+    if now >= auth.valid_before {
+        return Err(PaymentVerificationError::Expired.into());
+    }
+
+    Ok(())
 }

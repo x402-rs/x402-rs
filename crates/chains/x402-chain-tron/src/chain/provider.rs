@@ -9,6 +9,7 @@ use alloy_sol_types::{SolCall, sol};
 use k256::ecdsa::{RecoveryId, SigningKey, VerifyingKey};
 use reqwest::Client;
 use serde_json::Value;
+use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::time::Duration;
 use url::Url;
@@ -16,7 +17,7 @@ use x402_types::chain::{ChainId, ChainProviderOps, FromConfig};
 use x402_types::timestamp::UnixTimestamp;
 
 use crate::chain::TronAddress;
-use crate::chain::config::{TronChainConfig, TronPrivateKey, TronSignersConfig};
+use crate::chain::config::{TronChainConfig, TronPrivateKey};
 use crate::chain::types::TronChainReference;
 
 sol! {
@@ -144,8 +145,8 @@ pub struct TronChainProvider {
     signers: Vec<TronSigner>,
 }
 
-impl std::fmt::Debug for TronChainProvider {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for TronChainProvider {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("TronChainProvider")
             .field("chain_reference", &self.chain_reference)
             .field("rpc_url", &self.rpc_url)
@@ -162,43 +163,6 @@ impl std::fmt::Debug for TronChainProvider {
 }
 
 impl TronChainProvider {
-    /// Build from a validated set of signer keys.
-    pub fn from_signers(
-        chain_reference: TronChainReference,
-        rpc_url: Url,
-        signer_keys: &TronSignersConfig,
-        permit2_proxy_address: Option<String>,
-    ) -> Result<Self, TronChainProviderError> {
-        if signer_keys.is_empty() {
-            return Err(TronChainProviderError::InvalidKey(
-                "at least one signer is required".to_string(),
-            ));
-        }
-        let signers: Result<Vec<_>, _> = signer_keys
-            .iter()
-            .map(|k| TronSigner::from_key(k))
-            .collect();
-        let signers = signers?;
-
-        // Explicit config overrides the well-known default.
-        let permit2_proxy_address = permit2_proxy_address
-            .as_deref()
-            .or_else(|| chain_reference.permit2_proxy())
-            .map(|s| s.parse::<TronAddress>())
-            .transpose()
-            .map_err(|e| {
-                TronChainProviderError::Api(format!("invalid permit2 proxy address: {e}"))
-            })?;
-
-        Ok(Self {
-            chain_reference,
-            rpc_url,
-            signers,
-            client: Client::new(),
-            permit2_proxy_address,
-        })
-    }
-
     /// Returns the Base58Check address of the first (active) signer.
     pub fn facilitator_address(&self) -> TronAddress {
         self.signers[0].address // TODO Multiple addresses
@@ -559,13 +523,40 @@ impl TronChainProvider {
 #[async_trait::async_trait]
 impl FromConfig<TronChainConfig> for TronChainProvider {
     async fn from_config(config: &TronChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
-        let provider = TronChainProvider::from_signers(
-            config.chain_reference,
-            config.inner.rpc_url.inner().clone(),
-            &config.inner.signers,
-            config.inner.permit2_proxy_address.clone(),
-        )?;
-        Ok(provider)
+        let signers = &config.inner.signers;
+        if signers.is_empty() {
+            return Err(TronChainProviderError::InvalidKey(
+                "at least one signer is required".to_string(),
+            )
+            .into());
+        }
+        let signers = signers
+            .iter()
+            .map(|k| TronSigner::from_key(k))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Explicit config overrides the well-known default
+        let chain_reference = config.chain_reference;
+        let permit2_proxy_address = config
+            .inner
+            .permit2_proxy_address
+            .as_deref()
+            .or_else(|| chain_reference.permit2_proxy())
+            .map(|s| s.parse::<TronAddress>())
+            .transpose()
+            .map_err(|e| {
+                TronChainProviderError::Api(format!("invalid permit2 proxy address: {e}"))
+            })?;
+
+        let rpc_url = config.inner.rpc_url.inner().clone();
+
+        Ok(Self {
+            chain_reference,
+            rpc_url,
+            signers,
+            client: Client::new(),
+            permit2_proxy_address,
+        })
     }
 }
 
@@ -579,5 +570,16 @@ impl ChainProviderOps for TronChainProvider {
 
     fn chain_id(&self) -> ChainId {
         self.chain_reference.chain_id()
+    }
+}
+
+pub trait TronChainProviderLike {
+    /// Returns true if the given EVM address belongs to any configured signer.
+    fn is_signer(&self, addr: &TronAddress) -> bool;
+}
+
+impl TronChainProviderLike for TronChainProvider {
+    fn is_signer(&self, addr: &TronAddress) -> bool {
+        self.signers.iter().any(|s| s.address == *addr)
     }
 }

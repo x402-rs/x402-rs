@@ -94,6 +94,12 @@ impl From<TronChainReference> for ChainId {
     }
 }
 
+impl From<&TronChainReference> for ChainId {
+    fn from(value: &TronChainReference) -> Self {
+        ChainId::new(TRON_NAMESPACE, value.to_string())
+    }
+}
+
 impl TryFrom<ChainId> for TronChainReference {
     type Error = TronChainReferenceFormatError;
 
