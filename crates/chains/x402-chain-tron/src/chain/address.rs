@@ -15,23 +15,13 @@ use std::str::FromStr;
 ///
 /// Serializes and deserializes as Base58 (the "T..." format used on the wire).
 /// Internally holds the 20-byte EVM address payload.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct TronAddress(pub [u8; 20]);
 
 impl TronAddress {
     /// Creates a TronAddress from raw 20 bytes (EVM address bytes).
     pub fn from_bytes(bytes: [u8; 20]) -> Self {
         Self(bytes)
-    }
-
-    /// Creates a TronAddress from an alloy `Address`.
-    pub fn from_evm_address(addr: Address) -> Self {
-        Self(*addr.as_ref())
-    }
-
-    /// Returns the alloy `Address` (EVM hex).
-    pub fn to_evm_address(&self) -> Address {
-        Address::from(self.0)
     }
 
     /// Returns the TRON hex representation: "41" + 40 hex chars.
@@ -118,6 +108,14 @@ impl FromStr for TronAddress {
     }
 }
 
+impl TryFrom<&str> for TronAddress {
+    type Error = TronAddressError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::from_str(value)
+    }
+}
+
 impl Serialize for TronAddress {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.to_base58())
@@ -133,13 +131,19 @@ impl<'de> Deserialize<'de> for TronAddress {
 
 impl From<Address> for TronAddress {
     fn from(addr: Address) -> Self {
-        Self::from_evm_address(addr)
+        Self(*addr.as_ref())
+    }
+}
+
+impl From<&Address> for TronAddress {
+    fn from(addr: &Address) -> Self {
+        Self(*addr.as_ref())
     }
 }
 
 impl From<TronAddress> for Address {
     fn from(addr: TronAddress) -> Self {
-        addr.to_evm_address()
+        Address::from(addr.0)
     }
 }
 
