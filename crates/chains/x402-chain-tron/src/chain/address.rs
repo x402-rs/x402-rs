@@ -1,9 +1,4 @@
 //! TRON address type with Base58Check encoding.
-//!
-//! TRON addresses have three representations:
-//! - Base58Check (wire format): "T..." (e.g., "TXyz...")
-//! - TRON hex: "41" + 20-byte-hex (42 hex chars)
-//! - EVM hex: "0x" + 20-byte-hex (for EIP-712 signing)
 
 use alloy_primitives::Address;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -11,28 +6,22 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 use std::str::FromStr;
 
-/// A TRON address in Base58Check encoding.
+/// A TRON address in Base58Check format (the standard "T..." representation).
 ///
-/// Serializes and deserializes as Base58 (the "T..." format used on the wire).
-/// Internally holds the 20-byte EVM address payload.
+/// Internally holds the 20-byte EVM address payload (same key derivation as Ethereum).
+/// Serializes as Base58Check for the x402 wire format and for TronGrid API calls.
+/// Use `Into<Address>` / `From<TronAddress>` to get the `alloy` `Address` needed for
+/// EIP-712 / TIP-712 signing.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct TronAddress(pub [u8; 20]);
 
 impl TronAddress {
-    /// Creates a TronAddress from raw 20 bytes (EVM address bytes).
+    /// Creates a `TronAddress` from raw 20 bytes (EVM address bytes).
     pub fn from_bytes(bytes: [u8; 20]) -> Self {
         Self(bytes)
     }
 
-    /// Returns the TRON hex representation: "41" + 40 hex chars.
-    pub fn to_tron_hex(&self) -> String {
-        let mut result = String::with_capacity(42);
-        result.push_str("41");
-        result.push_str(&hex::encode(self.0));
-        result
-    }
-
-    /// Decodes a Base58Check string into a TronAddress.
+    /// Decodes a Base58Check string into a `TronAddress`.
     pub fn from_base58(s: &str) -> Result<Self, TronAddressError> {
         let decoded = bs58::decode(s)
             .into_vec()
@@ -63,7 +52,7 @@ impl TronAddress {
     }
 
     /// Encodes the address to Base58Check.
-    pub fn to_base58(&self) -> String {
+    pub fn as_base58(&self) -> String {
         let mut payload = [0u8; 21];
         payload[0] = 0x41;
         payload[1..21].copy_from_slice(&self.0);
@@ -77,26 +66,11 @@ impl TronAddress {
 
         bs58::encode(full).into_string()
     }
-
-    /// Decodes a TRON hex string ("41" + 40 hex chars) into a TronAddress.
-    pub fn from_tron_hex(s: &str) -> Result<Self, TronAddressError> {
-        let hex_str = s.strip_prefix("0x").unwrap_or(s);
-        if hex_str.len() != 42 {
-            return Err(TronAddressError::InvalidTronHex);
-        }
-        let bytes = hex::decode(hex_str).map_err(|_| TronAddressError::InvalidTronHex)?;
-        if bytes[0] != 0x41 {
-            return Err(TronAddressError::InvalidPrefix(bytes[0]));
-        }
-        let mut addr = [0u8; 20];
-        addr.copy_from_slice(&bytes[1..21]);
-        Ok(Self(addr))
-    }
 }
 
 impl fmt::Display for TronAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_base58())
+        write!(f, "{}", self.as_base58())
     }
 }
 
@@ -118,7 +92,7 @@ impl TryFrom<&str> for TronAddress {
 
 impl Serialize for TronAddress {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_base58())
+        serializer.serialize_str(&self.as_base58())
     }
 }
 
@@ -158,17 +132,4 @@ pub enum TronAddressError {
     InvalidChecksum,
     #[error("Invalid address prefix: expected 0x41, got 0x{0:02x}")]
     InvalidPrefix(u8),
-    #[error("Invalid TRON hex format")]
-    InvalidTronHex,
-}
-
-/// Hex encoding helper (avoid pulling in another crate — use alloy_primitives hex).
-mod hex {
-    pub fn encode(bytes: impl AsRef<[u8]>) -> String {
-        alloy_primitives::hex::encode(bytes.as_ref())
-    }
-
-    pub fn decode(s: &str) -> Result<Vec<u8>, ()> {
-        alloy_primitives::hex::decode(s).map_err(|_| ())
-    }
 }
