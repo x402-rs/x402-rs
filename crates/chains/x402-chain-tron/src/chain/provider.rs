@@ -6,10 +6,6 @@
 
 use std::fmt::{Debug, Display, Formatter};
 use std::time::Duration;
-
-use crate::chain::TronAddress;
-use crate::chain::config::{TronChainConfig, TronPrivateKey, TronSignersConfig};
-use crate::chain::types::TronChainReference;
 use alloy_primitives::{Address, B256, Bytes, U256};
 use alloy_sol_types::{SolCall, sol};
 use k256::ecdsa::{RecoveryId, SigningKey, VerifyingKey};
@@ -19,9 +15,10 @@ use url::Url;
 use x402_types::chain::{ChainId, ChainProviderOps, FromConfig};
 use x402_types::timestamp::UnixTimestamp;
 
-// ── ABI definitions ───────────────────────────────────────────────────────────
+use crate::chain::TronAddress;
+use crate::chain::config::{TronChainConfig, TronPrivateKey, TronSignersConfig};
+use crate::chain::types::TronChainReference;
 
-// TODO Use vanilla ABIs
 sol! {
     function balanceOf(address account) external view returns (uint256);
     function allowance(address owner, address spender) external view returns (uint256);
@@ -62,8 +59,6 @@ sol! {
     ) external;
 }
 
-// ── Errors ────────────────────────────────────────────────────────────────────
-
 #[derive(Debug, thiserror::Error)]
 pub enum TronChainProviderError {
     #[error("HTTP error: {0}")]
@@ -94,8 +89,6 @@ impl From<TronChainProviderError> for x402_types::proto::PaymentVerificationErro
     }
 }
 
-// ── TronSigner ────────────────────────────────────────────────────────────────
-
 struct TronSigner {
     signing_key: SigningKey,
     address: TronAddress,
@@ -114,6 +107,10 @@ impl TronSigner {
             signing_key,
             address: tron_address,
         })
+    }
+
+    pub fn address(&self) -> &TronAddress {
+        &self.address
     }
 }
 
@@ -139,12 +136,12 @@ pub struct TronChainProvider {
     pub chain_reference: TronChainReference,
     /// TronGrid base URL.
     pub rpc_url: Url,
-    /// All configured signers (at least one required).
-    signers: Vec<TronSigner>,
     /// HTTP client.
     pub client: Client,
     /// Permit2 proxy address (Base58Check) for this network.
     pub permit2_proxy_address: Option<TronAddress>,
+    /// All configured signers (at least one required).
+    signers: Vec<TronSigner>,
 }
 
 impl std::fmt::Debug for TronChainProvider {
@@ -559,23 +556,25 @@ impl TronChainProvider {
     }
 }
 
-// ── Trait impls ───────────────────────────────────────────────────────────────
-
 #[async_trait::async_trait]
 impl FromConfig<TronChainConfig> for TronChainProvider {
     async fn from_config(config: &TronChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
-        Ok(TronChainProvider::from_signers(
+        let provider = TronChainProvider::from_signers(
             config.chain_reference,
             config.inner.rpc_url.inner().clone(),
             &config.inner.signers,
             config.inner.permit2_proxy_address.clone(),
-        )?)
+        )?;
+        Ok(provider)
     }
 }
 
 impl ChainProviderOps for TronChainProvider {
     fn signer_addresses(&self) -> Vec<String> {
-        self.signers.iter().map(|s| s.address.to_string()).collect()
+        self.signers
+            .iter()
+            .map(|s| s.address().to_string())
+            .collect()
     }
 
     fn chain_id(&self) -> ChainId {
