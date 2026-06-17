@@ -4,13 +4,15 @@
 //! Addresses in the authorization payload are EVM hex (0x...); addresses in
 //! PaymentRequirements are Base58Check (TronAddress).
 
-use crate::chain::TronChainProvider;
-use crate::v2_tron_exact::types::{Eip3009Payload, Eip3009PaymentRequirements};
 use alloy_primitives::{Address, Bytes, U256};
 use alloy_sol_types::{Eip712Domain, SolStruct, sol};
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::timestamp::UnixTimestamp;
+
+use crate::v2_tron_exact::Eip3009Authorization;
+use crate::chain::TronChainProvider;
+use crate::v2_tron_exact::types::{Eip3009Payload, Eip3009PaymentRequirements};
 
 sol! {
     struct TransferWithAuthorization {
@@ -173,7 +175,7 @@ fn build_eip712_domain(chain_id: u64, name: &str, version: &str, token: Address)
 
 fn recover_eip3009_signer(
     domain: &Eip712Domain,
-    auth: &crate::v2_tron_exact::types::Eip3009Authorization,
+    auth: &Eip3009Authorization,
     signature: &Bytes,
 ) -> Result<Address, String> {
     let hash = TransferWithAuthorization {
