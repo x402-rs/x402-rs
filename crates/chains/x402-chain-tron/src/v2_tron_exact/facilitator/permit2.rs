@@ -11,23 +11,28 @@ use crate::chain::TronChainProvider;
 use crate::v2_tron_exact::facilitator::eip3009::{assert_requirements_match, recover_address};
 use crate::v2_tron_exact::types::{Permit2Payload, Permit2PaymentRequirements};
 
+// Struct names are verbatim in the EIP-712 typehash — must match Permit2 exactly:
+//   PermitWitnessTransferFrom(TokenPermissions permitted,address spender,
+//     uint256 nonce,uint256 deadline,Witness witness)
+//   TokenPermissions(address token,uint256 amount)
+//   Witness(address to,uint256 validAfter)
 sol! {
-    struct TronTokenPermissionsTyped {
+    struct TokenPermissions {
         address token;
         uint256 amount;
     }
 
-    struct TronWitnessTyped {
+    struct Witness {
         address to;
         uint256 validAfter;
     }
 
-    struct TronPermitWitnessTransferFrom {
-        TronTokenPermissionsTyped permitted;
+    struct PermitWitnessTransferFrom {
+        TokenPermissions permitted;
         address spender;
         uint256 nonce;
         uint256 deadline;
-        TronWitnessTyped witness;
+        Witness witness;
     }
 }
 
@@ -77,27 +82,45 @@ pub async fn verify_permit2_payment(
 
     // TIP-712 signature recovery against the Permit2 domain
     let permit2_evm = Address::from(x402_exact_permit2_proxy);
+    let chain_id = provider.chain_reference.inner() as u64;
     let domain = eip712_domain! {
         name: "Permit2",
-        chain_id: provider.chain_reference.inner() as u64,
+        chain_id: chain_id,
         verifying_contract: permit2_evm,
     };
-    let hash = TronPermitWitnessTransferFrom {
-        permitted: TronTokenPermissionsTyped {
+    let nonce_u256: U256 = auth.nonce.into();
+    let deadline_u256 = U256::from(auth.deadline.as_secs());
+    let valid_after_u256 = U256::from(auth.witness.valid_after.as_secs());
+    println!("[permit2:verify] chain_id={chain_id}");
+    println!("[permit2:verify] permit2_evm={permit2_evm}");
+    println!("[permit2:verify] token={}", auth.permitted.token);
+    println!("[permit2:verify] amount={}", auth.permitted.amount);
+    println!("[permit2:verify] spender={}", auth.spender);
+    println!("[permit2:verify] nonce={nonce_u256}");
+    println!("[permit2:verify] deadline={deadline_u256}");
+    println!("[permit2:verify] witness.to={}", auth.witness.to);
+    println!("[permit2:verify] witness.validAfter={valid_after_u256}");
+    println!("[permit2:verify] signature={}", alloy_primitives::hex::encode(&payment_payload.payload.signature));
+    let struct_data = PermitWitnessTransferFrom {
+        permitted: TokenPermissions {
             token: auth.permitted.token,
             amount: auth.permitted.amount.into(),
         },
         spender: auth.spender,
-        nonce: auth.nonce.into(),
-        deadline: U256::from(auth.deadline.as_secs()),
-        witness: TronWitnessTyped {
+        nonce: nonce_u256,
+        deadline: deadline_u256,
+        witness: Witness {
             to: auth.witness.to,
-            validAfter: U256::from(auth.witness.valid_after.as_secs()),
+            validAfter: valid_after_u256,
         },
-    }
-    .eip712_signing_hash(&domain);
+    };
+    let typehash = alloy_primitives::keccak256(b"PermitWitnessTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256 deadline,Witness witness)TokenPermissions(address token,uint256 amount)Witness(address to,uint256 validAfter)");
+    println!("[permit2:verify] typehash={}", alloy_primitives::hex::encode(typehash));
+    let hash = struct_data.eip712_signing_hash(&domain);
+    println!("[permit2:verify] eip712_hash={}", alloy_primitives::hex::encode(hash));
     let recovered = recover_address(hash.as_ref(), &payment_payload.payload.signature)
         .map_err(|e| PaymentVerificationError::InvalidSignature(e.to_string()))?;
+    println!("[permit2:verify] recovered={recovered}, expected={}", auth.from);
     if recovered != auth.from {
         return Err(PaymentVerificationError::InvalidSignature(
             "Recovered signer does not match 'from'".to_string(),

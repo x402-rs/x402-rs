@@ -45,10 +45,25 @@ impl TronChainReference {
         ChainId::new(TRON_NAMESPACE, self.to_string())
     }
 
-    /// Returns the Permit2 proxy contract address (Base58Check) for this network, if known.
+    /// Returns the SUN.io Permit2 contract address for this network.
+    ///
+    /// This is the `verifyingContract` in the EIP-712 domain that clients sign against.
+    /// It is NOT the x402ExactPermit2Proxy — that is the `spender` in the Permit2 message.
+    pub fn sun_permit2(self) -> Option<TronAddress> {
+        match self {
+            TRON_MAINNET => "TTJxU3P8rHycAyFY4kVtGNfmnMH4ezcuM9".parse().ok(),
+            TRON_SHASTA => "TCJjTtzwRJYPapGTdyJdKcr7MqkngRRWQx".parse().ok(),
+            TRON_NILE => "TCJjTtzwRJYPapGTdyJdKcr7MqkngRRWQx".parse().ok(),
+            _ => None,
+        }
+    }
+
+    /// Returns the x402ExactPermit2Proxy address for this network.
+    ///
+    /// This is the `spender` in the Permit2 message and the contract the facilitator
+    /// calls to settle. It is NOT the SUN.io Permit2 verifying contract.
     pub fn x402_exact_permit2_proxy(self) -> Option<TronAddress> {
         match self {
-            // Nile testnet
             TRON_NILE => "TTjbkCh8sC4gNTWG48iWNssrLBqZq2tiTy".parse().ok(),
             _ => None,
         }

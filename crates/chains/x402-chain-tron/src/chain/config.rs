@@ -42,10 +42,19 @@ pub struct TronChainConfigInner {
     pub rpc_url: LiteralOrEnv<Url>,
     /// One or more facilitator signing keys (hex format, `0x`-prefixed or env var references).
     pub signers: TronSignersConfig,
-    /// Optional Permit2 proxy contract address in Base58Check format.
+    /// Optional contract addresses in Base58Check format.
     /// If not set, the well-known deployment for this network is used (if any).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub permit2_proxy_address: Option<TronAddress>,
+    pub contracts: Option<TronContracts>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TronContracts {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sun_permit2: Option<TronAddress>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x402_exact_permit2_proxy: Option<TronAddress>,
 }
 
 // ── TronSignersConfig ────────────────────────────────────────────────────────

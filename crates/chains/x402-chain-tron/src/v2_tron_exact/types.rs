@@ -35,7 +35,7 @@ use x402_types::lit_str;
 
 #[cfg(feature = "facilitator")]
 mod facilitator_types {
-    use alloy_primitives::{Address, B256, Bytes, U256};
+    use alloy_primitives::{Address, B256, Bytes};
     use serde::{Deserialize, Serialize};
     use x402_types::proto::{self, v2};
     use x402_types::timestamp::UnixTimestamp;

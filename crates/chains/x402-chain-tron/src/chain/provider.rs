@@ -204,7 +204,9 @@ pub struct TronChainProvider {
     pub rpc_url: Url,
     /// HTTP client.
     pub client: Client,
-    /// Permit2 proxy address (Base58Check) for this network.
+    /// SUN.io Permit2 contract — the EIP-712 `verifyingContract` that clients sign against.
+    pub sun_permit2: TronAddress,
+    /// x402ExactPermit2Proxy — the `spender` in Permit2 messages and the settlement contract.
     pub x402_exact_permit2_proxy: TronAddress,
     /// All configured signers (at least one required).
     signers: Vec<TronSigner>,
@@ -567,13 +569,11 @@ impl FromConfig<TronChainConfig> for TronChainProvider {
         let chain_reference = config.chain_reference;
         println!("foo.0 {:?}", chain_reference.x402_exact_permit2_proxy());
 
-        let permit2_proxy_address = config
-            .inner
-            .permit2_proxy_address
-            .or_else(|| chain_reference.x402_exact_permit2_proxy())
-            .ok_or(
-                TronChainProviderError::Api(format!("can not get permit2 address for tron:{chain_reference}"))
-            )?;
+        let contracts = config.inner.contracts.as_ref();
+        let x402_exact_permit2_proxy = contracts.and_then(|c| c.x402_exact_permit2_proxy).or_else(|| chain_reference.x402_exact_permit2_proxy()).ok_or(
+            TronChainProviderError::Api(format!("can not get x402ExactPermit2Proxy contract address for tron:{chain_reference}"))
+        )?;
+        let sun_permit2 = contracts.and_then(|c| c.sun_permit2).or_else(|| chain_reference.sun_permit2()).ok_or(TronChainProviderError::Api(format!("can not get Permit2 contract address for tron:{chain_reference}")))?;
 
         let rpc_url = config.inner.rpc_url.inner().clone();
 
@@ -582,7 +582,8 @@ impl FromConfig<TronChainConfig> for TronChainProvider {
             rpc_url,
             signers,
             client: Client::new(),
-            x402_exact_permit2_proxy: permit2_proxy_address,
+            x402_exact_permit2_proxy,
+            sun_permit2,
         })
     }
 }
