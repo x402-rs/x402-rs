@@ -5819,6 +5819,7 @@ dependencies = [
  "once_cell",
  "serdect",
  "sha2 0.10.9",
+ "signature 2.2.0",
 ]
 
 [[package]]
@@ -13905,6 +13906,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "x402-chain-tron"
+version = "2.0.0"
+dependencies = [
+ "alloy-primitives",
+ "alloy-sol-types",
+ "async-trait",
+ "bs58",
+ "k256",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-core",
+ "url",
+ "x402-types",
+]
+
+[[package]]
 name = "x402-facilitator"
 version = "2.0.0"
 dependencies = [
@@ -13920,6 +13942,7 @@ dependencies = [
  "x402-chain-aptos",
  "x402-chain-eip155",
  "x402-chain-solana",
+ "x402-chain-tron",
  "x402-facilitator-local",
  "x402-types",
 ]

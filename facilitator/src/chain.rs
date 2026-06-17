@@ -45,6 +45,8 @@ use x402_chain_aptos::chain as aptos;
 use x402_chain_eip155::chain as eip155;
 #[cfg(feature = "chain-solana")]
 use x402_chain_solana::chain as solana;
+#[cfg(feature = "chain-tron")]
+use x402_chain_tron::chain as tron;
 use x402_types::chain::{ChainId, ChainProviderOps, ChainRegistry, FromConfig};
 
 use crate::config::{ChainConfig, ChainsConfig};
@@ -70,6 +72,9 @@ pub enum ChainProvider {
     /// Aptos chain provider.
     #[cfg(feature = "chain-aptos")]
     Aptos(Arc<aptos::AptosChainProvider>),
+    /// TRON chain provider.
+    #[cfg(feature = "chain-tron")]
+    Tron(Arc<tron::TronChainProvider>),
 }
 
 /// Creates a new chain provider from configuration.
@@ -103,6 +108,11 @@ impl FromConfig<ChainConfig> for ChainProvider {
                 let provider = aptos::AptosChainProvider::from_config(config).await?;
                 ChainProvider::Aptos(Arc::new(provider))
             }
+            #[cfg(feature = "chain-tron")]
+            ChainConfig::Tron(config) => {
+                let provider = tron::TronChainProvider::from_config(config).await?;
+                ChainProvider::Tron(Arc::new(provider))
+            }
             #[allow(unreachable_patterns)] // For when no chain features enabled
             _ => unreachable!("ChainConfig variant not enabled in this build"),
         };
@@ -120,6 +130,8 @@ impl ChainProviderOps for ChainProvider {
             ChainProvider::Solana(provider) => provider.signer_addresses(),
             #[cfg(feature = "chain-aptos")]
             ChainProvider::Aptos(provider) => provider.signer_addresses(),
+            #[cfg(feature = "chain-tron")]
+            ChainProvider::Tron(provider) => provider.signer_addresses(),
             #[allow(unreachable_patterns)] // For when no chain features enabled
             _ => unreachable!("ChainProvider variant not enabled in this build"),
         }
@@ -133,6 +145,8 @@ impl ChainProviderOps for ChainProvider {
             ChainProvider::Solana(provider) => provider.chain_id(),
             #[cfg(feature = "chain-aptos")]
             ChainProvider::Aptos(provider) => provider.chain_id(),
+            #[cfg(feature = "chain-tron")]
+            ChainProvider::Tron(provider) => provider.chain_id(),
             #[allow(unreachable_patterns)] // For when no chain features enabled
             _ => unreachable!("ChainProvider variant not enabled in this build"),
         }

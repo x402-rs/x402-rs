@@ -22,11 +22,12 @@ path = "src/main.rs"
 
 [features]
 default = ["telemetry", "chain-eip155", "chain-solana"]
-telemetry = ["dep:tracing", "x402-types/telemetry", "x402-facilitator-local/telemetry", "x402-chain-eip155?/telemetry", "x402-chain-solana?/telemetry", "x402-chain-aptos?/telemetry"]
+telemetry = ["dep:tracing", "x402-types/telemetry", "x402-facilitator-local/telemetry", "x402-chain-eip155?/telemetry", "x402-chain-solana?/telemetry", "x402-chain-aptos?/telemetry", "x402-chain-tron?/telemetry"]
 chain-aptos = ["dep:x402-chain-aptos"]
 chain-eip155 = ["dep:x402-chain-eip155"]
 chain-solana = ["dep:x402-chain-solana"]
-full = ["telemetry", "chain-aptos", "chain-eip155", "chain-solana"]
+chain-tron = ["dep:x402-chain-tron"]
+full = ["telemetry", "chain-aptos", "chain-eip155", "chain-solana", "chain-tron"]
 
 [dependencies]
 x402-types = { workspace = true, features = ["cli"]}
@@ -34,6 +35,7 @@ x402-facilitator-local = { workspace = true }
 x402-chain-eip155 = { workspace = true, features = ["facilitator"], optional = true }
 x402-chain-solana = { workspace = true, features = ["facilitator"], optional = true }
 x402-chain-aptos = { workspace = true, features = ["facilitator"], optional = true }
+x402-chain-tron = { workspace = true, features = ["facilitator"], optional = true }
 
 dotenvy = { workspace = true }
 serde_json = { workspace = true }

@@ -8,6 +8,7 @@ members = [
   "crates/chains/x402-chain-eip155",
   "crates/chains/x402-chain-solana",
   "crates/chains/x402-chain-aptos",
+  "crates/chains/x402-chain-tron",
   "facilitator",
   "examples/x402-axum-example",
   "examples/x402-reqwest-exact",
@@ -30,6 +31,7 @@ x402-axum = { version = "2.0", path = "crates/x402-axum" }
 x402-chain-aptos = { version = "2.0", path = "crates/chains/x402-chain-aptos" }
 x402-chain-eip155 = { version = "2.0", path = "crates/chains/x402-chain-eip155" }
 x402-chain-solana = { version = "2.0", path = "crates/chains/x402-chain-solana" }
+x402-chain-tron = { version = "2.0", path = "crates/chains/x402-chain-tron" }
 x402-facilitator-local = { version = "2.0", path = "crates/x402-facilitator-local" }
 x402-reqwest = { version = "2.0", path = "crates/x402-reqwest" }
 x402-types = { version = "2.0", path = "crates/x402-types" }
