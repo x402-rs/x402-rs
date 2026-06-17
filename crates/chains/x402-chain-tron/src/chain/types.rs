@@ -20,14 +20,14 @@ pub const TRON_NAMESPACE: &str = "tron";
 /// | Network | Reference      | Chain ID   |
 /// |---------|----------------|------------|
 /// | Mainnet | `0x2b6653dc`   | 728126428  |
-/// | Shasta  | `0xcd8690dc`   | 3448148188 |
-/// | Nile    | `0x94a9059e`   | 2494104990 |
+/// | Shasta  | `0x94a9059e`   | 2494104990 |
+/// | Nile    | `0xcd8690dc`   | 3448148188 |
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TronChainReference(u32);
 
 pub const TRON_MAINNET: TronChainReference = TronChainReference(0x2b6653dc);
-pub const TRON_SHASTA: TronChainReference = TronChainReference(0xcd8690dc);
-pub const TRON_NILE: TronChainReference = TronChainReference(0x94a9059e);
+pub const TRON_SHASTA: TronChainReference = TronChainReference(0x94a9059e);
+pub const TRON_NILE: TronChainReference = TronChainReference(0xcd8690dc);
 
 impl TronChainReference {
     /// Creates a new chain reference from a raw u32 chain ID.
@@ -35,12 +35,12 @@ impl TronChainReference {
         Self(chain_id)
     }
 
-    /// Returns the numeric chain ID value.
+    /// Returns the numeric chain ID value (the CAIP-2 reference as u32).
     pub fn inner(self) -> u32 {
         self.0
     }
 
-    /// Returns the CAIP-2 chain ID (e.g. `tron:0x2b6653dc`).
+    /// Returns the CAIP-2 chain ID (e.g. `tron:0xcd8690dc`).
     pub fn chain_id(self) -> ChainId {
         ChainId::new(TRON_NAMESPACE, self.to_string())
     }
@@ -52,8 +52,7 @@ impl TronChainReference {
     pub fn sun_permit2(self) -> Option<TronAddress> {
         match self {
             TRON_MAINNET => "TTJxU3P8rHycAyFY4kVtGNfmnMH4ezcuM9".parse().ok(),
-            TRON_SHASTA => "TCJjTtzwRJYPapGTdyJdKcr7MqkngRRWQx".parse().ok(),
-            TRON_NILE => "TCJjTtzwRJYPapGTdyJdKcr7MqkngRRWQx".parse().ok(),
+            TRON_NILE    => "TCJjTtzwRJYPapGTdyJdKcr7MqkngRRWQx".parse().ok(),
             _ => None,
         }
     }
@@ -65,6 +64,7 @@ impl TronChainReference {
     pub fn x402_exact_permit2_proxy(self) -> Option<TronAddress> {
         match self {
             TRON_NILE => "TTjbkCh8sC4gNTWG48iWNssrLBqZq2tiTy".parse().ok(),
+            // TODO Deploy on mainnet
             _ => None,
         }
     }

@@ -42,7 +42,7 @@ pub async fn verify_permit2_payment(
     payment_requirements: &Permit2PaymentRequirements,
 ) -> Result<v2::VerifyResponse, X402SchemeFacilitatorError> {
     let accepted = &payment_payload.accepted;
-    let x402_exact_permit2_proxy = provider.x402_exact_permit2_proxy;
+    let sun_permit2 = provider.sun_permit2;
 
     assert_requirements_match(accepted, payment_requirements)?;
 
@@ -81,8 +81,8 @@ pub async fn verify_permit2_payment(
     }
 
     // TIP-712 signature recovery against the Permit2 domain
-    let permit2_evm = Address::from(x402_exact_permit2_proxy);
-    let chain_id = provider.chain_reference.inner() as u64;
+    let permit2_evm = Address::from(sun_permit2);
+    let chain_id = provider.chain_reference.inner().into();
     let domain = eip712_domain! {
         name: "Permit2",
         chain_id: chain_id,
@@ -91,16 +91,6 @@ pub async fn verify_permit2_payment(
     let nonce_u256: U256 = auth.nonce.into();
     let deadline_u256 = U256::from(auth.deadline.as_secs());
     let valid_after_u256 = U256::from(auth.witness.valid_after.as_secs());
-    println!("[permit2:verify] chain_id={chain_id}");
-    println!("[permit2:verify] permit2_evm={permit2_evm}");
-    println!("[permit2:verify] token={}", auth.permitted.token);
-    println!("[permit2:verify] amount={}", auth.permitted.amount);
-    println!("[permit2:verify] spender={}", auth.spender);
-    println!("[permit2:verify] nonce={nonce_u256}");
-    println!("[permit2:verify] deadline={deadline_u256}");
-    println!("[permit2:verify] witness.to={}", auth.witness.to);
-    println!("[permit2:verify] witness.validAfter={valid_after_u256}");
-    println!("[permit2:verify] signature={}", alloy_primitives::hex::encode(&payment_payload.payload.signature));
     let struct_data = PermitWitnessTransferFrom {
         permitted: TokenPermissions {
             token: auth.permitted.token,
@@ -114,13 +104,9 @@ pub async fn verify_permit2_payment(
             validAfter: valid_after_u256,
         },
     };
-    let typehash = alloy_primitives::keccak256(b"PermitWitnessTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256 deadline,Witness witness)TokenPermissions(address token,uint256 amount)Witness(address to,uint256 validAfter)");
-    println!("[permit2:verify] typehash={}", alloy_primitives::hex::encode(typehash));
     let hash = struct_data.eip712_signing_hash(&domain);
-    println!("[permit2:verify] eip712_hash={}", alloy_primitives::hex::encode(hash));
     let recovered = recover_address(hash.as_ref(), &payment_payload.payload.signature)
         .map_err(|e| PaymentVerificationError::InvalidSignature(e.to_string()))?;
-    println!("[permit2:verify] recovered={recovered}, expected={}", auth.from);
     if recovered != auth.from {
         return Err(PaymentVerificationError::InvalidSignature(
             "Recovered signer does not match 'from'".to_string(),

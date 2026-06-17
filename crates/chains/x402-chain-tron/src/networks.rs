@@ -22,16 +22,19 @@ pub struct USDT;
 /// | Network | CAIP-2            | Chain ID   |
 /// |---------|-------------------|------------|
 /// | Mainnet | `tron:0x2b6653dc` | 728126428  |
-/// | Shasta  | `tron:0xcd8690dc` | 3448148188 |
-/// | Nile    | `tron:0x94a9059e` | 2494104990 |
+/// | Nile    | `tron:0xcd8690dc` | 3448148188 |
+/// | Shasta  | `tron:0x94a9059e` | 2494104990 |
+///
+/// Note: CAIP-2 PR #170 had Nile (`0xcd8690dc`) and Shasta (`0x94a9059e`) swapped.
+/// Corrected by verifying `eth_chainId` on `nile.trongrid.io` → `0xcd8690dc`.
 #[allow(dead_code)]
 pub trait KnownNetworkTron<A> {
     /// Returns the instance for TRON mainnet (`tron:0x2b6653dc`).
     fn mainnet() -> A;
-    /// Returns the instance for TRON Shasta testnet (`tron:0xcd8690dc`).
-    fn shasta() -> A;
-    /// Returns the instance for TRON Nile testnet (`tron:0x94a9059e`).
+    /// Returns the instance for TRON Nile testnet (`tron:0xcd8690dc`).
     fn nile() -> A;
+    /// Returns the instance for TRON Shasta testnet (`tron:0x94a9059e`).
+    fn shasta() -> A;
 }
 
 // ── TronChainReference ───────────────────────────────────────────────────────
@@ -153,15 +156,15 @@ mod tests {
     #[test]
     fn chain_reference_display() {
         assert_eq!(TronChainReference::mainnet().to_string(), "0x2b6653dc");
-        assert_eq!(TronChainReference::shasta().to_string(), "0xcd8690dc");
-        assert_eq!(TronChainReference::nile().to_string(), "0x94a9059e");
+        assert_eq!(TronChainReference::nile().to_string(),    "0xcd8690dc");
+        assert_eq!(TronChainReference::shasta().to_string(),  "0x94a9059e");
     }
 
     #[test]
     fn chain_id_format() {
         assert_eq!(ChainId::mainnet().to_string(), "tron:0x2b6653dc");
-        assert_eq!(ChainId::shasta().to_string(), "tron:0xcd8690dc");
-        assert_eq!(ChainId::nile().to_string(), "tron:0x94a9059e");
+        assert_eq!(ChainId::nile().to_string(),    "tron:0xcd8690dc");
+        assert_eq!(ChainId::shasta().to_string(),  "tron:0x94a9059e");
     }
 
     #[test]
@@ -180,15 +183,19 @@ mod tests {
     #[test]
     fn eip712_chain_ids() {
         assert_eq!(TronChainReference::mainnet().inner(), 728126428);
-        assert_eq!(TronChainReference::shasta().inner(), 3448148188);
-        assert_eq!(TronChainReference::nile().inner(), 2494104990);
+        assert_eq!(TronChainReference::nile().inner(),    3448148188);
+        assert_eq!(TronChainReference::shasta().inner(),  2494104990);
     }
 
     #[test]
     fn permit2_proxies() {
-        assert!(TronChainReference::mainnet().x402_exact_permit2_proxy().is_some());
-        assert!(TronChainReference::shasta().x402_exact_permit2_proxy().is_some());
-        assert!(TronChainReference::nile().x402_exact_permit2_proxy().is_none());
+        assert!(TronChainReference::nile().x402_exact_permit2_proxy().is_some());
+        assert!(TronChainReference::mainnet().x402_exact_permit2_proxy().is_none());
+        assert!(TronChainReference::shasta().x402_exact_permit2_proxy().is_none());
+        // SUN.io Permit2 is known for mainnet and nile
+        assert!(TronChainReference::mainnet().sun_permit2().is_some());
+        assert!(TronChainReference::nile().sun_permit2().is_some());
+        assert!(TronChainReference::shasta().sun_permit2().is_none());
     }
 
     #[test]

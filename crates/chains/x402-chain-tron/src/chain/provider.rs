@@ -567,8 +567,6 @@ impl FromConfig<TronChainConfig> for TronChainProvider {
 
         // Explicit config overrides the well-known default
         let chain_reference = config.chain_reference;
-        println!("foo.0 {:?}", chain_reference.x402_exact_permit2_proxy());
-
         let contracts = config.inner.contracts.as_ref();
         let x402_exact_permit2_proxy = contracts.and_then(|c| c.x402_exact_permit2_proxy).or_else(|| chain_reference.x402_exact_permit2_proxy()).ok_or(
             TronChainProviderError::Api(format!("can not get x402ExactPermit2Proxy contract address for tron:{chain_reference}"))
