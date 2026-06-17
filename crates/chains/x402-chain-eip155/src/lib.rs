@@ -96,4 +96,4 @@ pub use v2_eip155_exact::client::V2Eip155ExactClient;
 #[cfg(feature = "client")]
 pub use v2_eip155_upto::client::V2Eip155UptoClient;
 
-pub use chain::types::decimal_u256;
+pub use x402_types::util::decimal_u256::decimal_u256;
