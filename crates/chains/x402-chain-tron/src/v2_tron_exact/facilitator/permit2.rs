@@ -1,7 +1,7 @@
 //! Permit2 payment verification and settlement for TRON.
 
 use alloy_primitives::{Address, U256};
-use alloy_sol_types::{Eip712Domain, SolStruct, sol};
+use alloy_sol_types::{SolStruct, eip712_domain, sol};
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::timestamp::UnixTimestamp;
@@ -81,12 +81,10 @@ pub async fn verify_permit2_payment(
 
     // TIP-712 signature recovery against the Permit2 domain
     let permit2_evm = Address::from(*permit2_proxy);
-    let domain = Eip712Domain {
-        name: Some(std::borrow::Cow::Borrowed("Permit2")),
-        version: None,
-        chain_id: Some(U256::from(provider.eip712_chain_id())),
-        verifying_contract: Some(permit2_evm),
-        salt: None,
+    let domain = eip712_domain! {
+        name: "Permit2",
+        chain_id: provider.eip712_chain_id(),
+        verifying_contract: permit2_evm,
     };
     let hash = TronPermitWitnessTransferFrom {
         permitted: TronTokenPermissionsTyped {

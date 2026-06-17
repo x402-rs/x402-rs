@@ -5,7 +5,7 @@
 //! PaymentRequirements are Base58Check (TronAddress).
 
 use alloy_primitives::{Address, Bytes, U256};
-use alloy_sol_types::{Eip712Domain, SolStruct, sol};
+use alloy_sol_types::{Eip712Domain, SolStruct, eip712_domain, sol};
 use x402_types::chain::ChainId;
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
@@ -39,26 +39,10 @@ pub async fn verify_eip3009_payment(
         &provider.chain_reference,
         accepted,
         payment_payload,
-    )?;
+    ).await?;
 
     let auth = &payment_payload.payload.authorization;
     let required_amount = accepted.amount;
-
-    // TIP-712 signature recovery
-    let domain = build_eip712_domain(
-        provider.eip712_chain_id(),
-        &accepted.extra.name,
-        &accepted.extra.version,
-        Address::from(accepted.asset),
-    );
-    let recovered = recover_eip3009_signer(&domain, auth, &payment_payload.payload.signature)
-        .map_err(|e| PaymentVerificationError::InvalidSignature(e.to_string()))?;
-    if recovered != auth.from {
-        return Err(PaymentVerificationError::InvalidSignature(
-            "Recovered signer does not match 'from'".to_string(),
-        )
-        .into());
-    }
 
     let token = &accepted.asset;
     let balance = provider
@@ -144,16 +128,6 @@ pub async fn settle_eip3009_payment(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-fn build_eip712_domain(chain_id: u64, name: &str, version: &str, token: Address) -> Eip712Domain {
-    Eip712Domain {
-        name: Some(std::borrow::Cow::Owned(name.to_owned())),
-        version: Some(std::borrow::Cow::Owned(version.to_owned())),
-        chain_id: Some(U256::from(chain_id)),
-        verifying_contract: Some(token),
-        salt: None,
-    }
-}
-
 fn recover_eip3009_signer(
     domain: &Eip712Domain,
     auth: &Eip3009Authorization,
@@ -205,7 +179,7 @@ pub fn assert_requirements_match<T: PartialEq>(
     }
 }
 
-pub fn assert_valid_payment<P>(
+pub async fn assert_valid_payment<P>(
     provider: &P,
     chain: &TronChainReference,
     accepted: &Eip3009PaymentRequirements,
@@ -247,6 +221,22 @@ where
     }
     if now >= auth.valid_before {
         return Err(PaymentVerificationError::Expired.into());
+    }
+
+    let domain = eip712_domain! {
+        name: accepted.extra.name.clone(),
+        version: accepted.extra.version.clone(),
+        chain_id: provider.chain().into(),
+        verifying_contract: Address::from(accepted.asset),
+    };
+    let recovered = recover_eip3009_signer(&domain, auth, &payload.payload.signature)
+        .map_err(|e| PaymentVerificationError::InvalidSignature(e.to_string()))?;
+
+    if recovered != auth.from {
+        return Err(PaymentVerificationError::InvalidSignature(
+            "Recovered signer does not match 'from'".to_string(),
+        )
+        .into());
     }
 
     Ok(())

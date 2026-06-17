@@ -100,6 +100,13 @@ impl From<&TronChainReference> for ChainId {
     }
 }
 
+// For Alloy chain id
+impl From<&TronChainReference> for u64 {
+    fn from(value: &TronChainReference) -> Self {
+        value.0 as u64
+    }
+}
+
 impl TryFrom<ChainId> for TronChainReference {
     type Error = TronChainReferenceFormatError;
 

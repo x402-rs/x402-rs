@@ -175,14 +175,8 @@ impl TronChainProvider {
 
     /// Returns true if the given EVM address belongs to any configured signer.
     pub fn is_signer(&self, addr: &Address) -> bool {
-        // TODO Why do we need this at all?
         let tron_addr = TronAddress::from(addr);
         self.signers.iter().any(|s| s.address == tron_addr)
-    }
-
-    /// Returns the EIP-712 / TIP-712 chain ID for this network.
-    pub fn eip712_chain_id(&self) -> u64 {
-        self.chain_reference.inner() as u64 // FIXME
     }
 
     // ── TronGrid HTTP helpers ─────────────────────────────────────────────────
@@ -576,10 +570,15 @@ impl ChainProviderOps for TronChainProvider {
 pub trait TronChainProviderLike {
     /// Returns true if the given EVM address belongs to any configured signer.
     fn is_signer(&self, addr: &TronAddress) -> bool;
+    fn chain(&self) -> &TronChainReference;
 }
 
 impl TronChainProviderLike for TronChainProvider {
     fn is_signer(&self, addr: &TronAddress) -> bool {
         self.signers.iter().any(|s| s.address == *addr)
+    }
+
+    fn chain(&self) -> &TronChainReference {
+        &self.chain_reference
     }
 }
