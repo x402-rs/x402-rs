@@ -150,20 +150,20 @@ pub async fn settle_permit2_payment(
     let accepted = &payment_payload.accepted;
     let auth = &payment_payload.payload.permit2_authorization;
 
-    let tx_id = build_and_submit_permit2_settle_tx(
-        provider,
-        provider.x402_exact_permit2_proxy,
-        auth.permitted.token,
-        auth.permitted.amount.into(),
-        auth.nonce.into(),
-        auth.deadline,
-        auth.from,
-        auth.witness.to,
-        auth.witness.valid_after,
-        payment_payload.payload.signature.clone(),
-    )
-    .await
-    .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
+    let transfer = Permit2Transfer {
+        token: auth.permitted.token,
+        amount: auth.permitted.amount.into(),
+        nonce: auth.nonce.into(),
+        deadline: auth.deadline,
+        owner: auth.from,
+        witness_to: auth.witness.to,
+        witness_valid_after: auth.witness.valid_after,
+        signature: payment_payload.payload.signature.clone(),
+    };
+    let tx_id =
+        build_and_submit_permit2_settle_tx(provider, provider.x402_exact_permit2_proxy, transfer)
+            .await
+            .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
 
     provider
         .wait_for_tx(&tx_id)
@@ -179,31 +179,38 @@ pub async fn settle_permit2_payment(
 
 // ── Permit2 settlement tx ─────────────────────────────────────────────────────
 
+pub struct Permit2Transfer {
+    pub token: Address,
+    pub amount: U256,
+    pub nonce: U256,
+    pub deadline: UnixTimestamp,
+    pub owner: Address,
+    pub witness_to: Address,
+    pub witness_valid_after: UnixTimestamp,
+    pub signature: Bytes,
+}
+
 pub async fn build_and_submit_permit2_settle_tx<P: TronChainProviderLike>(
     provider: &P,
     x402_exact_permit2_proxy: TronAddress,
-    token: Address,
-    amount: U256,
-    nonce: U256,
-    deadline: UnixTimestamp,
-    owner: Address,
-    witness_to: Address,
-    witness_valid_after: UnixTimestamp,
-    signature: Bytes,
+    transfer: Permit2Transfer,
 ) -> Result<TronTxId, TronChainProviderError> {
     use contracts::x402_exact_permit2_proxy as c;
     let settle_call = c::settleCall {
         permit: c::TronPermitTransferFrom {
-            permitted: c::TronTokenPermissions { token, amount },
-            nonce,
-            deadline: U256::from(deadline.as_secs()),
+            permitted: c::TronTokenPermissions {
+                token: transfer.token,
+                amount: transfer.amount,
+            },
+            nonce: transfer.nonce,
+            deadline: U256::from(transfer.deadline.as_secs()),
         },
-        owner,
+        owner: transfer.owner,
         witness: c::TronWitness {
-            to: witness_to,
-            validAfter: U256::from(witness_valid_after.as_secs()),
+            to: transfer.witness_to,
+            validAfter: U256::from(transfer.witness_valid_after.as_secs()),
         },
-        signature,
+        signature: transfer.signature,
     };
     provider
         .build_and_submit_tx(x402_exact_permit2_proxy, settle_call, None)

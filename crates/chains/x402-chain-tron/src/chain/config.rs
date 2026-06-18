@@ -124,7 +124,7 @@ impl<'de> Deserialize<'de> for TronPrivateKey {
 impl fmt::Display for TronPrivateKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let bytes = self.0.to_bytes();
-        let as_hex = alloy_primitives::hex::encode(&bytes);
+        let as_hex = alloy_primitives::hex::encode(bytes);
         write!(f, "{}", as_hex)
     }
 }

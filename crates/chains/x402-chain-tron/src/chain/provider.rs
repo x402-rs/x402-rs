@@ -438,7 +438,7 @@ impl TronChainProviderLike for TronChainProvider {
             .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
         let calldata = Bytes::from(calldata.abi_encode());
         let body = CallConstantRequest {
-            owner_address: from.unwrap_or_else(|| TronAddress::default()),
+            owner_address: from.unwrap_or_default(),
             contract_address,
             data: calldata,
             call_value: 0,
@@ -461,7 +461,7 @@ impl TronChainProviderLike for TronChainProvider {
                 TronChainProviderError::Api("missing constant_result".to_string())
             })?;
 
-        let decoded = TCalldata::abi_decode_returns(&constant_result)
+        let decoded = TCalldata::abi_decode_returns(constant_result)
             .map_err(|e| TronChainProviderError::AbiDecode(e.to_string()))?;
 
         Ok(decoded)

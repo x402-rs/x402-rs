@@ -66,19 +66,19 @@ pub async fn verify_eip3009_payment(
         .into());
     }
 
-    let sim_ok = simulate_transfer_with_authorization(
-        provider,
+    let transfer = Eip3009Transfer {
         token,
-        auth.from,
-        auth.to,
-        auth.value.into(),
-        auth.valid_after,
-        auth.valid_before,
-        auth.nonce,
-        payment_payload.payload.signature.clone(),
-    )
-    .await
-    .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
+        from: auth.from,
+        to: auth.to,
+        value: auth.value.into(),
+        valid_after: auth.valid_after,
+        valid_before: auth.valid_before,
+        nonce: auth.nonce,
+        signature: payment_payload.payload.signature.clone(),
+    };
+    let sim_ok = simulate_transfer_with_authorization(provider, transfer)
+        .await
+        .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
     if !sim_ok {
         return Err(PaymentVerificationError::TransactionSimulation(
             "transferWithAuthorization simulation failed".to_string(),
@@ -102,19 +102,19 @@ pub async fn settle_eip3009_payment(
     let accepted = &payment_payload.accepted;
     let auth = &payment_payload.payload.authorization;
 
-    let tx_id = build_and_submit_eip3009_tx(
-        provider,
-        accepted.asset,
-        auth.from,
-        auth.to,
-        auth.value.into(),
-        auth.valid_after,
-        auth.valid_before,
-        auth.nonce,
-        payment_payload.payload.signature.clone(),
-    )
-    .await
-    .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
+    let transfer = Eip3009Transfer {
+        token: accepted.asset,
+        from: auth.from,
+        to: auth.to,
+        value: auth.value.into(),
+        valid_after: auth.valid_after,
+        valid_before: auth.valid_before,
+        nonce: auth.nonce,
+        signature: payment_payload.payload.signature.clone(),
+    };
+    let tx_id = build_and_submit_eip3009_tx(provider, transfer)
+        .await
+        .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
 
     provider
         .wait_for_tx(&tx_id)
@@ -148,27 +148,34 @@ pub async fn read_authorization_state<P: TronChainProviderLike>(
         .await
 }
 
+pub struct Eip3009Transfer {
+    pub token: TronAddress,
+    pub from: Address,
+    pub to: Address,
+    pub value: U256,
+    pub valid_after: UnixTimestamp,
+    pub valid_before: UnixTimestamp,
+    pub nonce: B256,
+    pub signature: Bytes,
+}
+
 pub async fn simulate_transfer_with_authorization<P: TronChainProviderLike>(
     provider: &P,
-    token: TronAddress,
-    from: Address,
-    to: Address,
-    value: U256,
-    valid_after: UnixTimestamp,
-    valid_before: UnixTimestamp,
-    nonce: B256,
-    signature: Bytes,
+    transfer: Eip3009Transfer,
 ) -> Result<bool, TronChainProviderError> {
     let call = contracts::eip3009::transferWithAuthorizationCall {
-        from,
-        to,
-        value,
-        validAfter: U256::from(valid_after.as_secs()),
-        validBefore: U256::from(valid_before.as_secs()),
-        nonce,
-        signature,
+        from: transfer.from,
+        to: transfer.to,
+        value: transfer.value,
+        validAfter: U256::from(transfer.valid_after.as_secs()),
+        validBefore: U256::from(transfer.valid_before.as_secs()),
+        nonce: transfer.nonce,
+        signature: transfer.signature,
     };
-    match provider.trigger_constant_contract(token, call, None).await {
+    match provider
+        .trigger_constant_contract(transfer.token, call, None)
+        .await
+    {
         Ok(_) => Ok(true),
         Err(TronChainProviderError::Api(_)) => Ok(false),
         Err(e) => Err(e),
@@ -177,25 +184,20 @@ pub async fn simulate_transfer_with_authorization<P: TronChainProviderLike>(
 
 pub async fn build_and_submit_eip3009_tx<P: TronChainProviderLike>(
     provider: &P,
-    token: TronAddress,
-    from: Address,
-    to: Address,
-    value: U256,
-    valid_after: UnixTimestamp,
-    valid_before: UnixTimestamp,
-    nonce: B256,
-    signature: Bytes,
+    transfer: Eip3009Transfer,
 ) -> Result<TronTxId, TronChainProviderError> {
     let call = contracts::eip3009::transferWithAuthorizationCall {
-        from,
-        to,
-        value,
-        validAfter: U256::from(valid_after.as_secs()),
-        validBefore: U256::from(valid_before.as_secs()),
-        nonce,
-        signature,
+        from: transfer.from,
+        to: transfer.to,
+        value: transfer.value,
+        validAfter: U256::from(transfer.valid_after.as_secs()),
+        validBefore: U256::from(transfer.valid_before.as_secs()),
+        nonce: transfer.nonce,
+        signature: transfer.signature,
     };
-    provider.build_and_submit_tx(token, call, None).await
+    provider
+        .build_and_submit_tx(transfer.token, call, None)
+        .await
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
