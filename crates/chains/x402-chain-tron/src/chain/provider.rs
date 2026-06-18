@@ -19,7 +19,7 @@ use x402_types::timestamp::UnixTimestamp;
 
 use crate::chain::TronAddress;
 use crate::chain::config::{TronChainConfig, TronPrivateKey};
-use crate::chain::contracts::{eip3009::*, erc20::*, x402_exact_permit2_proxy::*};
+use crate::chain::contracts;
 use crate::chain::types::TronChainReference;
 
 // ── TronGrid response types ───────────────────────────────────────────────────
@@ -134,13 +134,13 @@ impl TronSigner {
 }
 
 impl Debug for TronSigner {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "TronSigner {{ address: {:?} }}", self.address)
     }
 }
 
 impl Display for TronSigner {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.address)
     }
 }
@@ -313,8 +313,12 @@ impl TronChainProvider {
         token: TronAddress,
         owner_evm: Address,
     ) -> Result<U256, TronChainProviderError> {
-        self.trigger_constant_contract(token, balanceOfCall { account: owner_evm }, None)
-            .await
+        self.trigger_constant_contract(
+            token,
+            contracts::erc20::balanceOfCall { account: owner_evm },
+            None,
+        )
+        .await
     }
 
     pub async fn read_allowance(
@@ -324,8 +328,8 @@ impl TronChainProvider {
         spender_evm: Address,
     ) -> Result<U256, TronChainProviderError> {
         self.trigger_constant_contract(
-            token.clone(),
-            allowanceCall {
+            token,
+            contracts::erc20::allowanceCall {
                 owner: owner_evm,
                 spender: spender_evm,
             },
@@ -342,7 +346,7 @@ impl TronChainProvider {
     ) -> Result<bool, TronChainProviderError> {
         self.trigger_constant_contract(
             token.clone(),
-            authorizationStateCall {
+            contracts::eip3009::authorizationStateCall {
                 authorizer: authorizer_evm,
                 nonce,
             },
@@ -362,7 +366,7 @@ impl TronChainProvider {
         nonce: B256,
         signature: Bytes,
     ) -> Result<bool, TronChainProviderError> {
-        let call = transferWithAuthorizationCall {
+        let call = contracts::eip3009::transferWithAuthorizationCall {
             from,
             to,
             value,
@@ -389,7 +393,7 @@ impl TronChainProvider {
         nonce: B256,
         signature: Bytes,
     ) -> Result<String, TronChainProviderError> {
-        let calldata = transferWithAuthorizationCall {
+        let calldata = contracts::eip3009::transferWithAuthorizationCall {
             from,
             to,
             value,
@@ -415,14 +419,17 @@ impl TronChainProvider {
         witness_valid_after: UnixTimestamp,
         signature: Bytes,
     ) -> Result<String, TronChainProviderError> {
-        let calldata = settleCall {
-            permit: TronPermitTransferFrom {
-                permitted: TronTokenPermissions { token, amount },
+        let calldata = contracts::x402_exact_permit2_proxy::settleCall {
+            permit: contracts::x402_exact_permit2_proxy::TronPermitTransferFrom {
+                permitted: contracts::x402_exact_permit2_proxy::TronTokenPermissions {
+                    token,
+                    amount,
+                },
                 nonce,
                 deadline: U256::from(deadline.as_secs()),
             },
             owner,
-            witness: TronWitness {
+            witness: contracts::x402_exact_permit2_proxy::TronWitness {
                 to: witness_to,
                 validAfter: U256::from(witness_valid_after.as_secs()),
             },
@@ -602,7 +609,7 @@ impl<'de> Deserialize<'de> for ConstantResult {
         impl<'de> serde::de::Visitor<'de> for PrefixlessHexVecVisitor {
             type Value = ConstantResult;
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
                 formatter.write_str("a list of prefixless hex strings")
             }
 
