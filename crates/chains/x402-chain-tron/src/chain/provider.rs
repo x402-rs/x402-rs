@@ -454,7 +454,7 @@ impl TronChainProviderLike for TronChainProvider {
             .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
         let body = serde_json::json!({ "value": txid });
         let timeout = Duration::from_secs(60);
-        let interval = Duration::from_secs(3);
+        let interval = Duration::from_secs(3); // FIXME CONFIGURABLE
         let start = std::time::Instant::now();
         loop {
             if start.elapsed() > timeout {
