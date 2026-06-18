@@ -417,18 +417,7 @@ impl TronChainProvider {
         owner_evm: Address,
         spender_evm: Address,
     ) -> Result<U256, TronChainProviderError> {
-        let raw = self
-            .call_constant(
-                token,
-                &allowanceCall {
-                    owner: owner_evm,
-                    spender: spender_evm,
-                }
-                .abi_encode(),
-            )
-            .await?;
-        allowanceCall::abi_decode_returns(&raw)
-            .map_err(|e| TronChainProviderError::AbiDecode(e.to_string()))
+        self.call_constant_a(token.clone(), allowanceCall { owner: owner_evm, spender: spender_evm }, None).await
     }
 
     pub async fn read_authorization_state(
