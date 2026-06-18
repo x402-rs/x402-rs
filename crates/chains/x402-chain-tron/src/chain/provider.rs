@@ -5,7 +5,7 @@
 //! Base58Check strings (the canonical TRON format).
 
 use alloy_primitives::{Address, B256, Bytes, U256};
-use alloy_sol_types::{SolCall, sol};
+use alloy_sol_types::SolCall;
 use k256::ecdsa::{RecoveryId, SigningKey, VerifyingKey};
 use reqwest::Client;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -19,47 +19,8 @@ use x402_types::timestamp::UnixTimestamp;
 
 use crate::chain::TronAddress;
 use crate::chain::config::{TronChainConfig, TronPrivateKey};
+use crate::chain::contracts::{eip3009::*, erc20::*, x402_exact_permit2_proxy::*};
 use crate::chain::types::TronChainReference;
-
-sol! {
-    function balanceOf(address account) external view returns (uint256);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function authorizationState(address authorizer, bytes32 nonce) external view returns (bool);
-    function transferWithAuthorization(
-        address from,
-        address to,
-        uint256 value,
-        uint256 validAfter,
-        uint256 validBefore,
-        bytes32 nonce,
-        bytes calldata signature
-    ) external;
-}
-
-sol! {
-    struct TronTokenPermissions {
-        address token;
-        uint256 amount;
-    }
-
-    struct TronPermitTransferFrom {
-        TronTokenPermissions permitted;
-        uint256 nonce;
-        uint256 deadline;
-    }
-
-    struct TronWitness {
-        address to;
-        uint256 validAfter;
-    }
-
-    function settle(
-        TronPermitTransferFrom permit,
-        address owner,
-        TronWitness witness,
-        bytes signature
-    ) external;
-}
 
 // ── TronGrid response types ───────────────────────────────────────────────────
 
@@ -366,7 +327,7 @@ impl TronChainProvider {
         token: TronAddress,
         owner_evm: Address,
     ) -> Result<U256, TronChainProviderError> {
-        self.call_constant(token, balanceOfCall { account: owner_evm }, None)
+        self.trigger_constant_contract(token, balanceOfCall { account: owner_evm }, None)
             .await
     }
 
@@ -376,7 +337,7 @@ impl TronChainProvider {
         owner_evm: Address,
         spender_evm: Address,
     ) -> Result<U256, TronChainProviderError> {
-        self.call_constant(
+        self.trigger_constant_contract(
             token.clone(),
             allowanceCall {
                 owner: owner_evm,
@@ -393,7 +354,7 @@ impl TronChainProvider {
         authorizer_evm: Address,
         nonce: B256,
     ) -> Result<bool, TronChainProviderError> {
-        self.call_constant(
+        self.trigger_constant_contract(
             token.clone(),
             authorizationStateCall {
                 authorizer: authorizer_evm,
@@ -424,7 +385,7 @@ impl TronChainProvider {
             nonce,
             signature,
         };
-        match self.call_constant(token, call, None).await {
+        match self.trigger_constant_contract(token, call, None).await {
             Ok(_) => Ok(true),
             Err(TronChainProviderError::Api(_)) => Ok(false),
             Err(e) => Err(e),
@@ -548,7 +509,7 @@ pub trait TronChainProviderLike {
     /// Returns true if the given EVM address belongs to any configured signer.
     fn is_signer(&self, addr: &TronAddress) -> bool;
     fn chain(&self) -> &TronChainReference;
-    fn call_constant<TCalldata>(
+    fn trigger_constant_contract<TCalldata>(
         &self,
         contract: TronAddress,
         calldata: TCalldata,
@@ -567,7 +528,7 @@ impl TronChainProviderLike for TronChainProvider {
         &self.chain_reference
     }
 
-    async fn call_constant<TCalldata>(
+    async fn trigger_constant_contract<TCalldata>(
         &self,
         contract_address: TronAddress,
         calldata: TCalldata,
@@ -622,6 +583,7 @@ pub struct CallConstantRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)] // It is used for deserialization only.
 pub struct CallConstantResponse {
     pub result: TriggerStatus,
     #[serde(default)]

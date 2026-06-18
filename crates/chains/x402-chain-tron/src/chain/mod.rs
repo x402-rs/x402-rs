@@ -13,6 +13,9 @@ pub use address::TronAddress;
 pub mod config;
 
 #[cfg(feature = "facilitator")]
+pub mod contracts;
+
+#[cfg(feature = "facilitator")]
 pub mod provider;
 #[cfg(feature = "facilitator")]
 pub use provider::TronChainProvider;
