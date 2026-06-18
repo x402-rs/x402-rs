@@ -59,8 +59,8 @@ pub type TronTxId = prefixless_hex::PrefixlessHexOwned;
 
 /// Request body for `gettransactioninfobyid`.
 #[derive(Debug, Serialize)]
-struct GetTransactionInfoRequest {
-    value: TronTxId,
+struct GetTransactionInfoRequest<'a> {
+    value: &'a TronTxId,
 }
 
 /// An unsigned transaction returned by `triggersmartcontract`.
@@ -459,9 +459,7 @@ impl TronChainProviderLike for TronChainProvider {
             .rpc_url
             .join("wallet/gettransactioninfobyid")
             .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
-        let body = GetTransactionInfoRequest {
-            value: tx_id.clone(),
-        };
+        let body = GetTransactionInfoRequest { value: tx_id };
         let timeout = Duration::from_secs(60);
         let interval = Duration::from_secs(3); // FIXME CONFIGURABLE
         let start = std::time::Instant::now();
