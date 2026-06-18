@@ -42,11 +42,23 @@ impl TriggerStatus {
     }
 }
 
+/// Request body for `triggersmartcontract`.
+#[derive(Debug, Serialize)]
+struct TriggerSmartContractRequest {
+    owner_address: TronAddress,
+    contract_address: TronAddress,
+    #[serde(with = "prefixless_hex")]
+    data: Vec<u8>,
+    fee_limit: u64,
+    call_value: u64,
+    visible: bool,
+}
+
 /// Response from `triggersmartcontract`.
 /// The `transaction` field is kept as raw JSON because we add `signature` to it
 /// before broadcasting.
 #[derive(Debug, Deserialize)]
-struct SmartContractResponse {
+struct TriggerSmartContractResponse {
     result: TriggerStatus,
     transaction: Option<Value>,
 }
@@ -206,15 +218,15 @@ impl TronChainProvider {
             .rpc_url
             .join("wallet/triggersmartcontract")
             .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
-        let body = serde_json::json!({
-            "owner_address": self.facilitator_address().to_string(),
-            "contract_address": contract.to_string(),
-            "data": alloy_primitives::hex::encode(calldata.abi_encode()),
-            "fee_limit": 100_000_000u64,
-            "call_value": 0,
-            "visible": true
-        });
-        let resp: SmartContractResponse = self
+        let body = TriggerSmartContractRequest {
+            owner_address: self.facilitator_address(),
+            contract_address: contract,
+            data: calldata.abi_encode(),
+            fee_limit: 100_000_000,
+            call_value: 0,
+            visible: true,
+        };
+        let resp: TriggerSmartContractResponse = self
             .client
             .post(url)
             .json(&body)
