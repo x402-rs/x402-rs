@@ -60,24 +60,19 @@ impl<'de> Deserialize<'de> for DecimalU256 {
     }
 }
 
-pub mod decimal_u256 {
-    use alloy_primitives::U256;
-    use serde::{Deserialize, Deserializer, Serializer};
+/// Serialize a U256 as a decimal string.
+pub fn serialize<S>(value: &U256, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&value.to_string())
+}
 
-    /// Serialize a U256 as a decimal string.
-    pub fn serialize<S>(value: &U256, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&value.to_string())
-    }
-
-    /// Deserialize a decimal string into a U256.
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<U256, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        U256::from_str_radix(&s, 10).map_err(serde::de::Error::custom)
-    }
+/// Deserialize a decimal string into a U256.
+pub fn deserialize<'de, D>(deserializer: D) -> Result<U256, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    U256::from_str_radix(&s, 10).map_err(serde::de::Error::custom)
 }

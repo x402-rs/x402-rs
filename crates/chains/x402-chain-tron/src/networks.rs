@@ -5,7 +5,6 @@
 //! See <https://github.com/ChainAgnostic/namespaces/pull/170>.
 
 use x402_types::chain::ChainId;
-use x402_types::networks::USDC;
 
 use crate::chain::types::{TRON_MAINNET, TRON_NILE, TRON_SHASTA};
 use crate::chain::{TronChainReference, TronTokenDeployment, TronTransferMethod};
@@ -69,53 +68,13 @@ impl KnownNetworkTron<ChainId> for ChainId {
     }
 }
 
-// ── USDC ─────────────────────────────────────────────────────────────────────
-
-impl KnownNetworkTron<TronTokenDeployment> for USDC {
-    fn mainnet() -> TronTokenDeployment {
-        TronTokenDeployment {
-            chain_reference: TronChainReference::mainnet(),
-            address: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8".try_into().unwrap(),
-            decimals: 6,
-            transfer_method: TronTransferMethod::Eip3009 {
-                name: "USD Coin".to_string(),
-                version: "2".to_string(),
-            },
-        }
-    }
-
-    fn shasta() -> TronTokenDeployment {
-        TronTokenDeployment {
-            chain_reference: TronChainReference::shasta(),
-            address: "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf".try_into().unwrap(),
-            decimals: 6,
-            transfer_method: TronTransferMethod::Eip3009 {
-                name: "USD Coin".to_string(),
-                version: "2".to_string(),
-            },
-        }
-    }
-
-    fn nile() -> TronTokenDeployment {
-        TronTokenDeployment {
-            chain_reference: TronChainReference::nile(),
-            address: "TF17BgPaZYbz8oxbjhriubPDsA7ArKoLX3".try_into().unwrap(),
-            decimals: 6,
-            transfer_method: TronTransferMethod::Eip3009 {
-                name: "USD Coin".to_string(),
-                version: "2".to_string(),
-            },
-        }
-    }
-}
-
 // ── USDT ─────────────────────────────────────────────────────────────────────
 
 impl KnownNetworkTron<TronTokenDeployment> for USDT {
     fn mainnet() -> TronTokenDeployment {
         TronTokenDeployment {
             chain_reference: TronChainReference::mainnet(),
-            address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t".try_into().unwrap(),
+            address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t".into(),
             decimals: 6,
             transfer_method: TronTransferMethod::Eip3009 {
                 name: "Tether USD".to_string(),
@@ -127,7 +86,7 @@ impl KnownNetworkTron<TronTokenDeployment> for USDT {
     fn shasta() -> TronTokenDeployment {
         TronTokenDeployment {
             chain_reference: TronChainReference::shasta(),
-            address: "TQQg4EL8o1BSeKJY4MJ8TB8XK7xufxFBvK".try_into().unwrap(),
+            address: "TQQg4EL8o1BSeKJY4MJ8TB8XK7xufxFBvK".into(),
             decimals: 6,
             transfer_method: TronTransferMethod::Eip3009 {
                 name: "Tether USD".to_string(),
@@ -139,7 +98,7 @@ impl KnownNetworkTron<TronTokenDeployment> for USDT {
     fn nile() -> TronTokenDeployment {
         TronTokenDeployment {
             chain_reference: TronChainReference::nile(),
-            address: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj".try_into().unwrap(),
+            address: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj".into(),
             decimals: 6,
             transfer_method: TronTransferMethod::Eip3009 {
                 name: "Tether USD".to_string(),
@@ -216,13 +175,5 @@ mod tests {
         assert_eq!(t.chain_reference, TronChainReference::mainnet());
         assert_eq!(t.address, "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t");
         assert_eq!(t.decimals, 6);
-    }
-
-    #[test]
-    fn usdc_mainnet() {
-        let u = USDC::mainnet();
-        assert_eq!(u.chain_reference, TronChainReference::mainnet());
-        assert_eq!(u.address, "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8");
-        assert_eq!(u.decimals, 6);
     }
 }

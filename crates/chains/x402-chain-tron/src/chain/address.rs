@@ -36,7 +36,7 @@ impl TronAddress {
         let payload = &decoded[..21];
         let checksum = &decoded[21..25];
         let hash1 = Sha256::digest(payload);
-        let hash2 = Sha256::digest(&hash1);
+        let hash2 = Sha256::digest(hash1);
         if &hash2[..4] != checksum {
             return Err(TronAddressError::InvalidChecksum);
         }
@@ -57,8 +57,8 @@ impl TronAddress {
         payload[0] = 0x41;
         payload[1..21].copy_from_slice(&self.0);
 
-        let hash1 = Sha256::digest(&payload);
-        let hash2 = Sha256::digest(&hash1);
+        let hash1 = Sha256::digest(payload);
+        let hash2 = Sha256::digest(hash1);
 
         let mut full = [0u8; 25];
         full[..21].copy_from_slice(&payload);
