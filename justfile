@@ -74,8 +74,9 @@ conformance: build-all
 
 cargo-publish-all:
   cd crates/x402-types && cargo publish
+  cd crates/chains/x402-chain-eip155 && cargo publish
+  cd crates/chains/x402-chain-solana && cargo publish
+  cd crates/chains/x402-chain-tron && cargo publish
   cd crates/x402-axum && cargo publish
   cd crates/x402-reqwest && cargo publish
   cd crates/x402-facilitator-local && cargo publish
-  cd crates/chains/x402-chain-eip155 && cargo publish
-  cd crates/chains/x402-chain-solana && cargo publish

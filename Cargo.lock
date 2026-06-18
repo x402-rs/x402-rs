@@ -13907,7 +13907,7 @@ dependencies = [
 
 [[package]]
 name = "x402-chain-tron"
-version = "2.0.0"
+version = "0.1.0"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
