@@ -1,15 +1,15 @@
 //! Permit2 payment verification and settlement for TRON.
 
+use crate::chain::TronAddress;
+use crate::chain::TronChainProvider;
+use crate::chain::provider::TronChainProviderLike;
+use crate::v2_tron_exact::facilitator::eip3009::{assert_requirements_match, recover_address};
+use crate::v2_tron_exact::types::{Permit2Payload, Permit2PaymentRequirements};
 use alloy_primitives::{Address, U256};
 use alloy_sol_types::{SolStruct, eip712_domain, sol};
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::timestamp::UnixTimestamp;
-
-use crate::chain::TronAddress;
-use crate::chain::TronChainProvider;
-use crate::v2_tron_exact::facilitator::eip3009::{assert_requirements_match, recover_address};
-use crate::v2_tron_exact::types::{Permit2Payload, Permit2PaymentRequirements};
 
 // Struct names are verbatim in the EIP-712 typehash — must match Permit2 exactly:
 //   PermitWitnessTransferFrom(TokenPermissions permitted,address spender,
@@ -54,7 +54,8 @@ pub async fn verify_permit2_payment(
         return Err(PaymentVerificationError::ChainIdMismatch.into());
     }
 
-    if provider.is_signer(&auth.from) {
+    let auth_from = TronAddress::from(auth.from);
+    if provider.is_signer(&auth_from) {
         return Err(PaymentVerificationError::InvalidSignature(
             "Payment from address must not be the facilitator".to_string(),
         )

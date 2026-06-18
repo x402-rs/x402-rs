@@ -43,14 +43,6 @@ impl TriggerStatus {
     }
 }
 
-/// Response from `triggerconstantcontract`.
-#[derive(Debug, Deserialize)]
-struct ConstantContractResponse {
-    result: TriggerStatus,
-    #[serde(default)]
-    constant_result: Vec<String>,
-}
-
 /// Response from `triggersmartcontract`.
 /// The `transaction` field is kept as raw JSON because we add `signature` to it
 /// before broadcasting.
@@ -199,12 +191,6 @@ impl TronChainProvider {
     /// Returns the EVM address of the first (active) signer.
     pub fn facilitator_evm(&self) -> Address {
         Address::from(self.signers[0].address) // TODO Multiple addresses and why do we need this at all?
-    }
-
-    /// Returns true if the given EVM address belongs to any configured signer.
-    pub fn is_signer(&self, addr: &Address) -> bool {
-        let tron_addr = TronAddress::from(addr);
-        self.signers.iter().any(|s| s.address == tron_addr)
     }
 
     // ── TronGrid HTTP helpers ─────────────────────────────────────────────────
@@ -583,7 +569,6 @@ pub struct CallConstantRequest {
 }
 
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)] // It is used for deserialization only.
 pub struct CallConstantResponse {
     pub result: TriggerStatus,
     #[serde(default)]
