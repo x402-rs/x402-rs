@@ -12,7 +12,9 @@ use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::timestamp::UnixTimestamp;
 
 use crate::chain::contracts;
-use crate::chain::provider::{TronChainProviderError, TronChainProviderLike, read_balance_of};
+use crate::chain::provider::{
+    TronChainProviderError, TronChainProviderLike, TronTxId, read_balance_of,
+};
 use crate::chain::{TronAddress, TronChainProvider, TronChainReference};
 use crate::v2_tron_exact::types::{Eip3009Payload, Eip3009PaymentRequirements};
 use crate::v2_tron_exact::{Eip3009Authorization, Eip3009PaymentPayload};
@@ -100,7 +102,7 @@ pub async fn settle_eip3009_payment(
     let accepted = &payment_payload.accepted;
     let auth = &payment_payload.payload.authorization;
 
-    let txid = build_and_submit_eip3009_tx(
+    let tx_id = build_and_submit_eip3009_tx(
         provider,
         accepted.asset,
         auth.from,
@@ -115,13 +117,13 @@ pub async fn settle_eip3009_payment(
     .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
 
     provider
-        .wait_for_tx(&txid)
+        .wait_for_tx(&tx_id)
         .await
         .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
 
     Ok(v2::SettleResponse::Success {
         payer: format!("0x{}", alloy_primitives::hex::encode(auth.from)),
-        transaction: txid,
+        transaction: tx_id.to_string(),
         network: accepted.network.to_string(),
     })
 }
@@ -183,7 +185,7 @@ pub async fn build_and_submit_eip3009_tx<P: TronChainProviderLike>(
     valid_before: UnixTimestamp,
     nonce: B256,
     signature: Bytes,
-) -> Result<String, TronChainProviderError> {
+) -> Result<TronTxId, TronChainProviderError> {
     let call = contracts::eip3009::transferWithAuthorizationCall {
         from,
         to,

@@ -10,7 +10,7 @@ use crate::chain::TronAddress;
 use crate::chain::TronChainProvider;
 use crate::chain::contracts;
 use crate::chain::provider::{
-    TronChainProviderError, TronChainProviderLike, read_allowance, read_balance_of,
+    TronChainProviderError, TronChainProviderLike, TronTxId, read_allowance, read_balance_of,
 };
 use crate::v2_tron_exact::facilitator::eip3009::{assert_requirements_match, recover_address};
 use crate::v2_tron_exact::types::{Permit2Payload, Permit2PaymentRequirements};
@@ -150,7 +150,7 @@ pub async fn settle_permit2_payment(
     let accepted = &payment_payload.accepted;
     let auth = &payment_payload.payload.permit2_authorization;
 
-    let txid = build_and_submit_permit2_settle_tx(
+    let tx_id = build_and_submit_permit2_settle_tx(
         provider,
         provider.x402_exact_permit2_proxy,
         auth.permitted.token,
@@ -166,13 +166,13 @@ pub async fn settle_permit2_payment(
     .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
 
     provider
-        .wait_for_tx(&txid)
+        .wait_for_tx(&tx_id)
         .await
         .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
 
     Ok(v2::SettleResponse::Success {
         payer: format!("0x{}", alloy_primitives::hex::encode(auth.from)),
-        transaction: txid,
+        transaction: tx_id.to_string(),
         network: accepted.network.to_string(),
     })
 }
@@ -190,7 +190,7 @@ pub async fn build_and_submit_permit2_settle_tx<P: TronChainProviderLike>(
     witness_to: Address,
     witness_valid_after: UnixTimestamp,
     signature: Bytes,
-) -> Result<String, TronChainProviderError> {
+) -> Result<TronTxId, TronChainProviderError> {
     use contracts::x402_exact_permit2_proxy as c;
     let settle_call = c::settleCall {
         permit: c::TronPermitTransferFrom {

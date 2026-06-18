@@ -54,6 +54,15 @@ struct TriggerSmartContractRequest {
     visible: bool,
 }
 
+/// A TRON transaction identifier — bytes deserialized from a prefixless hex string.
+pub type TronTxId = prefixless_hex::PrefixlessHexOwned;
+
+/// Request body for `gettransactioninfobyid`.
+#[derive(Debug, Serialize)]
+struct GetTransactionInfoRequest {
+    value: TronTxId,
+}
+
 /// An unsigned transaction returned by `triggersmartcontract`.
 ///
 /// `signature` starts empty; `sign_and_broadcast` fills it before posting to
@@ -62,7 +71,7 @@ struct TriggerSmartContractRequest {
 #[derive(Debug, Deserialize, Serialize)]
 struct TronTransaction {
     #[serde(rename = "txID")]
-    tx_id: String,
+    tx_id: TronTxId,
     #[serde(default, skip_serializing_if = "HexBytesVec::is_empty")]
     signature: HexBytesVec,
     #[serde(flatten)]
@@ -84,7 +93,7 @@ struct BroadcastResponse {
     #[serde(default)]
     message: Option<String>,
     #[serde(default)]
-    txid: Option<String>,
+    txid: Option<TronTxId>,
 }
 
 /// Response from `gettransactioninfobyid`.
@@ -257,15 +266,13 @@ impl TronChainProvider {
         })
     }
 
-    /// Sign a transaction's `txID` and return a 65-byte TRON signature hex.
+    /// Sign a transaction's `txID`.
     ///
     /// Format: r(32) + s(32) + (recovery_id + 27)(1).
-    fn sign_tx(&self, txid_hex: &str) -> Result<[u8; 65], TronChainProviderError> {
-        let txid_bytes = alloy_primitives::hex::decode(txid_hex)
-            .map_err(|e| TronChainProviderError::InvalidKey(format!("bad txid: {e}")))?;
+    fn sign_tx(&self, tx_id: &TronTxId) -> Result<[u8; 65], TronChainProviderError> {
         let (sig, recid): (k256::ecdsa::Signature, RecoveryId) = self.signers[0]
             .signing_key
-            .sign_prehash_recoverable(&txid_bytes)
+            .sign_prehash_recoverable(&tx_id.0)
             .map_err(|e| TronChainProviderError::InvalidKey(format!("sign failed: {e}")))?;
         let mut sig_bytes = [0u8; 65];
         sig_bytes[..64].copy_from_slice(&sig.to_bytes());
@@ -274,7 +281,7 @@ impl TronChainProvider {
     }
 
     /// Broadcast a signed transaction.
-    async fn broadcast(&self, tx: TronTransaction) -> Result<String, TronChainProviderError> {
+    async fn broadcast(&self, tx: TronTransaction) -> Result<TronTxId, TronChainProviderError> {
         let url = self
             .rpc_url
             .join("wallet/broadcasttransaction")
@@ -293,7 +300,7 @@ impl TronChainProvider {
     async fn sign_and_broadcast(
         &self,
         mut tx: TronTransaction,
-    ) -> Result<String, TronChainProviderError> {
+    ) -> Result<TronTxId, TronChainProviderError> {
         let signature = self.sign_tx(&tx.tx_id)?;
         let signature = Bytes::from(signature);
         tx.signature = HexBytesVec(vec![signature]);
@@ -373,12 +380,12 @@ pub trait TronChainProviderLike {
         &self,
         contract: TronAddress,
         calldata: TCalldata,
-    ) -> impl Future<Output = Result<String, TronChainProviderError>> + Send
+    ) -> impl Future<Output = Result<TronTxId, TronChainProviderError>> + Send
     where
         TCalldata: SolCall + Send;
     fn wait_for_tx(
         &self,
-        txid: &str,
+        tx_id: &TronTxId,
     ) -> impl Future<Output = Result<(), TronChainProviderError>> + Send;
 }
 
@@ -439,7 +446,7 @@ impl TronChainProviderLike for TronChainProvider {
         &self,
         contract: TronAddress,
         calldata: TCalldata,
-    ) -> Result<String, TronChainProviderError>
+    ) -> Result<TronTxId, TronChainProviderError>
     where
         TCalldata: SolCall + Send,
     {
@@ -447,12 +454,14 @@ impl TronChainProviderLike for TronChainProvider {
         self.sign_and_broadcast(tx).await
     }
 
-    async fn wait_for_tx(&self, txid: &str) -> Result<(), TronChainProviderError> {
+    async fn wait_for_tx(&self, tx_id: &TronTxId) -> Result<(), TronChainProviderError> {
         let url = self
             .rpc_url
             .join("wallet/gettransactioninfobyid")
             .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
-        let body = serde_json::json!({ "value": txid });
+        let body = GetTransactionInfoRequest {
+            value: tx_id.clone(),
+        };
         let timeout = Duration::from_secs(60);
         let interval = Duration::from_secs(3); // FIXME CONFIGURABLE
         let start = std::time::Instant::now();
@@ -600,14 +609,24 @@ pub mod prefixless_hex {
         }
     }
 
+    #[derive(Debug, Clone)]
     pub struct PrefixlessHexOwned(pub Bytes);
 
+    impl Serialize for PrefixlessHexOwned {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serialize(&self.0, serializer)
+        }
+    }
+
     impl<'de> Deserialize<'de> for PrefixlessHexOwned {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
             deserialize(deserializer).map(Self)
+        }
+    }
+
+    impl std::fmt::Display for PrefixlessHexOwned {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(&alloy_primitives::hex::encode(&self.0))
         }
     }
 
@@ -625,7 +644,6 @@ pub mod prefixless_hex {
     {
         let as_string = String::deserialize(deserializer)?;
         let vec = alloy_primitives::hex::decode(&as_string).map_err(serde::de::Error::custom)?;
-        let bytes = Bytes::from(vec);
-        Ok(bytes)
+        Ok(Bytes::from(vec))
     }
 }
