@@ -26,7 +26,6 @@ pub const TRON_NAMESPACE: &str = "tron";
 pub struct TronChainReference(u32);
 
 pub const TRON_MAINNET: TronChainReference = TronChainReference(0x2b6653dc);
-pub const TRON_SHASTA: TronChainReference = TronChainReference(0x94a9059e);
 pub const TRON_NILE: TronChainReference = TronChainReference(0xcd8690dc);
 
 impl TronChainReference {
@@ -64,7 +63,7 @@ impl TronChainReference {
     pub fn x402_exact_permit2_proxy(self) -> Option<TronAddress> {
         match self {
             TRON_NILE => "TTjbkCh8sC4gNTWG48iWNssrLBqZq2tiTy".parse().ok(),
-            // TODO Deploy on mainnet
+            TRON_MAINNET => "TNtw4Wg6uQe4bqFywtcn5qagVZesSdYBSs".parse().ok(),
             _ => None,
         }
     }

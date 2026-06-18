@@ -6,7 +6,7 @@
 
 use x402_types::chain::ChainId;
 
-use crate::chain::types::{TRON_MAINNET, TRON_NILE, TRON_SHASTA};
+use crate::chain::types::{TRON_MAINNET, TRON_NILE};
 use crate::chain::{TronChainReference, TronTokenDeployment, TronTransferMethod};
 
 /// Marker struct for USDT (Tether) token deployment implementations on TRON.
@@ -32,8 +32,6 @@ pub trait KnownNetworkTron<A> {
     fn mainnet() -> A;
     /// Returns the instance for TRON Nile testnet (`tron:0xcd8690dc`).
     fn nile() -> A;
-    /// Returns the instance for TRON Shasta testnet (`tron:0x94a9059e`).
-    fn shasta() -> A;
 }
 
 // ── TronChainReference ───────────────────────────────────────────────────────
@@ -42,11 +40,6 @@ impl KnownNetworkTron<TronChainReference> for TronChainReference {
     fn mainnet() -> TronChainReference {
         TRON_MAINNET
     }
-
-    fn shasta() -> TronChainReference {
-        TRON_SHASTA
-    }
-
     fn nile() -> TronChainReference {
         TRON_NILE
     }
@@ -58,11 +51,6 @@ impl KnownNetworkTron<ChainId> for ChainId {
     fn mainnet() -> ChainId {
         TronChainReference::mainnet().into()
     }
-
-    fn shasta() -> ChainId {
-        TronChainReference::shasta().into()
-    }
-
     fn nile() -> ChainId {
         TronChainReference::nile().into()
     }
@@ -75,18 +63,6 @@ impl KnownNetworkTron<TronTokenDeployment> for USDT {
         TronTokenDeployment {
             chain_reference: TronChainReference::mainnet(),
             address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t".into(),
-            decimals: 6,
-            transfer_method: TronTransferMethod::Eip3009 {
-                name: "Tether USD".to_string(),
-                version: "1".to_string(),
-            },
-        }
-    }
-
-    fn shasta() -> TronTokenDeployment {
-        TronTokenDeployment {
-            chain_reference: TronChainReference::shasta(),
-            address: "TQQg4EL8o1BSeKJY4MJ8TB8XK7xufxFBvK".into(),
             decimals: 6,
             transfer_method: TronTransferMethod::Eip3009 {
                 name: "Tether USD".to_string(),
@@ -116,23 +92,17 @@ mod tests {
     fn chain_reference_display() {
         assert_eq!(TronChainReference::mainnet().to_string(), "0x2b6653dc");
         assert_eq!(TronChainReference::nile().to_string(), "0xcd8690dc");
-        assert_eq!(TronChainReference::shasta().to_string(), "0x94a9059e");
     }
 
     #[test]
     fn chain_id_format() {
         assert_eq!(ChainId::mainnet().to_string(), "tron:0x2b6653dc");
         assert_eq!(ChainId::nile().to_string(), "tron:0xcd8690dc");
-        assert_eq!(ChainId::shasta().to_string(), "tron:0x94a9059e");
     }
 
     #[test]
     fn chain_reference_round_trips() {
-        for r in [
-            TronChainReference::mainnet(),
-            TronChainReference::shasta(),
-            TronChainReference::nile(),
-        ] {
+        for r in [TronChainReference::mainnet(), TronChainReference::nile()] {
             let chain_id = ChainId::from(r.clone());
             let parsed = TronChainReference::try_from(chain_id).unwrap();
             assert_eq!(parsed, r);
@@ -143,7 +113,6 @@ mod tests {
     fn eip712_chain_ids() {
         assert_eq!(TronChainReference::mainnet().inner(), 728126428);
         assert_eq!(TronChainReference::nile().inner(), 3448148188);
-        assert_eq!(TronChainReference::shasta().inner(), 2494104990);
     }
 
     #[test]
@@ -158,15 +127,9 @@ mod tests {
                 .x402_exact_permit2_proxy()
                 .is_none()
         );
-        assert!(
-            TronChainReference::shasta()
-                .x402_exact_permit2_proxy()
-                .is_none()
-        );
         // SUN.io Permit2 is known for mainnet and nile
         assert!(TronChainReference::mainnet().sun_permit2().is_some());
         assert!(TronChainReference::nile().sun_permit2().is_some());
-        assert!(TronChainReference::shasta().sun_permit2().is_none());
     }
 
     #[test]
