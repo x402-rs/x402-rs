@@ -12,6 +12,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use url::Url;
 use x402_types::chain::{ChainId, ChainProviderOps, FromConfig};
@@ -160,9 +161,19 @@ impl TronSigner {
             address: tron_address,
         })
     }
+}
 
-    pub fn address(&self) -> &TronAddress {
-        &self.address
+impl TronSigner {
+    /// Sign a transaction hash. Format: r(32) + s(32) + (recovery_id + 27)(1).
+    fn sign(&self, tx_id: &TronTxId) -> Result<[u8; 65], TronChainProviderError> {
+        let (sig, recid): (k256::ecdsa::Signature, RecoveryId) = self
+            .signing_key
+            .sign_prehash_recoverable(&tx_id.0)
+            .map_err(|e| TronChainProviderError::InvalidKey(format!("sign failed: {e}")))?;
+        let mut sig_bytes = [0u8; 65];
+        sig_bytes[..64].copy_from_slice(&sig.to_bytes());
+        sig_bytes[64] = recid.to_byte() + 27;
+        Ok(sig_bytes)
     }
 }
 
@@ -175,6 +186,52 @@ impl Debug for TronSigner {
 impl Display for TronSigner {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.address)
+    }
+}
+
+// ── TronSigners ───────────────────────────────────────────────────────────────
+
+struct TronSigners {
+    inner: Vec<TronSigner>,
+    next_idx: AtomicUsize,
+}
+
+impl TronSigners {
+    fn new(signers: Vec<TronSigner>) -> Self {
+        Self {
+            inner: signers,
+            next_idx: AtomicUsize::new(0),
+        }
+    }
+
+    /// Returns the next signer in round-robin order.
+    fn next(&self) -> &TronSigner {
+        let idx = self.next_idx.fetch_add(1, Ordering::Relaxed) % self.inner.len();
+        &self.inner[idx]
+    }
+
+    /// Returns the signer for the given address, or an error if not configured.
+    fn get(&self, addr: &TronAddress) -> Result<&TronSigner, TronChainProviderError> {
+        self.inner
+            .iter()
+            .find(|s| s.address == *addr)
+            .ok_or_else(|| TronChainProviderError::InvalidKey(format!("no signer for {addr}")))
+    }
+
+    fn contains(&self, addr: &TronAddress) -> bool {
+        self.inner.iter().any(|s| s.address == *addr)
+    }
+
+    fn addresses(&self) -> impl Iterator<Item = &TronAddress> {
+        self.inner.iter().map(|s| &s.address)
+    }
+}
+
+impl fmt::Debug for TronSigners {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_list()
+            .entries(self.inner.iter().map(|s| s.address.to_string()))
+            .finish()
     }
 }
 
@@ -195,7 +252,7 @@ pub struct TronChainProvider {
     /// x402ExactPermit2Proxy — the `spender` in Permit2 messages and the settlement contract.
     pub x402_exact_permit2_proxy: TronAddress,
     /// All configured signers (at least one required).
-    signers: Vec<TronSigner>,
+    signers: TronSigners,
 }
 
 impl fmt::Debug for TronChainProvider {
@@ -203,26 +260,12 @@ impl fmt::Debug for TronChainProvider {
         f.debug_struct("TronChainProvider")
             .field("chain_reference", &self.chain_reference)
             .field("rpc_url", &self.rpc_url)
-            .field(
-                "signer_addresses",
-                &self
-                    .signers
-                    .iter()
-                    .map(|s| s.address.to_string())
-                    .collect::<Vec<_>>(),
-            )
+            .field("signers", &self.signers)
             .finish()
     }
 }
 
 impl TronChainProvider {
-    /// Returns the Base58Check address of the first (active) signer.
-    pub fn facilitator_address(&self) -> TronAddress {
-        self.signers[0].address // TODO Multiple addresses
-    }
-
-    // ── TronGrid HTTP helpers ─────────────────────────────────────────────────
-
     /// Build an unsigned transaction via `triggersmartcontract`.
     ///
     /// Uses `visible: true` so addresses are Base58Check throughout.
@@ -230,14 +273,14 @@ impl TronChainProvider {
         &self,
         contract: TronAddress,
         calldata: TCalldata,
-        from: Option<TronAddress>,
+        owner: TronAddress,
     ) -> Result<TronTransaction, TronChainProviderError> {
         let url = self
             .rpc_url
             .join("wallet/triggersmartcontract")
             .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
         let body = TriggerSmartContractRequest {
-            owner_address: from.unwrap_or_else(|| self.facilitator_address()),
+            owner_address: owner,
             contract_address: contract,
             data: calldata.abi_encode(),
             fee_limit: 100_000_000,
@@ -262,20 +305,6 @@ impl TronChainProvider {
         })
     }
 
-    /// Sign a transaction's `txID`.
-    ///
-    /// Format: r(32) + s(32) + (recovery_id + 27)(1).
-    fn sign_tx(&self, tx_id: &TronTxId) -> Result<[u8; 65], TronChainProviderError> {
-        let (sig, recid): (k256::ecdsa::Signature, RecoveryId) = self.signers[0]
-            .signing_key
-            .sign_prehash_recoverable(&tx_id.0)
-            .map_err(|e| TronChainProviderError::InvalidKey(format!("sign failed: {e}")))?;
-        let mut sig_bytes = [0u8; 65];
-        sig_bytes[..64].copy_from_slice(&sig.to_bytes());
-        sig_bytes[64] = recid.to_byte() + 27;
-        Ok(sig_bytes)
-    }
-
     /// Broadcast a signed transaction.
     async fn broadcast(&self, tx: TronTransaction) -> Result<TronTxId, TronChainProviderError> {
         let url = self
@@ -296,8 +325,9 @@ impl TronChainProvider {
     async fn sign_and_broadcast(
         &self,
         mut tx: TronTransaction,
+        signer: &TronSigner,
     ) -> Result<TronTxId, TronChainProviderError> {
-        let signature = self.sign_tx(&tx.tx_id)?;
+        let signature = signer.sign(&tx.tx_id)?;
         let signature = Bytes::from(signature);
         tx.signature = HexBytesVec(vec![signature]);
         self.broadcast(tx).await
@@ -317,7 +347,8 @@ impl FromConfig<TronChainConfig> for TronChainProvider {
         let signers = signers
             .iter()
             .map(|k| TronSigner::from_key(k))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map(TronSigners::new)?;
 
         // Explicit config overrides the well-known default
         let chain_reference = config.chain_reference;
@@ -350,10 +381,7 @@ impl FromConfig<TronChainConfig> for TronChainProvider {
 
 impl ChainProviderOps for TronChainProvider {
     fn signer_addresses(&self) -> Vec<String> {
-        self.signers
-            .iter()
-            .map(|s| s.address().to_string())
-            .collect()
+        self.signers.addresses().map(|a| a.to_string()).collect()
     }
 
     fn chain_id(&self) -> ChainId {
@@ -388,7 +416,7 @@ pub trait TronChainProviderLike {
 
 impl TronChainProviderLike for TronChainProvider {
     fn is_signer(&self, addr: &TronAddress) -> bool {
-        self.signers.iter().any(|s| s.address == *addr)
+        self.signers.contains(addr)
     }
 
     fn chain(&self) -> &TronChainReference {
@@ -448,8 +476,12 @@ impl TronChainProviderLike for TronChainProvider {
     where
         TCalldata: SolCall + Send,
     {
-        let tx = self.build_tx(contract, calldata, from).await?;
-        self.sign_and_broadcast(tx).await
+        let signer = match from {
+            Some(addr) => self.signers.get(&addr)?,
+            None => self.signers.next(),
+        };
+        let tx = self.build_tx(contract, calldata, signer.address).await?;
+        self.sign_and_broadcast(tx, signer).await
     }
 
     async fn wait_for_tx(&self, tx_id: &TronTxId) -> Result<(), TronChainProviderError> {
