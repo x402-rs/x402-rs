@@ -253,7 +253,7 @@ impl TronChainProvider {
     /// Uses `visible: true` so addresses are Base58Check throughout.
     async fn build_tx(
         &self,
-        contract: &TronAddress,
+        contract: TronAddress,
         calldata: &[u8],
     ) -> Result<Value, TronChainProviderError> {
         let url = self
@@ -363,20 +363,20 @@ impl TronChainProvider {
 
     pub async fn read_balance_of(
         &self,
-        token: &TronAddress,
+        token: TronAddress,
         owner_evm: Address,
     ) -> Result<U256, TronChainProviderError> {
-        self.call_constant_a(token.clone(), balanceOfCall { account: owner_evm }, None)
+        self.call_constant(token, balanceOfCall { account: owner_evm }, None)
             .await
     }
 
     pub async fn read_allowance(
         &self,
-        token: &TronAddress,
+        token: TronAddress,
         owner_evm: Address,
         spender_evm: Address,
     ) -> Result<U256, TronChainProviderError> {
-        self.call_constant_a(
+        self.call_constant(
             token.clone(),
             allowanceCall {
                 owner: owner_evm,
@@ -389,11 +389,11 @@ impl TronChainProvider {
 
     pub async fn read_authorization_state(
         &self,
-        token: &TronAddress,
+        token: TronAddress,
         authorizer_evm: Address,
         nonce: B256,
     ) -> Result<bool, TronChainProviderError> {
-        self.call_constant_a(
+        self.call_constant(
             token.clone(),
             authorizationStateCall {
                 authorizer: authorizer_evm,
@@ -406,7 +406,7 @@ impl TronChainProvider {
 
     pub async fn simulate_transfer_with_authorization(
         &self,
-        token: &TronAddress,
+        token: TronAddress,
         from: Address,
         to: Address,
         value: U256,
@@ -424,7 +424,7 @@ impl TronChainProvider {
             nonce,
             signature,
         };
-        match self.call_constant_a(token.clone(), call, None).await {
+        match self.call_constant(token, call, None).await {
             Ok(_) => Ok(true),
             Err(TronChainProviderError::Api(_)) => Ok(false),
             Err(e) => Err(e),
@@ -433,7 +433,7 @@ impl TronChainProvider {
 
     pub async fn build_and_submit_eip3009_tx(
         &self,
-        token: &TronAddress,
+        token: TronAddress,
         from: Address,
         to: Address,
         value: U256,
@@ -458,7 +458,7 @@ impl TronChainProvider {
 
     pub async fn build_and_submit_permit2_settle_tx(
         &self,
-        x402_exact_permit2_proxy: &TronAddress,
+        x402_exact_permit2_proxy: TronAddress,
         token: Address,
         amount: U256,
         nonce: U256,
@@ -548,7 +548,7 @@ pub trait TronChainProviderLike {
     /// Returns true if the given EVM address belongs to any configured signer.
     fn is_signer(&self, addr: &TronAddress) -> bool;
     fn chain(&self) -> &TronChainReference;
-    fn call_constant_a<TCalldata>(
+    fn call_constant<TCalldata>(
         &self,
         contract: TronAddress,
         calldata: TCalldata,
@@ -567,7 +567,7 @@ impl TronChainProviderLike for TronChainProvider {
         &self.chain_reference
     }
 
-    async fn call_constant_a<TCalldata>(
+    async fn call_constant<TCalldata>(
         &self,
         contract_address: TronAddress,
         calldata: TCalldata,

@@ -45,7 +45,7 @@ pub async fn verify_eip3009_payment(
     let auth = &payment_payload.payload.authorization;
     let required_amount = accepted.amount;
 
-    let token = &accepted.asset;
+    let token = accepted.asset;
     let balance = provider
         .read_balance_of(token, auth.from)
         .await
@@ -103,7 +103,7 @@ pub async fn settle_eip3009_payment(
 
     let txid = provider
         .build_and_submit_eip3009_tx(
-            &accepted.asset,
+            accepted.asset,
             auth.from,
             auth.to,
             auth.value.into(),

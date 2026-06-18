@@ -116,7 +116,7 @@ pub async fn verify_permit2_payment(
 
     let token = TronAddress::from(auth.permitted.token);
     let balance = provider
-        .read_balance_of(&token, auth.from)
+        .read_balance_of(token, auth.from)
         .await
         .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
     if balance < required_amount {
@@ -124,7 +124,7 @@ pub async fn verify_permit2_payment(
     }
 
     let allowance = provider
-        .read_allowance(&token, auth.from, permit2_evm)
+        .read_allowance(token, auth.from, permit2_evm)
         .await
         .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
     if allowance < required_amount {
@@ -150,7 +150,7 @@ pub async fn settle_permit2_payment(
 
     let txid = provider
         .build_and_submit_permit2_settle_tx(
-            x402_exact_permit2_proxy,
+            *x402_exact_permit2_proxy,
             auth.permitted.token,
             auth.permitted.amount.into(),
             auth.nonce.into(),
