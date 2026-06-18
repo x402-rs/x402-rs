@@ -235,13 +235,14 @@ impl TronChainProvider {
         &self,
         contract: TronAddress,
         calldata: TCalldata,
+        from: Option<TronAddress>,
     ) -> Result<TronTransaction, TronChainProviderError> {
         let url = self
             .rpc_url
             .join("wallet/triggersmartcontract")
             .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
         let body = TriggerSmartContractRequest {
-            owner_address: self.facilitator_address(),
+            owner_address: from.unwrap_or_else(|| self.facilitator_address()),
             contract_address: contract,
             data: calldata.abi_encode(),
             fee_limit: 100_000_000,
@@ -380,6 +381,7 @@ pub trait TronChainProviderLike {
         &self,
         contract: TronAddress,
         calldata: TCalldata,
+        from: Option<TronAddress>,
     ) -> impl Future<Output = Result<TronTxId, TronChainProviderError>> + Send
     where
         TCalldata: SolCall + Send;
@@ -446,11 +448,12 @@ impl TronChainProviderLike for TronChainProvider {
         &self,
         contract: TronAddress,
         calldata: TCalldata,
+        from: Option<TronAddress>,
     ) -> Result<TronTxId, TronChainProviderError>
     where
         TCalldata: SolCall + Send,
     {
-        let tx = self.build_tx(contract, calldata).await?;
+        let tx = self.build_tx(contract, calldata, from).await?;
         self.sign_and_broadcast(tx).await
     }
 

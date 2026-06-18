@@ -206,6 +206,6 @@ pub async fn build_and_submit_permit2_settle_tx<P: TronChainProviderLike>(
         signature,
     };
     provider
-        .build_and_submit_tx(x402_exact_permit2_proxy, settle_call)
+        .build_and_submit_tx(x402_exact_permit2_proxy, settle_call, None)
         .await
 }

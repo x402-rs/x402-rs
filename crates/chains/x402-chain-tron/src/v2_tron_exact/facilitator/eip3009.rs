@@ -195,7 +195,7 @@ pub async fn build_and_submit_eip3009_tx<P: TronChainProviderLike>(
         nonce,
         signature,
     };
-    provider.build_and_submit_tx(token, call).await
+    provider.build_and_submit_tx(token, call, None).await
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
