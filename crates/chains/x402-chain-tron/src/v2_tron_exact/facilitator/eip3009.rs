@@ -5,7 +5,7 @@
 //! PaymentRequirements are Base58Check (TronAddress).
 
 use alloy_primitives::{Address, B256, Bytes, U256};
-use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, eip712_domain, sol};
+use alloy_sol_types::{Eip712Domain, SolStruct, eip712_domain, sol};
 use x402_types::chain::ChainId;
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
@@ -184,7 +184,7 @@ pub async fn build_and_submit_eip3009_tx<P: TronChainProviderLike>(
     nonce: B256,
     signature: Bytes,
 ) -> Result<String, TronChainProviderError> {
-    let calldata = contracts::eip3009::transferWithAuthorizationCall {
+    let call = contracts::eip3009::transferWithAuthorizationCall {
         from,
         to,
         value,
@@ -192,9 +192,8 @@ pub async fn build_and_submit_eip3009_tx<P: TronChainProviderLike>(
         validBefore: U256::from(valid_before.as_secs()),
         nonce,
         signature,
-    }
-    .abi_encode();
-    provider.build_and_submit_tx(token, calldata).await
+    };
+    provider.build_and_submit_tx(token, call).await
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

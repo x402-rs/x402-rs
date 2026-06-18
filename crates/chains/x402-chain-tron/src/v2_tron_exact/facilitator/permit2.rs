@@ -1,14 +1,14 @@
 //! Permit2 payment verification and settlement for TRON.
 
 use alloy_primitives::{Address, Bytes, U256};
-use alloy_sol_types::{SolCall, SolStruct, eip712_domain, sol};
+use alloy_sol_types::{SolStruct, eip712_domain, sol};
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::timestamp::UnixTimestamp;
 
-use crate::chain::contracts;
 use crate::chain::TronAddress;
 use crate::chain::TronChainProvider;
+use crate::chain::contracts;
 use crate::chain::provider::{
     TronChainProviderError, TronChainProviderLike, read_allowance, read_balance_of,
 };
@@ -192,7 +192,7 @@ pub async fn build_and_submit_permit2_settle_tx<P: TronChainProviderLike>(
     signature: Bytes,
 ) -> Result<String, TronChainProviderError> {
     use contracts::x402_exact_permit2_proxy as c;
-    let calldata = c::settleCall {
+    let settle_call = c::settleCall {
         permit: c::TronPermitTransferFrom {
             permitted: c::TronTokenPermissions { token, amount },
             nonce,
@@ -204,9 +204,8 @@ pub async fn build_and_submit_permit2_settle_tx<P: TronChainProviderLike>(
             validAfter: U256::from(witness_valid_after.as_secs()),
         },
         signature,
-    }
-    .abi_encode();
+    };
     provider
-        .build_and_submit_tx(x402_exact_permit2_proxy, calldata)
+        .build_and_submit_tx(x402_exact_permit2_proxy, settle_call)
         .await
 }

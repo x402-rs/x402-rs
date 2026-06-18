@@ -197,10 +197,10 @@ impl TronChainProvider {
     /// Build an unsigned transaction via `triggersmartcontract`.
     ///
     /// Uses `visible: true` so addresses are Base58Check throughout.
-    async fn build_tx(
+    async fn build_tx<TCalldata: SolCall>(
         &self,
         contract: TronAddress,
-        calldata: &[u8],
+        calldata: TCalldata,
     ) -> Result<Value, TronChainProviderError> {
         let url = self
             .rpc_url
@@ -209,7 +209,7 @@ impl TronChainProvider {
         let body = serde_json::json!({
             "owner_address": self.facilitator_address().to_string(),
             "contract_address": contract.to_string(),
-            "data": alloy_primitives::hex::encode(calldata),
+            "data": alloy_primitives::hex::encode(calldata.abi_encode()),
             "fee_limit": 100_000_000u64,
             "call_value": 0,
             "visible": true
@@ -344,11 +344,13 @@ pub trait TronChainProviderLike {
     ) -> impl Future<Output = Result<TCalldata::Return, TronChainProviderError>> + Send
     where
         TCalldata: SolCall + Send;
-    fn build_and_submit_tx(
+    fn build_and_submit_tx<TCalldata>(
         &self,
         contract: TronAddress,
-        calldata: Vec<u8>,
-    ) -> impl Future<Output = Result<String, TronChainProviderError>> + Send;
+        calldata: TCalldata,
+    ) -> impl Future<Output = Result<String, TronChainProviderError>> + Send
+    where
+        TCalldata: SolCall + Send;
     fn wait_for_tx(
         &self,
         txid: &str,
@@ -407,12 +409,15 @@ impl TronChainProviderLike for TronChainProvider {
         Ok(decoded)
     }
 
-    async fn build_and_submit_tx(
+    async fn build_and_submit_tx<TCalldata>(
         &self,
         contract: TronAddress,
-        calldata: Vec<u8>,
-    ) -> Result<String, TronChainProviderError> {
-        let tx = self.build_tx(contract, &calldata).await?;
+        calldata: TCalldata,
+    ) -> Result<String, TronChainProviderError>
+    where
+        TCalldata: SolCall + Send,
+    {
+        let tx = self.build_tx(contract, calldata).await?;
         self.sign_and_broadcast(tx).await
     }
 
