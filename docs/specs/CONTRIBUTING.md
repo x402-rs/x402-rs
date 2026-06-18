@@ -1,10 +1,9 @@
 ---
 Document Type: Contributing Guide
 Description: Guide for proposing and documenting new x402 specifications
-Source: https://github.com/coinbase/x402/blob/main/specs/CONTRIBUTING.md
-Downloaded At: 2026-03-05
+Source: https://github.com/x402-foundation/x402/blob/main/specs/CONTRIBUTING.md
+Downloaded At: 2026-06-16
 ---
-
 # Specs Contributing Guide
 
 Guide for proposing and documenting new x402 specifications.
@@ -198,3 +197,4 @@ For schemes, include a section on:
 - Open an issue for spec questions
 - Reference existing specs for patterns
 - Discuss in the proposal issue before extensive writing
+

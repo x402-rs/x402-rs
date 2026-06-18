@@ -1,10 +1,9 @@
 ---
 Document Type: Scheme Implementation
 Description: EVM implementation of the 'upto' payment scheme using Permit2
-Source: https://github.com/coinbase/x402/blob/main/specs/schemes/upto/scheme_upto_evm.md
-Downloaded At: 2026-03-05
+Source: https://github.com/x402-foundation/x402/blob/main/specs/schemes/upto/scheme_upto_evm.md
+Downloaded At: 2026-06-16
 ---
-
 # Scheme: `upto` on `EVM`
 
 ## Summary
@@ -70,6 +69,8 @@ The `payload` field must contain:
 
 > **Requirement**: The `x402Permit2Proxy` contract will be deployed to the same address across all supported EVM chains using `CREATE2` to ensure consistent behavior and simpler integration.
 
+**Facilitator Address Discovery:** The facilitator announces its address via the `/supported` endpoint in the `extra` field of each supported scheme. The client MUST include this `facilitatorAddress` in the `permit2Authorization.witness.facilitator` field when constructing the payment signature. This binds the authorization to a specific facilitator, preventing unauthorized settlement by other parties.
+
 **Example PaymentRequired (402 Response):**
 
 ```json
@@ -91,7 +92,8 @@ The `payload` field must contain:
       "maxTimeoutSeconds": 300,
       "extra": {
         "name": "USDC",
-        "version": "2"
+        "version": "2",
+        "facilitatorAddress": "0xFacilitatorAddress1234567890123456789012"
       }
     }
   ]
@@ -128,13 +130,13 @@ The `payload` field must contain:
         "amount": "5000000"
       },
       "from": "0x857b06519E91e3A54538791bDbb0E22373e36b66",
-      "spender": "0xx402Permit2ProxyAddress",
+      "spender": "0x4020A4f3b7b90ccA423B9fabCc0CE57C6C240002",
       "nonce": "0xf3746613c2d920b5fdabc0856f2aeb2d4f88ee6037b8cc5d04a71a4462f13480",
       "deadline": "1740672154",
       "witness": {
         "to": "0x209693Bc6afc0C5328bA36FaF03C514EF312287C",
-        "validAfter": "1740672089",
-        "extra": {}
+        "facilitator": "0xFacilitatorAddress1234567890123456789012",
+        "validAfter": "1740672089"
       }
     }
   }
@@ -160,6 +162,8 @@ The verifier must execute these checks in order:
 
 4.  **Verify** the `permit2Authorization.permitted.amount` equals the `amount` from requirements.
 
+    > **Note**: This check applies at **verification** time, where `requirements.amount` represents the authorized maximum. At **settlement** time, `requirements.amount` carries the actual settlement amount, which may be less than `permitted.amount`. See [Phase 4 — Settle-Time Verification](#settle-time-verification) for the required handling.
+
 5.  **Verify** the `deadline` (not expired) and `witness.validAfter` (active).
 
 6.  **Verify** the Token and Network match the requirement.
@@ -181,6 +185,48 @@ The server determines the actual amount based on resource consumption during the
 - The settled `amount` MUST be `<=` the authorized maximum
 - The settled `amount` MAY be `0` (no charge if no usage occurred)
 - The settled `amount` is determined by the resource server, not the client
+
+#### Settle-Time Verification
+
+Before executing an on-chain settlement, the facilitator MUST re-verify the client's signature. Because the `upto` scheme uses phase-dependent `amount` semantics (see [§2 PaymentRequirements Schema](#2-paymentrequirements-schema)), the `/settle` request will carry `paymentRequirements.amount` set to the **actual settlement amount** (as communicated by the resource server via `setSettlementOverrides`), which may be less than `paymentPayload.payload.permit2Authorization.permitted.amount` (the **authorized maximum** the client signed).
+
+The facilitator MUST handle this case as follows:
+
+1.  **Verify the signature against `permitted.amount`** — When re-verifying the client's signature at settle time, use `permit2Authorization.permitted.amount` (the ceiling from the signed payload), NOT `paymentRequirements.amount` (the actual settlement amount). The client signed for the ceiling; comparing against the metered amount would always fail for partial settlements.
+
+2.  **Validate** `paymentRequirements.amount <= permit2Authorization.permitted.amount` — The actual settlement amount must not exceed the authorized maximum.
+
+3.  **Execute the on-chain transfer for `paymentRequirements.amount`** — The `x402UptoPermit2Proxy.settle` call uses the actual settlement amount, not the ceiling.
+
+> **Conformance note**: A facilitator that enforces `paymentRequirements.amount === permit2Authorization.permitted.amount` at settle time will reject all partial settlements, breaking the core `upto` value proposition. The Phase 3 step 4 equality check (`permitted.amount === requirements.amount`) applies only to the `/verify` endpoint, where `requirements.amount` carries the ceiling.
+
+**Example settle request wire shape** (partial settlement):
+
+```json
+{
+  "x402Version": 2,
+  "paymentPayload": {
+    "x402Version": 2,
+    "accepted": { "scheme": "upto", "network": "eip155:84532", "amount": "20000", ... },
+    "payload": {
+      "signature": "0x...",
+      "permit2Authorization": {
+        "permitted": { "token": "0x036CbD53...", "amount": "20000" },
+        "from": "<buyer>", "spender": "0x4020A4f3b7b90ccA423B9fabCc0CE57C6C240002",
+        "nonce": "...", "deadline": "...",
+        "witness": { "to": "<payTo>", "facilitator": "<facilitatorAddress>", "validAfter": "0" }
+      }
+    }
+  },
+  "paymentRequirements": {
+    "scheme": "upto", "network": "eip155:84532",
+    "asset": "0x036CbD53...", "payTo": "<payTo>",
+    "amount": "1858"
+  }
+}
+```
+
+In this example, the buyer signed for up to `20000` atomic units. The resource server consumed `1858` units of work. The facilitator verifies the signature against `permitted.amount` (`20000`), confirms `1858 <= 20000`, then transfers `1858` on-chain.
 
 **Settlement Process:**
 
@@ -218,11 +264,11 @@ The `upto` scheme uses the following `PaymentRequirements` schema:
 | ------------------- | -------- | -------- | ----------------------------------------------------------------------------- |
 | `scheme`            | `string` | Required | Must be `"upto"`                                                              |
 | `network`           | `string` | Required | Blockchain network identifier in CAIP-2 format (e.g., "eip155:84532")         |
-| `amount`            | `string` | Required | Phase-dependent: maximum amount at verification, actual amount at settlement    |
+| `amount`            | `string` | Required | Phase-dependent: maximum amount at verification, actual amount at settlement  |
 | `asset`             | `string` | Required | Token contract address                                                        |
 | `payTo`             | `string` | Required | Recipient wallet address                                                      |
-| `maxTimeoutSeconds` | `number` | Required | Maximum time allowed for payment completion                                 |
-| `extra`             | `object` | Optional | Scheme-specific additional information (must include `name` and `version`)      |
+| `maxTimeoutSeconds` | `number` | Required | Maximum time allowed for payment completion                                   |
+| `extra`             | `object` | Optional | Scheme-specific additional information (must include `name`, `version`, and `facilitatorAddress`) |
 
 > **Note**: In the `upto` scheme, the `amount` field of `PaymentRequirements` is phase-dependent for server-to-facilitator communication:
 >
@@ -243,7 +289,7 @@ The `upto` scheme extends the base [`SettlementResponse`](../../x402-specificati
 | `errorReason`   | `string`  | Optional | Error reason if settlement failed (omitted if successful)             |
 | `payer`         | `string`  | Optional | Address of the payer's wallet                                         |
 | `transaction`   | `string`  | Required | Blockchain transaction hash (empty string if $0 settlement)           |
-| `network`       | `string`  | Required | Blockchain network identifier in CAIP-2 format                      |
+| `network`       | `string`  | Required | Blockchain network identifier in CAIP-2 format                        |
 | `amount`        | `string`  | Required | Actual amount charged in atomic token units (may be 0)                |
 
 ---
@@ -268,7 +314,7 @@ The Canonical Permit2 contract address can be found at [https://docs.uniswap.org
 
 ### Reference Implementation: `x402Permit2Proxy`
 
-The `upto` scheme uses the same `x402Permit2Proxy` contract defined in the [exact scheme specification](../exact/scheme_exact_evm.md#reference-implementation-x402permit2proxy). The contract's `settle` function accepts an `amount` parameter that can be less than or equal to `permit.permitted.amount`, which enables the variable settlement amounts required by the `upto` scheme.
+The `upto` scheme uses its own `x402UptoPermit2Proxy` contract (deployed at `0x4020A4f3b7b90ccA423B9fabCc0CE57C6C240002`), which is structurally similar to the `x402ExactPermit2Proxy` used by the [exact scheme](../exact/scheme_exact_evm.md#reference-implementation-x402permit2proxy) but includes a `facilitator` field in the witness struct for access control. The contract's `settle` function accepts an `amount` parameter that can be less than or equal to `permit.permitted.amount`, which enables the variable settlement amounts required by the `upto` scheme.
 
 ---
 
@@ -283,3 +329,4 @@ The `upto` scheme uses the same `x402Permit2Proxy` contract defined in the [exac
 4. **Time Constraints**: Authorizations have explicit valid time windows (`deadline`, `validAfter`) to limit their lifetime and reduce exposure.
 
 5. **Zero Settlement**: Allowing $0 settlements means unused authorizations naturally expire without on-chain transactions, reducing gas costs and blockchain bloat.
+

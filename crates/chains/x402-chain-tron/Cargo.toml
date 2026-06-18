@@ -1,0 +1,49 @@
+[package]
+name = "x402-chain-tron"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "TRON chain support for the x402 payment protocol"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = []
+telemetry = ["tracing", "tracing-core", "x402-types/telemetry"]
+facilitator = [
+  "async-trait",
+  "reqwest",
+  "alloy-sol-types",
+  "k256",
+  "tokio",
+  "url",
+]
+full = ["telemetry", "facilitator"]
+
+[dependencies]
+x402-types = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
+
+alloy-primitives = { version = "1.6", features = ["serde"] }
+alloy-sol-types = { version = "1.6", optional = true }
+
+bs58 = { version = "0.5.1" }
+sha2 = { version = "0.10" }
+k256 = { version = "0.13", features = ["ecdsa", "ecdsa-core"], optional = true }
+
+tracing = { workspace = true, optional = true }
+tracing-core = { workspace = true, optional = true }

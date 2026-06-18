@@ -1,10 +1,9 @@
 ---
 Document Type: Extension Specification
 Description: ERC-20 gasless approval flow extension for x402 protocol
-Source: https://github.com/coinbase/x402/blob/main/specs/extensions/erc20_gas_sponsoring.md
-Downloaded At: 2026-03-05
+Source: https://github.com/x402-foundation/x402/blob/main/specs/extensions/erc20_gas_sponsoring.md
+Downloaded At: 2026-06-16
 ---
-
 # Extension: `erc20ApprovalGasSponsoring`
 
 ## Summary
@@ -16,8 +15,8 @@ Because these tokens lack native gasless approvals:
 - The **Client** must sign a normal EVM transaction calling `approve(Permit2, amount)`.
 - The **Facilitator** agrees to:
 
-  - Fund the Client's wallet with enough native gas token **if the Client lacks sufficient funds**.
-  - Broadcast the Client's signed approval transaction.
+  - Fund the Client’s wallet with enough native gas token **if the Client lacks sufficient funds**.
+  - Broadcast the Client’s signed approval transaction.
   - Immediately perform settlement via [`x402Permit2Proxy`](../schemes/exact/scheme_exact_evm.md#reference-implementation-x402permit2proxy) after the approval confirms.
 
 This flow must be executed using an **atomic batch transaction** to mitigate the risk of malicious actors front-running the transaction and intercepting funds between the Facilitator funding step and the final settlement operation.
@@ -161,13 +160,12 @@ Incorrect fees or nonce values invalidate the signed transaction.
         "amount": "10000"
       },
       "from": "0x857b06519E91e3A54538791bDbb0E22373e36b66",
-      "spender": "0xx402Permit2ProxyAddress",
-      "nonce": "0xf3746613c2d920b5fdabc0856f2aeb2d4f88ee6037b8cc5d04a71a4462f13480",
+      "spender": "0x402085c248EeA27D92E8b30b2C58ed07f9E20001",
+      "nonce": "33247007178036348590600198031289925668252061821958005840077069883511451257277",
       "deadline": "1740672154",
       "witness": {
         "to": "0x209693Bc6afc0C5328bA36FaF03C514EF312287C",
-        "validAfter": "1740672089",
-        "extra": {}
+        "validAfter": "1740672089"
       }
     }
   },
@@ -176,7 +174,7 @@ Incorrect fees or nonce values invalidate the signed transaction.
       "info": {
         "from": "0x857b06519E91e3A54538791bDbb0E22373e36b66",
         "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-        "spender": "0xCanonicalPermit2",
+        "spender": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
         "amount": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
         "signedTransaction": "0x505cbf0d9a4a227e0c52c6c2d6a7588d6acca34008c8e8986a12832597641d6293af148b571c73608a2ce6496642e377d6da8dbbf5836e9bd15092f9ecab05ded3",
         "version": "1"
@@ -208,7 +206,7 @@ Upon receiving a `PaymentPayload` containing `erc20ApprovalGasSponsoring`:
 
 - **Note**: The Facilitator MUST verify that `spender` in the extension data matches the spender in the decoded transaction and matches the expected contract (e.g., [Canonical Permit2](../schemes/exact/scheme_exact_evm.md#canonical-permit2)).
 
-- **nonce** matches user's current on-chain nonce
+- **nonce** matches user’s current on-chain nonce
 - **maxFee** and **maxPriorityFee** match the current network prices
 
 ### 3. Check User Balance
@@ -222,8 +220,8 @@ Upon receiving a `PaymentPayload` containing `erc20ApprovalGasSponsoring`:
 The Facilitator must simulate in a single atomic batch transaction:
 
 1. **Funding** → sending native gas token to the user (if needed)
-2. **Approval Relay** → broadcasting the user's signed approval
-3. **Settlement** → calling `x402Permit2Proxy.settle()`
+2. **Approval Relay** → broadcasting the user’s signed approval
+3. **Settlement** → calling `x402Permit2Proxy.settle`
 
 ---
 

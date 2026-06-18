@@ -42,6 +42,8 @@ use x402_chain_aptos::V2AptosExact;
 use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact, V2Eip155Upto};
 #[cfg(feature = "chain-solana")]
 use x402_chain_solana::{V1SolanaExact, V2SolanaExact};
+#[cfg(feature = "chain-tron")]
+use x402_chain_tron::V2TronExact;
 
 #[cfg(feature = "chain-solana")]
 impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1SolanaExact {
@@ -125,6 +127,23 @@ impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2AptosExact {
             return Err("V2AptosExact::build: provider must be an AptosChainProvider".into());
         };
         self.build(aptos_provider, config)
+    }
+}
+
+#[cfg(feature = "chain-tron")]
+impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2TronExact {
+    fn build(
+        &self,
+        provider: &ChainProvider,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        #[allow(irrefutable_let_patterns)]
+        let tron_provider = if let ChainProvider::Tron(provider) = provider {
+            Arc::clone(provider)
+        } else {
+            return Err("V2TronExact::build: provider must be a TronChainProvider".into());
+        };
+        self.build(tron_provider, config)
     }
 }
 

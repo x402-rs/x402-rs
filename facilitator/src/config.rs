@@ -47,6 +47,10 @@ use x402_chain_eip155::chain::config::{Eip155ChainConfig, Eip155ChainConfigInner
 use x402_chain_solana::chain as solana;
 #[cfg(feature = "chain-solana")]
 use x402_chain_solana::chain::config::{SolanaChainConfig, SolanaChainConfigInner};
+#[cfg(feature = "chain-tron")]
+use x402_chain_tron::chain as tron;
+#[cfg(feature = "chain-tron")]
+use x402_chain_tron::chain::config::{TronChainConfig, TronChainConfigInner};
 
 /// Server configuration.
 ///
@@ -70,6 +74,9 @@ pub enum ChainConfig {
     /// Aptos chain configuration (for chains with "aptos:" prefix).
     #[cfg(feature = "chain-aptos")]
     Aptos(Box<AptosChainConfig>),
+    /// TRON chain configuration (for chains with "tron:" prefix).
+    #[cfg(feature = "chain-tron")]
+    Tron(Box<TronChainConfig>),
 }
 
 /// Configuration for chains.
@@ -113,6 +120,12 @@ impl Serialize for ChainsConfig {
                 }
                 #[cfg(feature = "chain-aptos")]
                 ChainConfig::Aptos(config) => {
+                    let chain_id = config.chain_id();
+                    let inner = &config.inner;
+                    map.serialize_entry(&chain_id, inner)?;
+                }
+                #[cfg(feature = "chain-tron")]
+                ChainConfig::Tron(config) => {
                     let chain_id = config.chain_id();
                     let inner = &config.inner;
                     map.serialize_entry(&chain_id, inner)?;
@@ -185,6 +198,17 @@ impl<'de> Deserialize<'de> for ChainsConfig {
                                 inner,
                             };
                             ChainConfig::Aptos(Box::new(config))
+                        }
+                        #[cfg(feature = "chain-tron")]
+                        tron::TRON_NAMESPACE => {
+                            let inner: TronChainConfigInner = access.next_value()?;
+                            let chain_reference = tron::TronChainReference::try_from(&chain_id)
+                                .map_err(|e| serde::de::Error::custom(format!("{e}")))?;
+                            let config = TronChainConfig {
+                                chain_reference,
+                                inner,
+                            };
+                            ChainConfig::Tron(Box::new(config))
                         }
                         _ => {
                             return Err(serde::de::Error::custom(format!(

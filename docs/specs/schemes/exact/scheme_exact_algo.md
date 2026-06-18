@@ -1,10 +1,9 @@
 ---
 Document Type: Scheme Implementation
 Description: Algorand implementation of the 'exact' payment scheme using ASA
-Source: https://github.com/coinbase/x402/blob/main/specs/schemes/exact/scheme_exact_algo.md
-Downloaded At: 2026-03-05
+Source: https://github.com/x402-foundation/x402/blob/main/specs/schemes/exact/scheme_exact_algo.md
+Downloaded At: 2026-06-16
 ---
-
 # Scheme: `exact` on `Algorand`
 
 ## Summary
@@ -79,7 +78,7 @@ Full `paymentRequirements` Example:
   "maxTimeoutSeconds": 60,
   "asset": "31566704",
   "extra": {
-    "feePayer": "FACILITATORADDRESSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALQCXBZE",
+    "feePayer": "FACILITATORADDRESSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALQCXBZE"
   }
 }
 ```
@@ -118,7 +117,7 @@ Example of a USDC asset transfer with an abstracted fee (i.e paid by the facilit
   "x402Version": 2,
   "scheme": "exact",
   "network": "algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=",
-  "resource": { 
+  "resource": {
     "url": "https://example.net/signup",
     "description": "$5 registration payment",
     "mimeType": "text/html"
@@ -131,7 +130,7 @@ Example of a USDC asset transfer with an abstracted fee (i.e paid by the facilit
     "maxTimeoutSeconds": 60,
     "asset": "31566704",
     "extra": {
-      "feePayer": "FACILITATORADDRESSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALQCXBZE",
+      "feePayer": "FACILITATORADDRESSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALQCXBZE"
     }
   },
   "extensions": {},
@@ -139,7 +138,7 @@ Example of a USDC asset transfer with an abstracted fee (i.e paid by the facilit
   "payload": {
     "paymentIndex": 1,
     "paymentGroup": [
-      "gaN0eG6Jo2ZlZc0H0KJmds4DLgNro2dlbqxtYWlubmV0LXYxLjCiZ2jEIMBhxe0tdgS+RWjjNj8Hb39tBBmHrDe95LYgtas5JIrfo2dycMQgfy1Szr+lgvgTJsviMY2KnHSsXqyfCJ1UOCE+2Tf3vS+ibHbOAy4HU6NyY3bEICgEhaJgm6IBjiSUgAAAAAAAAAAAAAAAAAAAAAAAAAAAo3NuZMQgKASFomCbogGOJJSAAAAAAAAAAAAAAAAAAAAAAAAAAACkdHlwZaNwYXk=",
+      "gaN0eG6Jo2ZlZc0H0KJmds4DLgNro2dlbqxtYWlubmV0LXYxLjCiZ2jEIMBhxNj8Hb3e0tdgS+RWjj9tBBmHrDe95LYgtas5JIrfo2dycMQgfy1Szr+lgvgTJsviMY2KnHSsXqyfCJ1UOCE+2Tf3vS+ibHbOAy4HU6NyY3bEICgEhaJgm6IBjiSUgAAAAAAAAAAAAAAAAAAAAAAAAAAAo3NuZMQgKASFomCbogGOJJSAAAAAAAAAAAAAAAAAAAAAAAAAAACkdHlwZaNwYXk=",
       "gqNzaWfEQP3J1DI6GLSfK0nLZftvSyVMJuFOE48xPlnZpNdEJWbGbcxsD5aASwza4TjbwhgEF0dXOv8E3W/f22vkEzfFywWjdHhuiaRhYW10zgBMS0CkYXJjdsQgiSTqRESRI1JEAxxJKQAAAAAAAAAAAAAAAAAAAAAAAACiZnbOAy4Da6JnaMQgwGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit+jZ3JwxCB/LVLOv6WC+BMmy+IxjYqcdKxerJ8InVQ4IT7ZN/e9L6Jsds4DLgdTo3NuZMQgEtBGzAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACkdHlwZaVheGZlcqR4YWlkzgHhq3A="
     ]
   }
@@ -148,11 +147,12 @@ Example of a USDC asset transfer with an abstracted fee (i.e paid by the facilit
 
 ## `PAYMENT-RESPONSE` Header
 
-Upon a successful settlement, the `PAYMENT-RESPONSE` **MUST** return the transaction ID of the `paymentGroup[paymentIndex]` transaction. This identifies the specific asset transfer transaction to the `payTo` address for the `maxAmountRequired`, and can be used to identify the transaction on the network.
+Upon a successful settlement, the `PAYMENT-RESPONSE` **MUST** return the transaction ID of the `paymentGroup[paymentIndex]` transaction. This identifies the specific asset transfer transaction to the `payTo` address for the `amount`, and can be used to identify the transaction on the network.
 
 Should the settlement fail, the transaction ID **SHOULD** be returned, but since failed transactions are not committed to the network, it might not be visible on the chain.
 
 ### Full `PAYMENT-RESPONSE` header example:
+
 ```json
 {
   "success": true,
@@ -167,17 +167,21 @@ Should the settlement fail, the transaction ID **SHOULD** be returned, but since
 
 Steps to verify a payment for the `exact` scheme on Algorand:
 
-1. Check the `paymentGroup` contains 16 or fewer elements.
-2. Decode all transactions from the `paymentGroup`.
-3. Locate the `paymentGroup[paymentIndex]` transaction from the `Payment Payload`.
-    1. Check the `aamt` (asset amount) matches `maxAmountRequired` from the `Payment Requirements`.
-    2. Check the `arcv` (asset receiver) matches `payTo` from the `Payment Requirements`.
-4. Locate all transactions where for `snd` (sender) is the `Facilitator`s Algorand address.
-    1. Check the `type` (transaction type) is `pay`.
-    2. Check the following fields are omitted: `close`, `rekey`, `amt`.
-    3. Check the `fee` (Fee) is a reasonable amount.
-    4. Sign the transaction.
-5. Evaluate the payment group against an Algorand node's `simulate` endpoint to ensure the transactions would succeed.
+1. Validate `x402Version` is a supported version (currently `2`).
+2. Validate `scheme` is `"exact"` in both the `PAYMENT-SIGNATURE` payload `accepted` field and the `paymentRequirements`.
+3. Validate `network` matches between the `PAYMENT-SIGNATURE` payload `accepted` field and the `paymentRequirements`.
+4. Check the `paymentGroup` contains 16 or fewer elements.
+5. Decode all transactions from the `paymentGroup`.
+6. Locate the `paymentGroup[paymentIndex]` transaction from the `Payment Payload`.
+   1. Check the `aamt` (asset amount) matches `amount` from the `Payment Requirements`.
+   2. Check the `arcv` (asset receiver) matches `payTo` from the `Payment Requirements`.
+   3. Check the `xaid` (asset ID) matches `asset` from the `Payment Requirements`.
+7. Locate all transactions where `snd` (sender) is the `Facilitator`s Algorand address.
+   1. Check the `type` (transaction type) is `pay`.
+   2. Check the following fields are omitted: `close`, `rekey`, `amt`.
+   3. Check the `fee` (Fee) is a reasonable amount.
+   4. Sign the transaction.
+8. Evaluate the payment group against an Algorand node's `simulate` endpoint to ensure the transactions would succeed.
 
 ## Settlement
 

@@ -46,6 +46,8 @@ use x402_chain_aptos::V2AptosExact;
 use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact, V2Eip155Upto};
 #[cfg(feature = "chain-solana")]
 use x402_chain_solana::{V1SolanaExact, V2SolanaExact};
+#[cfg(feature = "chain-tron")]
+use x402_chain_tron::V2TronExact;
 #[cfg(feature = "telemetry")]
 use x402_facilitator_local::util::Telemetry;
 
@@ -95,6 +97,10 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(feature = "chain-aptos")]
         {
             scheme_blueprints.register(V2AptosExact);
+        }
+        #[cfg(feature = "chain-tron")]
+        {
+            scheme_blueprints.register(V2TronExact);
         }
         scheme_blueprints
     };

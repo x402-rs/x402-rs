@@ -1,10 +1,9 @@
 ---
 Document Type: Overview
 Description: Overview of the x402 specification folder containing canonical protocol specifications
-Source: https://github.com/coinbase/x402/blob/main/specs/README.md
-Downloaded At: 2026-03-05
+Source: https://github.com/x402-foundation/x402/blob/main/specs/README.md
+Downloaded At: 2026-06-16
 ---
-
 # x402 Specification
 
 This folder contains documentation of x402, separated by version where applicable.

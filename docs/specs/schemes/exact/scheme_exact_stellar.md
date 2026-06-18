@@ -1,10 +1,9 @@
 ---
 Document Type: Scheme Implementation
 Description: Stellar implementation of the 'exact' payment scheme using Soroban token transfers
-Source: https://github.com/coinbase/x402/blob/main/specs/schemes/exact/scheme_exact_stellar.md
-Downloaded At: 2026-03-05
+Source: https://github.com/x402-foundation/x402/blob/main/specs/schemes/exact/scheme_exact_stellar.md
+Downloaded At: 2026-06-16
 ---
-
 # Scheme: `exact` on `Stellar`
 
 ## Versions supported
@@ -35,14 +34,16 @@ The protocol flow for `exact` on Stellar is client-driven with facilitator-spons
 4. **Client** signs the authorization entries (not the full transaction) with their wallet, setting expiration to `currentLedger + ledgerTimeout`, where `ledgerTimeout = ceil(maxTimeoutSeconds / estimatedLedgerSeconds)`; implementations should use the current network estimate for `estimatedLedgerSeconds` when available (fallback to `5` seconds).
 5. **Client** serializes the transaction with signed auth entries and encodes it as XDR (base64).
 6. **Client** sends a new request to the resource server with the `PaymentPayload` containing the base64-encoded transaction.
-7. **Resource Server** forwards the `PaymentPayload` and `PaymentRequirements` to the **Facilitator Server's** `/settle` endpoint.
-   - NOTE: `/verify` is optional and intended for pre-flight checks only. `/settle` MUST perform full verification independently and MUST NOT assume prior verification.
+7. **Resource Server** forwards the `PaymentPayload` and `PaymentRequirements` to the **Facilitator Server's** `/verify` endpoint.
 8. **Facilitator** decodes the transaction XDR and validates the transaction's: structure, auth entries, signature expiration, amount, payer, and recipient.
-9. **Facilitator** rebuilds the transaction with its own account as the source, preserving all operations and auth entries.
-10. **Facilitator** simulates the transaction to verify it succeeds and emits the expected transfer events.
-11. **Facilitator** signs the rebuilt transaction with its own key and submits it to the Stellar network via RPC `sendTransaction`.
-12. **Facilitator** polls for transaction confirmation and responds with a `SettlementResponse` to the **Resource Server**.
-13. **Resource Server** grants the **Client** access to the resource in its response upon successful settlement.
+9. **Facilitator** returns a `VerifyResponse` to the **Resource Server**.
+10. **Resource Server**, upon successful verification, forwards the payload to the facilitator's `/settle` endpoint.
+    - NOTE: `/settle` MUST perform full verification independently and MUST NOT assume prior verification.
+11. **Facilitator** rebuilds the transaction with its own account as the source, preserving all operations and auth entries.
+12. **Facilitator** simulates the transaction to verify it succeeds and emits the expected transfer events.
+13. **Facilitator** signs the rebuilt transaction with its own key and submits it to the Stellar network via RPC `sendTransaction`.
+14. **Facilitator** polls for transaction confirmation and responds with a `SettlementResponse` to the **Resource Server**.
+15. **Resource Server** grants the **Client** access to the resource in its response upon successful settlement.
 
 ## `PaymentRequirements` for `exact`
 
@@ -92,7 +93,7 @@ The `transaction` field contains the base64-encoded XDR of a Stellar transaction
     "scheme": "exact",
     "network": "stellar:testnet",
     "amount": "10000000",
-    "asset": "6YBZJUCBIELTK5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+    "asset": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
     "payTo": "GBHEGW3KWOY2OFH767EDALFGCUTBOEVBDQMCKU4APMDLQNBW5QV3W3KO",
     "maxTimeoutSeconds": 60,
     "extra": {
@@ -191,7 +192,7 @@ Key concepts for understanding Stellar transaction composition and authorization
 
 ### Transaction Hierarchy
 
-Per the transaction hierarchy below, the client builds and signs the contract invocation (innermost component) and sends it to the resource server. During settlement, the facilitator attaches the signed invocation to a transaction for Stellar network submission, handling fees and [sequence number].
+Per the transaction hierarchy below, the client builds and signs the contract invocation (innermost component) and sends it to the resource server. During settlement, the facilitator attaches the signed invocation to a transaction for Stellar network submission, handling fees and [sequence numbers][sequence number].
 
 ![Stellar Transaction Hierarchy](../../../static/stellar-transaction-hierarchy.png)
 
