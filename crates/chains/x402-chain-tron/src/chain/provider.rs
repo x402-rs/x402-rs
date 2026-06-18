@@ -54,13 +54,26 @@ struct TriggerSmartContractRequest {
     visible: bool,
 }
 
+/// An unsigned transaction returned by `triggersmartcontract`.
+///
+/// `signature` starts empty; `sign_and_broadcast` fills it before posting to
+/// `broadcasttransaction`.  All other fields are captured in `rest` and
+/// round-tripped verbatim so nothing is lost.
+#[derive(Debug, Deserialize, Serialize)]
+struct TronTransaction {
+    #[serde(rename = "txID")]
+    tx_id: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    signature: Vec<String>,
+    #[serde(flatten)]
+    rest: serde_json::Map<String, Value>,
+}
+
 /// Response from `triggersmartcontract`.
-/// The `transaction` field is kept as raw JSON because we add `signature` to it
-/// before broadcasting.
 #[derive(Debug, Deserialize)]
 struct TriggerSmartContractResponse {
     result: TriggerStatus,
-    transaction: Option<Value>,
+    transaction: Option<TronTransaction>,
 }
 
 /// Response from `broadcasttransaction`.
@@ -213,7 +226,7 @@ impl TronChainProvider {
         &self,
         contract: TronAddress,
         calldata: TCalldata,
-    ) -> Result<Value, TronChainProviderError> {
+    ) -> Result<TronTransaction, TronChainProviderError> {
         let url = self
             .rpc_url
             .join("wallet/triggersmartcontract")
@@ -261,7 +274,7 @@ impl TronChainProvider {
     }
 
     /// Broadcast a signed transaction.
-    async fn broadcast(&self, tx: Value) -> Result<String, TronChainProviderError> {
+    async fn broadcast(&self, tx: TronTransaction) -> Result<String, TronChainProviderError> {
         let url = self
             .rpc_url
             .join("wallet/broadcasttransaction")
@@ -277,13 +290,8 @@ impl TronChainProvider {
     }
 
     /// Sign and broadcast, returning the txid.
-    async fn sign_and_broadcast(&self, mut tx: Value) -> Result<String, TronChainProviderError> {
-        let txid = tx
-            .get("txID")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| TronChainProviderError::Api("missing txID in transaction".to_string()))?
-            .to_string();
-        tx["signature"] = serde_json::json!([self.sign_tx(&txid)?]);
+    async fn sign_and_broadcast(&self, mut tx: TronTransaction) -> Result<String, TronChainProviderError> {
+        tx.signature = vec![self.sign_tx(&tx.tx_id)?];
         self.broadcast(tx).await
     }
 }
