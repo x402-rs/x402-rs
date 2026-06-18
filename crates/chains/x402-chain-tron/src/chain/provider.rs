@@ -248,47 +248,6 @@ impl TronChainProvider {
 
     // ── TronGrid HTTP helpers ─────────────────────────────────────────────────
 
-    /// Call a contract read-only method via `triggerconstantcontract`.
-    ///
-    /// Uses `visible: true` so addresses are Base58Check throughout.
-    pub async fn call_constant(
-        &self,
-        contract: &TronAddress,
-        calldata: &[u8],
-    ) -> Result<Vec<u8>, TronChainProviderError> {
-        let url = self
-            .rpc_url
-            .join("wallet/triggerconstantcontract")
-            .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
-        let body = serde_json::json!({
-            "owner_address": self.facilitator_address().to_string(),
-            "contract_address": contract.to_string(),
-            "data": alloy_primitives::hex::encode(calldata),
-            "call_value": 0,
-            "visible": true
-        });
-        let resp: ConstantContractResponse = self
-            .client
-            .post(url)
-            .json(&body)
-            .send()
-            .await?
-            .json()
-            .await?;
-
-        resp.result
-            .into_result()
-            .map_err(TronChainProviderError::Api)?;
-
-        let hex_result = resp
-            .constant_result
-            .first()
-            .ok_or_else(|| TronChainProviderError::Api("missing constant_result".to_string()))?;
-
-        alloy_primitives::hex::decode(hex_result)
-            .map_err(|e| TronChainProviderError::AbiDecode(e.to_string()))
-    }
-
     /// Build an unsigned transaction via `triggersmartcontract`.
     ///
     /// Uses `visible: true` so addresses are Base58Check throughout.
@@ -417,7 +376,15 @@ impl TronChainProvider {
         owner_evm: Address,
         spender_evm: Address,
     ) -> Result<U256, TronChainProviderError> {
-        self.call_constant_a(token.clone(), allowanceCall { owner: owner_evm, spender: spender_evm }, None).await
+        self.call_constant_a(
+            token.clone(),
+            allowanceCall {
+                owner: owner_evm,
+                spender: spender_evm,
+            },
+            None,
+        )
+        .await
     }
 
     pub async fn read_authorization_state(
@@ -426,18 +393,15 @@ impl TronChainProvider {
         authorizer_evm: Address,
         nonce: B256,
     ) -> Result<bool, TronChainProviderError> {
-        let raw = self
-            .call_constant(
-                token,
-                &authorizationStateCall {
-                    authorizer: authorizer_evm,
-                    nonce,
-                }
-                .abi_encode(),
-            )
-            .await?;
-        authorizationStateCall::abi_decode_returns(&raw)
-            .map_err(|e| TronChainProviderError::AbiDecode(e.to_string()))
+        self.call_constant_a(
+            token.clone(),
+            authorizationStateCall {
+                authorizer: authorizer_evm,
+                nonce,
+            },
+            None,
+        )
+        .await
     }
 
     pub async fn simulate_transfer_with_authorization(
@@ -451,7 +415,7 @@ impl TronChainProvider {
         nonce: B256,
         signature: Bytes,
     ) -> Result<bool, TronChainProviderError> {
-        let calldata = transferWithAuthorizationCall {
+        let call = transferWithAuthorizationCall {
             from,
             to,
             value,
@@ -459,9 +423,8 @@ impl TronChainProvider {
             validBefore: U256::from(valid_before.as_secs()),
             nonce,
             signature,
-        }
-        .abi_encode();
-        match self.call_constant(token, &calldata).await {
+        };
+        match self.call_constant_a(token.clone(), call, None).await {
             Ok(_) => Ok(true),
             Err(TronChainProviderError::Api(_)) => Ok(false),
             Err(e) => Err(e),
