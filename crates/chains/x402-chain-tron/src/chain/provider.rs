@@ -525,13 +525,13 @@ pub struct CallConstantRequest {
 pub struct CallConstantResponse {
     pub result: TriggerStatus,
     #[serde(default)]
-    pub constant_result: ConstantResult,
+    pub constant_result: HexBytesVec,
 }
 
 #[derive(Debug, Default)]
-pub struct ConstantResult(pub Vec<Bytes>);
+pub struct HexBytesVec(pub Vec<Bytes>);
 
-impl Serialize for ConstantResult {
+impl Serialize for HexBytesVec {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -545,7 +545,7 @@ impl Serialize for ConstantResult {
     }
 }
 
-impl<'de> Deserialize<'de> for ConstantResult {
+impl<'de> Deserialize<'de> for HexBytesVec {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -553,7 +553,7 @@ impl<'de> Deserialize<'de> for ConstantResult {
         struct PrefixlessHexVecVisitor;
 
         impl<'de> serde::de::Visitor<'de> for PrefixlessHexVecVisitor {
-            type Value = ConstantResult;
+            type Value = HexBytesVec;
 
             fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
                 formatter.write_str("a list of prefixless hex strings")
@@ -569,7 +569,7 @@ impl<'de> Deserialize<'de> for ConstantResult {
                     values.push(value.0);
                 }
 
-                Ok(ConstantResult(values))
+                Ok(HexBytesVec(values))
             }
         }
 
