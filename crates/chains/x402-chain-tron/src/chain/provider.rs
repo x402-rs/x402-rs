@@ -253,6 +253,10 @@ pub struct TronChainProvider {
     pub x402_exact_permit2_proxy: TronAddress,
     /// All configured signers (at least one required).
     signers: TronSigners,
+    /// How long to wait for a transaction to be confirmed before giving up.
+    pub tx_timeout: Duration,
+    /// How often to poll `gettransactioninfobyid`.
+    pub tx_poll_interval: Duration,
 }
 
 impl fmt::Debug for TronChainProvider {
@@ -375,6 +379,8 @@ impl FromConfig<TronChainConfig> for TronChainProvider {
             client: Client::new(),
             x402_exact_permit2_proxy,
             sun_permit2,
+            tx_timeout: config.inner.tx_timeout(),
+            tx_poll_interval: config.inner.tx_poll_interval(),
         })
     }
 }
@@ -490,8 +496,8 @@ impl TronChainProviderLike for TronChainProvider {
             .join("wallet/gettransactioninfobyid")
             .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
         let body = GetTransactionInfoRequest { value: tx_id };
-        let timeout = Duration::from_secs(60);
-        let interval = Duration::from_secs(3); // FIXME CONFIGURABLE
+        let timeout = self.tx_timeout;
+        let interval = self.tx_poll_interval;
         let start = std::time::Instant::now();
         loop {
             if start.elapsed() > timeout {

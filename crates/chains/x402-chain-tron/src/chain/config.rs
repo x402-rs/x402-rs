@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
+use std::time::Duration;
 use url::Url;
 use x402_types::chain::ChainId;
 use x402_types::config::LiteralOrEnv;
@@ -46,6 +47,28 @@ pub struct TronChainConfigInner {
     /// If not set, the well-known deployment for this network is used (if any).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub contracts: Option<TronContracts>,
+    /// How long to wait for a transaction to be confirmed before giving up (seconds).
+    #[serde(default = "TronChainConfigInner::default_tx_timeout_secs")]
+    pub tx_timeout_secs: u64,
+    /// How often to poll `gettransactioninfobyid` (seconds).
+    #[serde(default = "TronChainConfigInner::default_tx_poll_interval_secs")]
+    pub tx_poll_interval_secs: u64,
+}
+
+impl TronChainConfigInner {
+    fn default_tx_timeout_secs() -> u64 {
+        60
+    }
+    fn default_tx_poll_interval_secs() -> u64 {
+        3
+    }
+
+    pub fn tx_timeout(&self) -> Duration {
+        Duration::from_secs(self.tx_timeout_secs)
+    }
+    pub fn tx_poll_interval(&self) -> Duration {
+        Duration::from_secs(self.tx_poll_interval_secs)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
