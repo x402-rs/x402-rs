@@ -63,8 +63,8 @@ struct TriggerSmartContractRequest {
 struct TronTransaction {
     #[serde(rename = "txID")]
     tx_id: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    signature: Vec<String>,
+    #[serde(default, skip_serializing_if = "HexBytesVec::is_empty")]
+    signature: HexBytesVec,
     #[serde(flatten)]
     rest: serde_json::Map<String, Value>,
 }
@@ -260,7 +260,7 @@ impl TronChainProvider {
     /// Sign a transaction's `txID` and return a 65-byte TRON signature hex.
     ///
     /// Format: r(32) + s(32) + (recovery_id + 27)(1).
-    fn sign_tx(&self, txid_hex: &str) -> Result<String, TronChainProviderError> {
+    fn sign_tx(&self, txid_hex: &str) -> Result<[u8; 65], TronChainProviderError> {
         let txid_bytes = alloy_primitives::hex::decode(txid_hex)
             .map_err(|e| TronChainProviderError::InvalidKey(format!("bad txid: {e}")))?;
         let (sig, recid): (k256::ecdsa::Signature, RecoveryId) = self.signers[0]
@@ -270,7 +270,7 @@ impl TronChainProvider {
         let mut sig_bytes = [0u8; 65];
         sig_bytes[..64].copy_from_slice(&sig.to_bytes());
         sig_bytes[64] = recid.to_byte() + 27;
-        Ok(alloy_primitives::hex::encode(sig_bytes))
+        Ok(sig_bytes)
     }
 
     /// Broadcast a signed transaction.
@@ -294,7 +294,9 @@ impl TronChainProvider {
         &self,
         mut tx: TronTransaction,
     ) -> Result<String, TronChainProviderError> {
-        tx.signature = vec![self.sign_tx(&tx.tx_id)?];
+        let signature = self.sign_tx(&tx.tx_id)?;
+        let signature = Bytes::from(signature);
+        tx.signature = HexBytesVec(vec![signature]);
         self.broadcast(tx).await
     }
 }
@@ -530,6 +532,12 @@ pub struct CallConstantResponse {
 
 #[derive(Debug, Default)]
 pub struct HexBytesVec(pub Vec<Bytes>);
+
+impl HexBytesVec {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
 
 impl Serialize for HexBytesVec {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
