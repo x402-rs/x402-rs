@@ -4,7 +4,7 @@
 //! `visible: true`, which means all addresses are passed and returned as
 //! Base58Check strings (the canonical TRON format).
 
-use alloy_primitives::{Address, U256};
+use alloy_primitives::{Address, Bytes, U256};
 use alloy_sol_types::SolCall;
 use k256::ecdsa::{RecoveryId, SigningKey, VerifyingKey};
 use reqwest::Client;
@@ -290,7 +290,10 @@ impl TronChainProvider {
     }
 
     /// Sign and broadcast, returning the txid.
-    async fn sign_and_broadcast(&self, mut tx: TronTransaction) -> Result<String, TronChainProviderError> {
+    async fn sign_and_broadcast(
+        &self,
+        mut tx: TronTransaction,
+    ) -> Result<String, TronChainProviderError> {
         tx.signature = vec![self.sign_tx(&tx.tx_id)?];
         self.broadcast(tx).await
     }
@@ -399,10 +402,11 @@ impl TronChainProviderLike for TronChainProvider {
             .rpc_url
             .join("wallet/triggerconstantcontract")
             .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
+        let calldata = Bytes::from(calldata.abi_encode());
         let body = CallConstantRequest {
             owner_address: from.unwrap_or_else(|| TronAddress::default()),
             contract_address,
-            data: calldata.abi_encode(),
+            data: calldata,
             call_value: 0,
             visible: true,
         };
@@ -512,7 +516,7 @@ pub struct CallConstantRequest {
     pub owner_address: TronAddress,
     pub contract_address: TronAddress,
     #[serde(with = "prefixless_hex")]
-    pub data: Vec<u8>,
+    pub data: Bytes,
     pub call_value: u64,
     pub visible: bool,
 }
@@ -525,7 +529,7 @@ pub struct CallConstantResponse {
 }
 
 #[derive(Debug, Default)]
-pub struct ConstantResult(pub Vec<Vec<u8>>);
+pub struct ConstantResult(pub Vec<Bytes>);
 
 impl Serialize for ConstantResult {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -574,6 +578,7 @@ impl<'de> Deserialize<'de> for ConstantResult {
 }
 
 pub mod prefixless_hex {
+    use alloy_primitives::Bytes;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     pub struct PrefixlessHex<'a>(pub &'a [u8]);
@@ -587,7 +592,7 @@ pub mod prefixless_hex {
         }
     }
 
-    pub struct PrefixlessHexOwned(pub Vec<u8>);
+    pub struct PrefixlessHexOwned(pub Bytes);
 
     impl<'de> Deserialize<'de> for PrefixlessHexOwned {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -606,12 +611,13 @@ pub mod prefixless_hex {
         serializer.serialize_str(&value)
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Bytes, D::Error>
     where
         D: Deserializer<'de>,
     {
         let as_string = String::deserialize(deserializer)?;
         let vec = alloy_primitives::hex::decode(&as_string).map_err(serde::de::Error::custom)?;
-        Ok(vec)
+        let bytes = Bytes::from(vec);
+        Ok(bytes)
     }
 }
