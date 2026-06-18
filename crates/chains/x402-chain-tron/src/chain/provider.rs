@@ -4,7 +4,7 @@
 //! `visible: true`, which means all addresses are passed and returned as
 //! Base58Check strings (the canonical TRON format).
 
-use alloy_primitives::{Address, B256, Bytes, U256};
+use alloy_primitives::{Address, U256};
 use alloy_sol_types::SolCall;
 use k256::ecdsa::{RecoveryId, SigningKey, VerifyingKey};
 use reqwest::Client;
@@ -15,7 +15,6 @@ use std::fmt::{Debug, Display, Formatter};
 use std::time::Duration;
 use url::Url;
 use x402_types::chain::{ChainId, ChainProviderOps, FromConfig};
-use x402_types::timestamp::UnixTimestamp;
 
 use crate::chain::TronAddress;
 use crate::chain::config::{TronChainConfig, TronPrivateKey};
@@ -275,170 +274,6 @@ impl TronChainProvider {
         tx["signature"] = serde_json::json!([self.sign_tx(&txid)?]);
         self.broadcast(tx).await
     }
-
-    /// Poll `gettransactioninfobyid` until confirmed, failed, or timed out.
-    pub async fn wait_for_tx(&self, txid: &str) -> Result<(), TronChainProviderError> {
-        let url = self
-            .rpc_url
-            .join("wallet/gettransactioninfobyid")
-            .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
-        let body = serde_json::json!({ "value": txid });
-        let timeout = Duration::from_secs(60);
-        let interval = Duration::from_secs(3);
-        let start = std::time::Instant::now();
-        loop {
-            if start.elapsed() > timeout {
-                return Err(TronChainProviderError::TxTimeout);
-            }
-            let resp: TransactionInfoResponse = self
-                .client
-                .post(url.clone())
-                .json(&body)
-                .send()
-                .await?
-                .json()
-                .await?;
-            match resp.receipt.as_ref().and_then(|r| r.result.as_deref()) {
-                None => tokio::time::sleep(interval).await, // pending: no receipt yet
-                Some("SUCCESS") => return Ok(()),
-                Some(status) => return Err(TronChainProviderError::TxFailed(status.to_string())),
-            }
-        }
-    }
-
-    // ── High-level on-chain operations ────────────────────────────────────────
-
-    pub async fn read_balance_of(
-        &self,
-        token: TronAddress,
-        owner_evm: Address,
-    ) -> Result<U256, TronChainProviderError> {
-        self.trigger_constant_contract(
-            token,
-            contracts::erc20::balanceOfCall { account: owner_evm },
-            None,
-        )
-        .await
-    }
-
-    pub async fn read_allowance(
-        &self,
-        token: TronAddress,
-        owner_evm: Address,
-        spender_evm: Address,
-    ) -> Result<U256, TronChainProviderError> {
-        self.trigger_constant_contract(
-            token,
-            contracts::erc20::allowanceCall {
-                owner: owner_evm,
-                spender: spender_evm,
-            },
-            None,
-        )
-        .await
-    }
-
-    pub async fn read_authorization_state(
-        &self,
-        token: TronAddress,
-        authorizer_evm: Address,
-        nonce: B256,
-    ) -> Result<bool, TronChainProviderError> {
-        self.trigger_constant_contract(
-            token.clone(),
-            contracts::eip3009::authorizationStateCall {
-                authorizer: authorizer_evm,
-                nonce,
-            },
-            None,
-        )
-        .await
-    }
-
-    pub async fn simulate_transfer_with_authorization(
-        &self,
-        token: TronAddress,
-        from: Address,
-        to: Address,
-        value: U256,
-        valid_after: UnixTimestamp,
-        valid_before: UnixTimestamp,
-        nonce: B256,
-        signature: Bytes,
-    ) -> Result<bool, TronChainProviderError> {
-        let call = contracts::eip3009::transferWithAuthorizationCall {
-            from,
-            to,
-            value,
-            validAfter: U256::from(valid_after.as_secs()),
-            validBefore: U256::from(valid_before.as_secs()),
-            nonce,
-            signature,
-        };
-        match self.trigger_constant_contract(token, call, None).await {
-            Ok(_) => Ok(true),
-            Err(TronChainProviderError::Api(_)) => Ok(false),
-            Err(e) => Err(e),
-        }
-    }
-
-    pub async fn build_and_submit_eip3009_tx(
-        &self,
-        token: TronAddress,
-        from: Address,
-        to: Address,
-        value: U256,
-        valid_after: UnixTimestamp,
-        valid_before: UnixTimestamp,
-        nonce: B256,
-        signature: Bytes,
-    ) -> Result<String, TronChainProviderError> {
-        let calldata = contracts::eip3009::transferWithAuthorizationCall {
-            from,
-            to,
-            value,
-            validAfter: U256::from(valid_after.as_secs()),
-            validBefore: U256::from(valid_before.as_secs()),
-            nonce,
-            signature,
-        }
-        .abi_encode();
-        let tx = self.build_tx(token, &calldata).await?;
-        self.sign_and_broadcast(tx).await
-    }
-
-    pub async fn build_and_submit_permit2_settle_tx(
-        &self,
-        x402_exact_permit2_proxy: TronAddress,
-        token: Address,
-        amount: U256,
-        nonce: U256,
-        deadline: UnixTimestamp,
-        owner: Address,
-        witness_to: Address,
-        witness_valid_after: UnixTimestamp,
-        signature: Bytes,
-    ) -> Result<String, TronChainProviderError> {
-        let calldata = contracts::x402_exact_permit2_proxy::settleCall {
-            permit: contracts::x402_exact_permit2_proxy::TronPermitTransferFrom {
-                permitted: contracts::x402_exact_permit2_proxy::TronTokenPermissions {
-                    token,
-                    amount,
-                },
-                nonce,
-                deadline: U256::from(deadline.as_secs()),
-            },
-            owner,
-            witness: contracts::x402_exact_permit2_proxy::TronWitness {
-                to: witness_to,
-                validAfter: U256::from(witness_valid_after.as_secs()),
-            },
-            signature,
-        }
-        .abi_encode();
-        let tx = self.build_tx(x402_exact_permit2_proxy, &calldata).await?;
-        self.sign_and_broadcast(tx).await
-    }
 }
 
 #[async_trait::async_trait]
@@ -499,7 +334,6 @@ impl ChainProviderOps for TronChainProvider {
 }
 
 pub trait TronChainProviderLike {
-    /// Returns true if the given EVM address belongs to any configured signer.
     fn is_signer(&self, addr: &TronAddress) -> bool;
     fn chain(&self) -> &TronChainReference;
     fn trigger_constant_contract<TCalldata>(
@@ -510,6 +344,15 @@ pub trait TronChainProviderLike {
     ) -> impl Future<Output = Result<TCalldata::Return, TronChainProviderError>> + Send
     where
         TCalldata: SolCall + Send;
+    fn build_and_submit_tx(
+        &self,
+        contract: TronAddress,
+        calldata: Vec<u8>,
+    ) -> impl Future<Output = Result<String, TronChainProviderError>> + Send;
+    fn wait_for_tx(
+        &self,
+        txid: &str,
+    ) -> impl Future<Output = Result<(), TronChainProviderError>> + Send;
 }
 
 impl TronChainProviderLike for TronChainProvider {
@@ -563,7 +406,81 @@ impl TronChainProviderLike for TronChainProvider {
 
         Ok(decoded)
     }
+
+    async fn build_and_submit_tx(
+        &self,
+        contract: TronAddress,
+        calldata: Vec<u8>,
+    ) -> Result<String, TronChainProviderError> {
+        let tx = self.build_tx(contract, &calldata).await?;
+        self.sign_and_broadcast(tx).await
+    }
+
+    async fn wait_for_tx(&self, txid: &str) -> Result<(), TronChainProviderError> {
+        let url = self
+            .rpc_url
+            .join("wallet/gettransactioninfobyid")
+            .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
+        let body = serde_json::json!({ "value": txid });
+        let timeout = Duration::from_secs(60);
+        let interval = Duration::from_secs(3);
+        let start = std::time::Instant::now();
+        loop {
+            if start.elapsed() > timeout {
+                return Err(TronChainProviderError::TxTimeout);
+            }
+            let resp: TransactionInfoResponse = self
+                .client
+                .post(url.clone())
+                .json(&body)
+                .send()
+                .await?
+                .json()
+                .await?;
+            match resp.receipt.as_ref().and_then(|r| r.result.as_deref()) {
+                None => tokio::time::sleep(interval).await,
+                Some("SUCCESS") => return Ok(()),
+                Some(status) => return Err(TronChainProviderError::TxFailed(status.to_string())),
+            }
+        }
+    }
 }
+
+// ── ERC20 reads (used by both EIP-3009 and Permit2 facilitators) ──────────────
+
+pub async fn read_balance_of<P: TronChainProviderLike>(
+    provider: &P,
+    token: TronAddress,
+    owner_evm: Address,
+) -> Result<U256, TronChainProviderError> {
+    provider
+        .trigger_constant_contract(
+            token,
+            contracts::erc20::balanceOfCall { account: owner_evm },
+            None,
+        )
+        .await
+}
+
+pub async fn read_allowance<P: TronChainProviderLike>(
+    provider: &P,
+    token: TronAddress,
+    owner_evm: Address,
+    spender_evm: Address,
+) -> Result<U256, TronChainProviderError> {
+    provider
+        .trigger_constant_contract(
+            token,
+            contracts::erc20::allowanceCall {
+                owner: owner_evm,
+                spender: spender_evm,
+            },
+            None,
+        )
+        .await
+}
+
+// ── Serde helpers ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CallConstantRequest {
@@ -656,7 +573,6 @@ pub mod prefixless_hex {
         }
     }
 
-    /// Serialize a U256 as a decimal string.
     pub fn serialize<S>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -665,7 +581,6 @@ pub mod prefixless_hex {
         serializer.serialize_str(&value)
     }
 
-    /// Deserialize a decimal string into a U256.
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,

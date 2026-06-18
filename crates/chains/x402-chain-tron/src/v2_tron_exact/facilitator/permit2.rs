@@ -1,15 +1,19 @@
 //! Permit2 payment verification and settlement for TRON.
 
-use crate::chain::TronAddress;
-use crate::chain::TronChainProvider;
-use crate::chain::provider::TronChainProviderLike;
-use crate::v2_tron_exact::facilitator::eip3009::{assert_requirements_match, recover_address};
-use crate::v2_tron_exact::types::{Permit2Payload, Permit2PaymentRequirements};
-use alloy_primitives::{Address, U256};
-use alloy_sol_types::{SolStruct, eip712_domain, sol};
+use alloy_primitives::{Address, Bytes, U256};
+use alloy_sol_types::{SolCall, SolStruct, eip712_domain, sol};
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::timestamp::UnixTimestamp;
+
+use crate::chain::contracts;
+use crate::chain::TronAddress;
+use crate::chain::TronChainProvider;
+use crate::chain::provider::{
+    TronChainProviderError, TronChainProviderLike, read_allowance, read_balance_of,
+};
+use crate::v2_tron_exact::facilitator::eip3009::{assert_requirements_match, recover_address};
+use crate::v2_tron_exact::types::{Permit2Payload, Permit2PaymentRequirements};
 
 // Struct names are verbatim in the EIP-712 typehash — must match Permit2 exactly:
 //   PermitWitnessTransferFrom(TokenPermissions permitted,address spender,
@@ -116,16 +120,14 @@ pub async fn verify_permit2_payment(
     }
 
     let token = TronAddress::from(auth.permitted.token);
-    let balance = provider
-        .read_balance_of(token, auth.from)
+    let balance = read_balance_of(provider, token, auth.from)
         .await
         .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
     if balance < required_amount {
         return Err(PaymentVerificationError::InsufficientFunds.into());
     }
 
-    let allowance = provider
-        .read_allowance(token, auth.from, permit2_evm)
+    let allowance = read_allowance(provider, token, auth.from, permit2_evm)
         .await
         .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
     if allowance < required_amount {
@@ -147,22 +149,21 @@ pub async fn settle_permit2_payment(
 
     let accepted = &payment_payload.accepted;
     let auth = &payment_payload.payload.permit2_authorization;
-    let x402_exact_permit2_proxy = &provider.x402_exact_permit2_proxy;
 
-    let txid = provider
-        .build_and_submit_permit2_settle_tx(
-            *x402_exact_permit2_proxy,
-            auth.permitted.token,
-            auth.permitted.amount.into(),
-            auth.nonce.into(),
-            auth.deadline,
-            auth.from,
-            auth.witness.to,
-            auth.witness.valid_after,
-            payment_payload.payload.signature.clone(),
-        )
-        .await
-        .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
+    let txid = build_and_submit_permit2_settle_tx(
+        provider,
+        provider.x402_exact_permit2_proxy,
+        auth.permitted.token,
+        auth.permitted.amount.into(),
+        auth.nonce.into(),
+        auth.deadline,
+        auth.from,
+        auth.witness.to,
+        auth.witness.valid_after,
+        payment_payload.payload.signature.clone(),
+    )
+    .await
+    .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
 
     provider
         .wait_for_tx(&txid)
@@ -174,4 +175,38 @@ pub async fn settle_permit2_payment(
         transaction: txid,
         network: accepted.network.to_string(),
     })
+}
+
+// ── Permit2 settlement tx ─────────────────────────────────────────────────────
+
+pub async fn build_and_submit_permit2_settle_tx<P: TronChainProviderLike>(
+    provider: &P,
+    x402_exact_permit2_proxy: TronAddress,
+    token: Address,
+    amount: U256,
+    nonce: U256,
+    deadline: UnixTimestamp,
+    owner: Address,
+    witness_to: Address,
+    witness_valid_after: UnixTimestamp,
+    signature: Bytes,
+) -> Result<String, TronChainProviderError> {
+    use contracts::x402_exact_permit2_proxy as c;
+    let calldata = c::settleCall {
+        permit: c::TronPermitTransferFrom {
+            permitted: c::TronTokenPermissions { token, amount },
+            nonce,
+            deadline: U256::from(deadline.as_secs()),
+        },
+        owner,
+        witness: c::TronWitness {
+            to: witness_to,
+            validAfter: U256::from(witness_valid_after.as_secs()),
+        },
+        signature,
+    }
+    .abi_encode();
+    provider
+        .build_and_submit_tx(x402_exact_permit2_proxy, calldata)
+        .await
 }

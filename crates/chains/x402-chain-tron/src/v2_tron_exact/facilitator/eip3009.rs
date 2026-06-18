@@ -4,14 +4,15 @@
 //! Addresses in the authorization payload are EVM hex (0x...); addresses in
 //! PaymentRequirements are Base58Check (TronAddress).
 
-use alloy_primitives::{Address, Bytes, U256};
-use alloy_sol_types::{Eip712Domain, SolStruct, eip712_domain, sol};
+use alloy_primitives::{Address, B256, Bytes, U256};
+use alloy_sol_types::{Eip712Domain, SolCall, SolStruct, eip712_domain, sol};
 use x402_types::chain::ChainId;
 use x402_types::proto::{PaymentVerificationError, v2};
 use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::timestamp::UnixTimestamp;
 
-use crate::chain::provider::TronChainProviderLike;
+use crate::chain::contracts;
+use crate::chain::provider::{TronChainProviderError, TronChainProviderLike, read_balance_of};
 use crate::chain::{TronAddress, TronChainProvider, TronChainReference};
 use crate::v2_tron_exact::types::{Eip3009Payload, Eip3009PaymentRequirements};
 use crate::v2_tron_exact::{Eip3009Authorization, Eip3009PaymentPayload};
@@ -46,16 +47,14 @@ pub async fn verify_eip3009_payment(
     let required_amount = accepted.amount;
 
     let token = accepted.asset;
-    let balance = provider
-        .read_balance_of(token, auth.from)
+    let balance = read_balance_of(provider, token, auth.from)
         .await
         .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
     if balance < required_amount.0 {
         return Err(PaymentVerificationError::InsufficientFunds.into());
     }
 
-    if provider
-        .read_authorization_state(token, auth.from, auth.nonce)
+    if read_authorization_state(provider, token, auth.from, auth.nonce)
         .await
         .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?
     {
@@ -65,19 +64,19 @@ pub async fn verify_eip3009_payment(
         .into());
     }
 
-    let sim_ok = provider
-        .simulate_transfer_with_authorization(
-            token,
-            auth.from,
-            auth.to,
-            auth.value.into(),
-            auth.valid_after,
-            auth.valid_before,
-            auth.nonce,
-            payment_payload.payload.signature.clone(),
-        )
-        .await
-        .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
+    let sim_ok = simulate_transfer_with_authorization(
+        provider,
+        token,
+        auth.from,
+        auth.to,
+        auth.value.into(),
+        auth.valid_after,
+        auth.valid_before,
+        auth.nonce,
+        payment_payload.payload.signature.clone(),
+    )
+    .await
+    .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
     if !sim_ok {
         return Err(PaymentVerificationError::TransactionSimulation(
             "transferWithAuthorization simulation failed".to_string(),
@@ -101,19 +100,19 @@ pub async fn settle_eip3009_payment(
     let accepted = &payment_payload.accepted;
     let auth = &payment_payload.payload.authorization;
 
-    let txid = provider
-        .build_and_submit_eip3009_tx(
-            accepted.asset,
-            auth.from,
-            auth.to,
-            auth.value.into(),
-            auth.valid_after,
-            auth.valid_before,
-            auth.nonce,
-            payment_payload.payload.signature.clone(),
-        )
-        .await
-        .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
+    let txid = build_and_submit_eip3009_tx(
+        provider,
+        accepted.asset,
+        auth.from,
+        auth.to,
+        auth.value.into(),
+        auth.valid_after,
+        auth.valid_before,
+        auth.nonce,
+        payment_payload.payload.signature.clone(),
+    )
+    .await
+    .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
 
     provider
         .wait_for_tx(&txid)
@@ -125,6 +124,77 @@ pub async fn settle_eip3009_payment(
         transaction: txid,
         network: accepted.network.to_string(),
     })
+}
+
+// ── EIP-3009 on-chain reads ───────────────────────────────────────────────────
+
+pub async fn read_authorization_state<P: TronChainProviderLike>(
+    provider: &P,
+    token: TronAddress,
+    authorizer_evm: Address,
+    nonce: B256,
+) -> Result<bool, TronChainProviderError> {
+    provider
+        .trigger_constant_contract(
+            token,
+            contracts::eip3009::authorizationStateCall {
+                authorizer: authorizer_evm,
+                nonce,
+            },
+            None,
+        )
+        .await
+}
+
+pub async fn simulate_transfer_with_authorization<P: TronChainProviderLike>(
+    provider: &P,
+    token: TronAddress,
+    from: Address,
+    to: Address,
+    value: U256,
+    valid_after: UnixTimestamp,
+    valid_before: UnixTimestamp,
+    nonce: B256,
+    signature: Bytes,
+) -> Result<bool, TronChainProviderError> {
+    let call = contracts::eip3009::transferWithAuthorizationCall {
+        from,
+        to,
+        value,
+        validAfter: U256::from(valid_after.as_secs()),
+        validBefore: U256::from(valid_before.as_secs()),
+        nonce,
+        signature,
+    };
+    match provider.trigger_constant_contract(token, call, None).await {
+        Ok(_) => Ok(true),
+        Err(TronChainProviderError::Api(_)) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
+pub async fn build_and_submit_eip3009_tx<P: TronChainProviderLike>(
+    provider: &P,
+    token: TronAddress,
+    from: Address,
+    to: Address,
+    value: U256,
+    valid_after: UnixTimestamp,
+    valid_before: UnixTimestamp,
+    nonce: B256,
+    signature: Bytes,
+) -> Result<String, TronChainProviderError> {
+    let calldata = contracts::eip3009::transferWithAuthorizationCall {
+        from,
+        to,
+        value,
+        validAfter: U256::from(valid_after.as_secs()),
+        validBefore: U256::from(valid_before.as_secs()),
+        nonce,
+        signature,
+    }
+    .abi_encode();
+    provider.build_and_submit_tx(token, calldata).await
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
