@@ -221,11 +221,6 @@ impl TronChainProvider {
         self.signers[0].address // TODO Multiple addresses
     }
 
-    /// Returns the EVM address of the first (active) signer.
-    pub fn facilitator_evm(&self) -> Address {
-        Address::from(self.signers[0].address) // TODO Multiple addresses and why do we need this at all?
-    }
-
     // ── TronGrid HTTP helpers ─────────────────────────────────────────────────
 
     /// Build an unsigned transaction via `triggersmartcontract`.
