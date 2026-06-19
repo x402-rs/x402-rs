@@ -577,3 +577,7 @@ impl V1SolanaExactFacilitatorConfig {
             .any(|addr| addr.pubkey() == program_id)
     }
 }
+
+#[cfg(test)]
+#[path = "facilitator_tests.rs"]
+mod tests;
