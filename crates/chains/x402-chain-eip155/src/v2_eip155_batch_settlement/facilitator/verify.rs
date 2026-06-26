@@ -564,6 +564,9 @@ fn deposit_amount_to_u128(value: U256) -> Result<U128, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_primitives::{B256, b256, keccak256};
+
+    use crate::v2_eip155_batch_settlement::types::DepositSegment;
 
     #[test]
     fn u256_to_u128_round_trips_small_values() {
@@ -622,6 +625,60 @@ mod tests {
         assert_eq!(
             permit2_authorization_signature_error_reason(VoucherVerifyError::InvalidFormat),
             err::ERR_PERMIT2_INVALID_SIGNATURE
+        );
+    }
+
+    #[test]
+    fn erc3009_deposit_calldata_matches_typescript_reference() {
+        // Fixture generated from the canonical x402 TypeScript implementation:
+        // buildErc3009CollectorData uses viem encodeAbiParameters, then
+        // x402BatchSettlement.deposit((...),uint128,address,bytes) encodes
+        // with selector 0x140f1e75.
+        let payload = DepositPayload {
+            channel_config: ChannelConfig {
+                payer: "0x57b0eF875DeB5A37301F1640E469a2129Da9490E"
+                    .parse()
+                    .unwrap(),
+                payer_authorizer: "0x57b0eF875DeB5A37301F1640E469a2129Da9490E"
+                    .parse()
+                    .unwrap(),
+                receiver: "0x2707390BC2E69FF9637106b6a43Cc85183392c6A"
+                    .parse()
+                    .unwrap(),
+                receiver_authorizer: "0x2707390BC2E69FF9637106b6a43Cc85183392c6A"
+                    .parse()
+                    .unwrap(),
+                token: "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+                    .parse()
+                    .unwrap(),
+                withdraw_delay: 900,
+                salt: B256::ZERO,
+            },
+            voucher: VoucherFields {
+                channel_id: B256::ZERO,
+                max_claimable_amount: U128::from(10_000u128).into(),
+                signature: Bytes::from(vec![0x11; 65]),
+            },
+            deposit: DepositSegment {
+                amount: U256::from(100_000u64).into(),
+                authorization: DepositAuthorization::Erc3009(Erc3009Authorization {
+                    valid_after: U256::ZERO.into(),
+                    valid_before: U256::from(1_782_471_206u64).into(),
+                    salt: b256!(
+                        "0x2222222222222222222222222222222222222222222222222222222222222222"
+                    ),
+                    signature: Bytes::from(vec![0x11; 65]),
+                }),
+            },
+        };
+
+        let calldata = build_deposit_calldata(&payload, U128::from(100_000u128));
+
+        assert_eq!(calldata.len(), 612);
+        assert_eq!(&calldata[..4], &[0x14, 0x0f, 0x1e, 0x75]);
+        assert_eq!(
+            keccak256(calldata.as_ref()),
+            b256!("0x597b162bcb662f450e0352297afdceabef1416829e1dfa26e42a9a86a4532a6c")
         );
     }
 }

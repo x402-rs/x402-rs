@@ -64,13 +64,18 @@ pub fn build_erc3009_collector_data(
     salt: B256,
     signature: &Bytes,
 ) -> Bytes {
-    let data = Erc3009CollectorData {
-        validAfter: valid_after,
-        validBefore: valid_before,
-        salt: U256::from_be_bytes(salt.0),
-        signature: signature.clone(),
-    };
-    Bytes::from(data.abi_encode())
+    // The x402 collector contract decodes this as
+    // `(uint256,uint256,uint256,bytes)`, so encode a parameter sequence rather
+    // than a single wrapped struct value.
+    Bytes::from(
+        (
+            valid_after,
+            valid_before,
+            U256::from_be_bytes(salt.0),
+            signature.clone(),
+        )
+            .abi_encode_sequence(),
+    )
 }
 
 /// Encodes optional EIP-2612 permit data consumed by `Permit2DepositCollector`.
@@ -95,13 +100,18 @@ pub fn build_permit2_collector_data(
     permit2_signature: &Bytes,
     eip2612_permit_data: &Bytes,
 ) -> Bytes {
-    let data = Permit2CollectorData {
-        nonce,
-        deadline,
-        permit2Signature: permit2_signature.clone(),
-        eip2612PermitData: eip2612_permit_data.clone(),
-    };
-    Bytes::from(data.abi_encode())
+    // The x402 collector contract decodes this as
+    // `(uint256,uint256,bytes,bytes)`, so encode a parameter sequence rather
+    // than a single wrapped struct value.
+    Bytes::from(
+        (
+            nonce,
+            deadline,
+            permit2_signature.clone(),
+            eip2612_permit_data.clone(),
+        )
+            .abi_encode_sequence(),
+    )
 }
 
 #[cfg(test)]
@@ -133,7 +143,8 @@ mod tests {
             b256!("0x0000000000000000000000000000000000000000000000000000000000000077"),
             &Bytes::from_static(&hex!("deadbeef")),
         );
-        let decoded = Erc3009CollectorData::abi_decode(&bytes).unwrap();
+        assert_eq!(bytes.len(), 192);
+        let decoded = Erc3009CollectorData::abi_decode_sequence(&bytes).unwrap();
         assert_eq!(decoded.validAfter, U256::ZERO);
         assert_eq!(decoded.validBefore, U256::from(1_770_000_000u64));
         assert_eq!(decoded.salt, U256::from(0x77u64));
@@ -148,7 +159,8 @@ mod tests {
             &Bytes::from_static(&hex!("abcd")),
             &Bytes::new(),
         );
-        let decoded = Permit2CollectorData::abi_decode(&bytes).unwrap();
+        assert_eq!(bytes.len(), 224);
+        let decoded = Permit2CollectorData::abi_decode_sequence(&bytes).unwrap();
         assert_eq!(decoded.nonce, U256::from(42u64));
         assert_eq!(decoded.deadline, U256::from(1_770_000_000u64));
         assert_eq!(decoded.permit2Signature, Bytes::from_static(&hex!("abcd")));
