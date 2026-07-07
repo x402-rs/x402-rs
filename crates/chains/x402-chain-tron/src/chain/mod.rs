@@ -18,4 +18,7 @@ pub mod contracts;
 #[cfg(feature = "facilitator")]
 pub mod provider;
 #[cfg(feature = "facilitator")]
+pub mod tron_grid;
+
+#[cfg(feature = "facilitator")]
 pub use provider::TronChainProvider;

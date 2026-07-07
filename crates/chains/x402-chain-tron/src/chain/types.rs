@@ -193,3 +193,60 @@ pub struct TronTokenDeployment {
     /// The method used to transfer the asset.
     pub transfer_method: TronTransferMethod,
 }
+
+/// A TRON transaction identifier — bytes deserialized from a prefixless hex string.
+pub type TronTxId = prefixless_hex::PrefixlessHexOwned;
+
+pub mod prefixless_hex {
+    use alloy_primitives::Bytes;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub struct PrefixlessHex<'a>(pub &'a [u8]);
+
+    impl Serialize for PrefixlessHex<'_> {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            serialize(self.0, serializer)
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct PrefixlessHexOwned(pub Bytes);
+
+    impl Serialize for PrefixlessHexOwned {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serialize(&self.0, serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for PrefixlessHexOwned {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            deserialize(deserializer).map(Self)
+        }
+    }
+
+    impl std::fmt::Display for PrefixlessHexOwned {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(&alloy_primitives::hex::encode(&self.0))
+        }
+    }
+
+    pub fn serialize<S>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let value = alloy_primitives::hex::encode(value).replace("0x", "");
+        serializer.serialize_str(&value)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Bytes, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let as_string = String::deserialize(deserializer)?;
+        let vec = alloy_primitives::hex::decode(&as_string).map_err(serde::de::Error::custom)?;
+        Ok(Bytes::from(vec))
+    }
+}

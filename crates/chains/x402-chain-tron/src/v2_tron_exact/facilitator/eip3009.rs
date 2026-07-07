@@ -12,10 +12,10 @@ use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::timestamp::UnixTimestamp;
 
 use crate::chain::contracts;
-use crate::chain::provider::{
-    TronChainProviderError, TronChainProviderLike, TronTxId, read_balance_of,
-};
-use crate::chain::{TronAddress, TronChainProvider, TronChainReference};
+use crate::chain::provider::{TronChainProviderError, TronChainProviderLike, read_balance_of};
+use crate::chain::tron_grid::WaitForTxLike;
+use crate::chain::types::TronTxId;
+use crate::chain::{TronAddress, TronChainReference};
 use crate::v2_tron_exact::types::{Eip3009Payload, Eip3009PaymentRequirements};
 use crate::v2_tron_exact::{Eip3009Authorization, Eip3009PaymentPayload};
 
@@ -30,20 +30,17 @@ sol! {
     }
 }
 
-pub async fn verify_eip3009_payment(
-    provider: &TronChainProvider,
+pub async fn verify_eip3009_payment<P>(
+    provider: &P,
     payment_payload: &Eip3009PaymentPayload,
     payment_requirements: &Eip3009PaymentRequirements,
-) -> Result<v2::VerifyResponse, X402SchemeFacilitatorError> {
+) -> Result<v2::VerifyResponse, X402SchemeFacilitatorError>
+where
+    P: TronChainProviderLike,
+{
     let accepted = &payment_payload.accepted;
     assert_requirements_match(accepted, payment_requirements)?;
-    assert_valid_payment(
-        provider,
-        &provider.chain_reference,
-        accepted,
-        payment_payload,
-    )
-    .await?;
+    assert_valid_payment(provider, provider.chain(), accepted, payment_payload).await?;
 
     let auth = &payment_payload.payload.authorization;
     let required_amount = accepted.amount;
@@ -92,11 +89,14 @@ pub async fn verify_eip3009_payment(
     )))
 }
 
-pub async fn settle_eip3009_payment(
-    provider: &TronChainProvider,
+pub async fn settle_eip3009_payment<P>(
+    provider: &P,
     payment_payload: &v2::PaymentPayload<Eip3009PaymentRequirements, Eip3009Payload>,
     payment_requirements: &Eip3009PaymentRequirements,
-) -> Result<v2::SettleResponse, X402SchemeFacilitatorError> {
+) -> Result<v2::SettleResponse, X402SchemeFacilitatorError>
+where
+    P: TronChainProviderLike + WaitForTxLike,
+{
     verify_eip3009_payment(provider, payment_payload, payment_requirements).await?;
 
     let accepted = &payment_payload.accepted;

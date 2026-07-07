@@ -7,108 +7,19 @@
 use alloy_primitives::{Address, Bytes, U256};
 use alloy_sol_types::SolCall;
 use k256::ecdsa::{RecoveryId, SigningKey, VerifyingKey};
-use reqwest::Client;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::Value;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
-use url::Url;
 use x402_types::chain::{ChainId, ChainProviderOps, FromConfig};
 
 use crate::chain::TronAddress;
 use crate::chain::config::{TronChainConfig, TronPrivateKey};
 use crate::chain::contracts;
-use crate::chain::types::TronChainReference;
-
-// ── TronGrid response types ───────────────────────────────────────────────────
-
-/// The nested `result` object inside `trigger*` responses.
-/// Distinct from `broadcasttransaction` which has a flat `bool` at `result`.
-#[derive(Debug, Deserialize)]
-pub struct TriggerStatus {
-    result: bool,
-    #[serde(default)]
-    message: Option<String>,
-}
-
-impl TriggerStatus {
-    fn into_result(self) -> Result<(), String> {
-        if self.result {
-            Ok(())
-        } else {
-            Err(self.message.unwrap_or_else(|| "unknown error".into()))
-        }
-    }
-}
-
-/// Request body for `triggersmartcontract`.
-#[derive(Debug, Serialize)]
-struct TriggerSmartContractRequest {
-    owner_address: TronAddress,
-    contract_address: TronAddress,
-    #[serde(with = "prefixless_hex")]
-    data: Vec<u8>,
-    fee_limit: u64,
-    call_value: u64,
-    visible: bool,
-}
-
-/// A TRON transaction identifier — bytes deserialized from a prefixless hex string.
-pub type TronTxId = prefixless_hex::PrefixlessHexOwned;
-
-/// Request body for `gettransactioninfobyid`.
-#[derive(Debug, Serialize)]
-struct GetTransactionInfoRequest<'a> {
-    value: &'a TronTxId,
-}
-
-/// An unsigned transaction returned by `triggersmartcontract`.
-///
-/// `signature` starts empty; `sign_and_broadcast` fills it before posting to
-/// `broadcasttransaction`.  All other fields are captured in `rest` and
-/// round-tripped verbatim so nothing is lost.
-#[derive(Debug, Deserialize, Serialize)]
-struct TronTransaction {
-    #[serde(rename = "txID")]
-    tx_id: TronTxId,
-    #[serde(default, skip_serializing_if = "HexBytesVec::is_empty")]
-    signature: HexBytesVec,
-    #[serde(flatten)]
-    rest: serde_json::Map<String, Value>,
-}
-
-/// Response from `triggersmartcontract`.
-#[derive(Debug, Deserialize)]
-struct TriggerSmartContractResponse {
-    result: TriggerStatus,
-    transaction: Option<TronTransaction>,
-}
-
-/// Response from `broadcasttransaction`.
-/// Note: `result` here is a flat `bool`, not a nested object.
-#[derive(Debug, Deserialize)]
-struct BroadcastResponse {
-    result: bool,
-    #[serde(default)]
-    message: Option<String>,
-    #[serde(default)]
-    txid: Option<TronTxId>,
-}
-
-/// Response from `gettransactioninfobyid`.
-/// All fields are optional — an empty object `{}` means the tx is still pending.
-#[derive(Debug, Deserialize)]
-struct TransactionInfoResponse {
-    #[serde(default)]
-    receipt: Option<TxReceipt>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TxReceipt {
-    result: Option<String>,
-}
+use crate::chain::tron_grid::{
+    HexBytesVec, TronGridHttp, TronGridLike, TronGridLikeError, TronGridPolling, WaitForTxLike,
+};
+use crate::chain::types::{TronChainReference, TronTxId};
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
@@ -128,6 +39,8 @@ pub enum TronChainProviderError {
     TxTimeout,
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    TronGrid(#[from] TronGridLikeError),
 }
 
 impl From<TronChainProviderError> for x402_types::scheme::X402SchemeFacilitatorError {
@@ -142,13 +55,17 @@ impl From<TronChainProviderError> for x402_types::proto::PaymentVerificationErro
     }
 }
 
-struct TronSigner {
+pub struct TronSigner {
     signing_key: SigningKey,
     address: TronAddress,
 }
 
 impl TronSigner {
-    fn from_key(key: &TronPrivateKey) -> Result<Self, TronChainProviderError> {
+    pub fn address(&self) -> TronAddress {
+        self.address
+    }
+
+    pub fn from_key(key: &TronPrivateKey) -> Result<Self, TronChainProviderError> {
         let signing_key = SigningKey::from(key.clone());
         let verifying_key = VerifyingKey::from(&signing_key);
         let point = verifying_key.to_encoded_point(false);
@@ -165,7 +82,7 @@ impl TronSigner {
 
 impl TronSigner {
     /// Sign a transaction hash. Format: r(32) + s(32) + (recovery_id + 27)(1).
-    fn sign(&self, tx_id: &TronTxId) -> Result<[u8; 65], TronChainProviderError> {
+    pub fn sign(&self, tx_id: &TronTxId) -> Result<[u8; 65], TronChainProviderError> {
         let (sig, recid): (k256::ecdsa::Signature, RecoveryId) = self
             .signing_key
             .sign_prehash_recoverable(&tx_id.0)
@@ -191,13 +108,13 @@ impl Display for TronSigner {
 
 // ── TronSigners ───────────────────────────────────────────────────────────────
 
-struct TronSigners {
+pub struct TronSigners {
     inner: Vec<TronSigner>,
     next_idx: AtomicUsize,
 }
 
 impl TronSigners {
-    fn new(signers: Vec<TronSigner>) -> Self {
+    pub fn new(signers: Vec<TronSigner>) -> Self {
         Self {
             inner: signers,
             next_idx: AtomicUsize::new(0),
@@ -205,24 +122,24 @@ impl TronSigners {
     }
 
     /// Returns the next signer in round-robin order.
-    fn next(&self) -> &TronSigner {
+    pub fn next(&self) -> &TronSigner {
         let idx = self.next_idx.fetch_add(1, Ordering::Relaxed) % self.inner.len();
         &self.inner[idx]
     }
 
     /// Returns the signer for the given address, or an error if not configured.
-    fn get(&self, addr: &TronAddress) -> Result<&TronSigner, TronChainProviderError> {
+    pub fn get(&self, addr: &TronAddress) -> Result<&TronSigner, TronChainProviderError> {
         self.inner
             .iter()
             .find(|s| s.address == *addr)
             .ok_or_else(|| TronChainProviderError::InvalidKey(format!("no signer for {addr}")))
     }
 
-    fn contains(&self, addr: &TronAddress) -> bool {
+    pub fn contains(&self, addr: &TronAddress) -> bool {
         self.inner.iter().any(|s| s.address == *addr)
     }
 
-    fn addresses(&self) -> impl Iterator<Item = &TronAddress> {
+    pub fn addresses(&self) -> impl Iterator<Item = &TronAddress> {
         self.inner.iter().map(|s| &s.address)
     }
 }
@@ -243,98 +160,28 @@ impl fmt::Debug for TronSigners {
 pub struct TronChainProvider {
     /// Chain reference for this provider.
     pub chain_reference: TronChainReference,
-    /// TronGrid base URL.
-    pub rpc_url: Url,
-    /// HTTP client.
-    pub client: Client,
-    /// SUN.io Permit2 contract — the EIP-712 `verifyingContract` that clients sign against.
-    pub sun_permit2: TronAddress,
-    /// x402ExactPermit2Proxy — the `spender` in Permit2 messages and the settlement contract.
-    pub x402_exact_permit2_proxy: TronAddress,
+    /// TronGrid client
+    pub tron_grid: TronGridPolling<TronGridHttp>,
+    /// Chain-specific addresses.
+    pub addresses: TronChainAddresses,
     /// All configured signers (at least one required).
     signers: TronSigners,
-    /// How long to wait for a transaction to be confirmed before giving up.
-    pub tx_timeout: Duration,
-    /// How often to poll `gettransactioninfobyid`.
-    pub tx_poll_interval: Duration,
+}
+
+impl TronChainProvider {
+    pub fn with_tron_grid(mut self, tron_grid: TronGridPolling<TronGridHttp>) -> Self {
+        self.tron_grid = tron_grid;
+        self
+    }
 }
 
 impl fmt::Debug for TronChainProvider {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("TronChainProvider")
             .field("chain_reference", &self.chain_reference)
-            .field("rpc_url", &self.rpc_url)
+            .field("tron_grid", &self.tron_grid)
             .field("signers", &self.signers)
             .finish()
-    }
-}
-
-impl TronChainProvider {
-    /// Build an unsigned transaction via `triggersmartcontract`.
-    ///
-    /// Uses `visible: true` so addresses are Base58Check throughout.
-    async fn build_tx<TCalldata: SolCall>(
-        &self,
-        contract: TronAddress,
-        calldata: TCalldata,
-        owner: TronAddress,
-    ) -> Result<TronTransaction, TronChainProviderError> {
-        let url = self
-            .rpc_url
-            .join("wallet/triggersmartcontract")
-            .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
-        let body = TriggerSmartContractRequest {
-            owner_address: owner,
-            contract_address: contract,
-            data: calldata.abi_encode(),
-            fee_limit: 100_000_000,
-            call_value: 0,
-            visible: true,
-        };
-        let resp: TriggerSmartContractResponse = self
-            .client
-            .post(url)
-            .json(&body)
-            .send()
-            .await?
-            .json()
-            .await?;
-
-        resp.result
-            .into_result()
-            .map_err(TronChainProviderError::Api)?;
-
-        resp.transaction.ok_or_else(|| {
-            TronChainProviderError::Api("missing transaction in response".to_string())
-        })
-    }
-
-    /// Broadcast a signed transaction.
-    async fn broadcast(&self, tx: TronTransaction) -> Result<TronTxId, TronChainProviderError> {
-        let url = self
-            .rpc_url
-            .join("wallet/broadcasttransaction")
-            .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
-        let resp: BroadcastResponse = self.client.post(url).json(&tx).send().await?.json().await?;
-        if !resp.result {
-            let msg = resp.message.unwrap_or_else(|| "broadcast failed".into());
-            return Err(TronChainProviderError::Api(msg));
-        }
-        resp.txid.ok_or_else(|| {
-            TronChainProviderError::Api("missing txid in broadcast response".to_string())
-        })
-    }
-
-    /// Sign and broadcast, returning the txid.
-    async fn sign_and_broadcast(
-        &self,
-        mut tx: TronTransaction,
-        signer: &TronSigner,
-    ) -> Result<TronTxId, TronChainProviderError> {
-        let signature = signer.sign(&tx.tx_id)?;
-        let signature = Bytes::from(signature);
-        tx.signature = HexBytesVec(vec![signature]);
-        self.broadcast(tx).await
     }
 }
 
@@ -370,17 +217,26 @@ impl FromConfig<TronChainConfig> for TronChainProvider {
                 "can not get Permit2 contract address for tron:{chain_reference}"
             )))?;
 
-        let rpc_url = config.inner.rpc_url.inner().clone();
+        let tron_grid = {
+            let rpc_url = config.inner.rpc_url.inner().clone();
+            let tron_grid = TronGridHttp::new(rpc_url);
+            TronGridPolling {
+                tron_grid,
+                tx_timeout: config.inner.tx_timeout(),
+                tx_poll_interval: config.inner.tx_poll_interval(),
+            }
+        };
+
+        let addresses = TronChainAddresses {
+            sun_permit2,
+            x402_exact_permit2_proxy,
+        };
 
         Ok(Self {
             chain_reference,
-            rpc_url,
             signers,
-            client: Client::new(),
-            x402_exact_permit2_proxy,
-            sun_permit2,
-            tx_timeout: config.inner.tx_timeout(),
-            tx_poll_interval: config.inner.tx_poll_interval(),
+            tron_grid,
+            addresses,
         })
     }
 }
@@ -395,7 +251,31 @@ impl ChainProviderOps for TronChainProvider {
     }
 }
 
+pub trait TronChainAddressesLike {
+    fn sun_permit2(&self) -> TronAddress;
+    fn x402_exact_permit2_proxy(&self) -> TronAddress;
+}
+
+pub struct TronChainAddresses {
+    /// SUN.io Permit2 contract — the EIP-712 `verifyingContract` that clients sign against.
+    pub sun_permit2: TronAddress,
+    /// x402ExactPermit2Proxy — the `spender` in Permit2 messages and the settlement contract.
+    pub x402_exact_permit2_proxy: TronAddress,
+}
+
+impl TronChainAddressesLike for TronChainAddresses {
+    fn sun_permit2(&self) -> TronAddress {
+        self.sun_permit2
+    }
+
+    fn x402_exact_permit2_proxy(&self) -> TronAddress {
+        self.x402_exact_permit2_proxy
+    }
+}
+
 pub trait TronChainProviderLike {
+    type Addresses: TronChainAddressesLike;
+    fn addresses(&self) -> &Self::Addresses;
     fn is_signer(&self, addr: &TronAddress) -> bool;
     fn chain(&self) -> &TronChainReference;
     fn trigger_constant_contract<TCalldata>(
@@ -414,13 +294,59 @@ pub trait TronChainProviderLike {
     ) -> impl Future<Output = Result<TronTxId, TronChainProviderError>> + Send
     where
         TCalldata: SolCall + Send;
-    fn wait_for_tx(
+}
+
+impl<T> TronChainProviderLike for Arc<T>
+where
+    T: TronChainProviderLike,
+{
+    type Addresses = T::Addresses;
+
+    fn addresses(&self) -> &Self::Addresses {
+        self.as_ref().addresses()
+    }
+
+    fn is_signer(&self, addr: &TronAddress) -> bool {
+        self.as_ref().is_signer(addr)
+    }
+
+    fn chain(&self) -> &TronChainReference {
+        self.as_ref().chain()
+    }
+
+    fn trigger_constant_contract<TCalldata>(
         &self,
-        tx_id: &TronTxId,
-    ) -> impl Future<Output = Result<(), TronChainProviderError>> + Send;
+        contract: TronAddress,
+        calldata: TCalldata,
+        from: Option<TronAddress>,
+    ) -> impl Future<Output = Result<TCalldata::Return, TronChainProviderError>> + Send
+    where
+        TCalldata: SolCall + Send,
+    {
+        self.as_ref()
+            .trigger_constant_contract(contract, calldata, from)
+    }
+
+    fn build_and_submit_tx<TCalldata>(
+        &self,
+        contract: TronAddress,
+        calldata: TCalldata,
+        from: Option<TronAddress>,
+    ) -> impl Future<Output = Result<TronTxId, TronChainProviderError>> + Send
+    where
+        TCalldata: SolCall + Send,
+    {
+        self.as_ref().build_and_submit_tx(contract, calldata, from)
+    }
 }
 
 impl TronChainProviderLike for TronChainProvider {
+    type Addresses = TronChainAddresses;
+
+    fn addresses(&self) -> &Self::Addresses {
+        &self.addresses
+    }
+
     fn is_signer(&self, addr: &TronAddress) -> bool {
         self.signers.contains(addr)
     }
@@ -428,7 +354,6 @@ impl TronChainProviderLike for TronChainProvider {
     fn chain(&self) -> &TronChainReference {
         &self.chain_reference
     }
-
     async fn trigger_constant_contract<TCalldata>(
         &self,
         contract_address: TronAddress,
@@ -438,38 +363,10 @@ impl TronChainProviderLike for TronChainProvider {
     where
         TCalldata: SolCall + Send,
     {
-        let url = self
-            .rpc_url
-            .join("wallet/triggerconstantcontract")
-            .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
-        let calldata = Bytes::from(calldata.abi_encode());
-        let body = CallConstantRequest {
-            owner_address: from.unwrap_or_default(),
-            contract_address,
-            data: calldata,
-            call_value: 0,
-            visible: true,
-        };
-        let resp: CallConstantResponse = self
-            .client
-            .post(url)
-            .json(&body)
-            .send()
-            .await?
-            .json()
+        let decoded = self
+            .tron_grid
+            .wallet_trigger_constant_contract(contract_address, calldata, from)
             .await?;
-
-        resp.result
-            .into_result()
-            .map_err(TronChainProviderError::Api)?;
-        let constant_result =
-            resp.constant_result.0.first().ok_or_else(|| {
-                TronChainProviderError::Api("missing constant_result".to_string())
-            })?;
-
-        let decoded = TCalldata::abi_decode_returns(constant_result)
-            .map_err(|e| TronChainProviderError::AbiDecode(e.to_string()))?;
-
         Ok(decoded)
     }
 
@@ -486,37 +383,25 @@ impl TronChainProviderLike for TronChainProvider {
             Some(addr) => self.signers.get(&addr)?,
             None => self.signers.next(),
         };
-        let tx = self.build_tx(contract, calldata, signer.address).await?;
-        self.sign_and_broadcast(tx, signer).await
-    }
+        let mut tx = self
+            .tron_grid
+            .wallet_trigger_smart_contract(contract, calldata, signer.address)
+            .await?;
 
-    async fn wait_for_tx(&self, tx_id: &TronTxId) -> Result<(), TronChainProviderError> {
-        let url = self
-            .rpc_url
-            .join("wallet/gettransactioninfobyid")
-            .map_err(|e| TronChainProviderError::Api(e.to_string()))?;
-        let body = GetTransactionInfoRequest { value: tx_id };
-        let timeout = self.tx_timeout;
-        let interval = self.tx_poll_interval;
-        let start = std::time::Instant::now();
-        loop {
-            if start.elapsed() > timeout {
-                return Err(TronChainProviderError::TxTimeout);
-            }
-            let resp: TransactionInfoResponse = self
-                .client
-                .post(url.clone())
-                .json(&body)
-                .send()
-                .await?
-                .json()
-                .await?;
-            match resp.receipt.as_ref().and_then(|r| r.result.as_deref()) {
-                None => tokio::time::sleep(interval).await,
-                Some("SUCCESS") => return Ok(()),
-                Some(status) => return Err(TronChainProviderError::TxFailed(status.to_string())),
-            }
-        }
+        let signature = signer.sign(&tx.tx_id)?;
+        let signature = Bytes::from(signature);
+        tx.signature = HexBytesVec(vec![signature]);
+        let tx_id = self.tron_grid.wallet_broadcast_transaction(tx).await?;
+        Ok(tx_id)
+    }
+}
+
+impl WaitForTxLike for TronChainProvider {
+    fn wait_for_tx(
+        &self,
+        tx_id: &TronTxId,
+    ) -> impl Future<Output = Result<(), TronChainProviderError>> {
+        self.tron_grid.wait_for_tx(tx_id)
     }
 }
 
@@ -552,132 +437,4 @@ pub async fn read_allowance<P: TronChainProviderLike>(
             None,
         )
         .await
-}
-
-// ── Serde helpers ─────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CallConstantRequest {
-    pub owner_address: TronAddress,
-    pub contract_address: TronAddress,
-    #[serde(with = "prefixless_hex")]
-    pub data: Bytes,
-    pub call_value: u64,
-    pub visible: bool,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CallConstantResponse {
-    pub result: TriggerStatus,
-    #[serde(default)]
-    pub constant_result: HexBytesVec,
-}
-
-#[derive(Debug, Default)]
-pub struct HexBytesVec(pub Vec<Bytes>);
-
-impl HexBytesVec {
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-impl Serialize for HexBytesVec {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeSeq;
-        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
-        for value in &self.0 {
-            seq.serialize_element(&prefixless_hex::PrefixlessHex(value))?;
-        }
-        seq.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for HexBytesVec {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct PrefixlessHexVecVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for PrefixlessHexVecVisitor {
-            type Value = HexBytesVec;
-
-            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-                formatter.write_str("a list of prefixless hex strings")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let mut values = Vec::new();
-
-                while let Some(value) = seq.next_element::<prefixless_hex::PrefixlessHexOwned>()? {
-                    values.push(value.0);
-                }
-
-                Ok(HexBytesVec(values))
-            }
-        }
-
-        deserializer.deserialize_seq(PrefixlessHexVecVisitor)
-    }
-}
-
-pub mod prefixless_hex {
-    use alloy_primitives::Bytes;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    pub struct PrefixlessHex<'a>(pub &'a [u8]);
-
-    impl Serialize for PrefixlessHex<'_> {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            serialize(self.0, serializer)
-        }
-    }
-
-    #[derive(Debug, Clone)]
-    pub struct PrefixlessHexOwned(pub Bytes);
-
-    impl Serialize for PrefixlessHexOwned {
-        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            serialize(&self.0, serializer)
-        }
-    }
-
-    impl<'de> Deserialize<'de> for PrefixlessHexOwned {
-        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-            deserialize(deserializer).map(Self)
-        }
-    }
-
-    impl std::fmt::Display for PrefixlessHexOwned {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_str(&alloy_primitives::hex::encode(&self.0))
-        }
-    }
-
-    pub fn serialize<S>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let value = alloy_primitives::hex::encode(value).replace("0x", "");
-        serializer.serialize_str(&value)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Bytes, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let as_string = String::deserialize(deserializer)?;
-        let vec = alloy_primitives::hex::decode(&as_string).map_err(serde::de::Error::custom)?;
-        Ok(Bytes::from(vec))
-    }
 }

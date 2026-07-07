@@ -7,11 +7,13 @@ use x402_types::scheme::X402SchemeFacilitatorError;
 use x402_types::timestamp::UnixTimestamp;
 
 use crate::chain::TronAddress;
-use crate::chain::TronChainProvider;
 use crate::chain::contracts;
 use crate::chain::provider::{
-    TronChainProviderError, TronChainProviderLike, TronTxId, read_allowance, read_balance_of,
+    TronChainAddressesLike, TronChainProviderError, TronChainProviderLike, read_allowance,
+    read_balance_of,
 };
+use crate::chain::tron_grid::WaitForTxLike;
+use crate::chain::types::TronTxId;
 use crate::v2_tron_exact::facilitator::eip3009::{assert_requirements_match, recover_address};
 use crate::v2_tron_exact::types::{Permit2Payload, Permit2PaymentRequirements};
 
@@ -40,13 +42,16 @@ sol! {
     }
 }
 
-pub async fn verify_permit2_payment(
-    provider: &TronChainProvider,
+pub async fn verify_permit2_payment<P>(
+    provider: &P,
     payment_payload: &v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>,
     payment_requirements: &Permit2PaymentRequirements,
-) -> Result<v2::VerifyResponse, X402SchemeFacilitatorError> {
+) -> Result<v2::VerifyResponse, X402SchemeFacilitatorError>
+where
+    P: TronChainProviderLike,
+{
     let accepted = &payment_payload.accepted;
-    let sun_permit2 = provider.sun_permit2;
+    let sun_permit2 = provider.addresses().sun_permit2();
 
     assert_requirements_match(accepted, payment_requirements)?;
 
@@ -54,7 +59,7 @@ pub async fn verify_permit2_payment(
     let now = UnixTimestamp::now();
     let required_amount: U256 = payment_payload.accepted.amount.into();
 
-    if accepted.network != provider.chain_reference.chain_id() {
+    if accepted.network != provider.chain().chain_id() {
         return Err(PaymentVerificationError::ChainIdMismatch.into());
     }
 
@@ -87,7 +92,7 @@ pub async fn verify_permit2_payment(
 
     // TIP-712 signature recovery against the Permit2 domain
     let permit2_evm = Address::from(sun_permit2);
-    let chain_id = provider.chain_reference.inner().into();
+    let chain_id = provider.chain().into();
     let domain = eip712_domain! {
         name: "Permit2",
         chain_id: chain_id,
@@ -140,11 +145,14 @@ pub async fn verify_permit2_payment(
     )))
 }
 
-pub async fn settle_permit2_payment(
-    provider: &TronChainProvider,
+pub async fn settle_permit2_payment<P>(
+    provider: &P,
     payment_payload: &v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>,
     payment_requirements: &Permit2PaymentRequirements,
-) -> Result<v2::SettleResponse, X402SchemeFacilitatorError> {
+) -> Result<v2::SettleResponse, X402SchemeFacilitatorError>
+where
+    P: TronChainProviderLike + WaitForTxLike,
+{
     verify_permit2_payment(provider, payment_payload, payment_requirements).await?;
 
     let accepted = &payment_payload.accepted;
@@ -160,10 +168,13 @@ pub async fn settle_permit2_payment(
         witness_valid_after: auth.witness.valid_after,
         signature: payment_payload.payload.signature.clone(),
     };
-    let tx_id =
-        build_and_submit_permit2_settle_tx(provider, provider.x402_exact_permit2_proxy, transfer)
-            .await
-            .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
+    let tx_id = build_and_submit_permit2_settle_tx(
+        provider,
+        provider.addresses().x402_exact_permit2_proxy(),
+        transfer,
+    )
+    .await
+    .map_err(|e| X402SchemeFacilitatorError::OnchainFailure(e.to_string()))?;
 
     provider
         .wait_for_tx(&tx_id)

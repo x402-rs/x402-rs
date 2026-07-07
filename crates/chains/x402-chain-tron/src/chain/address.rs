@@ -4,6 +4,7 @@ use alloy_primitives::Address;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use std::fmt;
+use std::fmt::{Debug, Formatter};
 use std::str::FromStr;
 
 /// A TRON address in Base58Check format (the standard "T..." representation).
@@ -12,7 +13,7 @@ use std::str::FromStr;
 /// Serializes as Base58Check for the x402 wire format and for TronGrid API calls.
 /// Use `Into<Address>` / `From<TronAddress>` to get the `alloy` `Address` needed for
 /// EIP-712 / TIP-712 signing.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Default)]
 pub struct TronAddress(pub [u8; 20]);
 
 impl TronAddress {
@@ -65,6 +66,12 @@ impl TronAddress {
         full[21..25].copy_from_slice(&hash2[..4]);
 
         bs58::encode(full).into_string()
+    }
+}
+
+impl Debug for TronAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("TronAddress").field(&self.as_base58()).finish()
     }
 }
 
