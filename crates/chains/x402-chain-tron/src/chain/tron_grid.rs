@@ -1,3 +1,6 @@
+//! HTTP client for the TronGrid full-node API, used with `visible: true` so all
+//! addresses on the wire are Base58Check.
+
 use alloy_primitives::Bytes;
 use alloy_sol_types::SolCall;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -12,6 +15,7 @@ use crate::chain::TronAddress;
 use crate::chain::provider::TronChainProviderError;
 use crate::chain::types::{TronTxId, prefixless_hex};
 
+/// A TronGrid HTTP client bound to a single node's base URL.
 pub struct TronGridHttp {
     /// TronGrid base URL.
     rpc_url: Url,
@@ -20,6 +24,7 @@ pub struct TronGridHttp {
 }
 
 impl TronGridHttp {
+    /// Creates a client with a fresh `reqwest::Client`.
     pub fn new(rpc_url: Url) -> Self {
         Self {
             rpc_url,
@@ -27,6 +32,7 @@ impl TronGridHttp {
         }
     }
 
+    /// Creates a client reusing an existing `reqwest::Client` (e.g. for connection pooling).
     pub fn with_client(rpc_url: Url, client: reqwest::Client) -> Self {
         Self { rpc_url, client }
     }
@@ -40,12 +46,16 @@ impl fmt::Debug for TronGridHttp {
     }
 }
 
+/// Errors from calling the TronGrid HTTP API.
 #[derive(Debug, thiserror::Error)]
 pub enum TronGridLikeError {
+    /// The HTTP request itself failed (network, URL parsing, etc).
     #[error("TronGrid transport: {0}")]
     Transport(String),
+    /// The response body didn't have the expected shape.
     #[error("failed to parse TronGrid response: {0}")]
     ParsingError(String),
+    /// TronGrid returned a well-formed response reporting failure.
     #[error("TronGrid returned an error: {0}")]
     ReportedError(String),
 }
@@ -74,6 +84,7 @@ impl From<TronGridReportedError> for TronGridLikeError {
     }
 }
 
+/// Internal parsing errors, converted into [`TronGridLikeError::ParsingError`].
 #[derive(Debug, thiserror::Error)]
 enum TronGridParsingError {
     #[error("missing field: {0}")]
@@ -82,11 +93,15 @@ enum TronGridParsingError {
     AbiDecode(#[from] alloy_sol_types::Error),
 }
 
+/// A `result: false` reported by TronGrid, carrying its error message.
 #[derive(Debug, thiserror::Error)]
 #[error("TronGrid reported error: {0}")]
 pub struct TronGridReportedError(String);
 
+/// TronGrid wallet API operations needed to read state and submit transactions.
 pub trait TronGridLike {
+    /// Calls a read-only contract method via `triggerconstantcontract` and ABI-decodes
+    /// the return value.
     fn wallet_trigger_constant_contract<TCalldata>(
         &self,
         contract_address: TronAddress,
@@ -114,6 +129,8 @@ pub trait TronGridLike {
         tx: TronTransaction,
     ) -> impl Future<Output = Result<TronTxId, TronGridLikeError>>;
 
+    /// Fetches confirmation status via `gettransactioninfobyid`. Returns an empty
+    /// response while the transaction is still pending.
     fn wallet_get_transaction_info_by_id(
         &self,
         tx_id: &TronTxId,
@@ -210,6 +227,8 @@ impl TronGridLike for TronGridHttp {
     }
 }
 
+/// Wraps a [`TronGridLike`] client with the timeout/interval used to poll for
+/// transaction confirmation.
 pub struct TronGridPolling<A> {
     /// TronGrid client.
     pub tron_grid: A,
@@ -236,7 +255,9 @@ impl<A> Deref for TronGridPolling<A> {
     }
 }
 
+/// Blocks (async) until a submitted transaction is confirmed on-chain.
 pub trait WaitForTxLike {
+    /// Polls until the transaction succeeds, fails, or times out.
     fn wait_for_tx(
         &self,
         tx_id: &TronTxId,
@@ -399,6 +420,7 @@ pub struct TxReceipt {
 
 // ── Serde helpers ─────────────────────────────────────────────────────────────
 
+/// Request body for `triggerconstantcontract`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CallConstantRequest {
     pub owner_address: TronAddress,
@@ -409,6 +431,7 @@ pub struct CallConstantRequest {
     pub visible: bool,
 }
 
+/// Response from `triggerconstantcontract`.
 #[derive(Debug, Deserialize)]
 pub struct CallConstantResponse {
     pub result: TriggerStatus,
@@ -417,6 +440,7 @@ pub struct CallConstantResponse {
 }
 
 impl CallConstantResponse {
+    /// ABI-decodes the first `constant_result` entry as `TCalldata`'s return type.
     pub fn into_abi_decoded<TCalldata: SolCall>(
         self,
     ) -> Result<TCalldata::Return, TronGridLikeError> {
@@ -433,6 +457,7 @@ impl CallConstantResponse {
     }
 }
 
+/// A list of byte strings, (de)serialized as prefixless hex strings.
 #[derive(Debug, Default)]
 pub struct HexBytesVec(pub Vec<Bytes>);
 

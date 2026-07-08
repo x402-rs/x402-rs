@@ -1,3 +1,6 @@
+//! Solidity ABI bindings for the contracts TRON facilitators call into.
+
+/// Standard ERC-20 read-only calls, used to check payer balance and allowance.
 pub mod erc20 {
     use alloy_sol_types::sol;
 
@@ -7,6 +10,7 @@ pub mod erc20 {
     }
 }
 
+/// EIP-3009 `transferWithAuthorization` calls, for the EIP-3009 transfer method.
 pub mod eip3009 {
     use alloy_sol_types::sol;
 
@@ -24,6 +28,7 @@ pub mod eip3009 {
     }
 }
 
+/// `x402ExactPermit2Proxy.settle` and its argument structs, for the Permit2 transfer method of x402 protocol.
 pub mod x402_exact_permit2_proxy {
     use alloy_sol_types::sol;
 

@@ -33,6 +33,7 @@ where
 
 /// Facilitator for the V2 TRON "exact" payment scheme.
 pub struct V2TronExactFacilitator<P> {
+    /// The chain provider used for on-chain reads and settlement.
     pub provider: P,
 }
 

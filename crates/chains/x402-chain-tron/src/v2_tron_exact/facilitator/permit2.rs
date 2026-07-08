@@ -42,6 +42,9 @@ sol! {
     }
 }
 
+/// Verifies a Permit2 payment: requirements match, signature recovers to `from`,
+/// balance and Permit2 allowance both cover the amount, and timing/recipient/asset
+/// match the accepted requirements.
 pub async fn verify_permit2_payment<P>(
     provider: &P,
     payment_payload: &v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>,
@@ -145,6 +148,8 @@ where
     )))
 }
 
+/// Re-verifies, then calls `x402ExactPermit2Proxy.settle` on-chain and waits for
+/// confirmation.
 pub async fn settle_permit2_payment<P>(
     provider: &P,
     payment_payload: &v2::PaymentPayload<Permit2PaymentRequirements, Permit2Payload>,
@@ -190,6 +195,7 @@ where
 
 // ── Permit2 settlement tx ─────────────────────────────────────────────────────
 
+/// The `x402ExactPermit2Proxy.settle` call parameters, decoded from a payment payload.
 pub struct Permit2Transfer {
     pub token: Address,
     pub amount: U256,
@@ -201,6 +207,7 @@ pub struct Permit2Transfer {
     pub signature: Bytes,
 }
 
+/// Submits `x402ExactPermit2Proxy.settle` on-chain, signed by the facilitator.
 pub async fn build_and_submit_permit2_settle_tx<P: TronChainProviderLike>(
     provider: &P,
     x402_exact_permit2_proxy: TronAddress,

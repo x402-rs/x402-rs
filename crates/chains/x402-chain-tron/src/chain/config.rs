@@ -63,19 +63,25 @@ impl TronChainConfigInner {
         3
     }
 
+    /// [`Self::tx_timeout_secs`] as a [`Duration`].
     pub fn tx_timeout(&self) -> Duration {
         Duration::from_secs(self.tx_timeout_secs)
     }
+    /// [`Self::tx_poll_interval_secs`] as a [`Duration`].
     pub fn tx_poll_interval(&self) -> Duration {
         Duration::from_secs(self.tx_poll_interval_secs)
     }
 }
 
+/// Explicit contract address overrides. Unset fields fall back to the
+/// well-known deployment for the configured network, if any.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct TronContracts {
+    /// SUN.io Permit2 contract override.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sun_permit2: Option<TronAddress>,
+    /// x402ExactPermit2Proxy contract override.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub x402_exact_permit2_proxy: Option<TronAddress>,
 }
@@ -98,6 +104,7 @@ pub type TronSignersConfig = Vec<LiteralOrEnv<TronPrivateKey>>;
 pub struct TronPrivateKey(k256::ecdsa::SigningKey);
 
 impl TronPrivateKey {
+    /// Wraps an already-parsed secp256k1 signing key.
     pub fn new(key: k256::ecdsa::SigningKey) -> Self {
         Self(key)
     }

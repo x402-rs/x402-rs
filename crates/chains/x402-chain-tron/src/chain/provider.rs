@@ -23,6 +23,7 @@ use crate::chain::types::{TronChainReference, TronTxId};
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
+/// Errors that can occur while talking to TronGrid or submitting transactions.
 #[derive(Debug, thiserror::Error)]
 pub enum TronChainProviderError {
     #[error("HTTP error: {0}")]
@@ -55,16 +56,20 @@ impl From<TronChainProviderError> for x402_types::proto::PaymentVerificationErro
     }
 }
 
+/// A single k256 signing key paired with its derived TRON address.
 pub struct TronSigner {
     signing_key: SigningKey,
     address: TronAddress,
 }
 
 impl TronSigner {
+    /// Returns the TRON address derived from this signer's public key.
     pub fn address(&self) -> TronAddress {
         self.address
     }
 
+    /// Derives a `TronSigner` from a private key (TRON uses the same secp256k1 + keccak
+    /// derivation as EVM chains).
     pub fn from_key(key: &TronPrivateKey) -> Result<Self, TronChainProviderError> {
         let signing_key = SigningKey::from(key.clone());
         let verifying_key = VerifyingKey::from(&signing_key);
@@ -108,12 +113,14 @@ impl Display for TronSigner {
 
 // ── TronSigners ───────────────────────────────────────────────────────────────
 
+/// A pool of configured facilitator signers, dispatched round-robin.
 pub struct TronSigners {
     inner: Vec<TronSigner>,
     next_idx: AtomicUsize,
 }
 
 impl TronSigners {
+    /// Creates a signer pool from an already-derived list of signers.
     pub fn new(signers: Vec<TronSigner>) -> Self {
         Self {
             inner: signers,
@@ -135,10 +142,12 @@ impl TronSigners {
             .ok_or_else(|| TronChainProviderError::InvalidKey(format!("no signer for {addr}")))
     }
 
+    /// Returns whether the given address is one of the configured signers.
     pub fn contains(&self, addr: &TronAddress) -> bool {
         self.inner.iter().any(|s| s.address == *addr)
     }
 
+    /// Returns the addresses of all configured signers.
     pub fn addresses(&self) -> impl Iterator<Item = &TronAddress> {
         self.inner.iter().map(|s| &s.address)
     }
@@ -169,6 +178,7 @@ pub struct TronChainProvider {
 }
 
 impl TronChainProvider {
+    /// Replaces the TronGrid client (e.g. to inject a mock in tests).
     pub fn with_tron_grid(mut self, tron_grid: TronGridPolling<TronGridHttp>) -> Self {
         self.tron_grid = tron_grid;
         self
@@ -251,11 +261,15 @@ impl ChainProviderOps for TronChainProvider {
     }
 }
 
+/// Accessors for the contract addresses a TRON chain provider was configured with.
 pub trait TronChainAddressesLike {
+    /// The SUN.io Permit2 contract (the EIP-712 `verifyingContract` clients sign against).
     fn sun_permit2(&self) -> TronAddress;
+    /// The x402ExactPermit2Proxy contract (the Permit2 `spender` and settlement target).
     fn x402_exact_permit2_proxy(&self) -> TronAddress;
 }
 
+/// Contract addresses resolved for a given TRON chain (from config or well-known defaults).
 pub struct TronChainAddresses {
     /// SUN.io Permit2 contract — the EIP-712 `verifyingContract` that clients sign against.
     pub sun_permit2: TronAddress,
@@ -273,11 +287,20 @@ impl TronChainAddressesLike for TronChainAddresses {
     }
 }
 
+/// Chain access needed by facilitators: read-only calls, signing, and settlement.
+///
+/// Implemented directly by [`TronChainProvider`] and, transparently, by `Arc<T>` so
+/// facilitators can be generic over either.
 pub trait TronChainProviderLike {
+    /// Concrete address bundle type returned by [`Self::addresses`].
     type Addresses: TronChainAddressesLike;
+    /// Contract addresses configured for this chain.
     fn addresses(&self) -> &Self::Addresses;
+    /// Whether `addr` is one of the facilitator's own signers (must never be a payer).
     fn is_signer(&self, addr: &TronAddress) -> bool;
+    /// The TRON chain this provider is connected to.
     fn chain(&self) -> &TronChainReference;
+    /// Calls a read-only (constant) contract method via `triggerconstantcontract`.
     fn trigger_constant_contract<TCalldata>(
         &self,
         contract: TronAddress,
@@ -286,6 +309,8 @@ pub trait TronChainProviderLike {
     ) -> impl Future<Output = Result<TCalldata::Return, TronChainProviderError>> + Send
     where
         TCalldata: SolCall + Send;
+    /// Builds, signs (round-robin or with a specific `from` signer), and broadcasts a
+    /// contract call, returning the resulting transaction ID.
     fn build_and_submit_tx<TCalldata>(
         &self,
         contract: TronAddress,
@@ -407,6 +432,7 @@ impl WaitForTxLike for TronChainProvider {
 
 // ── ERC20 reads (used by both EIP-3009 and Permit2 facilitators) ──────────────
 
+/// Reads `token.balanceOf(owner_evm)`.
 pub async fn read_balance_of<P: TronChainProviderLike>(
     provider: &P,
     token: TronAddress,
@@ -421,6 +447,7 @@ pub async fn read_balance_of<P: TronChainProviderLike>(
         .await
 }
 
+/// Reads `token.allowance(owner_evm, spender_evm)`.
 pub async fn read_allowance<P: TronChainProviderLike>(
     provider: &P,
     token: TronAddress,
