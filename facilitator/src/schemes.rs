@@ -39,7 +39,7 @@ use x402_types::scheme::{X402SchemeFacilitator, X402SchemeFacilitatorBuilder};
 #[cfg(feature = "chain-aptos")]
 use x402_chain_aptos::V2AptosExact;
 #[cfg(feature = "chain-eip155")]
-use x402_chain_eip155::{V1Eip155Exact, V2Eip155Exact, V2Eip155Upto};
+use x402_chain_eip155::{V1Eip155Exact, V2Eip155BatchSettlement, V2Eip155Exact, V2Eip155Upto};
 #[cfg(feature = "chain-solana")]
 use x402_chain_solana::{V1SolanaExact, V2SolanaExact};
 #[cfg(feature = "chain-tron")]
@@ -159,6 +159,25 @@ impl X402SchemeFacilitatorBuilder<&ChainProvider> for V1Eip155Exact {
             Arc::clone(provider)
         } else {
             return Err("V1Eip155Exact::build: provider must be an Eip155ChainProvider".into());
+        };
+        self.build(eip155_provider, config)
+    }
+}
+
+#[cfg(feature = "chain-eip155")]
+impl X402SchemeFacilitatorBuilder<&ChainProvider> for V2Eip155BatchSettlement {
+    fn build(
+        &self,
+        provider: &ChainProvider,
+        config: Option<serde_json::Value>,
+    ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
+        #[allow(irrefutable_let_patterns)] // For when just chain-aptos is enabled
+        let eip155_provider = if let ChainProvider::Eip155(provider) = provider {
+            Arc::clone(provider)
+        } else {
+            return Err(
+                "V2Eip155BatchSettlement::build: provider must be an Eip155ChainProvider".into(),
+            );
         };
         self.build(eip155_provider, config)
     }
