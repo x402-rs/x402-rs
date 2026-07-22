@@ -278,6 +278,14 @@ pub fn assert_offchain_valid(
         return Err(PaymentVerificationError::RecipientMismatch);
     }
 
+    // Recipient in the accepted requirements must match the server-declared
+    // requirements. The witness below is only checked against the
+    // client-supplied `accepted`, so without this check a client can embed a
+    // different `payTo` in `accepted` and redirect settlement.
+    if accepted.pay_to != payment_requirements.pay_to {
+        return Err(PaymentVerificationError::RecipientMismatch);
+    }
+
     // Correct recipient
     let witness = &authorization.witness;
     if witness.to != accepted.pay_to {
@@ -474,4 +482,85 @@ where
     };
 
     execute_permit2_settlement(provider, payer, structured_signature, build_call).await
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy_primitives::Address;
+    use x402_types::chain::ChainId;
+    use x402_types::timestamp::UnixTimestamp;
+
+    use super::*;
+    use crate::chain::ChecksummedAddress;
+    use crate::chain::permit2::{
+        Permit2Authorization, Permit2AuthorizationPermitted, UptoPermit2Witness,
+    };
+    use crate::v2_eip155_upto::types::UptoScheme;
+
+    fn addr(byte: u8) -> ChecksummedAddress {
+        Address::repeat_byte(byte).into()
+    }
+
+    fn requirements(pay_to: ChecksummedAddress) -> Permit2PaymentRequirements {
+        Permit2PaymentRequirements {
+            scheme: UptoScheme,
+            network: ChainId::new("eip155", "8453"),
+            amount: U256::from(1_000_000u64),
+            pay_to,
+            max_timeout_seconds: 600,
+            asset: addr(0xAA),
+            extra: None,
+        }
+    }
+
+    fn payload_with_accepted(accepted: Permit2PaymentRequirements) -> Permit2PaymentPayload {
+        let witness_to = accepted.pay_to;
+        let asset = accepted.asset;
+        Permit2PaymentPayload {
+            accepted,
+            payload: crate::chain::permit2::UptoPermit2Payload {
+                permit_2_authorization: Permit2Authorization {
+                    // 2100-01-01, far enough out that the time check passes.
+                    deadline: UnixTimestamp::from_secs(4_102_444_800),
+                    from: addr(0x01),
+                    nonce: U256::from(1u64),
+                    permitted: Permit2AuthorizationPermitted {
+                        amount: U256::from(1_000_000u64),
+                        token: asset,
+                    },
+                    spender: UPTO_PERMIT2_PROXY_ADDRESS.into(),
+                    witness: UptoPermit2Witness {
+                        to: witness_to,
+                        facilitator: addr(0x02),
+                        valid_after: UnixTimestamp::from_secs(0),
+                    },
+                },
+                signature: Bytes::new(),
+            },
+            resource: None,
+            x402_version: Default::default(),
+            extensions: Default::default(),
+        }
+    }
+
+    #[test]
+    fn offchain_valid_accepts_matching_pay_to() {
+        let requirements = requirements(addr(0x10));
+        let payload = payload_with_accepted(requirements.clone());
+        assert!(assert_offchain_valid(&payload, &requirements).is_ok());
+    }
+
+    #[test]
+    fn offchain_valid_rejects_accepted_pay_to_mismatch() {
+        // A client that embeds its own recipient in `accepted` must be
+        // rejected even though the witness matches that (attacker) recipient.
+        let requirements = requirements(addr(0x10));
+        let mut accepted = requirements.clone();
+        accepted.pay_to = addr(0x66);
+        let payload = payload_with_accepted(accepted);
+        assert!(matches!(
+            assert_offchain_valid(&payload, &requirements),
+            Err(PaymentVerificationError::RecipientMismatch)
+        ));
+    }
 }
