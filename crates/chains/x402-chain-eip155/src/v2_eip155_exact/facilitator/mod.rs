@@ -20,6 +20,10 @@ use x402_types::scheme::{
 #[cfg(feature = "telemetry")]
 use x402_types::util::telemetry::record_payment_context;
 
+#[cfg(test)]
+#[path = "facilitator_tests.rs"]
+mod tests;
+
 use crate::V2Eip155Exact;
 use crate::chain::Eip155MetaTransactionProvider;
 use crate::eip2612_gas_sponsoring::Eip2612GasSponsoring;
