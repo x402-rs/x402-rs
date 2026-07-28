@@ -15,8 +15,8 @@ use alloy_transport::layers::{FallbackLayer, ThrottleLayer};
 use alloy_transport_http::Http;
 use std::num::NonZeroUsize;
 use std::ops::Deref;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, LazyLock};
 use tower::ServiceBuilder;
 use x402_types::chain::{ChainId, ChainProviderOps, FromConfig};
 
@@ -25,23 +25,13 @@ use tracing::Instrument;
 
 use crate::chain::config::{Eip155ChainConfig, RpcConfig};
 use crate::chain::pending_nonce_manager::PendingNonceManager;
-use crate::chain::permit2::{EXACT_PERMIT2_PROXY_ADDRESS, PERMIT2_ADDRESS};
 use crate::chain::types::Eip155ChainReference;
-use crate::v1_eip155_exact::VALIDATOR_ADDRESS;
 
 /// Combined filler type for gas, blob gas, nonce, and chain ID.
 pub type InnerFiller = JoinFill<
     GasFiller,
     JoinFill<BlobGasFiller, JoinFill<NonceFiller<PendingNonceManager>, ChainIdFiller>>,
 >;
-
-static REQUIRED_CONTRACT_ADDRESSES: LazyLock<Vec<Address>> = LazyLock::new(|| {
-    vec![
-        VALIDATOR_ADDRESS,
-        PERMIT2_ADDRESS,
-        EXACT_PERMIT2_PROXY_ADDRESS,
-    ]
-});
 
 /// The fully composed Ethereum provider type used in this project.
 ///
@@ -195,8 +185,6 @@ impl FromConfig<Eip155ChainConfig> for Eip155ChainProvider {
             .filler(filler)
             .wallet(wallet)
             .connect_client(client);
-
-        assert_contracts_exists(&inner).await?;
 
         #[cfg(feature = "telemetry")]
         tracing::info!(chain=%config.chain_id(), signers=?signer_addresses, "Using EVM provider");
@@ -443,17 +431,60 @@ impl<T: Eip155MetaTransactionProvider> Eip155MetaTransactionProvider for Arc<T> 
     }
 }
 
-pub async fn assert_contracts_exists<P: Provider>(
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum ContractDependencyError {
+    #[error(transparent)]
+    Transport(#[from] TransportError),
+    #[error("Required contract at {0} is not deployed")]
+    NotDeployed(Address),
+}
+
+pub(crate) async fn assert_contracts_exist<P: Provider>(
     provider: &P,
-) -> Result<(), Box<dyn std::error::Error>> {
-    for address in REQUIRED_CONTRACT_ADDRESSES.deref() {
+    addresses: &[Address],
+) -> Result<(), ContractDependencyError> {
+    for address in addresses {
         let code = provider.get_code_at(*address).await?;
         if code.is_empty() {
-            return Err(
-                format!("Contract at address {address} does not exist (empty code)").into(),
-            );
+            return Err(ContractDependencyError::NotDeployed(*address));
         }
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy_transport::mock::Asserter;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn accepts_deployed_contracts() {
+        let asserter = Asserter::new();
+        let provider = ProviderBuilder::new().connect_mocked_client(asserter.clone());
+        let addresses = [Address::ZERO, Address::from([1_u8; 20])];
+        asserter.push_success(&Bytes::from(vec![1]));
+        asserter.push_success(&Bytes::from(vec![1]));
+
+        assert_contracts_exist(&provider, &addresses).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rejects_the_first_missing_contract() {
+        let asserter = Asserter::new();
+        let provider = ProviderBuilder::new().connect_mocked_client(asserter.clone());
+        let deployed = Address::ZERO;
+        let missing = Address::from([1_u8; 20]);
+        asserter.push_success(&Bytes::from(vec![1]));
+        asserter.push_success(&Bytes::new());
+
+        let error = assert_contracts_exist(&provider, &[deployed, missing])
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ContractDependencyError::NotDeployed(address) if address == missing
+        ));
+    }
 }
