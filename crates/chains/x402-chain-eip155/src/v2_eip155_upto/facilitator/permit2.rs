@@ -1,5 +1,5 @@
 use alloy_primitives::{Address, Bytes, TxHash, U256};
-use alloy_provider::{MulticallItem, Provider};
+use alloy_provider::{MULTICALL3_ADDRESS, MulticallItem, Provider};
 use alloy_sol_types::{SolStruct, eip712_domain};
 use x402_types::chain::ChainProviderOps;
 use x402_types::proto::{PaymentVerificationError, v2};
@@ -12,6 +12,7 @@ use tracing::instrument;
 
 use crate::chain::erc20::IERC20;
 use crate::chain::permit2::{PERMIT2_ADDRESS, UPTO_PERMIT2_PROXY_ADDRESS};
+use crate::chain::provider::{ContractDependencyError, assert_contracts_exist};
 use crate::chain::{
     Eip155ChainReference, Eip155MetaTransactionProvider, Eip155SignerAddresses, MetaTransaction,
 };
@@ -101,15 +102,22 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + Eip155Sig
     let authorization = &payment_payload.payload.permit_2_authorization;
     let witness_facilitator = &authorization.witness.facilitator;
     assert_own_signer(provider, witness_facilitator.as_ref())?;
-
-    // 3. Verify onchain constraints
-    let payer = authorization.from;
     let eip2612_payload = payment_payload.eip2612_gas_sponsoring();
     if let Some(eip2612_gas_sponsoring_payload) = &eip2612_payload {
         if !eip2612_gas_sponsoring {
             return Err(PaymentVerificationError::eip2612_gas_sponsoring_not_enabled().into());
         }
         assert_eip2612_offchain_valid(eip2612_gas_sponsoring_payload, payment_payload)?;
+    }
+    assert_contracts_exist(
+        provider.inner(),
+        &[PERMIT2_ADDRESS, UPTO_PERMIT2_PROXY_ADDRESS],
+    )
+    .await?;
+
+    // 3. Verify onchain constraints
+    let payer = authorization.from;
+    if let Some(eip2612_gas_sponsoring_payload) = &eip2612_payload {
         eip2612::assert_onchain_upto_permit2_with_eip2612(
             provider.inner(),
             provider.chain(),
@@ -188,14 +196,22 @@ where
             "0".to_string(),
         ));
     }
-
-    // 3. Execute settlement (with or without EIP-2612 permit)
     let eip2612_payload = payment_payload.eip2612_gas_sponsoring();
-    let tx_hash = if let Some(ref info) = eip2612_payload {
+    if let Some(ref info) = eip2612_payload {
         if !eip2612_gas_sponsoring {
             return Err(PaymentVerificationError::eip2612_gas_sponsoring_not_enabled().into());
         }
         assert_eip2612_offchain_valid(info, payment_payload)?;
+    }
+    assert_contracts_exist(
+        provider.inner(),
+        &[PERMIT2_ADDRESS, UPTO_PERMIT2_PROXY_ADDRESS],
+    )
+    .await
+    .map_err(<Eip155ExactError as From<ContractDependencyError>>::from)?;
+
+    // 3. Execute settlement (with or without EIP-2612 permit)
+    let tx_hash = if let Some(ref info) = eip2612_payload {
         eip2612::settle_upto_permit2_with_eip2612(provider, payment_payload, info, required_amount)
             .await?
     } else {
@@ -336,6 +352,7 @@ pub async fn assert_onchain_upto_permit2<P: Provider>(
             inner,
             original,
         } => {
+            assert_contracts_exist(provider, &[VALIDATOR_ADDRESS, MULTICALL3_ADDRESS]).await?;
             let validator6492 = Validator6492::new(VALIDATOR_ADDRESS, provider);
             let is_valid_signature_call =
                 validator6492.isValidSigWithSideEffects(payer, eip712_hash, original);

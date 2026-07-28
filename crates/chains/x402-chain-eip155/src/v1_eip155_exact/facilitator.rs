@@ -36,6 +36,7 @@ use tracing::{Instrument, instrument};
 use tracing_core::Level;
 
 use crate::V1Eip155Exact;
+use crate::chain::provider::{ContractDependencyError, assert_contracts_exist};
 use crate::chain::{
     EOASignature, EOASignatureExt, Eip155ChainReference, Eip155MetaTransactionProvider,
     MetaTransaction, MetaTransactionSendError,
@@ -769,6 +770,7 @@ pub async fn verify_payment<P: Provider>(
             inner,
             original,
         } => {
+            assert_contracts_exist(provider, &[VALIDATOR_ADDRESS, MULTICALL3_ADDRESS]).await?;
             // Prepare the call to validate EIP-6492 signature
             let validator6492 = Validator6492::new(VALIDATOR_ADDRESS, &provider);
             let is_valid_signature_call =
@@ -907,6 +909,7 @@ where
                 let receipt = tx_fut.await?;
                 receipt
             } else {
+                assert_contracts_exist(provider.inner(), &[MULTICALL3_ADDRESS]).await?;
                 // deploy the smart wallet, and transferWithAuthorization with inner signature
                 let deployment_call = IMulticall3::Call3 {
                     allowFailure: true,
@@ -1060,6 +1063,17 @@ impl From<Eip155ExactError> for X402SchemeFacilitatorError {
             Eip155ExactError::TransactionReverted(_) => Self::OnchainFailure(value.to_string()),
             Eip155ExactError::ContractCall(_) => Self::OnchainFailure(value.to_string()),
             Eip155ExactError::PaymentVerification(e) => Self::PaymentVerification(e),
+        }
+    }
+}
+
+impl From<ContractDependencyError> for Eip155ExactError {
+    fn from(error: ContractDependencyError) -> Self {
+        match error {
+            ContractDependencyError::Transport(error) => Self::Transport(error),
+            ContractDependencyError::NotDeployed(address) => {
+                Self::ContractCall(format!("Required contract at {address} is not deployed"))
+            }
         }
     }
 }

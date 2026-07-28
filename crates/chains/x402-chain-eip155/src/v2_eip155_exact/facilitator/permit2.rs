@@ -16,6 +16,7 @@ use tracing::instrument;
 
 use crate::chain::erc20::IERC20;
 use crate::chain::permit2::{EXACT_PERMIT2_PROXY_ADDRESS, PERMIT2_ADDRESS};
+use crate::chain::provider::{ContractDependencyError, assert_contracts_exist};
 use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction};
 use crate::v1_eip155_exact::{
     Eip155ExactError, StructuredSignature, VALIDATOR_ADDRESS, Validator6492, assert_enough_value,
@@ -49,6 +50,13 @@ pub async fn verify_permit2_payment<P: Eip155MetaTransactionProvider + ChainProv
             return Err(PaymentVerificationError::eip2612_gas_sponsoring_not_enabled().into());
         }
         eip2612::assert_eip2612_offchain_valid(eip2612_gas_sponsoring_payload, payment_payload)?;
+    }
+    assert_contracts_exist(
+        provider.inner(),
+        &[PERMIT2_ADDRESS, EXACT_PERMIT2_PROXY_ADDRESS],
+    )
+    .await?;
+    if let Some(eip2612_gas_sponsoring_payload) = &eip2612_gas_sponsoring_payload {
         eip2612::assert_onchain_exact_permit2_with_eip2612(
             provider.inner(),
             provider.chain(),
@@ -79,14 +87,21 @@ where
 
     // Check if the client provided EIP-2612 gas-sponsoring extension data
     let eip2612_gas_sponsoring_payload = payment_payload.eip2612_gas_sponsoring();
-
-    // 2. Try settle (with or without EIP-2612 permit)
-    let tx_hash = if let Some(eip2612_gas_sponsoring_payload) = &eip2612_gas_sponsoring_payload {
-        // Reject EIP-2612 gas sponsoring if not enabled in config
+    if let Some(eip2612_gas_sponsoring_payload) = &eip2612_gas_sponsoring_payload {
         if !eip2612_gas_sponsoring {
             return Err(PaymentVerificationError::eip2612_gas_sponsoring_not_enabled().into());
         }
         eip2612::assert_eip2612_offchain_valid(eip2612_gas_sponsoring_payload, payment_payload)?;
+    }
+    assert_contracts_exist(
+        provider.inner(),
+        &[PERMIT2_ADDRESS, EXACT_PERMIT2_PROXY_ADDRESS],
+    )
+    .await
+    .map_err(<Eip155ExactError as From<ContractDependencyError>>::from)?;
+
+    // 2. Try settle (with or without EIP-2612 permit)
+    let tx_hash = if let Some(eip2612_gas_sponsoring_payload) = &eip2612_gas_sponsoring_payload {
         eip2612::settle_exact_permit2_with_eip2612(
             provider,
             payment_payload,
@@ -266,6 +281,7 @@ where
                 let receipt = tx_fut.await?;
                 receipt
             } else {
+                assert_contracts_exist(provider.inner(), &[MULTICALL3_ADDRESS]).await?;
                 let deployment_call = IMulticall3::Call3 {
                     allowFailure: true,
                     target: factory,
@@ -406,6 +422,7 @@ pub async fn assert_onchain_exact_permit2<P: Provider>(
             inner,
             original,
         } => {
+            assert_contracts_exist(provider, &[VALIDATOR_ADDRESS, MULTICALL3_ADDRESS]).await?;
             let validator6492 = Validator6492::new(VALIDATOR_ADDRESS, provider);
             let is_valid_signature_call =
                 validator6492.isValidSigWithSideEffects(payer, eip712_hash, original);
