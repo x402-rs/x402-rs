@@ -670,3 +670,76 @@ fn test_usdc_mainnet_address() {
         "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b"
     );
 }
+
+fn sample_raw_transaction(sender: AccountAddress) -> RawTransaction {
+    let ef = create_transfer_entry_function(AccountAddress::ONE, AccountAddress::TWO, 1_000);
+    create_test_raw_transaction(sender, ef, 200_000, 9999999999, 2)
+}
+
+#[test]
+fn test_sender_authenticator_accepts_valid_signature() {
+    let (sk, pk, sender) = generate_test_keypair();
+    let raw = sample_raw_transaction(sender);
+    let auth = sign_raw_transaction(&sk, &pk, &raw);
+    assert!(verify_sender_authenticator(&auth, sender, &raw, None).is_ok());
+}
+
+#[test]
+fn test_sender_authenticator_rejects_forged_signature() {
+    let (sk, pk, sender) = generate_test_keypair();
+    let raw = sample_raw_transaction(sender);
+    let other_raw = sample_raw_transaction(AccountAddress::random());
+    let signature = sk.sign(&other_raw).unwrap();
+    let auth = AccountAuthenticator::ed25519(pk, signature);
+    let err = verify_sender_authenticator(&auth, sender, &raw, None).unwrap_err();
+    assert!(matches!(
+        err,
+        PaymentVerificationError::InvalidSignature(msg) if msg.contains("sender_signature")
+    ));
+}
+
+#[test]
+fn test_sender_authenticator_rejects_pubkey_mismatch() {
+    let (sk, pk, _sender) = generate_test_keypair();
+    let other = AccountAddress::random();
+    let raw = sample_raw_transaction(other);
+    let auth = sign_raw_transaction(&sk, &pk, &raw);
+    let err = verify_sender_authenticator(&auth, other, &raw, None).unwrap_err();
+    assert!(matches!(
+        err,
+        PaymentVerificationError::InvalidSignature(msg) if msg.contains("authenticator_mismatch")
+    ));
+}
+
+#[test]
+fn test_sender_authenticator_rejects_no_account_authenticator() {
+    let sender = AccountAddress::random();
+    let raw = sample_raw_transaction(sender);
+    let err = verify_sender_authenticator(
+        &AccountAuthenticator::NoAccountAuthenticator,
+        sender,
+        &raw,
+        None,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        err,
+        PaymentVerificationError::InvalidSignature(msg) if msg.contains("unsupported_authenticator")
+    ));
+}
+
+#[test]
+fn test_sender_authenticator_fee_payer_requires_wrapped_message() {
+    let (sk, pk, sender) = generate_test_keypair();
+    let fee_payer = AccountAddress::random();
+    let raw = sample_raw_transaction(sender);
+    let auth = sign_fee_payer_transaction(&sk, &pk, &raw, fee_payer);
+    assert!(verify_sender_authenticator(&auth, sender, &raw, Some(fee_payer)).is_ok());
+
+    let raw_only = sign_raw_transaction(&sk, &pk, &raw);
+    let err = verify_sender_authenticator(&raw_only, sender, &raw, Some(fee_payer)).unwrap_err();
+    assert!(matches!(
+        err,
+        PaymentVerificationError::InvalidSignature(msg) if msg.contains("sender_signature")
+    ));
+}
