@@ -325,6 +325,35 @@ pub async fn verify_transfer<P: SolanaChainProviderLike + ChainProviderOps>(
     payer = tracing::field::Empty,
     pay_to = %transfer_requirement.pay_to
 )))]
+/// Rejects a transaction unless every required signer other than the
+/// facilitator fee payer has a non-default, cryptographically valid signature.
+pub fn assert_non_fee_payer_signatures_valid(
+    transaction: &VersionedTransaction,
+    fee_payer: &Pubkey,
+) -> Result<(), SolanaExactError> {
+    let message_bytes = transaction.message.serialize();
+    let keys = transaction.message.static_account_keys();
+    let num_required = transaction.message.header().num_required_signatures as usize;
+    if transaction.signatures.len() < num_required || keys.len() < num_required {
+        return Err(SolanaExactError::MissingPayerSignature);
+    }
+    let default = Signature::default();
+    for i in 0..num_required {
+        let pubkey = &keys[i];
+        if pubkey == fee_payer {
+            continue;
+        }
+        let signature = &transaction.signatures[i];
+        if default.eq(signature) {
+            return Err(SolanaExactError::MissingPayerSignature);
+        }
+        if !signature.verify(pubkey.as_ref(), message_bytes.as_slice()) {
+            return Err(SolanaExactError::InvalidPayerSignature);
+        }
+    }
+    Ok(())
+}
+
 pub async fn verify_transaction<P: SolanaChainProviderLike>(
     provider: &P,
     transaction_b64_string: String,
@@ -336,6 +365,13 @@ pub async fn verify_transaction<P: SolanaChainProviderLike>(
         .map_err(|e| SolanaExactError::TransactionDecoding(e.to_string()))?;
     let transaction = bincode::deserialize::<VersionedTransaction>(bytes.as_slice())
         .map_err(|e| SolanaExactError::TransactionDecoding(e.to_string()))?;
+
+    // The facilitator later adds its own fee-payer signature. Every other
+    // required signer (the payer) must already have a cryptographically valid
+    // signature. Simulation uses sig_verify:false, and settle only rejects
+    // default (all-zero) signatures, so this is the only place /verify attests
+    // that the payer authorized the transfer.
+    assert_non_fee_payer_signatures_valid(&transaction, &provider.pubkey())?;
 
     // Verify compute instructions
     let compute_units = verify_compute_limit_instruction(&transaction, 0)?;
@@ -620,3 +656,7 @@ impl V1SolanaExactFacilitatorConfig {
             .any(|addr| addr.pubkey() == program_id)
     }
 }
+
+#[cfg(test)]
+#[path = "facilitator_tests.rs"]
+mod tests;

@@ -253,6 +253,10 @@ pub enum SolanaExactError {
     InvalidTokenInstruction,
     #[error("Missing sender account in transaction")]
     MissingSenderAccount,
+    #[error("Required payer signature is missing")]
+    MissingPayerSignature,
+    #[error("Required payer signature is invalid")]
+    InvalidPayerSignature,
 }
 
 impl From<SolanaExactError> for PaymentVerificationError {
@@ -279,6 +283,9 @@ impl From<SolanaExactError> for PaymentVerificationError {
             | SolanaExactError::MissingSenderAccount
             | SolanaExactError::InvalidComputePriceInstruction => {
                 PaymentVerificationError::TransactionSimulation(e.to_string())
+            }
+            SolanaExactError::MissingPayerSignature | SolanaExactError::InvalidPayerSignature => {
+                PaymentVerificationError::InvalidSignature(e.to_string())
             }
         }
     }

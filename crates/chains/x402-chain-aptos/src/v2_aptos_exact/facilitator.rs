@@ -129,6 +129,53 @@ struct RawTransactionFields {
     chain_id: aptos_types::chain_id::ChainId,
 }
 
+/// Confirm the sender authenticator is Ed25519, derives to `payer`, and
+/// verifies against the message the client was required to sign.
+pub fn verify_sender_authenticator(
+    sender_authenticator: &AccountAuthenticator,
+    payer: AccountAddress,
+    raw_transaction: &RawTransaction,
+    fee_payer_address: Option<AccountAddress>,
+) -> Result<(), PaymentVerificationError> {
+    use aptos_crypto::Signature;
+    use aptos_types::transaction::RawTransactionWithData;
+    use aptos_types::transaction::authenticator::AuthenticationKey;
+
+    let AccountAuthenticator::Ed25519 {
+        public_key,
+        signature,
+    } = sender_authenticator
+    else {
+        return Err(PaymentVerificationError::InvalidSignature(
+            "invalid_exact_aptos_payload_unsupported_authenticator".to_string(),
+        ));
+    };
+
+    let derived_address = AuthenticationKey::ed25519(public_key).account_address();
+    if derived_address != payer {
+        return Err(PaymentVerificationError::InvalidSignature(
+            "invalid_exact_aptos_payload_sender_authenticator_mismatch".to_string(),
+        ));
+    }
+
+    let verified = if let Some(fee_payer_address) = fee_payer_address {
+        let message = RawTransactionWithData::new_fee_payer(
+            raw_transaction.clone(),
+            vec![],
+            fee_payer_address,
+        );
+        signature.verify(&message, public_key)
+    } else {
+        signature.verify(raw_transaction, public_key)
+    };
+
+    verified.map_err(|_| {
+        PaymentVerificationError::InvalidSignature(
+            "invalid_exact_aptos_payload_sender_signature".to_string(),
+        )
+    })
+}
+
 /// Verify an Aptos transfer request.
 pub async fn verify_transfer(
     provider: &AptosChainProvider,
@@ -200,7 +247,11 @@ pub async fn verify_transfer(
         return Err(PaymentVerificationError::ChainIdMismatch);
     }
 
-    // 6. Sender-authenticator matching for Ed25519
+    // 6. Sender authenticator must be Ed25519, derive to the claimed sender,
+    //    and carry a valid signature over the raw (or fee-payer) message.
+    //    Simulation replaces authenticators with NoAccountAuthenticator, so
+    //    this is the only place /verify attests that the payer authorized
+    //    the transfer.
     let sender_authenticator: AccountAuthenticator =
         bcs::from_bytes(&deserialized.authenticator_bytes).map_err(|e| {
             PaymentVerificationError::InvalidFormat(format!(
@@ -208,16 +259,12 @@ pub async fn verify_transfer(
                 e
             ))
         })?;
-    if let AccountAuthenticator::Ed25519 { ref public_key, .. } = sender_authenticator {
-        use aptos_types::transaction::authenticator::AuthenticationKey;
-        let auth_key = AuthenticationKey::ed25519(public_key);
-        let derived_address = auth_key.account_address();
-        if derived_address != payer {
-            return Err(PaymentVerificationError::InvalidSignature(
-                "invalid_exact_aptos_payload_sender_authenticator_mismatch".to_string(),
-            ));
-        }
-    }
+    verify_sender_authenticator(
+        &sender_authenticator,
+        payer,
+        &deserialized.raw_transaction,
+        deserialized.fee_payer_address,
+    )?;
 
     // 7. Max gas amount for sponsored transactions
     if is_sponsored && raw_fields.max_gas_amount > MAX_GAS_AMOUNT {
