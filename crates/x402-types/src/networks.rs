@@ -69,6 +69,7 @@
 //! - XDC, XRPL EVM, Peaq, IoTeX
 //! - Celo, Celo Sepolia
 //! - Radius, Radius Testnet
+//! - Arbitrum, BNB Smart Chain, PulseChain
 //!
 //! ## KnownNetworkSolana
 //! Provides convenient static methods for Solana networks:
@@ -77,8 +78,8 @@
 //!
 //! # Supported Networks
 //!
-//! The module supports 18 blockchain networks across two namespaces:
-//! - **EVM Networks (16)**: All networks in the eip155 namespace
+//! The module supports 21 blockchain networks across two namespaces:
+//! - **EVM Networks (19)**: All networks in the eip155 namespace
 //! - **Solana Networks (2)**: Solana mainnet and devnet
 //!
 //! # Examples
@@ -239,6 +240,24 @@ pub static KNOWN_NETWORKS: &[NetworkInfo] = &[
         name: "radius-testnet",
         namespace: "eip155",
         reference: "72344",
+    },
+    // Arbitrum
+    NetworkInfo {
+        name: "arbitrum",
+        namespace: "eip155",
+        reference: "42161",
+    },
+    // BNB Smart Chain
+    NetworkInfo {
+        name: "bnb",
+        namespace: "eip155",
+        reference: "56",
+    },
+    // PulseChain
+    NetworkInfo {
+        name: "pulsechain",
+        namespace: "eip155",
+        reference: "369",
     },
     // Solana Networks
     NetworkInfo {
@@ -468,6 +487,18 @@ mod tests {
         assert_eq!(radius_testnet.namespace, "eip155");
         assert_eq!(radius_testnet.reference, "72344");
 
+        let arbitrum = chain_id_by_network_name("arbitrum").unwrap();
+        assert_eq!(arbitrum.namespace, "eip155");
+        assert_eq!(arbitrum.reference, "42161");
+
+        let bnb = chain_id_by_network_name("bnb").unwrap();
+        assert_eq!(bnb.namespace, "eip155");
+        assert_eq!(bnb.reference, "56");
+
+        let pulsechain = chain_id_by_network_name("pulsechain").unwrap();
+        assert_eq!(pulsechain.namespace, "eip155");
+        assert_eq!(pulsechain.reference, "369");
+
         let solana = chain_id_by_network_name("solana").unwrap();
         assert_eq!(solana.namespace, "solana");
         assert_eq!(solana.reference, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
@@ -497,6 +528,18 @@ mod tests {
         let network_name = network_name_by_chain_id(&radius_testnet_chain_id).unwrap();
         assert_eq!(network_name, "radius-testnet");
 
+        let arbitrum_chain_id = ChainId::new("eip155", "42161");
+        let network_name = network_name_by_chain_id(&arbitrum_chain_id).unwrap();
+        assert_eq!(network_name, "arbitrum");
+
+        let bnb_chain_id = ChainId::new("eip155", "56");
+        let network_name = network_name_by_chain_id(&bnb_chain_id).unwrap();
+        assert_eq!(network_name, "bnb");
+
+        let pulsechain_chain_id = ChainId::new("eip155", "369");
+        let network_name = network_name_by_chain_id(&pulsechain_chain_id).unwrap();
+        assert_eq!(network_name, "pulsechain");
+
         let solana_chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
         let network_name = network_name_by_chain_id(&solana_chain_id).unwrap();
         assert_eq!(network_name, "solana");
@@ -515,6 +558,15 @@ mod tests {
 
         let radius_chain_id = ChainId::new("eip155", "723487");
         assert_eq!(radius_chain_id.as_network_name(), Some("radius"));
+
+        let arbitrum_chain_id = ChainId::new("eip155", "42161");
+        assert_eq!(arbitrum_chain_id.as_network_name(), Some("arbitrum"));
+
+        let bnb_chain_id = ChainId::new("eip155", "56");
+        assert_eq!(bnb_chain_id.as_network_name(), Some("bnb"));
+
+        let pulsechain_chain_id = ChainId::new("eip155", "369");
+        assert_eq!(pulsechain_chain_id.as_network_name(), Some("pulsechain"));
 
         let solana_chain_id = ChainId::new("solana", "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
         assert_eq!(solana_chain_id.as_network_name(), Some("solana"));
