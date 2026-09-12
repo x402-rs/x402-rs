@@ -86,6 +86,16 @@ pub struct Eip155ChainProvider {
     nonce_manager: PendingNonceManager,
 }
 
+/// The node rejected the submission because the base fee moved above the
+/// filled `maxFeePerGas` between fill and acceptance. Geth and its forks phrase
+/// it as `fee cap less than base fee` (op-geth: `max fee per gas less than
+/// block base fee`); both are transient and safe to resend once.
+pub fn is_fee_cap_below_base_fee(message: &str) -> bool {
+    let m = message.to_ascii_lowercase();
+    m.contains("fee cap less than base fee")
+        || m.contains("max fee per gas less than block base fee")
+}
+
 impl Eip155ChainProvider {
     #[allow(unused_variables)] // chain_id is needed for tracing only here
     pub fn rpc_client(chain_id: ChainId, rpc: &[RpcConfig]) -> RpcClient {
@@ -296,13 +306,33 @@ impl Eip155MetaTransactionProvider for Eip155ChainProvider {
             txr.set_gas_limit(gas_limit)
         }
 
-        // Send transaction with error handling for nonce reset
-        let pending_tx = match self.inner.send_transaction(txr).await {
-            Ok(pending) => pending,
-            Err(e) => {
-                // Transaction submission failed - reset nonce to force requery
-                self.nonce_manager.reset_nonce(from_address).await;
-                return Err(MetaTransactionSendError::Transport(e));
+        // Send transaction with error handling for nonce reset.
+        //
+        // One retry for exactly one rejection: "fee cap less than base fee".
+        // The fee filler priced the transaction against the block it saw, and
+        // the next block's base fee moved above that cap before the node
+        // accepted it. Nothing was broadcast, the nonce was not consumed, and
+        // a resend a moment later is filled against the newer block. Observed
+        // on Celo mainnet (#113): 2 of 1,005 settlements in a soak, both
+        // transient. Any other submission error is surfaced as before.
+        let mut attempt = 0u8;
+        let pending_tx = loop {
+            match self.inner.send_transaction(txr.clone()).await {
+                Ok(pending) => break pending,
+                Err(e) => {
+                    // Transaction submission failed - reset nonce to force requery
+                    self.nonce_manager.reset_nonce(from_address).await;
+                    if attempt == 0 && is_fee_cap_below_base_fee(&e.to_string()) {
+                        attempt += 1;
+                        // Not `error=%e`: a transport error's Display embeds the
+                        // request URL, which for hosted providers carries the API
+                        // key (#114). The classifier already says what happened.
+                        #[cfg(feature = "telemetry")]
+                        tracing::warn!(chain=%self.chain_id(), "fee cap below base fee at submission; refilling fees and resending once");
+                        continue;
+                    }
+                    return Err(MetaTransactionSendError::Transport(e));
+                }
             }
         };
 
@@ -456,4 +486,35 @@ pub async fn assert_contracts_exists<P: Provider>(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod fee_cap_tests {
+    use super::is_fee_cap_below_base_fee;
+
+    #[test]
+    fn geth_phrasing_is_recognised_inside_the_transport_error() {
+        assert!(is_fee_cap_below_base_fee(
+            "server returned an error response: error code -32000: failed to calculate effective gas tip: fee cap less than base fee"
+        ));
+    }
+
+    #[test]
+    fn op_geth_phrasing_is_recognised() {
+        assert!(is_fee_cap_below_base_fee(
+            "max fee per gas less than block base fee: address 0x…, maxFeePerGas: 1, baseFee: 2"
+        ));
+    }
+
+    #[test]
+    fn other_submission_errors_are_not_retried() {
+        for m in [
+            "server returned an error response: error code -32000: nonce too low",
+            "server returned an error response: error code -32000: insufficient funds for gas * price + value",
+            "server returned an error response: error code -32000: replacement transaction underpriced",
+            "connection reset by peer",
+        ] {
+            assert!(!is_fee_cap_below_base_fee(m), "{m}");
+        }
+    }
 }
