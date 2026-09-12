@@ -141,7 +141,7 @@ impl AsPaymentProblem for X402SchemeFacilitatorError {
         match self {
             X402SchemeFacilitatorError::PaymentVerification(e) => e.as_payment_problem(),
             X402SchemeFacilitatorError::OnchainFailure(e) => {
-                PaymentProblem::new(ErrorReason::UnexpectedError, e.to_string())
+                PaymentProblem::new(ErrorReason::UnexpectedError, redact_urls(e))
             }
         }
     }
@@ -352,4 +352,119 @@ pub trait ExtensionKey {
     /// The JSON key under which this extension type is stored in the
     /// `extensions` map of a payment message.
     const EXTENSION_KEY: &'static str;
+}
+
+/// Every `scheme://…` in `text` cut back to `scheme://host[:port]/<redacted>`.
+///
+/// On-chain failures carry the transport error's text into the response body
+/// (`error_message` / `invalid_reason_details`), and that text embeds the
+/// request URL — for hosted RPC providers, the API key as a path segment,
+/// query string or userinfo. The caller still learns which host failed; the
+/// key stays on the server. (#117)
+pub fn redact_urls(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("://") {
+        // Walk back over the scheme letters to find where the URL starts.
+        let scheme_start = rest[..i]
+            .rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.'))
+            .map(|j| j + 1)
+            .unwrap_or(0);
+        out.push_str(&rest[..scheme_start]);
+        let after = &rest[i + 3..];
+        // Authority ends at the first path/query/fragment separator or whitespace/closer.
+        let end = after
+            .find(|c: char| {
+                c == '/'
+                    || c == '?'
+                    || c == '#'
+                    || c.is_whitespace()
+                    || c == ')'
+                    || c == ']'
+                    || c == '"'
+                    || c == '\''
+            })
+            .unwrap_or(after.len());
+        let authority = &after[..end];
+        // Drop userinfo.
+        let host = authority.rsplit('@').next().unwrap_or(authority);
+        out.push_str(&rest[scheme_start..i + 3]);
+        out.push_str(host);
+        // Anything that followed the host (path, query, fragment, userinfo) is
+        // replaced; a lone trailing slash is not a secret and is kept as is.
+        let tail = &after[end..];
+        let tail_len = if tail.starts_with(['/', '?', '#']) {
+            tail.find(|c: char| {
+                c.is_whitespace() || c == ')' || c == ']' || c == '"' || c == '\'' || c == ','
+            })
+            .unwrap_or(tail.len())
+        } else {
+            0
+        };
+        let tail_str = &tail[..tail_len];
+        if authority.contains('@') || (tail_len > 0 && tail_str != "/") {
+            out.push_str("/<redacted>");
+        } else {
+            out.push_str(tail_str);
+        }
+        rest = &after[end + tail_len..];
+    }
+    out.push_str(rest);
+    out
+}
+
+#[cfg(test)]
+mod redact_urls_tests {
+    use super::redact_urls;
+
+    #[test]
+    fn key_in_path_query_and_userinfo_are_all_cut() {
+        let secret = "SECRETKEY123";
+        for (input, expected) in [
+            (
+                format!("error sending request for url (https://rpc.example.io/v2/{secret})"),
+                "error sending request for url (https://rpc.example.io/<redacted>)".to_string(),
+            ),
+            (
+                format!(
+                    "HTTP error 429 from https://rpc.example.io/?apikey={secret}: too many requests"
+                ),
+                // Everything up to the next whitespace goes with the query, colon included:
+                // a secret may contain one, and losing punctuation costs nothing.
+                "HTTP error 429 from https://rpc.example.io/<redacted> too many requests"
+                    .to_string(),
+            ),
+            (
+                format!("connect https://user:{secret}@rpc.example.io/ failed"),
+                "connect https://rpc.example.io/<redacted> failed".to_string(),
+            ),
+        ] {
+            let out = redact_urls(&input);
+            assert_eq!(out, expected);
+            assert!(!out.contains(secret));
+        }
+    }
+
+    #[test]
+    fn bare_hosts_and_text_without_urls_are_unchanged() {
+        assert_eq!(
+            redact_urls("https://forno.celo.org/ is down"),
+            "https://forno.celo.org/ is down"
+        );
+        assert_eq!(
+            redact_urls("http://localhost:8545 refused"),
+            "http://localhost:8545 refused"
+        );
+        assert_eq!(redact_urls("nonce too low"), "nonce too low");
+        assert_eq!(redact_urls(""), "");
+    }
+
+    #[test]
+    fn two_urls_in_one_message() {
+        let out = redact_urls("tried https://a.example/k1 then https://b.example/k2");
+        assert_eq!(
+            out,
+            "tried https://a.example/<redacted> then https://b.example/<redacted>"
+        );
+    }
 }
