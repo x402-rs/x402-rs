@@ -86,6 +86,32 @@ pub struct Eip155ChainProvider {
     nonce_manager: PendingNonceManager,
 }
 
+/// The RPC URL as it may appear in a log line: scheme and host (and port) only.
+///
+/// Hosted providers put the API key in the URL — as a path segment
+/// (`https://host/v2/<key>`), a query string (`?apikey=`), or userinfo
+/// (`https://user:token@host`). All three used to be printed verbatim at every
+/// start, and container logs travel further than the env file the key came
+/// from. Anything beyond the host is replaced by `<redacted>` when present.
+pub fn redacted_url(url: &url::Url) -> String {
+    let mut out = format!("{}://", url.scheme());
+    if let Some(host) = url.host_str() {
+        out.push_str(host);
+    }
+    if let Some(port) = url.port() {
+        out.push_str(&format!(":{port}"));
+    }
+    let has_secret_shaped_parts = !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.path().trim_matches('/').contains('/')
+        || (!url.path().trim_matches('/').is_empty());
+    if has_secret_shaped_parts {
+        out.push_str("/<redacted>");
+    }
+    out
+}
+
 impl Eip155ChainProvider {
     #[allow(unused_variables)] // chain_id is needed for tracing only here
     pub fn rpc_client(chain_id: ChainId, rpc: &[RpcConfig]) -> RpcClient {
@@ -99,7 +125,7 @@ impl Eip155ChainProvider {
                 }
                 let rpc_url = provider_config.http.deref().clone();
                 #[cfg(feature = "telemetry")]
-                tracing::info!(chain=%chain_id, rpc_url=%rpc_url, rate_limit=?provider_config.rate_limit, "Using HTTP transport");
+                tracing::info!(chain=%chain_id, rpc_url=%redacted_url(&rpc_url), rate_limit=?provider_config.rate_limit, "Using HTTP transport");
                 let rate_limit = provider_config.rate_limit.unwrap_or(u32::MAX);
                 let service = ServiceBuilder::new()
                     .layer(ThrottleLayer::new(rate_limit))
@@ -456,4 +482,56 @@ pub async fn assert_contracts_exists<P: Provider>(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod redaction_tests {
+    use super::redacted_url;
+    use url::Url;
+
+    fn r(s: &str) -> String {
+        redacted_url(&Url::parse(s).unwrap())
+    }
+
+    #[test]
+    fn key_in_path_segment_is_dropped() {
+        assert_eq!(
+            r("https://mainnet.example.io/v2/abcdef0123456789"),
+            "https://mainnet.example.io/<redacted>"
+        );
+    }
+
+    #[test]
+    fn key_in_query_string_is_dropped() {
+        assert_eq!(
+            r("https://rpc.example.org/?apikey=abcdef"),
+            "https://rpc.example.org/<redacted>"
+        );
+    }
+
+    #[test]
+    fn userinfo_is_dropped() {
+        assert_eq!(
+            r("https://user:token@rpc.example.org/"),
+            "https://rpc.example.org/<redacted>"
+        );
+    }
+
+    #[test]
+    fn bare_host_is_unchanged_and_port_kept() {
+        assert_eq!(r("https://forno.celo.org/"), "https://forno.celo.org");
+        assert_eq!(r("http://localhost:8545/"), "http://localhost:8545");
+    }
+
+    #[test]
+    fn the_secret_never_appears() {
+        let secret = "s3cr3t-key-value";
+        for shape in [
+            format!("https://h.example/v2/{secret}"),
+            format!("https://h.example/?key={secret}"),
+            format!("https://u:{secret}@h.example/"),
+        ] {
+            assert!(!r(&shape).contains(secret), "{shape}");
+        }
+    }
 }
