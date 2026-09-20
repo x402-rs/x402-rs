@@ -76,6 +76,7 @@
 //! ```
 
 pub mod chain;
+pub mod redact;
 pub mod v1_eip155_exact;
 pub mod v2_eip155_exact;
 pub mod v2_eip155_upto;
