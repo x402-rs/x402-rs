@@ -99,7 +99,7 @@ impl Eip155ChainProvider {
                 }
                 let rpc_url = provider_config.http.deref().clone();
                 #[cfg(feature = "telemetry")]
-                tracing::info!(chain=%chain_id, rpc_url=%rpc_url, rate_limit=?provider_config.rate_limit, "Using HTTP transport");
+                tracing::info!(chain=%chain_id, rpc_url=%crate::redact::redact_rpc_url(rpc_url.as_str()), rate_limit=?provider_config.rate_limit, "Using HTTP transport");
                 let rate_limit = provider_config.rate_limit.unwrap_or(u32::MAX);
                 let service = ServiceBuilder::new()
                     .layer(ThrottleLayer::new(rate_limit))
