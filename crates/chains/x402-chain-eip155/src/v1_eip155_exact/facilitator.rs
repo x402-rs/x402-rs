@@ -1055,7 +1055,12 @@ pub enum Eip155ExactError {
 impl From<Eip155ExactError> for X402SchemeFacilitatorError {
     fn from(value: Eip155ExactError) -> Self {
         match value {
-            Eip155ExactError::Transport(_) => Self::OnchainFailure(value.to_string()),
+            // Transport errors embed the request URL (alloy 1.x), which carries
+            // the keyed RPC URL for hosted providers. Redact it before the
+            // message reaches the client-facing response body (see #117).
+            Eip155ExactError::Transport(_) => {
+                Self::OnchainFailure(crate::redact::redact_urls_in_text(&value.to_string()))
+            }
             Eip155ExactError::PendingTransaction(_) => Self::OnchainFailure(value.to_string()),
             Eip155ExactError::TransactionReverted(_) => Self::OnchainFailure(value.to_string()),
             Eip155ExactError::ContractCall(_) => Self::OnchainFailure(value.to_string()),
