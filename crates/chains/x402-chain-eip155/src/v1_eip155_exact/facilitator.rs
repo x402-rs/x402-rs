@@ -36,6 +36,7 @@ use tracing::{Instrument, instrument};
 use tracing_core::Level;
 
 use crate::V1Eip155Exact;
+use crate::attribution_tag::append_suffix;
 use crate::chain::{
     EOASignature, EOASignatureExt, Eip155ChainReference, Eip155MetaTransactionProvider,
     MetaTransaction, MetaTransactionSendError,
@@ -154,7 +155,9 @@ where
         )
         .await?;
 
-        let tx_hash = settle_payment(&self.provider, &contract, &payment, &eip712_domain).await?;
+        // V1 payments carry no `builder-code` extension; settle without a suffix.
+        let tx_hash =
+            settle_payment(&self.provider, &contract, &payment, &eip712_domain, None).await?;
         Ok(v1::SettleResponse::Success {
             payer: payment.from.to_string(),
             transaction: tx_hash.to_string(),
@@ -864,6 +867,9 @@ pub async fn settle_payment<P, E>(
     contract: &IEIP3009::IEIP3009Instance<&P::Inner>,
     payment: &ExactEvmPayment,
     eip712_domain: &Eip712Domain,
+    // Optional ERC-8021 attribution suffix appended to the settlement calldata.
+    // `None` leaves the calldata untouched (the default, unconfigured behaviour).
+    attribution_suffix: Option<&Bytes>,
 ) -> Result<TxHash, Eip155ExactError>
 where
     P: Eip155MetaTransactionProvider<Error = E>,
@@ -885,7 +891,7 @@ where
                 // transferWithAuthorization with inner signature
                 let meta_tx = MetaTransaction::new(
                     transfer_call.tx.target(),
-                    transfer_call.tx.calldata().clone(),
+                    append_suffix(transfer_call.tx.calldata().clone(), attribution_suffix),
                 );
                 let tx_fut = Eip155MetaTransactionProvider::send_transaction(provider, meta_tx);
                 #[cfg(feature = "telemetry")]
@@ -921,8 +927,10 @@ where
                 let aggregate_call = IMulticall3::aggregate3Call {
                     calls: vec![deployment_call, transfer_with_authorization_call],
                 };
-                let meta_tx =
-                    MetaTransaction::new(MULTICALL3_ADDRESS, aggregate_call.abi_encode().into());
+                let meta_tx = MetaTransaction::new(
+                    MULTICALL3_ADDRESS,
+                    append_suffix(aggregate_call.abi_encode().into(), attribution_suffix),
+                );
                 let tx_fut = Eip155MetaTransactionProvider::send_transaction(provider, meta_tx);
                 #[cfg(feature = "telemetry")]
                 let receipt = tx_fut
@@ -951,7 +959,7 @@ where
             // transferWithAuthorization with eip1271 signature
             let meta_tx = MetaTransaction::new(
                 transfer_call.tx.target(),
-                transfer_call.tx.calldata().clone(),
+                append_suffix(transfer_call.tx.calldata().clone(), attribution_suffix),
             );
             let tx_fut = Eip155MetaTransactionProvider::send_transaction(provider, meta_tx);
             #[cfg(feature = "telemetry")]
@@ -980,7 +988,7 @@ where
             // transferWithAuthorization with EOA signature
             let meta_tx = MetaTransaction::new(
                 transfer_call.tx.target(),
-                transfer_call.tx.calldata().clone(),
+                append_suffix(transfer_call.tx.calldata().clone(), attribution_suffix),
             );
             let tx_fut = Eip155MetaTransactionProvider::send_transaction(provider, meta_tx);
             #[cfg(feature = "telemetry")]

@@ -75,6 +75,7 @@
 //! let settle_response = facilitator.settle(&settle_request).await?;
 //! ```
 
+pub mod attribution_tag;
 pub mod chain;
 pub mod v1_eip155_exact;
 pub mod v2_eip155_exact;

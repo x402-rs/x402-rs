@@ -8,6 +8,7 @@ pub mod eip2612;
 pub mod eip3009;
 pub mod permit2;
 
+use crate::attribution_tag::{AttributionTag, AttributionTagExtension, is_valid_code};
 use alloy_provider::Provider;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -37,9 +38,7 @@ where
         provider: P,
         config: Option<serde_json::Value>,
     ) -> Result<Box<dyn X402SchemeFacilitator>, Box<dyn std::error::Error>> {
-        let config: V2Eip155ExactFacilitatorConfig = config
-            .and_then(|config| V2Eip155ExactFacilitatorConfig::deserialize(config).ok())
-            .unwrap_or_default();
+        let config = V2Eip155ExactFacilitatorConfig::from_json(config)?;
         Ok(Box::new(V2Eip155ExactFacilitator::new(provider, config)))
     }
 }
@@ -54,10 +53,40 @@ where
 /// - `eip2612_gas_sponsoring`: Whether to enable EIP-2612 gas-sponsoring extension.
 ///   When enabled, the facilitator supports atomic settlement with EIP-2612 permits,
 ///   allowing the payer to have their gas fees covered by the facilitator.
+/// - `attribution_tag`: The facilitator's own ERC-8021 attribution code, written as `w`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct V2Eip155ExactFacilitatorConfig {
     #[serde(default)]
     pub eip2612_gas_sponsoring: bool,
+    /// ERC-8021 attribution: the facilitator's own code, written as `w` (wallet).
+    /// When set, the facilitator appends an attribution suffix to EIP-3009
+    /// settlement calldata, combining this code with any `a`/`s` codes the
+    /// payment carries in its `builder-code` extension. Must match
+    /// `^[a-z0-9_]{1,32}$`; an invalid value fails [`X402SchemeFacilitatorBuilder::build`].
+    /// Unset (the default) leaves `w` out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attribution_tag: Option<String>,
+}
+
+impl V2Eip155ExactFacilitatorConfig {
+    /// Reads the scheme config, falling back to the defaults when it is absent
+    /// or does not deserialize. A present but malformed `attribution_tag` is an
+    /// error: a facilitator asked to tag its settlements must not run untagged.
+    pub fn from_json(
+        config: Option<serde_json::Value>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let config: Self = config
+            .and_then(|config| Self::deserialize(config).ok())
+            .unwrap_or_default();
+        if let Some(tag) = config.attribution_tag.as_deref()
+            && !is_valid_code(tag)
+        {
+            return Err(
+                format!("invalid attribution_tag {tag:?}: must match ^[a-z0-9_]{{1,32}}$").into(),
+            );
+        }
+        Ok(config)
+    }
 }
 
 /// Extra data for the V2 EIP-155 exact scheme facilitator.
@@ -89,6 +118,7 @@ pub struct V2Eip155ExactFacilitatorExtra {
 pub struct V2Eip155ExactFacilitator<P> {
     provider: P,
     eip2612_gas_sponsoring: bool,
+    attribution_tag: Option<String>,
 }
 
 impl<P> V2Eip155ExactFacilitator<P> {
@@ -97,6 +127,7 @@ impl<P> V2Eip155ExactFacilitator<P> {
         Self {
             provider,
             eip2612_gas_sponsoring: config.eip2612_gas_sponsoring,
+            attribution_tag: config.attribution_tag,
         }
     }
 }
@@ -187,10 +218,20 @@ where
                     payment_payload.payload.authorization.from,
                     payment_requirements.pay_to,
                 );
+                // ERC-8021 attribution: combine the facilitator's configured
+                // tag with the app/service codes the payment carries in its
+                // `builder-code` extension, and append the resulting suffix to
+                // the settlement calldata.
+                let attribution_tag = AttributionTag::from_config_and_extensions(
+                    self.attribution_tag.as_deref(),
+                    &payment_payload.extensions,
+                );
+                let attribution_suffix = attribution_tag.suffix();
                 eip3009::settle_eip3009_payment(
                     &self.provider,
                     &payment_payload,
                     &payment_requirements,
+                    attribution_suffix.as_ref(),
                 )
                 .await?
             }
@@ -222,13 +263,8 @@ where
 
     async fn supported(&self) -> Result<proto::SupportedResponse, X402SchemeFacilitatorError> {
         let chain_id = self.provider.chain_id();
-        let mut extensions = vec![];
-        // Conditionally include EIP-2612 gas-sponsoring extension based on config.
-        // This tells the client it may include an EIP-2612 permit in the payload,
-        // allowing the facilitator to call `settleWithPermit` atomically.
-        if self.eip2612_gas_sponsoring {
-            extensions.push(Eip2612GasSponsoring::EXTENSION_KEY.to_string());
-        }
+        let extensions =
+            supported_extensions(self.eip2612_gas_sponsoring, self.attribution_tag.is_some());
         let extra = V2Eip155ExactFacilitatorExtra {
             extensions: extensions.clone(),
         };
@@ -249,5 +285,76 @@ where
             extensions,
             signers,
         })
+    }
+}
+
+/// The extension keys this facilitator advertises in `/supported`.
+fn supported_extensions(eip2612_gas_sponsoring: bool, attribution_tag: bool) -> Vec<String> {
+    let mut extensions = vec![];
+    // Conditionally include EIP-2612 gas-sponsoring extension based on config.
+    // This tells the client it may include an EIP-2612 permit in the payload,
+    // allowing the facilitator to call `settleWithPermit` atomically.
+    if eip2612_gas_sponsoring {
+        extensions.push(Eip2612GasSponsoring::EXTENSION_KEY.to_string());
+    }
+    // Advertised only when the facilitator has its own code configured, so
+    // `/supported` is unchanged for a facilitator that did not opt in.
+    if attribution_tag {
+        extensions.push(AttributionTagExtension::EXTENSION_KEY.to_string());
+    }
+    extensions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn config_reads_attribution_tag() {
+        let config = V2Eip155ExactFacilitatorConfig::from_json(Some(json!({
+            "eip2612_gas_sponsoring": true,
+            "attribution_tag": "celo_facil"
+        })))
+        .unwrap();
+        assert!(config.eip2612_gas_sponsoring);
+        assert_eq!(config.attribution_tag.as_deref(), Some("celo_facil"));
+    }
+
+    #[test]
+    fn config_without_attribution_tag_is_unchanged() {
+        let config = V2Eip155ExactFacilitatorConfig::from_json(Some(json!({
+            "eip2612_gas_sponsoring": true
+        })))
+        .unwrap();
+        assert!(config.eip2612_gas_sponsoring);
+        assert_eq!(config.attribution_tag, None);
+        let config = V2Eip155ExactFacilitatorConfig::from_json(None).unwrap();
+        assert_eq!(config.attribution_tag, None);
+    }
+
+    #[test]
+    fn config_rejects_a_malformed_attribution_tag() {
+        for tag in ["Celo-Facil", "", "with space", &"a".repeat(33)] {
+            let err = V2Eip155ExactFacilitatorConfig::from_json(Some(json!({
+                "attribution_tag": tag
+            })))
+            .expect_err("malformed tag must be rejected");
+            assert!(err.to_string().contains("invalid attribution_tag"), "{err}");
+        }
+    }
+
+    #[test]
+    fn supported_advertises_the_extension_only_with_a_tag_configured() {
+        assert_eq!(supported_extensions(false, false), Vec::<String>::new());
+        assert_eq!(
+            supported_extensions(true, false),
+            vec!["eip2612GasSponsoring"]
+        );
+        assert_eq!(supported_extensions(false, true), vec!["builder-code"]);
+        assert_eq!(
+            supported_extensions(true, true),
+            vec!["eip2612GasSponsoring", "builder-code"]
+        );
     }
 }

@@ -40,6 +40,7 @@ pub async fn settle_eip3009_payment<P>(
     provider: &P,
     payment_payload: &Eip3009PaymentPayload,
     payment_requirements: &Eip3009PaymentRequirements,
+    attribution_suffix: Option<&alloy_primitives::Bytes>,
 ) -> Result<v2::SettleResponse, X402SchemeFacilitatorError>
 where
     P: Eip155MetaTransactionProvider + ChainProviderOps,
@@ -55,7 +56,14 @@ where
     )
     .await?;
 
-    let tx_hash = settle_payment(provider, &contract, &payment, &eip712_domain).await?;
+    let tx_hash = settle_payment(
+        provider,
+        &contract,
+        &payment,
+        &eip712_domain,
+        attribution_suffix,
+    )
+    .await?;
 
     Ok(v2::SettleResponse::Success {
         payer: payment.from.to_string(),

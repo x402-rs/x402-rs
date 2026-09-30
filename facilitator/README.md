@@ -112,6 +112,38 @@ Create a `config.json` file:
 }
 ```
 
+### Attribution tag (ERC-8021)
+
+The `v2-eip155-exact` scheme implements the facilitator side of the
+[`builder-code` extension](../docs/specs/extensions/builder_code.md). Set
+`attribution_tag` to the facilitator's own attribution code:
+
+```json
+{
+  "scheme": "v2-eip155-exact",
+  "chains": ["eip155:42220"],
+  "config": { "attribution_tag": "my_facilitator" }
+}
+```
+
+At settlement the facilitator appends an ERC-8021 Schema 2 suffix to the
+transaction calldata, carrying `attribution_tag` as `w` and the `a` / `s` codes
+found in the payment's `builder-code` extension.
+
+- `attribution_tag` must match `^[a-z0-9_]{1,32}$`. A malformed value is a
+  configuration error: the scheme handler is not registered.
+- `a` and `s` come from the request. A code that fails the pattern is left out
+  and the payment settles anyway. At most 10 service codes are written.
+- With `attribution_tag` set, `/supported` lists `builder-code` under
+  `extensions`.
+- Without `attribution_tag`, a payment that carries codes is still tagged with
+  them. Without either, the calldata is unchanged.
+- Only EIP-3009 settlements are tagged. Permit2 and EIP-2612 settlements, the
+  `upto` scheme, and V1 payments are not.
+- The facilitator does not see the `402 Payment Required` response, so it cannot
+  compare the payment's `a` with the one the resource server declared. That
+  check belongs to the resource server.
+
 ### Environment Variables
 
 | Variable                      | Description                      | Default       |
