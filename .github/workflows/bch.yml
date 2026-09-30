@@ -1,0 +1,30 @@
+name: BCH chain tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bch:
+    name: x402-chain-bch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check BCH crate
+        run: cargo check --locked -p x402-chain-bch
+
+      - name: Test BCH crate
+        run: cargo test --locked -p x402-chain-bch --lib

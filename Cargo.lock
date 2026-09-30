@@ -2610,6 +2610,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bip39"
+version = "2.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90dbd31c98227229239363921e60fcf5e558e43ec69094d46fc4996f08d1d5bc"
+dependencies = [
+ "bitcoin_hashes",
+ "serde",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13841,6 +13852,26 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "url",
+ "x402-types",
+]
+
+[[package]]
+name = "x402-chain-bch"
+version = "2.0.2"
+dependencies = [
+ "alloy-primitives",
+ "async-trait",
+ "base64 0.22.1",
+ "bip39",
+ "hex",
+ "hmac 0.12.1",
+ "ripemd",
+ "secp256k1 0.31.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "tokio",
  "x402-types",
 ]
 

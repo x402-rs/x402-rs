@@ -8,6 +8,7 @@ members = [
   "crates/chains/x402-chain-eip155",
   "crates/chains/x402-chain-solana",
   "crates/chains/x402-chain-aptos",
+  "crates/chains/x402-chain-bch",
   "crates/chains/x402-chain-tron",
   "facilitator",
   "examples/x402-axum-example",
@@ -29,6 +30,7 @@ categories = ["cryptography::cryptocurrencies", "finance", "network-programming"
 [workspace.dependencies]
 x402-axum = { version = "2.0", path = "crates/x402-axum" }
 x402-chain-aptos = { version = "2.0", path = "crates/chains/x402-chain-aptos" }
+x402-chain-bch = { version = "2.0", path = "crates/chains/x402-chain-bch" }
 x402-chain-eip155 = { version = "2.0", path = "crates/chains/x402-chain-eip155" }
 x402-chain-solana = { version = "2.0", path = "crates/chains/x402-chain-solana" }
 x402-chain-tron = { version = "0.2", path = "crates/chains/x402-chain-tron" }
@@ -47,7 +49,7 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 
 # Common dependencies
 thiserror = { version = "2.0" }
-tokio = { version = "1.35", features = ["sync", "rt-multi-thread"] }
+tokio = { version = "1.35", features = ["io-util", "net", "sync", "rt-multi-thread"] }
 tokio-util = { version = "0.7.16", features = ["rt"] }
 tower = { version = "0.5" }
 tower-http = { version = "0.6.6", features = ["trace", "cors"] }

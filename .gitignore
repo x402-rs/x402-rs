@@ -1,5 +1,6 @@
 target/
 .idea/
+.ai/
 .env
 crates/*/target/
 facilitator/target/
