@@ -246,10 +246,11 @@ impl AsJsonValue for FacilitatorLocalError {
             }
             FacilitatorLocalError::Settlement(scheme_handler_error) => {
                 let problem = scheme_handler_error.as_payment_problem();
+                let (network, transaction) = pending_network_and_transaction(scheme_handler_error);
                 let settlement_error_response = SettlementErrorResponse {
                     success: false,
-                    network: "",
-                    transaction: "",
+                    network,
+                    transaction,
                     error_reason: problem.reason(),
                     error_message: problem.details(),
                     payer: "",
@@ -276,10 +277,11 @@ impl IntoResponse for FacilitatorLocalError {
             }
             FacilitatorLocalError::Settlement(scheme_handler_error) => {
                 let problem = scheme_handler_error.as_payment_problem();
+                let (network, transaction) = pending_network_and_transaction(&scheme_handler_error);
                 let settlement_error_response = SettlementErrorResponse {
                     success: false,
-                    network: "",
-                    transaction: "",
+                    network,
+                    transaction,
                     error_reason: problem.reason(),
                     error_message: problem.details(),
                     payer: "",
@@ -301,5 +303,67 @@ fn scheme_error_to_status_code(error: &X402SchemeFacilitatorError) -> StatusCode
             }
         }
         X402SchemeFacilitatorError::OnchainFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        // Broadcast, outcome not known yet: accepted, not failed.
+        X402SchemeFacilitatorError::SettlementPending { .. } => StatusCode::ACCEPTED,
+    }
+}
+
+/// The `network` and `transaction` a settlement error response carries.
+///
+/// Both are set only when a transaction was broadcast and its outcome is pending; the caller
+/// needs them to reconcile on chain. Otherwise nothing was broadcast, and both stay empty.
+fn pending_network_and_transaction(error: &X402SchemeFacilitatorError) -> (&str, &str) {
+    match error {
+        X402SchemeFacilitatorError::SettlementPending {
+            network,
+            transaction,
+            ..
+        } => (network, transaction),
+        _ => ("", ""),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TX_HASH: &str = "0xa5f6a7027df46b5da388406fbc39e468f2466968f698ffbd21ad0e674af58601";
+
+    fn settlement_pending() -> FacilitatorLocalError {
+        FacilitatorLocalError::Settlement(X402SchemeFacilitatorError::SettlementPending {
+            network: "celo".to_string(),
+            transaction: TX_HASH.to_string(),
+            details: "receipt could not be fetched: HTTP error 503".to_string(),
+        })
+    }
+
+    #[test]
+    fn test_settlement_pending_response_carries_transaction_and_network() {
+        let body = settlement_pending().as_json_value().unwrap();
+        assert_eq!(body["success"], false);
+        assert_eq!(body["errorReason"], "settlement_pending");
+        assert_eq!(body["transaction"], TX_HASH);
+        assert_eq!(body["network"], "celo");
+        assert_eq!(
+            settlement_pending().into_response().status(),
+            StatusCode::ACCEPTED
+        );
+    }
+
+    #[test]
+    fn test_onchain_failure_response_has_no_transaction() {
+        let error = || {
+            FacilitatorLocalError::Settlement(X402SchemeFacilitatorError::OnchainFailure(
+                "HTTP error 503".to_string(),
+            ))
+        };
+        let body = error().as_json_value().unwrap();
+        assert_eq!(body["success"], false);
+        assert_eq!(body["errorReason"], "unexpected_error");
+        assert_eq!(body["transaction"], "");
+        assert_eq!(
+            error().into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 }

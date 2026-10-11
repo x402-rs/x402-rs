@@ -55,7 +55,9 @@ where
     )
     .await?;
 
-    let tx_hash = settle_payment(provider, &contract, &payment, &eip712_domain).await?;
+    let tx_hash = settle_payment(provider, &contract, &payment, &eip712_domain)
+        .await
+        .map_err(|e| e.into_settlement_error(&accepted.network.to_string()))?;
 
     Ok(v2::SettleResponse::Success {
         payer: payment.from.to_string(),

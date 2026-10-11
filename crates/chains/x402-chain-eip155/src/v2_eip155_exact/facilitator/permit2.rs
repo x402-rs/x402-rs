@@ -92,14 +92,15 @@ where
             payment_payload,
             eip2612_gas_sponsoring_payload,
         )
-        .await?
+        .await
     } else {
-        settle_exact_permit2(provider, payment_payload).await?
+        settle_exact_permit2(provider, payment_payload).await
     };
+    let network = &payment_payload.accepted.network;
+    let tx_hash = tx_hash.map_err(|e| e.into_settlement_error(&network.to_string()))?;
 
     let authorization = &payment_payload.payload.permit_2_authorization;
     let payer = authorization.from;
-    let network = &payment_payload.accepted.network;
 
     Ok(v2::SettleResponse::Success {
         payer: payer.to_string(),
