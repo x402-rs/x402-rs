@@ -197,12 +197,12 @@ where
         }
         assert_eip2612_offchain_valid(info, payment_payload)?;
         eip2612::settle_upto_permit2_with_eip2612(provider, payment_payload, info, required_amount)
-            .await?
+            .await
     } else {
-        settle_upto_permit2(provider, payment_payload, required_amount).await?
+        settle_upto_permit2(provider, payment_payload, required_amount).await
     };
-
     let network = &payment_payload.accepted.network;
+    let tx_hash = tx_hash.map_err(|e| e.into_settlement_error(&network.to_string()))?;
 
     Ok(UptoSettleResponse::success(
         payer.to_string(),

@@ -154,7 +154,9 @@ where
         )
         .await?;
 
-        let tx_hash = settle_payment(&self.provider, &contract, &payment, &eip712_domain).await?;
+        let tx_hash = settle_payment(&self.provider, &contract, &payment, &eip712_domain)
+            .await
+            .map_err(|e| e.into_settlement_error(&payload.network))?;
         Ok(v1::SettleResponse::Success {
             payer: payment.from.to_string(),
             transaction: tx_hash.to_string(),
@@ -1044,6 +1046,13 @@ pub enum Eip155ExactError {
     Transport(#[from] TransportError),
     #[error(transparent)]
     PendingTransaction(#[from] PendingTransactionError),
+    /// The transaction was broadcast, but its receipt could not be fetched; it may still be mined.
+    #[error("Transaction {tx_hash} was broadcast, but its receipt could not be fetched: {source}")]
+    ReceiptUnavailable {
+        tx_hash: TxHash,
+        #[source]
+        source: PendingTransactionError,
+    },
     #[error("Transaction {0} reverted")]
     TransactionReverted(TxHash),
     #[error("Contract call failed: {0}")]
@@ -1052,11 +1061,33 @@ pub enum Eip155ExactError {
     PaymentVerification(#[from] PaymentVerificationError),
 }
 
+impl Eip155ExactError {
+    /// Converts an error from a settlement on `network` into the error `/settle` answers with.
+    ///
+    /// [`Eip155ExactError::ReceiptUnavailable`] becomes
+    /// [`X402SchemeFacilitatorError::SettlementPending`], which keeps the transaction hash and
+    /// the network so the caller can reconcile on chain. Every other error converts as
+    /// [`From`] does.
+    pub fn into_settlement_error(self, network: &str) -> X402SchemeFacilitatorError {
+        if let Eip155ExactError::ReceiptUnavailable { tx_hash, .. } = &self {
+            return X402SchemeFacilitatorError::SettlementPending {
+                network: network.to_string(),
+                transaction: tx_hash.to_string(),
+                details: self.to_string(),
+            };
+        }
+        self.into()
+    }
+}
+
 impl From<Eip155ExactError> for X402SchemeFacilitatorError {
     fn from(value: Eip155ExactError) -> Self {
         match value {
             Eip155ExactError::Transport(_) => Self::OnchainFailure(value.to_string()),
             Eip155ExactError::PendingTransaction(_) => Self::OnchainFailure(value.to_string()),
+            // Without the network a pending answer is incomplete; settlement code paths use
+            // `into_settlement_error` instead. The message still names the transaction.
+            Eip155ExactError::ReceiptUnavailable { .. } => Self::OnchainFailure(value.to_string()),
             Eip155ExactError::TransactionReverted(_) => Self::OnchainFailure(value.to_string()),
             Eip155ExactError::ContractCall(_) => Self::OnchainFailure(value.to_string()),
             Eip155ExactError::PaymentVerification(e) => Self::PaymentVerification(e),
@@ -1075,6 +1106,9 @@ impl From<MetaTransactionSendError> for Eip155ExactError {
         match e {
             MetaTransactionSendError::Transport(e) => Self::Transport(e),
             MetaTransactionSendError::PendingTransaction(e) => Self::PendingTransaction(e),
+            MetaTransactionSendError::ReceiptUnavailable { tx_hash, source } => {
+                Self::ReceiptUnavailable { tx_hash, source }
+            }
             MetaTransactionSendError::Custom(e) => Self::ContractCall(e),
         }
     }
@@ -1112,5 +1146,87 @@ impl From<alloy_contract::Error> for Eip155ExactError {
             alloy_contract::Error::TransportError(e) => Self::Transport(e),
             alloy_contract::Error::PendingTransactionError(e) => Self::PendingTransaction(e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy_primitives::b256;
+    use alloy_provider::WatchTxError;
+    use alloy_transport::TransportErrorKind;
+    use x402_types::proto::{AsPaymentProblem, ErrorReason};
+
+    const TX_HASH: TxHash =
+        b256!("0xa5f6a7027df46b5da388406fbc39e468f2466968f698ffbd21ad0e674af58601");
+
+    /// The error an RPC behind a load balancer with no healthy backend answers with.
+    fn rpc_503() -> TransportError {
+        TransportErrorKind::http_error(
+            503,
+            r#"{"jsonrpc":"2.0","error":{"code":-32011,"message":"no backend is currently healthy to serve traffic"},"id":1}"#
+                .to_string(),
+        )
+    }
+
+    #[test]
+    fn test_receipt_error_after_broadcast_settles_as_pending_with_hash() {
+        let send_error = MetaTransactionSendError::ReceiptUnavailable {
+            tx_hash: TX_HASH,
+            source: PendingTransactionError::TransportError(rpc_503()),
+        };
+        let error = Eip155ExactError::from(send_error).into_settlement_error("celo");
+        let X402SchemeFacilitatorError::SettlementPending {
+            network,
+            transaction,
+            details,
+        } = &error
+        else {
+            panic!("expected SettlementPending, got {error:?}");
+        };
+        assert_eq!(network, "celo");
+        assert_eq!(transaction, &TX_HASH.to_string());
+        assert!(details.contains("HTTP error 503"));
+        assert_eq!(
+            error.as_payment_problem().reason(),
+            ErrorReason::SettlementPending
+        );
+    }
+
+    #[test]
+    fn test_receipt_timeout_after_broadcast_settles_as_pending_with_hash() {
+        let send_error = MetaTransactionSendError::ReceiptUnavailable {
+            tx_hash: TX_HASH,
+            source: PendingTransactionError::TxWatcher(WatchTxError::Timeout),
+        };
+        let error = Eip155ExactError::from(send_error).into_settlement_error("eip155:42220");
+        assert!(matches!(
+            &error,
+            X402SchemeFacilitatorError::SettlementPending { network, transaction, .. }
+                if network == "eip155:42220" && transaction == &TX_HASH.to_string()
+        ));
+    }
+
+    #[test]
+    fn test_send_error_before_broadcast_stays_a_failure() {
+        let send_error = MetaTransactionSendError::Transport(rpc_503());
+        let error = Eip155ExactError::from(send_error).into_settlement_error("celo");
+        assert!(matches!(
+            error,
+            X402SchemeFacilitatorError::OnchainFailure(_)
+        ));
+        assert_eq!(
+            error.as_payment_problem().reason(),
+            ErrorReason::UnexpectedError
+        );
+    }
+
+    #[test]
+    fn test_reverted_transaction_stays_a_failure() {
+        let error = Eip155ExactError::TransactionReverted(TX_HASH).into_settlement_error("celo");
+        assert!(matches!(
+            error,
+            X402SchemeFacilitatorError::OnchainFailure(_)
+        ));
     }
 }
