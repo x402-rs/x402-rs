@@ -38,7 +38,8 @@ use tracing_core::Level;
 use crate::V1Eip155Exact;
 use crate::chain::{
     EOASignature, EOASignatureExt, Eip155ChainReference, Eip155MetaTransactionProvider,
-    MetaTransaction, MetaTransactionSendError,
+    MetaTransaction, MetaTransactionSendError, PendingSettlement, pending_settlement_key,
+    settle_request_hash,
 };
 use crate::v1_eip155_exact::{
     ExactScheme, PaymentRequirementsExtra, TransferWithAuthorization, types,
@@ -146,19 +147,25 @@ where
             payload.payload.authorization.from,
             requirements.pay_to,
         );
-        let (contract, payment, eip712_domain) = assert_valid_payment(
-            self.provider.inner(),
-            self.provider.chain(),
-            payload,
-            requirements,
+        let tx_hash = settle_with_pending_store(
+            &self.provider,
+            &payload.payload.signature,
+            settle_request_hash(payload, requirements),
+            &payload.network,
+            || async {
+                let (contract, payment, eip712_domain) = assert_valid_payment(
+                    self.provider.inner(),
+                    self.provider.chain(),
+                    payload,
+                    requirements,
+                )
+                .await?;
+                settle_payment(&self.provider, &contract, &payment, &eip712_domain).await
+            },
         )
         .await?;
-
-        let tx_hash = settle_payment(&self.provider, &contract, &payment, &eip712_domain)
-            .await
-            .map_err(|e| e.into_settlement_error(&payload.network))?;
         Ok(v1::SettleResponse::Success {
-            payer: payment.from.to_string(),
+            payer: payload.payload.authorization.from.to_string(),
             transaction: tx_hash.to_string(),
             network: payload.network.clone(),
         }
@@ -1008,6 +1015,75 @@ where
     tx_hash_from_receipt(&receipt)
 }
 
+/// Settles a payment through the provider's pending-settlement store, if it keeps one.
+///
+/// `signature` identifies the payment and `request_hash` the settle request (see
+/// [`settle_request_hash`]). A request that already answered `settlement_pending` is not
+/// verified or sent again: it is reconciled against the transaction it broadcast, and answers
+/// success once that receipt is found, a failure if the transaction reverted, or
+/// `settlement_pending` with the same hash if the receipt is still unavailable. Any other request
+/// runs `settle`; if that ends with the receipt unavailable, the hash is recorded so the
+/// resource server's retry can be reconciled.
+pub async fn settle_with_pending_store<P, F, Fut>(
+    provider: &P,
+    signature: &[u8],
+    request_hash: Option<B256>,
+    network: &str,
+    settle: F,
+) -> Result<TxHash, X402SchemeFacilitatorError>
+where
+    P: Eip155MetaTransactionProvider,
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = Result<TxHash, Eip155ExactError>>,
+{
+    let (Some(store), Some(request_hash)) = (provider.pending_settlements(), request_hash) else {
+        return settle().await.map_err(|e| e.into_settlement_error(network));
+    };
+    let key = pending_settlement_key(signature);
+    // Taken before reconciling, so a concurrent copy of the same request does not reconcile too:
+    // it settles from scratch and fails on the used authorization.
+    if let Some(tx_hash) = store.take(&key, &request_hash).await {
+        #[cfg(feature = "telemetry")]
+        tracing::info!(tx = %tx_hash, "Retried settlement: reconciling with the transaction already broadcast");
+        return match provider.find_receipt(tx_hash).await {
+            Some(receipt) => {
+                tx_hash_from_receipt(&receipt).map_err(|e| e.into_settlement_error(network))
+            }
+            None => {
+                store
+                    .insert(
+                        key,
+                        PendingSettlement {
+                            tx_hash,
+                            request_hash,
+                        },
+                    )
+                    .await;
+                Err(X402SchemeFacilitatorError::SettlementPending {
+                    network: network.to_string(),
+                    transaction: tx_hash.to_string(),
+                    details: format!(
+                        "Transaction {tx_hash} was broadcast for this payment by an earlier request; its receipt is still unavailable"
+                    ),
+                })
+            }
+        };
+    }
+    let result = settle().await;
+    if let Err(Eip155ExactError::ReceiptUnavailable { tx_hash, .. }) = &result {
+        store
+            .insert(
+                key,
+                PendingSettlement {
+                    tx_hash: *tx_hash,
+                    request_hash,
+                },
+            )
+            .await;
+    }
+    result.map_err(|e| e.into_settlement_error(network))
+}
+
 /// Extracts the transaction hash from a confirmed receipt, or returns an error if the
 /// transaction reverted.
 ///
@@ -1228,5 +1304,277 @@ mod tests {
             error,
             X402SchemeFacilitatorError::OnchainFailure(_)
         ));
+    }
+
+    mod pending_store {
+        use super::*;
+        use crate::chain::{InMemoryPendingSettlementStore, PendingSettlementStore};
+        use alloy_provider::RootProvider;
+        use std::sync::Arc;
+        use std::sync::Mutex;
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        const SIGNATURE: &[u8] = b"signature of the payment";
+        const REQUEST: B256 =
+            b256!("0x2222222222222222222222222222222222222222222222222222222222222222");
+        const OTHER_REQUEST: B256 =
+            b256!("0x3333333333333333333333333333333333333333333333333333333333333333");
+        const OTHER_TX: TxHash =
+            b256!("0x4444444444444444444444444444444444444444444444444444444444444444");
+
+        /// A provider whose receipt lookup answers what the test sets, with an optional store.
+        #[derive(Debug)]
+        struct MockProvider {
+            store: Option<InMemoryPendingSettlementStore>,
+            receipt: Mutex<Option<TransactionReceipt>>,
+            receipt_lookups: AtomicU32,
+            inner: RootProvider,
+            chain: Eip155ChainReference,
+        }
+
+        impl MockProvider {
+            fn new(store: bool) -> Self {
+                Self {
+                    store: store.then(InMemoryPendingSettlementStore::default),
+                    receipt: Mutex::new(None),
+                    receipt_lookups: AtomicU32::new(0),
+                    inner: RootProvider::new_http("http://127.0.0.1:9".parse().unwrap()),
+                    chain: Eip155ChainReference::new(84532),
+                }
+            }
+
+            fn set_receipt(&self, receipt: Option<TransactionReceipt>) {
+                *self.receipt.lock().unwrap() = receipt;
+            }
+
+            fn stored(&self) -> usize {
+                self.store.as_ref().map_or(0, |s| s.len())
+            }
+        }
+
+        impl Eip155MetaTransactionProvider for MockProvider {
+            type Error = MetaTransactionSendError;
+            type Inner = RootProvider;
+
+            fn inner(&self) -> &Self::Inner {
+                &self.inner
+            }
+
+            fn chain(&self) -> &Eip155ChainReference {
+                &self.chain
+            }
+
+            async fn send_transaction(
+                &self,
+                _tx: MetaTransaction,
+            ) -> Result<TransactionReceipt, Self::Error> {
+                unreachable!("settlement in these tests goes through the closure")
+            }
+
+            fn pending_settlements(&self) -> Option<&dyn PendingSettlementStore> {
+                self.store
+                    .as_ref()
+                    .map(|s| s as &dyn PendingSettlementStore)
+            }
+
+            async fn find_receipt(&self, _tx_hash: TxHash) -> Option<TransactionReceipt> {
+                self.receipt_lookups.fetch_add(1, Ordering::Relaxed);
+                self.receipt.lock().unwrap().clone()
+            }
+        }
+
+        fn receipt(tx_hash: TxHash, success: bool) -> TransactionReceipt {
+            serde_json::from_value(serde_json::json!({
+                "type": "0x2",
+                "status": if success { "0x1" } else { "0x0" },
+                "cumulativeGasUsed": "0x1",
+                "logs": [],
+                "logsBloom": format!("0x{}", "0".repeat(512)),
+                "transactionHash": tx_hash,
+                "transactionIndex": "0x0",
+                "blockHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+                "blockNumber": "0x10",
+                "gasUsed": "0x1",
+                "effectiveGasPrice": "0x1",
+                "from": "0x0000000000000000000000000000000000000001",
+                "to": "0x0000000000000000000000000000000000000002",
+                "contractAddress": null
+            }))
+            .unwrap()
+        }
+
+        fn receipt_unavailable() -> Eip155ExactError {
+            Eip155ExactError::ReceiptUnavailable {
+                tx_hash: TX_HASH,
+                source: PendingTransactionError::TransportError(rpc_503()),
+            }
+        }
+
+        /// Settles through the store; `outcome` is what a settlement from scratch would give.
+        async fn settle(
+            provider: &impl Eip155MetaTransactionProvider,
+            request: B256,
+            sends: &AtomicU32,
+            outcome: impl FnOnce() -> Result<TxHash, Eip155ExactError>,
+        ) -> Result<TxHash, X402SchemeFacilitatorError> {
+            settle_with_pending_store(provider, SIGNATURE, Some(request), "eip155:84532", || {
+                sends.fetch_add(1, Ordering::Relaxed);
+                async move { outcome() }
+            })
+            .await
+        }
+
+        fn assert_pending_with(error: &X402SchemeFacilitatorError, tx_hash: TxHash) {
+            assert!(
+                matches!(
+                    error,
+                    X402SchemeFacilitatorError::SettlementPending { network, transaction, .. }
+                        if network == "eip155:84532" && transaction == &tx_hash.to_string()
+                ),
+                "expected settlement_pending with {tx_hash}, got {error:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_receipt_unavailable_is_recorded_for_the_retry() {
+            let provider = MockProvider::new(true);
+            let sends = AtomicU32::new(0);
+            let error = settle(&provider, REQUEST, &sends, || Err(receipt_unavailable()))
+                .await
+                .unwrap_err();
+            assert_pending_with(&error, TX_HASH);
+            assert_eq!(provider.stored(), 1);
+            assert_eq!(sends.load(Ordering::Relaxed), 1);
+        }
+
+        #[tokio::test]
+        async fn test_retry_reconciles_with_the_broadcast_transaction_without_sending_again() {
+            let provider = MockProvider::new(true);
+            let sends = AtomicU32::new(0);
+            let _ = settle(&provider, REQUEST, &sends, || Err(receipt_unavailable())).await;
+            provider.set_receipt(Some(receipt(TX_HASH, true)));
+            let tx_hash = settle(&provider, REQUEST, &sends, || {
+                panic!("a reconciled retry must not settle again")
+            })
+            .await
+            .unwrap();
+            assert_eq!(tx_hash, TX_HASH);
+            assert_eq!(sends.load(Ordering::Relaxed), 1);
+            assert_eq!(provider.receipt_lookups.load(Ordering::Relaxed), 1);
+            assert_eq!(provider.stored(), 0);
+        }
+
+        #[tokio::test]
+        async fn test_retry_while_the_receipt_is_still_unavailable_stays_pending_with_the_same_hash()
+         {
+            let provider = MockProvider::new(true);
+            let sends = AtomicU32::new(0);
+            let _ = settle(&provider, REQUEST, &sends, || Err(receipt_unavailable())).await;
+            let error = settle(&provider, REQUEST, &sends, || {
+                panic!("a reconciled retry must not settle again")
+            })
+            .await
+            .unwrap_err();
+            assert_pending_with(&error, TX_HASH);
+            assert_eq!(provider.stored(), 1, "kept for a later retry");
+            // And a later retry still reconciles once the receipt shows up.
+            provider.set_receipt(Some(receipt(TX_HASH, true)));
+            let tx_hash = settle(&provider, REQUEST, &sends, || {
+                panic!("a reconciled retry must not settle again")
+            })
+            .await
+            .unwrap();
+            assert_eq!(tx_hash, TX_HASH);
+            assert_eq!(sends.load(Ordering::Relaxed), 1);
+        }
+
+        #[tokio::test]
+        async fn test_retry_of_a_reverted_settlement_is_a_failure() {
+            let provider = MockProvider::new(true);
+            let sends = AtomicU32::new(0);
+            let _ = settle(&provider, REQUEST, &sends, || Err(receipt_unavailable())).await;
+            provider.set_receipt(Some(receipt(TX_HASH, false)));
+            let error = settle(&provider, REQUEST, &sends, || {
+                panic!("a reconciled retry must not settle again")
+            })
+            .await
+            .unwrap_err();
+            assert!(matches!(
+                error,
+                X402SchemeFacilitatorError::OnchainFailure(_)
+            ));
+            assert_eq!(provider.stored(), 0);
+        }
+
+        #[tokio::test]
+        async fn test_same_signature_in_another_request_settles_from_scratch() {
+            let provider = MockProvider::new(true);
+            let sends = AtomicU32::new(0);
+            let _ = settle(&provider, REQUEST, &sends, || Err(receipt_unavailable())).await;
+            provider.set_receipt(Some(receipt(TX_HASH, true)));
+            // Settled from scratch, which on chain fails because the authorization is used.
+            let error = settle(&provider, OTHER_REQUEST, &sends, || {
+                Err(Eip155ExactError::ContractCall(
+                    "FiatTokenV2: authorization is used or canceled".to_string(),
+                ))
+            })
+            .await
+            .unwrap_err();
+            assert!(matches!(
+                error,
+                X402SchemeFacilitatorError::OnchainFailure(_)
+            ));
+            assert_eq!(sends.load(Ordering::Relaxed), 2);
+            assert_eq!(provider.receipt_lookups.load(Ordering::Relaxed), 0);
+            assert_eq!(
+                provider.stored(),
+                1,
+                "the original request can still reconcile"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_success_and_failures_before_broadcast_record_nothing() {
+            let provider = MockProvider::new(true);
+            let sends = AtomicU32::new(0);
+            assert_eq!(
+                settle(&provider, REQUEST, &sends, || Ok(OTHER_TX))
+                    .await
+                    .unwrap(),
+                OTHER_TX
+            );
+            let error = settle(&provider, OTHER_REQUEST, &sends, || {
+                Err(Eip155ExactError::Transport(rpc_503()))
+            })
+            .await
+            .unwrap_err();
+            assert!(matches!(
+                error,
+                X402SchemeFacilitatorError::OnchainFailure(_)
+            ));
+            assert_eq!(provider.stored(), 0);
+        }
+
+        #[tokio::test]
+        async fn test_without_a_store_every_request_settles_from_scratch() {
+            let provider = MockProvider::new(false);
+            let sends = AtomicU32::new(0);
+            let error = settle(&provider, REQUEST, &sends, || Err(receipt_unavailable()))
+                .await
+                .unwrap_err();
+            assert_pending_with(&error, TX_HASH);
+            let _ = settle(&provider, REQUEST, &sends, || Err(receipt_unavailable())).await;
+            assert_eq!(sends.load(Ordering::Relaxed), 2);
+            assert_eq!(provider.receipt_lookups.load(Ordering::Relaxed), 0);
+        }
+
+        #[tokio::test]
+        async fn test_arc_provider_passes_the_store_and_lookups_through() {
+            let provider = Arc::new(MockProvider::new(true));
+            assert!(provider.pending_settlements().is_some());
+            provider.set_receipt(Some(receipt(TX_HASH, true)));
+            assert!(provider.find_receipt(TX_HASH).await.is_some());
+            assert_eq!(provider.receipt_lookups.load(Ordering::Relaxed), 1);
+        }
     }
 }

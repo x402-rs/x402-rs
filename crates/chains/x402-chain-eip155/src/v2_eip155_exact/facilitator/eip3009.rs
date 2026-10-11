@@ -7,10 +7,12 @@ use x402_types::scheme::X402SchemeFacilitatorError;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
 
+use crate::chain::settle_request_hash;
 use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider};
 use crate::v1_eip155_exact::{
     Eip155ExactError, ExactEvmPayment, IEIP3009, PaymentRequirementsExtra, assert_domain,
-    assert_enough_balance, assert_enough_value, assert_time, settle_payment, verify_payment,
+    assert_enough_balance, assert_enough_value, assert_time, settle_payment,
+    settle_with_pending_store, verify_payment,
 };
 use crate::v2_eip155_exact::Eip3009Payload;
 use crate::v2_eip155_exact::types::{Eip3009PaymentPayload, Eip3009PaymentRequirements};
@@ -47,22 +49,29 @@ where
 {
     let accepted = &payment_payload.accepted;
     assert_requirements_match(accepted, payment_requirements)?;
-    let (contract, payment, eip712_domain) = assert_valid_payment(
-        provider.inner(),
-        provider.chain(),
-        accepted,
-        &payment_payload.payload,
+    let network = accepted.network.to_string();
+    let tx_hash = settle_with_pending_store(
+        provider,
+        &payment_payload.payload.signature,
+        settle_request_hash(payment_payload, payment_requirements),
+        &network,
+        || async {
+            let (contract, payment, eip712_domain) = assert_valid_payment(
+                provider.inner(),
+                provider.chain(),
+                accepted,
+                &payment_payload.payload,
+            )
+            .await?;
+            settle_payment(provider, &contract, &payment, &eip712_domain).await
+        },
     )
     .await?;
 
-    let tx_hash = settle_payment(provider, &contract, &payment, &eip712_domain)
-        .await
-        .map_err(|e| e.into_settlement_error(&accepted.network.to_string()))?;
-
     Ok(v2::SettleResponse::Success {
-        payer: payment.from.to_string(),
+        payer: payment_payload.payload.authorization.from.to_string(),
         transaction: tx_hash.to_string(),
-        network: accepted.network.to_string(),
+        network,
     })
 }
 

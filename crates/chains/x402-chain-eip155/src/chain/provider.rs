@@ -26,6 +26,7 @@ use tracing::Instrument;
 
 use crate::chain::config::{Eip155ChainConfig, RpcConfig};
 use crate::chain::pending_nonce_manager::PendingNonceManager;
+use crate::chain::pending_settlement::{InMemoryPendingSettlementStore, PendingSettlementStore};
 use crate::chain::permit2::{EXACT_PERMIT2_PROXY_ADDRESS, PERMIT2_ADDRESS};
 use crate::chain::types::Eip155ChainReference;
 use crate::v1_eip155_exact::VALIDATOR_ADDRESS;
@@ -42,6 +43,10 @@ const RECEIPT_RETRY_ATTEMPTS: u32 = 3;
 
 /// Wait before the first of those lookups. Each next wait is twice as long.
 const RECEIPT_RETRY_INITIAL_DELAY: Duration = Duration::from_secs(1);
+
+/// Wait between receipt lookups when a retried settlement is reconciled against the
+/// transaction it already broadcast.
+const RECONCILE_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 static REQUIRED_CONTRACT_ADDRESSES: LazyLock<Vec<Address>> = LazyLock::new(|| {
     vec![
@@ -92,6 +97,8 @@ pub struct Eip155ChainProvider {
     signer_cursor: Arc<AtomicUsize>,
     /// Nonce manager for resetting nonces on transaction failures.
     nonce_manager: PendingNonceManager,
+    /// Settlements broadcast without a known outcome, for the resource server's retry.
+    pending_settlements: Arc<InMemoryPendingSettlementStore>,
 }
 
 impl Eip155ChainProvider {
@@ -183,6 +190,30 @@ where
     None
 }
 
+/// Runs `lookup` every `interval` until it finds a receipt or `timeout` has passed since the
+/// start, and returns that receipt. The first lookup runs at once. A lookup that fails counts
+/// the same as one that finds nothing.
+async fn poll_receipt_lookup<R, E, F, Fut>(
+    timeout: Duration,
+    interval: Duration,
+    mut lookup: F,
+) -> Option<R>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<Option<R>, E>>,
+{
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        if let Ok(Some(receipt)) = lookup().await {
+            return Some(receipt);
+        }
+        if tokio::time::Instant::now() + interval > deadline {
+            return None;
+        }
+        tokio::time::sleep(interval).await;
+    }
+}
+
 /// Creates a new provider from configuration.
 ///
 /// Initializes signers, RPC transports, and the nonce manager.
@@ -262,6 +293,7 @@ impl FromConfig<Eip155ChainConfig> for Eip155ChainProvider {
             signer_addresses,
             signer_cursor,
             nonce_manager,
+            pending_settlements: Arc::new(InMemoryPendingSettlementStore::default()),
         })
     }
 }
@@ -397,6 +429,21 @@ impl Eip155MetaTransactionProvider for Eip155ChainProvider {
             }
         }
     }
+
+    fn pending_settlements(&self) -> Option<&dyn PendingSettlementStore> {
+        Some(self.pending_settlements.as_ref())
+    }
+
+    /// Looks the receipt of `tx_hash` up every second, for at most the configured receipt
+    /// timeout. Failed lookups count as "not yet".
+    async fn find_receipt(&self, tx_hash: TxHash) -> Option<TransactionReceipt> {
+        poll_receipt_lookup(
+            Duration::from_secs(self.receipt_timeout_secs),
+            RECONCILE_POLL_INTERVAL,
+            || self.confirmed_receipt(tx_hash, 1),
+        )
+        .await
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -506,6 +553,23 @@ pub trait Eip155MetaTransactionProvider {
         &self,
         tx: MetaTransaction,
     ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send;
+
+    /// The store of settlements that were broadcast but whose receipt could not be fetched,
+    /// which lets a retried `/settle` reconcile against the transaction already sent.
+    /// `None` (the default) keeps no store: a retry is verified and settled from scratch.
+    fn pending_settlements(&self) -> Option<&dyn PendingSettlementStore> {
+        None
+    }
+
+    /// Looks up the receipt of a transaction that was already broadcast, waiting for it for a
+    /// bounded time. `None` if it was not found in that time. The default looks nothing up.
+    fn find_receipt(
+        &self,
+        tx_hash: TxHash,
+    ) -> impl Future<Output = Option<TransactionReceipt>> + Send {
+        let _ = tx_hash;
+        std::future::ready(None)
+    }
 }
 
 impl<T: Eip155MetaTransactionProvider> Eip155MetaTransactionProvider for Arc<T> {
@@ -525,6 +589,17 @@ impl<T: Eip155MetaTransactionProvider> Eip155MetaTransactionProvider for Arc<T> 
         tx: MetaTransaction,
     ) -> impl Future<Output = Result<TransactionReceipt, Self::Error>> + Send {
         (**self).send_transaction(tx)
+    }
+
+    fn pending_settlements(&self) -> Option<&dyn PendingSettlementStore> {
+        (**self).pending_settlements()
+    }
+
+    fn find_receipt(
+        &self,
+        tx_hash: TxHash,
+    ) -> impl Future<Output = Option<TransactionReceipt>> + Send {
+        (**self).find_receipt(tx_hash)
     }
 }
 
@@ -591,5 +666,40 @@ mod tests {
         assert_eq!(calls.load(Ordering::Relaxed), 3);
         // Waits 1 s, 2 s and 4 s before the three lookups.
         assert_eq!(start.elapsed(), Duration::from_secs(7));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_poll_receipt_lookup_finds_receipt_once_lookups_recover() {
+        let calls = AtomicU32::new(0);
+        let start = tokio::time::Instant::now();
+        let receipt = poll_receipt_lookup(Duration::from_secs(30), Duration::from_secs(1), || {
+            let call = calls.fetch_add(1, Ordering::Relaxed);
+            async move {
+                if call < 5 {
+                    Err("HTTP error 503")
+                } else {
+                    Ok(Some("receipt"))
+                }
+            }
+        })
+        .await;
+        assert_eq!(receipt, Some("receipt"));
+        assert_eq!(calls.load(Ordering::Relaxed), 6);
+        // The first lookup runs at once, then one every second.
+        assert_eq!(start.elapsed(), Duration::from_secs(5));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_poll_receipt_lookup_gives_up_at_the_timeout() {
+        let calls = AtomicU32::new(0);
+        let start = tokio::time::Instant::now();
+        let receipt = poll_receipt_lookup(Duration::from_secs(10), Duration::from_secs(1), || {
+            calls.fetch_add(1, Ordering::Relaxed);
+            async { Ok::<Option<()>, ()>(None) }
+        })
+        .await;
+        assert_eq!(receipt, None);
+        assert_eq!(calls.load(Ordering::Relaxed), 11);
+        assert_eq!(start.elapsed(), Duration::from_secs(10));
     }
 }
