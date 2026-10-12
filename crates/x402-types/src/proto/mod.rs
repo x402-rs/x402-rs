@@ -357,6 +357,11 @@ pub enum ErrorReason {
     UnsupportedChain,
     /// The scheme is not supported.
     UnsupportedScheme,
+    /// The settlement transaction was broadcast, but its outcome could not be confirmed.
+    ///
+    /// Non-terminal: the transaction may still be mined. A response with this reason
+    /// carries the transaction hash so the caller can reconcile on chain.
+    SettlementPending,
     /// An unexpected error occurred.
     UnexpectedError,
 }

@@ -15,6 +15,7 @@
 //!
 //! - [`types`] - Wire format types like [`ChecksummedAddress`](types::ChecksummedAddress) and [`TokenAmount`](types::TokenAmount)
 //! - [`pending_nonce_manager`] - Nonce management for concurrent transaction submission
+//! - [`pending_settlement`] - Settlements broadcast without a known outcome, for the retry
 //!
 //! # ERC-3009 Support
 //!
@@ -39,6 +40,11 @@
 
 #[cfg(feature = "facilitator")]
 pub mod config;
+
+#[cfg(feature = "facilitator")]
+pub mod pending_settlement;
+#[cfg(feature = "facilitator")]
+pub use pending_settlement::*;
 
 #[cfg(feature = "facilitator")]
 pub mod pending_nonce_manager;

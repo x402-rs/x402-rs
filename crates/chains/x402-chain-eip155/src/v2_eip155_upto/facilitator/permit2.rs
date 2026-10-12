@@ -14,9 +14,11 @@ use crate::chain::erc20::IERC20;
 use crate::chain::permit2::{PERMIT2_ADDRESS, UPTO_PERMIT2_PROXY_ADDRESS};
 use crate::chain::{
     Eip155ChainReference, Eip155MetaTransactionProvider, Eip155SignerAddresses, MetaTransaction,
+    settle_request_hash,
 };
 use crate::v1_eip155_exact::{
     Eip155ExactError, StructuredSignature, VALIDATOR_ADDRESS, Validator6492, assert_time,
+    settle_with_pending_store,
 };
 use crate::v2_eip155_exact::eip2612::assert_eip2612_offchain_valid;
 use crate::v2_eip155_exact::facilitator::permit2::{
@@ -189,20 +191,36 @@ where
         ));
     }
 
-    // 3. Execute settlement (with or without EIP-2612 permit)
+    // 3. Execute settlement (with or without EIP-2612 permit), or reconcile a retried one
     let eip2612_payload = payment_payload.eip2612_gas_sponsoring();
-    let tx_hash = if let Some(ref info) = eip2612_payload {
+    if let Some(ref info) = eip2612_payload {
         if !eip2612_gas_sponsoring {
             return Err(PaymentVerificationError::eip2612_gas_sponsoring_not_enabled().into());
         }
         assert_eip2612_offchain_valid(info, payment_payload)?;
-        eip2612::settle_upto_permit2_with_eip2612(provider, payment_payload, info, required_amount)
-            .await?
-    } else {
-        settle_upto_permit2(provider, payment_payload, required_amount).await?
-    };
-
+    }
     let network = &payment_payload.accepted.network;
+    let tx_hash = settle_with_pending_store(
+        provider,
+        &payment_payload.payload.signature,
+        settle_request_hash(payment_payload, payment_requirements),
+        &network.to_string(),
+        || async {
+            match &eip2612_payload {
+                Some(info) => {
+                    eip2612::settle_upto_permit2_with_eip2612(
+                        provider,
+                        payment_payload,
+                        info,
+                        required_amount,
+                    )
+                    .await
+                }
+                None => settle_upto_permit2(provider, payment_payload, required_amount).await,
+            }
+        },
+    )
+    .await?;
 
     Ok(UptoSettleResponse::success(
         payer.to_string(),
