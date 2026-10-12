@@ -75,6 +75,9 @@ pub trait KnownNetworkEip155<A> {
 
     /// Returns the instance for Celo testnet (eip155:11142220)
     fn celo_sepolia() -> A;
+
+    /// Returns the instance for Shibarium mainnet (eip155:109)
+    fn shibarium() -> A;
 }
 
 /// Trait providing SBC deployments on EIP-155 networks where SBC is a known payment asset.
@@ -151,6 +154,10 @@ impl KnownNetworkEip155<ChainId> for ChainId {
 
     fn celo_sepolia() -> ChainId {
         ChainId::new("eip155", "11142220")
+    }
+
+    fn shibarium() -> ChainId {
+        ChainId::new("eip155", "109")
     }
 }
 
@@ -322,6 +329,22 @@ impl KnownNetworkEip155<Eip155TokenDeployment> for USDC {
             },
         }
     }
+    /// Bridged USDC on Shibarium. The token implements neither EIP-3009 nor EIP-2612
+    /// (it exposes no `version()`, `DOMAIN_SEPARATOR()` or `nonces()`), so payments
+    /// settle through Permit2 via the canonical x402 Permit2 proxies, which are
+    /// deployed on Shibarium at their usual addresses. `name` is the token's on-chain
+    /// `name()`; the Permit2 signing path does not read `version`.
+    fn shibarium() -> Eip155TokenDeployment {
+        Eip155TokenDeployment {
+            chain_reference: Eip155ChainReference::new(109),
+            address: alloy_primitives::address!("0xf010f12dcA0b96D2d6685bf4dB3dbB4Ad500B6Ad"),
+            decimals: 6,
+            transfer_method: AssetTransferMethod::Permit2 {
+                name: "USD Coin".into(),
+                version: "1".into(),
+            },
+        }
+    }
 }
 
 impl KnownSbcEip155 for SBC {
@@ -353,6 +376,25 @@ impl KnownSbcEip155 for SBC {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn usdc_shibarium_deployment_uses_permit2() {
+        let shibarium = USDC::shibarium();
+        assert_eq!(shibarium.chain_reference.inner(), 109);
+        assert_eq!(
+            shibarium.address,
+            alloy_primitives::address!("0xf010f12dcA0b96D2d6685bf4dB3dbB4Ad500B6Ad")
+        );
+        assert_eq!(shibarium.decimals, 6);
+        assert_eq!(
+            shibarium.transfer_method,
+            AssetTransferMethod::Permit2 {
+                name: "USD Coin".into(),
+                version: "1".into(),
+            }
+        );
+        assert_eq!(ChainId::shibarium(), ChainId::new("eip155", "109"));
+    }
 
     #[test]
     fn sbc_radius_deployments_use_permit2() {
