@@ -229,6 +229,12 @@ pub static KNOWN_NETWORKS: &[NetworkInfo] = &[
         namespace: "eip155",
         reference: "11142220",
     },
+    // Shibarium Networks
+    NetworkInfo {
+        name: "shibarium",
+        namespace: "eip155",
+        reference: "109",
+    },
     // Radius Networks
     NetworkInfo {
         name: "radius",
@@ -460,6 +466,10 @@ mod tests {
         assert_eq!(celo.namespace, "eip155");
         assert_eq!(celo.reference, "42220");
 
+        let shibarium = chain_id_by_network_name("shibarium").unwrap();
+        assert_eq!(shibarium.namespace, "eip155");
+        assert_eq!(shibarium.reference, "109");
+
         let radius = chain_id_by_network_name("radius").unwrap();
         assert_eq!(radius.namespace, "eip155");
         assert_eq!(radius.reference, "723487");
@@ -488,6 +498,10 @@ mod tests {
         let celo_sepolia_chain_id = ChainId::new("eip155", "11142220");
         let network_name = network_name_by_chain_id(&celo_sepolia_chain_id).unwrap();
         assert_eq!(network_name, "celo-sepolia");
+
+        let shibarium_chain_id = ChainId::new("eip155", "109");
+        let network_name = network_name_by_chain_id(&shibarium_chain_id).unwrap();
+        assert_eq!(network_name, "shibarium");
 
         let radius_chain_id = ChainId::new("eip155", "723487");
         let network_name = network_name_by_chain_id(&radius_chain_id).unwrap();

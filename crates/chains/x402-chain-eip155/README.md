@@ -99,6 +99,7 @@ The crate includes built-in support for many EVM networks through the `KnownNetw
 - **Peaq**
 - **IoTeX**
 - **Celo** (mainnet and Sepolia testnet)
+- **Shibarium** (mainnet, USDC via Permit2)
 - **Radius** (mainnet and testnet)
 
 Known token deployment helpers include USDC on supported USDC networks and SBC on Radius networks.
