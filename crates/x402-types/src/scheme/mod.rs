@@ -134,6 +134,19 @@ pub enum X402SchemeFacilitatorError {
     /// On-chain operation failed.
     #[error("Onchain error: {0}")]
     OnchainFailure(String),
+    /// The settlement transaction was broadcast, but its outcome could not be confirmed.
+    ///
+    /// The transaction may still be mined, so this is not a failure of the payment:
+    /// the caller reconciles on chain using `transaction` before deciding to retry.
+    #[error("Settlement pending: {details}")]
+    SettlementPending {
+        /// Network the transaction was broadcast to, as the request named it.
+        network: String,
+        /// Hash of the broadcast transaction.
+        transaction: String,
+        /// Why the outcome could not be confirmed.
+        details: String,
+    },
 }
 
 impl AsPaymentProblem for X402SchemeFacilitatorError {
@@ -142,6 +155,9 @@ impl AsPaymentProblem for X402SchemeFacilitatorError {
             X402SchemeFacilitatorError::PaymentVerification(e) => e.as_payment_problem(),
             X402SchemeFacilitatorError::OnchainFailure(e) => {
                 PaymentProblem::new(ErrorReason::UnexpectedError, e.to_string())
+            }
+            X402SchemeFacilitatorError::SettlementPending { details, .. } => {
+                PaymentProblem::new(ErrorReason::SettlementPending, details.clone())
             }
         }
     }
@@ -352,4 +368,35 @@ pub trait ExtensionKey {
     /// The JSON key under which this extension type is stored in the
     /// `extensions` map of a payment message.
     const EXTENSION_KEY: &'static str;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_settlement_pending_reason_serializes_as_settlement_pending() {
+        let serialized = serde_json::to_string(&ErrorReason::SettlementPending).unwrap();
+        assert_eq!(serialized, "\"settlement_pending\"");
+    }
+
+    #[test]
+    fn test_settlement_pending_maps_to_settlement_pending_problem() {
+        let error = X402SchemeFacilitatorError::SettlementPending {
+            network: "eip155:42220".to_string(),
+            transaction: "0xa5f6".to_string(),
+            details: "receipt lookup failed".to_string(),
+        };
+        let problem = error.as_payment_problem();
+        assert_eq!(problem.reason(), ErrorReason::SettlementPending);
+        assert_eq!(problem.details(), "receipt lookup failed");
+    }
+
+    #[test]
+    fn test_onchain_failure_maps_to_unexpected_error() {
+        let error = X402SchemeFacilitatorError::OnchainFailure("estimate_gas failed".to_string());
+        let problem = error.as_payment_problem();
+        assert_eq!(problem.reason(), ErrorReason::UnexpectedError);
+        assert_eq!(problem.details(), "estimate_gas failed");
+    }
 }

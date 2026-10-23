@@ -1,5 +1,6 @@
 use alloy_primitives::B256;
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroU64;
 use std::str::FromStr;
 use url::Url;
 use x402_types::chain::ChainId;
@@ -50,6 +51,17 @@ impl Eip155ChainConfig {
         self.inner.receipt_timeout_secs
     }
 
+    /// Returns whether a settle request whose ERC-3009 authorization is already used is
+    /// answered with the transaction that used it.
+    pub fn reconcile_used_authorizations(&self) -> bool {
+        self.inner.reconcile_used_authorizations
+    }
+
+    /// Returns the most blocks one `eth_getLogs` call of the used-authorization lookup covers.
+    pub fn log_query_max_blocks(&self) -> NonZeroU64 {
+        self.inner.log_query_max_blocks
+    }
+
     /// Returns the signer configuration for this chain.
     pub fn signers(&self) -> &Eip155SignersConfig {
         &self.inner.signers
@@ -83,6 +95,33 @@ pub struct Eip155ChainConfigInner {
     /// How long to wait till the transaction receipt is available (optional)
     #[serde(default = "eip155_chain_config::default_receipt_timeout_secs")]
     pub receipt_timeout_secs: u64,
+    /// Whether a settle request with no pending-settlement entry, whose ERC-3009 authorization
+    /// is already used, is answered with the transaction that used it (optional, off by
+    /// default).
+    ///
+    /// When on, such a request is looked up on chain: if one of this chain's signers sent a
+    /// transaction in the last five minutes (searched with at most 50 `eth_getLogs` calls of
+    /// `log_query_max_blocks` blocks each, newest first) that used the
+    /// authorization and transferred the signed value from the payer to the recipient,
+    /// `/settle` answers success with its hash instead of failing on the used authorization.
+    /// This answers the retry of a settlement that reached another instance, or this one after
+    /// a restart. It also makes `/settle` answer success again, for those five minutes, to any
+    /// other request that carries a settled authorization and matches its requirements.
+    /// Calling `/verify` first protects a resource server only from a copy of the payment that
+    /// arrives after the settlement has landed, because verifying a used authorization fails. A
+    /// copy verified before then that reaches `/settle` after it (one sent while the first
+    /// copy's handler is still running, or at the same time) is answered with the first copy's
+    /// transaction, so the server serves that copy too. Turn it on only when the resource
+    /// servers do not take a `/settle` success alone as proof of a new payment.
+    #[serde(default)]
+    pub reconcile_used_authorizations: bool,
+    /// Most blocks one `eth_getLogs` call of the `reconcile_used_authorizations` lookup covers
+    /// (optional, default 100). Set it to the block range limit of the chain's RPCs (the
+    /// smallest, if they differ): a larger value needs fewer calls. A range an RPC refuses is
+    /// split in halves until it is accepted, and the smaller size is kept for the rest of the
+    /// lookup, so a lower limit costs a few refused calls per lookup.
+    #[serde(default = "eip155_chain_config::default_log_query_max_blocks")]
+    pub log_query_max_blocks: NonZeroU64,
 }
 
 mod eip155_chain_config {
@@ -94,6 +133,9 @@ mod eip155_chain_config {
     }
     pub fn default_receipt_timeout_secs() -> u64 {
         30
+    }
+    pub fn default_log_query_max_blocks() -> std::num::NonZeroU64 {
+        crate::chain::authorization_use::LOG_QUERY_MAX_BLOCKS
     }
 }
 
@@ -159,5 +201,45 @@ impl FromStr for EvmPrivateKey {
         B256::from_str(s)
             .map(Self)
             .map_err(|e| format!("Invalid evm private key: {}", e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config(extra: &str) -> Eip155ChainConfigInner {
+        serde_json::from_str(&format!(
+            r#"{{
+                "signers": ["0xcafe000000000000000000000000000000000000000000000000000000000001"],
+                "rpc": [{{"http": "https://sepolia.base.org"}}]{extra}
+            }}"#
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn test_reconcile_used_authorizations_is_off_unless_set() {
+        assert!(!config("").reconcile_used_authorizations);
+        assert!(config(r#", "reconcile_used_authorizations": true"#).reconcile_used_authorizations);
+    }
+
+    #[test]
+    fn test_log_query_max_blocks_is_100_unless_set_and_not_zero() {
+        assert_eq!(config("").log_query_max_blocks.get(), 100);
+        assert_eq!(
+            config(r#", "log_query_max_blocks": 200"#)
+                .log_query_max_blocks
+                .get(),
+            200
+        );
+        let zero = serde_json::from_str::<Eip155ChainConfigInner>(
+            r#"{
+                "signers": ["0xcafe000000000000000000000000000000000000000000000000000000000001"],
+                "rpc": [{"http": "https://sepolia.base.org"}],
+                "log_query_max_blocks": 0
+            }"#,
+        );
+        assert!(zero.is_err());
     }
 }

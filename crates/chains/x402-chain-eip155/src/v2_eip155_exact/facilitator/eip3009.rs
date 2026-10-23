@@ -7,10 +7,12 @@ use x402_types::scheme::X402SchemeFacilitatorError;
 #[cfg(feature = "telemetry")]
 use tracing::instrument;
 
-use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider};
+use crate::chain::settle_request_hash;
+use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider, Eip3009Authorization};
 use crate::v1_eip155_exact::{
     Eip155ExactError, ExactEvmPayment, IEIP3009, PaymentRequirementsExtra, assert_domain,
-    assert_enough_balance, assert_enough_value, assert_time, settle_payment, verify_payment,
+    assert_enough_balance, assert_enough_value, assert_time, settle_or_find_used_authorization,
+    settle_payment, settle_with_pending_store, verify_payment,
 };
 use crate::v2_eip155_exact::Eip3009Payload;
 use crate::v2_eip155_exact::types::{Eip3009PaymentPayload, Eip3009PaymentRequirements};
@@ -47,20 +49,33 @@ where
 {
     let accepted = &payment_payload.accepted;
     assert_requirements_match(accepted, payment_requirements)?;
-    let (contract, payment, eip712_domain) = assert_valid_payment(
-        provider.inner(),
-        provider.chain(),
-        accepted,
-        &payment_payload.payload,
+    let network = accepted.network.to_string();
+    let authorization =
+        authorization_to_reconcile(provider.chain(), accepted, &payment_payload.payload);
+    let tx_hash = settle_with_pending_store(
+        provider,
+        &payment_payload.payload.signature,
+        settle_request_hash(payment_payload, payment_requirements),
+        &network,
+        || {
+            settle_or_find_used_authorization(provider, authorization, async {
+                let (contract, payment, eip712_domain) = assert_valid_payment(
+                    provider.inner(),
+                    provider.chain(),
+                    accepted,
+                    &payment_payload.payload,
+                )
+                .await?;
+                settle_payment(provider, &contract, &payment, &eip712_domain).await
+            })
+        },
     )
     .await?;
 
-    let tx_hash = settle_payment(provider, &contract, &payment, &eip712_domain).await?;
-
     Ok(v2::SettleResponse::Success {
-        payer: payment.from.to_string(),
+        payer: payment_payload.payload.authorization.from.to_string(),
         transaction: tx_hash.to_string(),
-        network: accepted.network.to_string(),
+        network,
     })
 }
 
@@ -118,6 +133,22 @@ pub async fn assert_valid_payment<P: Provider>(
     Ok((contract, payment, domain))
 }
 
+/// The authorization of a settle request, to look up on chain if settling it fails, when the
+/// request matches its requirements on `chain` (network, recipient and amount). `None` for a
+/// request that does not: it fails as before, without a lookup.
+fn authorization_to_reconcile(
+    chain: &Eip155ChainReference,
+    accepted: &Eip3009PaymentRequirements,
+    payload: &Eip3009Payload,
+) -> Option<Eip3009Authorization> {
+    let chain_id: ChainId = chain.into();
+    let authorization = &payload.authorization;
+    let matches = accepted.network == chain_id
+        && authorization.to == accepted.pay_to
+        && authorization.value >= accepted.amount;
+    matches.then(|| Eip3009Authorization::new(accepted.asset.into(), authorization))
+}
+
 pub fn assert_requirements_match<T: PartialEq>(
     accepted: &T,
     payment_requirements: &T,
@@ -126,5 +157,81 @@ pub fn assert_requirements_match<T: PartialEq>(
         Err(PaymentVerificationError::AcceptedRequirementsMismatch)
     } else {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy_primitives::{Address, B256, U256, address, b256};
+    use x402_types::timestamp::UnixTimestamp;
+
+    const ASSET: Address = address!("0x036CbD53842c5426634e7929541eC2318f3dCF7e");
+    const PAYER: Address = address!("0x1111111111111111111111111111111111111111");
+    const SELLER: Address = address!("0x2222222222222222222222222222222222222222");
+    const NONCE: B256 = b256!("0x6666666666666666666666666666666666666666666666666666666666666666");
+
+    fn request(
+        pay_to: Address,
+        amount: u64,
+        network: &str,
+    ) -> (Eip3009PaymentRequirements, Eip3009Payload) {
+        let accepted = serde_json::from_value(serde_json::json!({
+            "scheme": "exact",
+            "network": network,
+            "amount": amount.to_string(),
+            "payTo": pay_to,
+            "maxTimeoutSeconds": 60,
+            "asset": ASSET,
+            "extra": {"name": "USDC", "version": "2"}
+        }))
+        .unwrap();
+        let payload = serde_json::from_value(serde_json::json!({
+            "signature": "0x1234",
+            "authorization": {
+                "from": PAYER,
+                "to": SELLER,
+                "value": "10000",
+                "validAfter": "1000",
+                "validBefore": "2000",
+                "nonce": NONCE
+            }
+        }))
+        .unwrap();
+        (accepted, payload)
+    }
+
+    #[test]
+    fn test_request_is_looked_up_only_when_it_matches_its_requirements() {
+        let chain = Eip155ChainReference::new(84532);
+        let (accepted, payload) = request(SELLER, 10_000, "eip155:84532");
+        assert_eq!(
+            authorization_to_reconcile(&chain, &accepted, &payload),
+            Some(Eip3009Authorization {
+                asset: ASSET,
+                from: PAYER,
+                to: SELLER,
+                value: U256::from(10_000u64),
+                valid_after: UnixTimestamp::from_secs(1_000),
+                valid_before: UnixTimestamp::from_secs(2_000),
+                nonce: NONCE,
+            })
+        );
+        for (pay_to, amount, network) in [
+            (
+                address!("0x9999999999999999999999999999999999999999"),
+                10_000,
+                "eip155:84532",
+            ),
+            (SELLER, 10_001, "eip155:84532"),
+            (SELLER, 10_000, "eip155:8453"),
+        ] {
+            let (accepted, payload) = request(pay_to, amount, network);
+            assert_eq!(
+                authorization_to_reconcile(&chain, &accepted, &payload),
+                None,
+                "{pay_to} {amount} {network}"
+            );
+        }
     }
 }

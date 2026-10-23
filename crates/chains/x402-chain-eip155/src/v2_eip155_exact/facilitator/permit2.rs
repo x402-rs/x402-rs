@@ -16,10 +16,12 @@ use tracing::instrument;
 
 use crate::chain::erc20::IERC20;
 use crate::chain::permit2::{EXACT_PERMIT2_PROXY_ADDRESS, PERMIT2_ADDRESS};
-use crate::chain::{Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction};
+use crate::chain::{
+    Eip155ChainReference, Eip155MetaTransactionProvider, MetaTransaction, settle_request_hash,
+};
 use crate::v1_eip155_exact::{
     Eip155ExactError, StructuredSignature, VALIDATOR_ADDRESS, Validator6492, assert_enough_value,
-    assert_time, is_contract_deployed, tx_hash_from_receipt,
+    assert_time, is_contract_deployed, settle_with_pending_store, tx_hash_from_receipt,
 };
 use crate::v2_eip155_exact::eip3009::assert_requirements_match;
 use crate::v2_eip155_exact::types::{
@@ -80,26 +82,39 @@ where
     // Check if the client provided EIP-2612 gas-sponsoring extension data
     let eip2612_gas_sponsoring_payload = payment_payload.eip2612_gas_sponsoring();
 
-    // 2. Try settle (with or without EIP-2612 permit)
-    let tx_hash = if let Some(eip2612_gas_sponsoring_payload) = &eip2612_gas_sponsoring_payload {
+    if let Some(eip2612_gas_sponsoring_payload) = &eip2612_gas_sponsoring_payload {
         // Reject EIP-2612 gas sponsoring if not enabled in config
         if !eip2612_gas_sponsoring {
             return Err(PaymentVerificationError::eip2612_gas_sponsoring_not_enabled().into());
         }
         eip2612::assert_eip2612_offchain_valid(eip2612_gas_sponsoring_payload, payment_payload)?;
-        eip2612::settle_exact_permit2_with_eip2612(
-            provider,
-            payment_payload,
-            eip2612_gas_sponsoring_payload,
-        )
-        .await?
-    } else {
-        settle_exact_permit2(provider, payment_payload).await?
-    };
+    }
+
+    // 2. Try settle (with or without EIP-2612 permit), or reconcile a retried settlement
+    let network = &payment_payload.accepted.network;
+    let tx_hash = settle_with_pending_store(
+        provider,
+        &payment_payload.payload.signature,
+        settle_request_hash(payment_payload, payment_requirements),
+        &network.to_string(),
+        || async {
+            match &eip2612_gas_sponsoring_payload {
+                Some(eip2612_gas_sponsoring_payload) => {
+                    eip2612::settle_exact_permit2_with_eip2612(
+                        provider,
+                        payment_payload,
+                        eip2612_gas_sponsoring_payload,
+                    )
+                    .await
+                }
+                None => settle_exact_permit2(provider, payment_payload).await,
+            }
+        },
+    )
+    .await?;
 
     let authorization = &payment_payload.payload.permit_2_authorization;
     let payer = authorization.from;
-    let network = &payment_payload.accepted.network;
 
     Ok(v2::SettleResponse::Success {
         payer: payer.to_string(),
