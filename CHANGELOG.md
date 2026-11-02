@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `x402-chain-eip155`: New optional `poll_interval_ms` chain config field. Sets how often the provider polls for a pending transaction's receipt; unset keeps alloy's default (7000 ms for a remote transport). On 1–2 s-block chains the default makes every `/settle` take about 7 s even though the transfer is mined within a second or two.
+
 ## [2.0.0] - 2026-06-16
 
 ### Breaking Changes

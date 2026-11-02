@@ -156,6 +156,7 @@ The Permit2 implementation is designed to support gasless approval extensions:
     "eip1559": true,
     "flashblocks": false,
     "receipt_timeout_secs": 30,
+    "poll_interval_ms": 1000,
     "signers": [
       "$FACILITATOR_PRIVATE_KEY"
     ],
@@ -168,6 +169,9 @@ The Permit2 implementation is designed to support gasless approval extensions:
   }
 }
 ```
+
+- `receipt_timeout_secs` (optional, default 30): how long `/settle` waits for the transaction receipt before giving up.
+- `poll_interval_ms` (optional): how often the provider asks the node for a pending transaction's receipt. Unset keeps alloy's default, 7000 ms for a remote RPC, which suits 12 s blocks. On chains with 1–2 s blocks (Base, Celo, Arbitrum…) a settlement is mined within a second or two and is still only reported at the next 7 s tick, so set this near the block time. It does not change how many confirmations are required.
 
 ## Dependencies
 

@@ -175,6 +175,14 @@ impl FromConfig<Eip155ChainConfig> for Eip155ChainProvider {
 
         // 2. Transports
         let client = Self::rpc_client(config.chain_id(), config.rpc());
+        // `RpcClient::new(_, false)` above leaves alloy's remote default of a
+        // 7 s receipt poll in place. A chain config may shorten it to match its
+        // block time; the confirmation count is unaffected.
+        if let Some(poll_interval) = config.poll_interval() {
+            client.set_poll_interval(poll_interval);
+            #[cfg(feature = "telemetry")]
+            tracing::info!(chain=%config.chain_id(), ?poll_interval, "Using receipt poll interval");
+        }
 
         // 3. Provider
         // Create nonce manager explicitly so we can store a reference for error handling

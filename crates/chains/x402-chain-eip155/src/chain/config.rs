@@ -50,6 +50,15 @@ impl Eip155ChainConfig {
         self.inner.receipt_timeout_secs
     }
 
+    /// Returns how often the provider asks the node for a pending transaction's
+    /// receipt, if the chain config sets it. `None` keeps alloy's default
+    /// (7 s for a remote transport).
+    pub fn poll_interval(&self) -> Option<std::time::Duration> {
+        self.inner
+            .poll_interval_ms
+            .map(std::time::Duration::from_millis)
+    }
+
     /// Returns the signer configuration for this chain.
     pub fn signers(&self) -> &Eip155SignersConfig {
         &self.inner.signers
@@ -83,6 +92,16 @@ pub struct Eip155ChainConfigInner {
     /// How long to wait till the transaction receipt is available (optional)
     #[serde(default = "eip155_chain_config::default_receipt_timeout_secs")]
     pub receipt_timeout_secs: u64,
+    /// How often to ask the node whether a pending transaction's receipt is
+    /// available, in milliseconds (optional).
+    ///
+    /// Unset keeps alloy's default, which is 7000 ms for a remote transport.
+    /// That default suits 12 s blocks; on a chain with 1–2 s blocks the receipt
+    /// exists almost at once and `/settle` still answers only at the next 7 s
+    /// tick. Setting this near the chain's block time removes that wait without
+    /// changing how many confirmations are required.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub poll_interval_ms: Option<u64>,
 }
 
 mod eip155_chain_config {
@@ -159,5 +178,54 @@ impl FromStr for EvmPrivateKey {
         B256::from_str(s)
             .map(Self)
             .map_err(|e| format!("Invalid evm private key: {}", e))
+    }
+}
+
+#[cfg(test)]
+mod poll_interval_tests {
+    use super::*;
+
+    // No signers: env references resolve at parse time and keys do not belong
+    // in a fixture. The poll interval is independent of the signer set.
+    const BASE: &str = r#"{
+        "signers": [],
+        "rpc": [{ "http": "https://forno.celo.org" }]
+    }"#;
+
+    fn config(inner_json: &str) -> Eip155ChainConfig {
+        Eip155ChainConfig {
+            chain_reference: Eip155ChainReference::new(42220),
+            inner: serde_json::from_str(inner_json).expect("valid chain config"),
+        }
+    }
+
+    #[test]
+    fn poll_interval_is_unset_by_default() {
+        // Unset must leave alloy's default in place: existing configs see no change.
+        let cfg = config(BASE);
+        assert_eq!(cfg.inner.poll_interval_ms, None);
+        assert_eq!(cfg.poll_interval(), None);
+    }
+
+    #[test]
+    fn poll_interval_ms_is_read_as_a_duration() {
+        let with_poll = BASE.replacen('{', r#"{ "poll_interval_ms": 1000,"#, 1);
+        let cfg = config(&with_poll);
+        assert_eq!(cfg.inner.poll_interval_ms, Some(1000));
+        assert_eq!(
+            cfg.poll_interval(),
+            Some(std::time::Duration::from_millis(1000))
+        );
+    }
+
+    #[test]
+    fn poll_interval_round_trips_only_when_set() {
+        // `skip_serializing_if` keeps serialised configs byte-identical for
+        // operators who never set the field.
+        let unset = serde_json::to_string(&config(BASE).inner).unwrap();
+        assert!(!unset.contains("poll_interval_ms"), "{unset}");
+        let set = BASE.replacen('{', r#"{ "poll_interval_ms": 250,"#, 1);
+        let set = serde_json::to_string(&config(&set).inner).unwrap();
+        assert!(set.contains(r#""poll_interval_ms":250"#), "{set}");
     }
 }
