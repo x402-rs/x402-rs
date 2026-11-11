@@ -120,8 +120,8 @@ pub enum VerificationError {
 pub enum PaygateError {
     #[error(transparent)]
     Verification(#[from] VerificationError),
-    #[error("Settlement failed: {0}")]
-    Settlement(String),
+    #[error("Settlement failed: {reason}")]
+    Settlement { reason: String, receipt: Option<proto::SettleResponse> },
 }
 
 // ============================================================================
@@ -228,19 +228,23 @@ impl PaygateProtocol for v1::PriceTag {
                     .body(body)
                     .expect("Fail to construct response")
             }
-            PaygateError::Settlement(err) => {
+            PaygateError::Settlement { reason, receipt } => {
+                let mut builder = Response::builder()
+                    .status(StatusCode::PAYMENT_REQUIRED)
+                    .header("Content-Type", "application/json");
+                if let Some(ref settle_receipt) = receipt {
+                    if let Ok(header_value) = settlement_to_header(settle_receipt.clone()) {
+                        builder = builder.header("Payment-Response", header_value);
+                    }
+                }
                 let body = Body::from(
                     json!({
                         "error": "Settlement failed",
-                        "details": err.to_string()
+                        "details": reason
                     })
                     .to_string(),
                 );
-                Response::builder()
-                    .status(StatusCode::PAYMENT_REQUIRED)
-                    .header("Content-Type", "application/json")
-                    .body(body)
-                    .expect("Fail to construct response")
+                builder.body(body).expect("Fail to construct response")
             }
         }
     }
@@ -358,19 +362,23 @@ impl PaygateProtocol for v2::PriceTag {
                     .body(Body::empty())
                     .expect("Fail to construct response")
             }
-            PaygateError::Settlement(err) => {
+            PaygateError::Settlement { reason, receipt } => {
+                let mut builder = Response::builder()
+                    .status(StatusCode::PAYMENT_REQUIRED)
+                    .header("Content-Type", "application/json");
+                if let Some(ref settle_receipt) = receipt {
+                    if let Ok(header_value) = settlement_to_header(settle_receipt.clone()) {
+                        builder = builder.header("Payment-Response", header_value);
+                    }
+                }
                 let body = Body::from(
                     json!({
                         "error": "Settlement failed",
-                        "details": err.to_string()
+                        "details": reason
                     })
                     .to_string(),
                 );
-                Response::builder()
-                    .status(StatusCode::PAYMENT_REQUIRED)
-                    .header("Content-Type", "application/json")
-                    .body(body)
-                    .expect("Fail to construct response")
+                builder.body(body).expect("Fail to construct response")
             }
         }
     }
@@ -614,7 +622,7 @@ where
             .facilitator
             .settle(settle_request)
             .await
-            .map_err(|e| PaygateError::Settlement(format!("{e}")))?;
+            .map_err(|e| PaygateError::Settlement { reason: format!("{e}"), receipt: None })?;
         Ok(settle_response)
     }
 }
@@ -660,13 +668,15 @@ fn validate_settlement(settlement: &proto::SettleResponse) -> Result<(), Paygate
                 .get("errorReason")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
-            Err(PaygateError::Settlement(format!(
-                "facilitator returned success: false (reason: {reason})"
-            )))
+            Err(PaygateError::Settlement {
+                reason: format!("facilitator returned success: false (reason: {reason})"),
+                receipt: Some(settlement.clone()),
+            })
         }
-        None => Err(PaygateError::Settlement(
-            "settlement response missing boolean 'success' field".into(),
-        )),
+        None => Err(PaygateError::Settlement {
+            reason: "settlement response missing boolean 'success' field".into(),
+            receipt: None,
+        }),
     }
 }
 
@@ -675,10 +685,10 @@ fn validate_settlement(settlement: &proto::SettleResponse) -> Result<(), Paygate
 /// Returns an error response if conversion fails.
 fn settlement_to_header(settlement: proto::SettleResponse) -> Result<HeaderValue, PaygateError> {
     let json =
-        serde_json::to_vec(&settlement).map_err(|err| PaygateError::Settlement(err.to_string()))?;
+        serde_json::to_vec(&settlement).map_err(|err| PaygateError::Settlement { reason: err.to_string(), receipt: None })?;
     let payment_header = Base64Bytes::encode(json);
     HeaderValue::from_bytes(payment_header.as_ref())
-        .map_err(|err| PaygateError::Settlement(err.to_string()))
+        .map_err(|err| PaygateError::Settlement { reason: err.to_string(), receipt: None })
 }
 
 // ============================================================================
