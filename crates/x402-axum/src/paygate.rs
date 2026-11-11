@@ -225,6 +225,7 @@ impl PaygateProtocol for v1::PriceTag {
                 Response::builder()
                     .status(StatusCode::PAYMENT_REQUIRED)
                     .header("Content-Type", "application/json")
+                    .header("Cache-Control", "no-store")
                     .body(body)
                     .expect("Fail to construct response")
             }
@@ -239,6 +240,7 @@ impl PaygateProtocol for v1::PriceTag {
                 Response::builder()
                     .status(StatusCode::PAYMENT_REQUIRED)
                     .header("Content-Type", "application/json")
+                    .header("Cache-Control", "no-store")
                     .body(body)
                     .expect("Fail to construct response")
             }
@@ -355,6 +357,7 @@ impl PaygateProtocol for v2::PriceTag {
                 Response::builder()
                     .status(status_code)
                     .header("Payment-Required", header_value)
+                    .header("Cache-Control", "no-store")
                     .body(Body::empty())
                     .expect("Fail to construct response")
             }
@@ -369,6 +372,7 @@ impl PaygateProtocol for v2::PriceTag {
                 Response::builder()
                     .status(StatusCode::PAYMENT_REQUIRED)
                     .header("Content-Type", "application/json")
+                    .header("Cache-Control", "no-store")
                     .body(body)
                     .expect("Fail to construct response")
             }
@@ -557,6 +561,7 @@ where
             // Add payment response header
             let mut res = response;
             res.headers_mut().insert("Payment-Response", header_value);
+            res.headers_mut().insert("Cache-Control", "private");
             Ok(res.into_response())
         } else {
             // Settlement after execution (default): call inner handler first, then settle
@@ -588,6 +593,7 @@ where
 
             let mut res = response;
             res.headers_mut().insert("Payment-Response", header_value);
+            res.headers_mut().insert("Cache-Control", "private");
             Ok(res.into_response())
         }
     }
